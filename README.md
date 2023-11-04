@@ -36,7 +36,3 @@ For a detailed overview of our architecture, please visit our [Architecture Docu
 
 ## Contact
 For support or inquiries, please reach out to us through [GitHub Issues](#github-issues) or our [Community Forum](#community-forum).
-
----
-
-Remember to replace placeholders like `#installation-guide`, `#contributing-guidelines`, `#architecture-documentation`, `#github-issues`, and `#community-forum` with actual links to the respective sections or external resources. This draft serves as a foundational structure for your README, and you can build upon it as your project grows and evolves.
