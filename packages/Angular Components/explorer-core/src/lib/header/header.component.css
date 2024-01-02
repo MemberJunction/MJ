@@ -1,0 +1,102 @@
+.header-wrap {
+  flex: auto;
+}
+
+.title {
+  font-size: x-large;  
+}
+.app-logo {
+  width: 100px;
+  height: 50px;
+}
+
+.user-info kendo-dropdownlist {
+  border: none;
+  background: transparent;
+  width: auto;
+  color: #fff;
+}
+.user-info-wrapper {
+  display: flex;
+  align-items: center;
+}
+.icon-inbox {
+  position: relative;
+  margin: 0 26px 0 40px;
+}
+.icon-inbox .notification {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ff6358;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 10px;
+}
+.user-info-wrapper .header .k-avatar {
+  padding-left: 25px;
+  border-left: 2px solid #fff;
+}
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 500px;
+}
+.search-entity-list {
+  width: 200px; 
+}
+::ng-deep .search-wrapper #txtSearch::placeholder, ::ng-deep .search-wrapper input::placeholder {
+  color: #fff;
+}
+.search-wrapper .k-input, .search-wrapper .k-dropdownlist {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border-radius: 0;
+  color: #fff;
+}
+.search-wrapper .k-icon {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 9;
+    cursor: pointer;
+  margin-right: 2px;
+} 
+.k-input {
+  color: black;
+}
+
+
+/*RESPONSIVE STUFF HERE */
+@media (max-width: 1700px) {
+  .title {
+    font-size: x-small; /* or any other size you prefer */
+  }
+  .app-logo {
+    width: 50px;
+    height: 25px;
+  }
+}
+@media (max-width: 1200px) {
+  .title {
+    display: none;
+  }
+  .app-logo {
+    display: none
+  }
+
+  .search-wrapper {
+    width: 350px;
+  }  
+  .search-entity-list {
+    width: 150px; 
+  }
+}

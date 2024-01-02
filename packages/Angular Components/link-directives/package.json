@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/ng-link-directives",
+  "version": "0.9.59",
+  "description": "MemberJunction: Angular Link Directives for turning an element in an angular app into an email, web, or record link",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc"
+  },
+  "keywords": [
+    "MemberJunction",
+    "Angular",
+    "Link",
+    "Directives"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "^15.2.0",
+    "@angular/compiler-cli": "^15.2.0"
+  },
+  "peerDependencies": {
+    "@angular/common": "^15.2.0",
+    "@angular/core": "^15.2.0",
+    "@angular/router": "^15.2.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "@memberjunction/core": "^0.9.87"
+  },
+  "sideEffects": false
+}

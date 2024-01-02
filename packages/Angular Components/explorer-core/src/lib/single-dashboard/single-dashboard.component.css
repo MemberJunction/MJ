@@ -1,0 +1,40 @@
+.dashboard-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.dashboard-title .k-icon {
+    color: #ff6358;
+    font-size: 25px;
+}
+.dashboard-title h3 {
+color:  #424242;
+font-size: 28px;
+font-style: normal;
+font-weight: 300;
+line-height: 28px;
+}
+.dashboard-header {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+::ng-deep .dashboard-header .btn-ref .k-button-text {
+    display: flex;
+    gap: 10px;
+}
+    .dashboard-header .btn-ref {
+    border: none;
+    background: transparent;
+}
+.main-head-dashboard {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.tile-resource-container .k-tilelayout {
+    background: #fff;
+}

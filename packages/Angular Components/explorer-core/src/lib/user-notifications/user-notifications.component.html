@@ -1,0 +1,40 @@
+<div class="notification-list-wrap" mjFillContainer [bottomMargin]="5"> 
+  <div class="header">
+    <div class="title">
+      Notifications
+    </div>
+    <div>
+      <input #allRadio checked type="radio" name="UnreadStatus" value="All" (change)="onReadRadioChanged($event)" /><span class="radio-label"  
+            (click)="selectReadOption('All')">All</span>
+      <input #unreadRadio type="radio" name="UnreadStatus" value="Unread" (change)="onReadRadioChanged($event)" /><span class="radio-label"  
+            (click)="selectReadOption('Unread')">Unread</span>
+      <input #readRadio type="radio" name="UnreadStatus" value="Read" (change)="onReadRadioChanged($event)" /><span class="radio-label" 
+            (click)="selectReadOption('Read')">Read</span>
+      <kendo-textbox
+        class="filter-input"
+        placeholder="Filter items..."
+        (valueChange)="onFilterChanged($event)"
+      >
+        <ng-template kendoTextBoxSuffixTemplate>
+          <span class="k-icon k-i-search"></span>
+        </ng-template>
+      </kendo-textbox>  
+    </div>
+  </div> 
+
+  <kendo-listview [data]="NotificationsToShow">
+    <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
+      <div [class]="getItemWrapperClass(dataItem)">
+        <div [class]="getItemTitleClass(dataItem)" (click)="notificationClicked(dataItem)">{{dataItem.Title}}</div>
+        <div class="notification-body"  (click)="notificationClicked(dataItem)">
+          <div class="notification-date">{{dataItem.CreatedAt | date:'long'}}</div>
+          <div class="notification-message">{{dataItem.Message}}</div>
+        </div>
+        <div>
+          <button kendoButton *ngIf="dataItem.Unread" (click)="markAsRead(dataItem, true)">Mark as Read</button>
+          <button kendoButton *ngIf="!dataItem.Unread" (click)="markAsRead(dataItem, false)">Mark as Unread</button>
+        </div>  
+      </div>
+    </ng-template>
+  </kendo-listview>
+</div>

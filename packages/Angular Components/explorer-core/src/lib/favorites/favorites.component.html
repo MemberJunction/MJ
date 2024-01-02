@@ -1,0 +1,21 @@
+<kendo-listview
+    [data]="favorites"
+    class="list-view"
+>
+    <ng-container class="entity-wrap">
+        <ng-template kendoListViewHeaderTemplate>
+            <div class="header"> 
+                <div class="head-tag">
+                    <span class="k-icon k-i-clock"></span>
+                    Favorites
+                </div>
+                <div class="count">{{favorites.length}}</div>
+                </div>
+        </ng-template>
+        <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
+            <div class="list-item"  (click)="favoriteItemClick(dataItem)">
+                <b>{{dataItem.Entity}}</b>: {{dataItem.RecordName ? dataItem.RecordName : dataItem.RecordID}}
+            </div>
+        </ng-template>
+    </ng-container>
+</kendo-listview>

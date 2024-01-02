@@ -1,0 +1,61 @@
+<div class = "chat-container">
+    <div class="conversation-history">
+        <button kendoButton (click)="createNewConversation()" >+ New Chat</button>
+        <kendo-listview
+            class="conversation-list"
+            [data]="Conversations"
+            [style.height.px]="280"
+            [itemClass]="{ 'item-border': true }"
+            mjFillContainer 
+            [fillWidth]="false"
+            #conversationList
+            >
+            <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
+                <div class="conversation-item" 
+                     [ngClass]="SelectedConversation?.ID === dataItem.ID ? 'conversation-item-selected' : ''"
+                     [title]="dataItem.Name" 
+                     (click)="selectConversation(dataItem)"> 
+                    <kendo-icon *ngIf="!IsSkipProcessing(dataItem)" name="comment" class="conversation-icon"></kendo-icon>
+                    <kendo-icon *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" name="clock" class="conversation-icon"></kendo-icon>
+                    <div class="text-container">
+                        <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
+                        <textarea *ngIf="dataItem.ID === SelectedConversation?.ID && ConversationEditMode" [(ngModel)]="dataItem.Name" maxlength="100"></textarea>
+                    </div>
+                    <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
+                        <kendo-icon *ngIf="!ConversationEditMode" name="edit" class="edit-icon" (click)="editConvo(dataItem)"></kendo-icon>
+                        <kendo-icon *ngIf="!ConversationEditMode" name="delete" class="delete-icon" (click)="deleteConvo(dataItem)"></kendo-icon>    
+                        <kendo-icon *ngIf="ConversationEditMode" name="check" class="save-icon" (click)="saveConvoName(dataItem)" ></kendo-icon>
+                        <kendo-icon *ngIf="ConversationEditMode" name="close" class="cancel-edit-icon" (click)="cancelConvoEdit(dataItem)"></kendo-icon>
+                    </div>
+                </div>
+            </ng-template>
+        </kendo-listview>
+    </div>
+    <div class="input-wrapper">
+        <div class="skip-title">Ask Skip!</div>
+        <div #AskSkipPanel mjContainer class="messages" mjFillContainer [bottomMargin]="60" [fillWidth]="false">
+            <div *ngFor="let message of Messages">  
+                <div class="message-row" [ngClass]="message.Role.trim().toLowerCase() === 'ai' ? 'ai-message' : message.Role.trim().toLowerCase() === 'error' ? 'error-message' : 'user-message'" >
+                    <div class="message-image">
+                        <img src="{{message.Role.trim().toLowerCase() === 'ai' || message.Role.trim().toLowerCase() === 'error' ? 'assets/Skip - Mark Only - Small.png' : userImage()}}" class="avatar" />
+                    </div>
+                    <div class="message" mjContainer [id]="'skip_message_' + message.ID">
+                        <div>{{this.createDetailHtml(message)}}</div> 
+                    </div>
+                </div>
+            </div>
+            <div *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
+                <kendo-loader></kendo-loader>
+            </div>
+        </div>
+        <div class="input-area">
+            <textarea
+                    #AskSkipInput 
+                    [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
+                    (keyup.enter)="onEnter($event)" 
+                    type="text" 
+                    placeholder="Type your message..."></textarea>
+            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipQuestion()" [primary]="true">Send</button>
+        </div>
+    </div>
+</div>     

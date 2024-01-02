@@ -1,0 +1,27 @@
+<div class="detail-grid" *ngIf="entity">
+    <div class="grid-header">Field</div>
+    <div class="grid-header">Value</div>
+
+    <div class="grid-item">Name</div>
+    <div class="grid-item">{{ entity.Name }}</div>
+
+    <div class="grid-item">Description</div>
+    <div class="grid-item">{{ entity.Description }}</div>
+
+    <div class="grid-item">Base View</div>
+    <div class="grid-item">{{ entity.BaseView }}</div>
+
+    <div class="grid-item">Schema</div>
+    <div class="grid-item">{{ entity.SchemaName }}</div>
+
+    <div class="grid-item">Virtual Entity</div>
+    <div class="grid-item">{{ entity.VirtualEntity }}</div>
+
+    <div class="grid-item">Track Record Changes</div>
+    <div class="grid-item">{{ entity.TrackRecordChanges }}</div>
+
+    <!-- Add the rest of your fields here -->
+
+    <div class="grid-item">Allow User Search API</div>
+    <div class="grid-item">{{ entity.AllowUserSearchAPI }}</div>
+</div>  

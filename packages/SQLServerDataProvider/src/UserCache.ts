@@ -1,0 +1,69 @@
+import { LogError, Metadata, UserInfo } from "@memberjunction/core";
+import { MJGlobal } from "@memberjunction/global";
+import { DataSource } from "typeorm";
+
+export class UserCache {
+    static _instance: UserCache;
+    private _globalObjectKey: string = 'MJ.SQLServerDataProvider.UserCache.Instance';
+    private _users: UserInfo[];
+    constructor() {
+      if (UserCache._instance) 
+          return UserCache._instance;
+      else {
+          const g = MJGlobal.Instance.GetGlobalObjectStore();
+          if (g && g[this._globalObjectKey]) {
+            UserCache._instance = g[this._globalObjectKey];
+              return UserCache._instance;
+          }
+
+          // finally, if we get here, we are the first instance of this class, so create it
+          if (!UserCache._instance) {
+            UserCache._instance = this;
+          
+              // try to put this in global object store if there is a window/e.g. we're in a browser, a global object, we're in node, etc...
+              if (g)
+                  g[this._globalObjectKey] = UserCache._instance;
+              
+              return this;
+          }
+      }
+    }
+    
+    public async Refresh(dataSource: DataSource, autoRefreshIntervalMS?: number): Promise<void> {
+      try {
+        const coreSchema = Metadata.Provider.ConfigData.MJCoreSchemaName;
+        const u = await dataSource.query(`SELECT * FROM [${coreSchema}].vwUsers`);
+        const r = await dataSource.query(`SELECT * FROM [${coreSchema}].vwUserRoles`);
+        if (u) {
+          this._users = u.map((user: any) => {
+            user.UserRoles = r.filter((role: any) => role.UserID === user.ID);
+            const uI = new UserInfo(Metadata.Provider, user)
+            return uI;
+          })
+
+          // refresh this every interval noted above to ensure we have the latest data
+          if (autoRefreshIntervalMS && autoRefreshIntervalMS > 0)
+            setTimeout(() => {
+              this.Refresh(dataSource, autoRefreshIntervalMS);
+            }, autoRefreshIntervalMS);
+        }
+      }
+      catch (err) {
+        LogError(err); 
+      }
+    }
+    static get Instance(): UserCache {
+      if (!UserCache._instance) {
+        UserCache._instance = new UserCache();
+      }
+      return UserCache._instance;
+    }
+    public get Users(): UserInfo[] {
+      return this._users;
+    }
+    static get Users(): UserInfo[] {
+      return UserCache.Instance.Users; 
+    }
+  }
+  
+  

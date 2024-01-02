@@ -1,0 +1,26 @@
+.demo-container {
+    font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    height: 800px;
+    overflow-y: auto;
+    border: solid 1px blue;
+}
+.demo-list > thead {
+    border-bottom: solid 1px darkgray;
+}
+
+.row {
+    cursor: pointer;
+    padding: 5px;
+}
+
+.row-selected {
+    background-color: #baee2d; /* or any other color of your choice */
+}
+.row:hover {
+    background-color: lightpink;
+}
+
+td {
+    margin: 0;
+    padding: 3px;
+}

@@ -1,0 +1,23 @@
+{
+    "dbUrl": "",
+    "dbInstance": "",
+    "dbTrustServerCertificate": "Y",
+    "dbDatabase": "DBNAME",
+    "dbPort": 1433,
+    "codeGenLogin": "",
+    "codeGenPwD": "",
+    "mjAPILogin": "",
+    "mjAPIPwD": "",
+    "graphQLPort": 4000,
+    "authType": "MSAL",
+    "msalWebClientId": "",
+    "msalTenantId": "",
+    "auth0ClientId": "",
+    "auth0ClientSecret": "",
+    "auth0Domain": "",
+    "createNewUser": "Y",
+    "userEmail": "newuser@example.com",
+    "userFirstName": "John",
+    "userLastName": "Doe",
+    "userName": "johndoe"
+}

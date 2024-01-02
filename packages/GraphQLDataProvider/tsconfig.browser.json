@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig.base.json",
+    "compilerOptions": {
+      "module": "umd",
+      "outDir": "dist-browser"
+    },
+    "include": ["src/**/*"]
+  }
+  

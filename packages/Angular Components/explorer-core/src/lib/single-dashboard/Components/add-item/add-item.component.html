@@ -1,0 +1,44 @@
+<div class="k-overlay"></div>
+<kendo-window class="modal-body-wrap" [width]="500" [minHeight]="300" [minWidth]="400" [resizable]="true" (close)="closeDialog()"
+    title="Add Item to Dashboard">
+    <div class="k-d-flex k-flex-col resource-wrap">
+        <kendo-label text="Resource Type">
+            <br />
+            <kendo-dropdownlist [data]="ResourceTypes" [textField]="'DisplayName'" [valueField]="'ID'"  [subtitle]="'sdfsdf'"
+                (valueChange)="onResourceTypeChange($event)" [(ngModel)]="resourceType">
+            </kendo-dropdownlist>
+        </kendo-label>
+        <div [ngSwitch]="resourceType.Entity " class="user-view-wrap">
+            <ng-container *ngSwitchCase="'User Views'">
+                <kendo-label text="Entity">
+                    <br />
+                    <kendo-dropdownlist [data]="Entities" [textField]="'Name'" [valueField]="'ID'"
+                        (valueChange)="onEntityChange($event)" [(ngModel)]="selectedEntity">
+                    </kendo-dropdownlist>
+                </kendo-label>
+                <kendo-label text="Views" *ngIf="selectedEntity && Views.length">
+                    <br />
+                    <kendo-dropdownlist [data]="Views" [textField]="'Name'" [valueField]="'ID'"
+                        (valueChange)="onViewChange($event)" [(ngModel)]="selectedView">
+                    </kendo-dropdownlist>
+                </kendo-label>
+                <kendo-loader *ngIf="selectedEntity && !Views.length" type="converging-spinner"></kendo-loader>
+            </ng-container>
+            <ng-container *ngSwitchCase="'Reports'">
+                <kendo-label text="Reports" *ngIf="Reports.length">
+                    <br />
+                    <kendo-dropdownlist [data]="Reports" [textField]="'Name'" [valueField]="'ID'"
+                        (valueChange)="onViewChange($event)" [(ngModel)]="selectedReport">
+                    </kendo-dropdownlist>
+                </kendo-label>
+                <kendo-loader *ngIf="!Reports.length" type="converging-spinner"></kendo-loader>
+            </ng-container>
+        </div>
+    </div>
+    <div class="k-actions k-actions-end popup-actions">
+        <button kendoButton icon="save" themeColor="primary" (click)="addItem()">
+            Add
+        </button>
+        <button kendoButton (click)="closeDialog()">Cancel</button>
+    </div>
+</kendo-window>

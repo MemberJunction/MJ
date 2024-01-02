@@ -1,0 +1,39 @@
+html,
+body,
+my-app {
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+} 
+
+my-app {
+    display: flex;
+    flex-direction: column;
+}
+
+kendo-drawer-container {
+    flex: 1 1 auto;
+    overflow-y: auto;
+}
+
+.k-icon {
+    font-size: 20px;
+}
+
+
+.custom-toolbar {
+    width: 100%;
+    background-color: #f6f6f6;
+    line-height: 10px;
+    border-bottom: inset;
+    border-bottom-width: 1px;
+    padding: 3px 8px;
+    color: #656565;
+}
+
+.mail-box{
+    margin-left: 20px;
+    font-weight: bold;
+    font-size: 17px;
+} 
+ 

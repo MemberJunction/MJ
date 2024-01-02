@@ -1,0 +1,12 @@
+<div *ngIf="authBase.authenticated" class="app-main">
+  <app-header-component (toggle)="toggleDrawer($event)" selectedPage="selected" class="app-header" [applicationName]="environment.APPLICATION_NAME" [applicationInstance]="environment.APPLICATION_INSTANCE"></app-header-component>
+  <app-navigation *ngIf="!HasError" nav class="app-body" [applicationName]="environment.APPLICATION_NAME"></app-navigation>
+  <div *ngIf="HasError"><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
+</div>
+<div *ngIf="!(authBase.authenticated)">
+  Login:
+  <!-- <app-auth-button></app-auth-button> -->
+  <button (click)="authBase.login()">
+    Log in
+  </button>
+</div>

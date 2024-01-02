@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MemberJunction Angular Elements Demo</title>
+  <script src="dist/mj-angular-elements-demo-complete.js"></script>
+  <!-- Include MemberJunctionGraphQLDataProvider.js -->
+  <script src="../../../MemberJunction/GraphQLDataProvider/dist-browser/MemberJunctionGraphQLDataProvider.js"></script>
+</head>
+<body>
+  <mj-listener-demo></mj-listener-demo>
+  <mj-hello-world></mj-hello-world>
+  <div id="output-div">Output will appear here</div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async function() {
+      // wire up the event handler for the Hello World component first
+      const helloWorldElement = document.querySelector('mj-hello-world');
+      if(helloWorldElement) {
+        helloWorldElement.addEventListener('display', event => {
+          document.querySelector('#output-div').innerText = event.detail;
+        });
+      }
+
+      // Variables for setup (replace with actual values)
+      const token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImtpZCI6Ii1LSTNROW5OUjdiUm9meG1lWm9YcWJIWkdldyJ9.eyJhdWQiOiI3ZTZlNmVjZi02NmZmLTQ3MzMtOWM2MC0xZTZkZWY5NDk4OTciLCJpc3MiOiJodHRwczovL2xvZ2luLm1pY3Jvc29mdG9ubGluZS5jb20vZmYxMGFkZTctNWQwMy00MGE5LWJlMjgtY2I3YWI5OTY3MGIxL3YyLjAiLCJpYXQiOjE2OTYzNzE3NjEsIm5iZiI6MTY5NjM3MTc2MSwiZXhwIjoxNjk2Mzc1NjYxLCJhaW8iOiJBV1FBbS84VUFBQUFTQkdmZ2JSeGt1MGcrNFc3c2pNM3Exdzhqc2VDSWhJeG5vQk9ubjN6bFpCVGlsWjVaSUQ2Z3MwMkxCM3dMbE1SZHZ5V2NTSHgzaFNwSldlZFlaekhBL3gyRTBxYW5WY2wramJleXN1dmdxVjQ1YTR5dTY0L3QwRlFxNmNENjVqUiIsImVtYWlsIjoiYW1pdGhAYmx1ZWN5cHJlc3MuaW8iLCJsb2dpbl9oaW50IjoiTy5DaVEzTmprNU16TXdZeTFqWWpSakxUUTNNVFV0T1RNME5pMHpNV1EwTWpka1l6Z3pNRFlTSkdabU1UQmhaR1UzTFRWa01ETXROREJoT1MxaVpUSTRMV05pTjJGaU9UazJOekJpTVJvVVlXMXBkR2hBWW14MVpXTjVjSEpsYzNNdWFXOGdyZ0U9IiwibmFtZSI6IkFtaXRoIE5hZ2FyYWphbiIsIm5vbmNlIjoiYzBkNTA0YTQtMDBkZC00YzM5LWEyNDUtYjUzMWE3NzQxZjAwIiwib2lkIjoiNzY5OTMzMGMtY2I0Yy00NzE1LTkzNDYtMzFkNDI3ZGM4MzA2IiwicHJlZmVycmVkX3VzZXJuYW1lIjoiYW1pdGhAYmx1ZWN5cHJlc3MuaW8iLCJyaCI6IjAuQVh3QTU2MFFfd05kcVVDLUtNdDZ1Wlp3c2M5dWJuN19aak5IbkdBZWJlLVVtSmQ4QUFBLiIsInN1YiI6IkotTU1qRGx2ckFNSzVIRE01YzRYdGJsZGU3a0tEd0F3QVRORlZfbkRRYUkiLCJ0aWQiOiJmZjEwYWRlNy01ZDAzLTQwYTktYmUyOC1jYjdhYjk5NjcwYjEiLCJ1dGkiOiJtTTBNcEdvdHowcVFKVGMxcmIxaUFBIiwidmVyIjoiMi4wIn0.Jo6Qxvpaz0re5TtM_uP8QeUqNpfuVcra0Z8JdPIz8Ia8uBKUjF9pYKspsxkYEQ5kmuHgVlBUO-UTEVfNDHNCzlZJdqAUGsKdXWU-X2iEwiQL3waX1mpzU8HUDbpztqdBkNDUQyhFB1MUZnnJETeDT1yfQXhxSVEA2H0FR-nEmTkBqQHj599Syeo3VAbCIJDkLX7HETK4Vh0BGA9yRxXEH0s6Xk1-cW3H7Ma7Ab6IccG0GRJANfXUltI38ykTsJGAjhJWwK0_g1yi7ahrpl8TTY-qrZhpldqyrXYcst61QBwLRye03xlY-G1gOBdKrpiORjTsarnyzEnGXiYiXSYUjQ';
+      const url = 'http://localhost:4000';
+      const wsurl = 'ws://localhost:4000/';
+      const schemaName = 'admin'; // Replace with environment.MJ_CORE_SCHEMA_NAME if available
+
+      // Initialize GraphQL client
+      const { GraphQLProviderConfigData, setupGraphQLClient } = MemberJunctionGraphQLDataProvider;
+      const config = new GraphQLProviderConfigData(token, url, wsurl, schemaName);
+      await setupGraphQLClient(config);
+      console.log("GraphQL client initialized")
+    });
+
+  </script>
+
+</body>
+</html>

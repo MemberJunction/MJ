@@ -1,0 +1,44 @@
+.navigation-wrap {
+  height: calc(100vh - 80px);
+  width: 100%;
+  overflow:hidden
+}
+
+.nav-tab-title {
+  margin-left: 10px;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background-color: #ffffff;
+  border: 1px solid #ccc;
+  padding: 3px 3px;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background-color: #f1f1f1;
+}
+::ng-deep .navigation-wrap .drawer-container {
+  padding: 20px;
+  background: #FAFAFA;
+}
+::ng-deep .navigation-wrap .drawer-container .k-content {
+  padding: 25px;
+}
+::ng-deep .navigation-wrap .drawer-container .k-tabstrip-items-wrapper {
+  background: #fafafa;
+}
+::ng-deep .navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item.k-active {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+::ng-deep .navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item {
+  background: #fafafa;
+  border-radius: 0;
+}

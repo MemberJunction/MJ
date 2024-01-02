@@ -1,0 +1,52 @@
+<div class="card-container">
+  <div class="card-header-entity">
+    <div class="title-wrap">
+      <h1>{{entityName}}</h1>
+      <p> <span class="k-icon k-i-information"></span> {{entityDescription}}</p>
+    </div>
+    <button kendoButton icon="gear" (click)="createNewView()">Create New View</button>
+  </div>
+  <app-view-properties-dialog [EntityName]="this.entityName" [ShowPropertiesButton]="false"
+    (dialogClosed)="viewPropertiesClosed($event)"></app-view-properties-dialog>
+  <div class="main-area">
+    <kendo-loader *ngIf="showloader" type="converging-spinner" ></kendo-loader>
+    <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showloader">
+      <div *ngFor="let entity of entityViews">
+        <kendo-card class="card-wrapper">
+          <kendo-card-header class="k-hstack view-card">
+            <kendo-icon name="table" class="view-icon"></kendo-icon>
+            <div class="btn-wrapper">
+              <button kendoButton fillMode="flat" (click)="editView(entity)">
+                <span class="k-icon k-i-edit"></span>
+              </button>
+              <button kendoButton fillMode="flat" (click)="handleDeleteView(entity)"><span
+                  class="k-icon k-i-delete"></span></button>
+            </div>
+          </kendo-card-header>
+
+          <kendo-card-body (click)="viewItemClick(entity)">
+            <div class="view-card-content k-cursor-pointer">
+              <h5 kendoCardTitle>{{ entity.Name }}</h5>
+              <p kendoCardSubtitle>{{ entity.Description }}</p>
+            </div>
+          </kendo-card-body>
+        </kendo-card>
+      </div>
+    </div>
+  </div>
+
+  <kendo-dialog title="Delete View" *ngIf="deleteDialogOpened" (close)="handleDeleteView()">
+    <kendo-loader *ngIf="showloader" type="converging-spinner"></kendo-loader>
+    <div [class]="showloader ? 'disabled-div' : ''">
+      <p class="k-m-7.5 k-text-center">
+        Are you sure you want to delete <b>{{selectedView?.Name}}</b> View?
+      </p>
+      <div class="k-actions k-actions-end popup-actions">
+        <button kendoButton (click)="deleteView()" themeColor="primary">
+          <span class="k-icon k-i-check"></span> Yes
+        </button>
+        <button kendoButton (click)="handleDeleteView()"><span class="k-icon k-i-close"></span> No</button>
+      </div>
+    </div>
+  </kendo-dialog>
+</div>

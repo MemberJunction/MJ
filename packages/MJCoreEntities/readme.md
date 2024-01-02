@@ -1,0 +1,3 @@
+# @memberjunction/core-entities
+
+The `@memberjunction/core-entities` library provides a set of strongly typed classes that are sub-classes of the BaseEntity class defined within @memberjunction/core. These classes are maintained by MemberJunction and released with each updated release of MemberJunction as the metadata layer changes. In addition to the strongly-typed sub-classes this library contains UserViewEntityExtended which is the highest priority sub-class for the User Views entity and provides logic for view management.

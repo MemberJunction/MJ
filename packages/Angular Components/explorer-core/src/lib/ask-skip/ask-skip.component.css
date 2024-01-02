@@ -1,0 +1,195 @@
+.chat-container {
+    padding: 0px;
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+}
+
+.new-conversation {
+    height: 30px;
+    font-size: large;
+}
+
+.conversation-history {
+    min-width: 225px;
+    width: 225px;
+    height: 100%;
+    overflow-y: auto; /* Add scroll if the content exceeds the height */
+    margin-right: 10px;
+    padding-top: 5px;
+
+    margin-top: 0px;  
+    padding-top: 0px;  
+}
+
+.conversation-history > button {
+    height: 25px;
+}
+
+
+
+.skip-title {
+    font-size: larger;
+    margin-bottom: 5px;
+    height: 20px;
+    margin-top: 5px;
+}
+
+.conversation-list {
+    margin-top: 5px;
+    padding-top: 5px;
+}
+
+.messages {
+    flex-grow: 1; /* This will make the messages take the remaining space */
+    overflow-y: auto; /* enable scrolling if the content overflows */
+    overflow-x: hidden; /* hide horizontal scrollbar */
+    border: solid 1px rgba(0, 0, 0, 0.08);
+    margin-bottom: 5px;
+
+    margin-top: 2px; /* align it with the top of converation history exactly*/
+}
+
+.message-row {
+    display: flex;
+    align-items: start; /* if you want to align them at the top */
+    border-bottom: solid 1px rgba(0, 0, 0, 0.08);
+    padding: 10px;
+    width: 100%;
+}
+
+.conversation-item {
+    margin-left: 5px;
+    margin-right: 5px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 5px;
+    padding-right: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    overflow: hidden;
+    max-height: 150px;
+    font-size: 14px;
+
+    display: flex;
+    align-items: flex-start; /* Align items to the top */
+
+    flex-wrap: wrap; /* Allow items to wrap to the next line */
+}
+
+.text-container {
+    flex: 1; /* Take up remaining space */
+    display: flex;
+    flex-direction: column; /* Stack children vertically */
+}
+
+.text-container textarea {
+    resize: none; /* Disable resizing */
+    /* Add more styles for the textarea if needed */
+}
+
+.conversation-item > .conversation-icon {
+    margin-top: 3px;
+}
+
+.conversation-item span {
+    display: inline-block;
+    white-space: pre-wrap;  /* Allow text to wrap */
+    overflow: auto;
+    word-wrap: break-word;
+    margin-left: 3px;     /* Move the text to the right */
+}
+
+.conversation-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+.conversation-item-selected {
+    background-color: rgba(0, 0, 0, 0.15);
+}
+.conversation-item > .conversation-icon {
+    margin-right: 11px;
+}
+.edit-conversation-panel {
+    width: 100%; /* Take up the full width */
+    display: flex;
+    justify-content: flex-end; /* Align icons to the right */
+}
+.edit-conversation-panel > .k-icon {
+    margin-left: 5px;
+    cursor: pointer;
+}
+.edit-conversation-panel > .k-icon:hover {
+    color: #ff0000;
+}
+
+.message {
+    word-wrap: break-word;
+    width: 100%;
+    margin-right: 20px;
+}
+.message-image {
+    max-width: 45px;
+    max-height: 45px;
+    margin-right: 10px;
+    margin-left: 5px;
+    margin-bottom: 10px;
+}
+.message-image > img {
+    max-width: 100%;
+    max-height: 100%;
+}
+.user-message {
+  background-color: white;
+  /* additional styling for user messages... */
+}
+
+.error-message {
+    background-color:lightpink;
+    /* additional styling for AI messages... */
+  }
+  
+.ai-message {
+  background-color:rgba(0, 0, 0, 0.05);
+  /* additional styling for AI messages... */
+}
+
+
+
+.user-message {
+    align-self: flex-start; /* align user messages to the left */
+}
+
+.ai-message {
+    align-self: flex-end; /* align AI messages to the right */
+}
+
+.input-area {
+    height: 49px;
+    display: flex;
+    align-items: center;
+}
+
+.input-area > button {
+    vertical-align: top;
+    width: 100px;
+    height: 40px;
+    font-size: large;
+    margin-top: 3px;
+    margin-left: 1px;
+}
+
+.input-area > textarea {
+    padding: 3px;
+    border: solid 1px rgba(0, 0, 0, 0.08) ;
+    margin-top: 4px;
+    margin-right: 5px;
+    height: 42px;
+    font-size: large;
+    resize: none;
+    flex: 1;  /* Take up remaining space */
+} 
+
+.input-wrapper {
+    flex-grow: 1; /* This will make the input-wrapper take the remaining space */
+    height: 100%;
+}

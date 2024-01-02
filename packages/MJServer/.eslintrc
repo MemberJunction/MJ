@@ -1,0 +1,24 @@
+{
+  "env": {
+    "node": true
+  },
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["prettier", "@typescript-eslint"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-shadow": "error",
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "class-methods-use-this": "off",
+    "no-shadow": "off",
+    "no-unused-vars": "off",
+    "object-shorthand": "error",
+    "prettier/prettier": "error",
+    "spaced-comment": "off"
+  },
+  "settings": {
+    "import/resolver": {
+      "typescript": {}
+    }
+  }
+}

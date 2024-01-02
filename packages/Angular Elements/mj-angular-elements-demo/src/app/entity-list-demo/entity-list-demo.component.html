@@ -1,0 +1,23 @@
+<div class="demo-container">
+    <table *ngIf="entityList && entityList.length > 0" class="demo-list">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Schema</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let e of entityList" 
+                (click)="handleRowClicked(e)" 
+                [class]=" 'row' + (e === this.selectedRow ? ' row-selected' : '')">
+                <td>{{e.Name}}</td>
+                <td>{{e.Description}}</td>
+                <td>{{e.SchemaName}}</td>
+            </tr>
+        </tbody>
+    </table>    
+    <div *ngIf="!entityList || entityList.length === 0">
+        Loading...
+    </div>
+</div>

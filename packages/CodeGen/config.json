@@ -1,0 +1,170 @@
+{
+    "newUserSetup": {
+        "UserName": "",
+        "FirstName": "",
+        "LastName": "",
+        "Email": "",
+        "Roles": [
+            "Developer",
+            "Integration",
+            "UI"
+        ],
+        "IsComplete": false
+    },
+    "settings": [
+        {
+            "name": "mj_core_schema",
+            "value": "admin"
+        },
+        {
+            "name": "skip_database_generation",
+            "value": false
+        }
+    ],
+    "logging": {
+        "log": true,
+        "logFile": "codegen.output.txt",
+        "console": true
+    },
+    "newEntityDefaults": {
+        "TrackRecordChanges": false,
+        "AuditRecordAccess": false,
+        "AuditViewRuns": false,
+        "AllowAllRowsAPI": false,
+        "AllowCreateAPI": true,
+        "AllowUpdateAPI": true,
+        "AllowDeleteAPI": false,
+        "AllowUserSearchAPI": false,
+        "CascadeDeletes": false,
+        "UserViewMaxRows": 1000,
+        "AddToApplicationWithSchemaName": true,
+        "IncludeFirstNFieldsAsDefaultInView": 5,
+        "PermissionDefaults": {
+            "AutoAddPermissionsForNewEntities": true,
+            "Permissions": [
+                {
+                    "RoleName": "UI",
+                    "CanRead": true,
+                    "CanCreate": false,
+                    "CanUpdate": false,
+                    "CanDelete": false
+                },
+                {
+                    "RoleName": "Developer",
+                    "CanRead": true,
+                    "CanCreate": true,
+                    "CanUpdate": true,
+                    "CanDelete": false
+                },
+                {
+                    "RoleName": "Integration",
+                    "CanRead": true,
+                    "CanCreate": true,
+                    "CanUpdate": true,
+                    "CanDelete": true
+                }
+            ]
+        }
+    },
+    "newEntityRelationshipDefaults": {
+        "AutomaticallyCreateRelationships": true,
+        "CreateOneToManyRelationships": true
+    },
+    "newSchemaDefaults": {
+        "CreateNewApplicationWithSchemaName": true
+    },
+    "excludeSchemas": [
+        "sys",
+        "staging"
+    ],
+    "excludeTables": [
+        {
+            "schema": "%",
+            "table": "sys%"
+        }
+    ],
+    "customSQLScripts": [
+        {
+            "scriptFile": "../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql",
+            "when": "before-all"
+        }
+    ],
+    "dbSchemaJSONOutput": {
+        "excludeEntities": [],
+        "excludeSchemas": [
+            "sys",
+            "staging",
+            "dbo"
+        ],
+        "bundles": [
+            {
+                "name": "_Core_Apps",
+                "excludeSchemas": [
+                    "admin"
+                ]
+            }
+        ]
+    },
+    "output": [
+        {
+            "type": "SQL",
+            "directory": "../../SQL Scripts/generated",
+            "appendOutputCode": true
+        },
+        {
+            "type": "Angular",
+            "directory": "../MJExplorer/src/app/generated",
+            "options": [
+                {
+                    "name": "maxComponentsPerModule",
+                    "value": 20
+                }
+            ]
+        },
+        {
+            "type": "GraphQLServer",
+            "directory": "../MJAPI/src/generated"
+        },
+        {
+            "type": "CoreEntitySubclasses",
+            "directory": "../MJCoreEntities/src/generated"
+        },
+        {
+            "type": "EntitySubclasses",
+            "directory": "../GeneratedEntities/src/generated"
+        },
+        {
+            "type": "DBSchemaJSON",
+            "directory": "../../Schema Files"
+        }
+    ],
+    "commands": [
+        {
+            "workingDirectory": "../MJCoreEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../GeneratedEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../MJAPI",
+            "command": "npm",
+            "args": [
+                "start"
+            ],
+            "timeout": 30000,
+            "when": "after"
+        }
+    ]
+}

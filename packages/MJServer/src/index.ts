@@ -1,0 +1,111 @@
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+import { expressMiddleware } from '@apollo/server/express4';
+import { mergeSchemas } from '@graphql-tools/schema';
+import { Metadata } from '@memberjunction/core';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { json } from 'body-parser';
+import cors from 'cors';
+import express from 'express';
+import { globSync } from 'fast-glob';
+import { sep } from 'node:path';
+import { useServer } from 'graphql-ws/lib/use/ws';
+import { createServer } from 'node:http';
+import 'reflect-metadata';
+import { ReplaySubject } from 'rxjs';
+import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-graphql';
+import { DataSource } from 'typeorm';
+import { WebSocketServer } from 'ws';
+import buildApolloServer from './apolloServer';
+import { configInfo, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage } from './config';
+import { contextFunction, getUserPayload } from './context';
+import { publicDirective } from './directives';
+import orm from './orm';
+
+const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
+
+export { MaxLength } from 'class-validator';
+export * from 'type-graphql';
+export { NewUserBase } from './auth/newUsers';
+export { configInfo } from './config';
+export * from './directives';
+export * from './types';
+export * from './entitySubclasses/userViewEntity.server'
+
+export const serve = async (resolverPaths: Array<string>) => {
+  const replaceBackslashes = sep === '\\';
+  const paths = resolverPaths.flatMap((path) => globSync(replaceBackslashes ?  path.replace(/\\/g, '/') : globSync(path)));
+  if (paths.length === 0) {
+    console.warn(`No resolvers found in ${resolverPaths.join(', ')}`);
+    console.log({ resolverPaths, paths, cwd: process.cwd() });
+  }
+
+  const dataSource = new DataSource(orm(paths));
+  const setupComplete$ = new ReplaySubject(1);
+  dataSource
+    .initialize()
+    .then(async () => {
+      const config = new SQLServerProviderConfigData(dataSource, '', mj_core_schema, cacheRefreshInterval);
+      await setupSQLServerClient(config); // datasource is already initialized, so we can setup the client right away
+      const md = new Metadata();
+      console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+      setupComplete$.next(true);
+    })
+    .catch((err) => {
+      console.error('Error during Data Source initialization', err);
+    });
+
+  const dynamicModules = await Promise.all(paths.map((modulePath) => import(modulePath.replace(/\.[jt]s$/, ''))));
+  const resolvers = dynamicModules.flatMap((module) =>
+    Object.values(module).filter((value) => typeof value === 'function')
+  ) as BuildSchemaOptions['resolvers'];
+
+  const schema = publicDirective.transformer(
+    mergeSchemas({
+      schemas: [
+        buildSchemaSync({
+          resolvers,
+          validate: false,
+          scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
+          emitSchemaFile: websiteRunFromPackage !== 1,
+        }),
+      ],
+      typeDefs: [publicDirective.typeDefs],
+    })
+  );
+
+  const app = express();
+  const httpServer = createServer(app);
+
+  const webSocketServer = new WebSocketServer({ server: httpServer, path: graphqlRootPath });
+  const serverCleanup = useServer(
+    {
+      schema,
+      context: async ({ connectionParams }) => {
+        const userPayload = await getUserPayload(String(connectionParams?.Authorization), undefined, dataSource);
+        return { userPayload };
+      },
+    },
+    webSocketServer
+  );
+
+  const apolloServer = buildApolloServer({ schema }, { httpServer, serverCleanup });
+  await apolloServer.start();
+
+  app.use(
+    graphqlRootPath,
+    cors<cors.CorsRequest>(),
+    json(),
+    expressMiddleware(apolloServer, {
+      context: contextFunction({ setupComplete$, dataSource }),
+    })
+  );
+
+  await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
+};
+
+export default serve;

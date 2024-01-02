@@ -1,0 +1,41 @@
+<div #recordChangesWrapper>
+    <div class="k-overlay"></div>
+    <kendo-window 
+        class="kendo-window-custom"
+        [width]="700"
+        [height]="525"
+        [minHeight]="300"
+        [minWidth]="400"
+        [resizable]="true"
+        title="Record Changes"
+        (close)="closePropertiesDialog()"
+    >
+        <kendo-loader *ngIf="showloader" type="converging-spinner" ></kendo-loader>
+        <div class="k-d-flex k-flex-col k-justify-content-between k-h-full" #dialogContainer *ngIf="!showloader">
+            <div class="kendo-grid-container">
+                <kendo-grid 
+                    [kendoGridBinding]="viewData" 
+                    scrollable="virtual" 
+                    [pageSize]="100" 
+                    [sortable]="true"
+                    [sort]="sortSettings" 
+                    [loading]="showloader" 
+                    [resizable]="true" 
+                    [navigable]="true"
+                >
+                    <kendo-grid-column 
+                        *ngFor="let item of visibleColumns; let i = index" 
+                        field="{{item.field}}"
+                        title="{{item.title}}" 
+                        [width]="item.width"
+                        [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#a9c2af' }"
+                    >
+                        <ng-template kendoGridCellTemplate let-dataItem>
+                            <span [innerHTML]="FormatColumnValue(item, dataItem[item.field])"></span>
+                        </ng-template>
+                    </kendo-grid-column>
+                </kendo-grid>
+            </div>
+        </div>
+    </kendo-window>
+</div>

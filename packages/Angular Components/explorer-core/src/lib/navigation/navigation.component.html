@@ -1,0 +1,50 @@
+<div class="navigation-wrap" [ngClass]="{'waiting': loader}"  #drawerWrapper>
+  <kendo-loader *ngIf="loading" type="converging-spinner" ></kendo-loader>
+  <kendo-drawer-container *ngIf="!loading" >
+      <kendo-drawer
+      #drawer
+      [items]="drawerItems"
+      [mode]="mode"
+      [mini]="mini"
+      [animation]="false"
+      (select)="onDrawerSelect($event)"
+      [autoCollapse]="false"
+    >
+    </kendo-drawer>
+    <kendo-drawer-content mjFillContainer>
+      <kendo-tabstrip mjFillContainer class="drawer-container" [scrollable]="true" [keepTabContent]="true" (tabClose)="onClose($event)" (tabSelect)="onTabSelect($event)" [animate]="false" #tabstrip>
+        <kendo-tabstrip-tab [selected]="activeTabIndex === 0" [closable]="false">
+          <ng-template kendoTabTitle>
+            <kendo-icon name="home" (contextmenu)="onTabContextMenu($event, 0)"></kendo-icon>
+            <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, 0)">Home</span>
+          </ng-template>
+          <ng-template kendoTabContent class="navigation-tab-contents">
+            <router-outlet></router-outlet>
+          </ng-template>
+        </kendo-tabstrip-tab>
+        <kendo-tabstrip-tab *ngFor="let tab of tabs;let i = index" [selected]="isTabActive(tab.id)" [closable]="true">
+          <ng-template kendoTabTitle>
+            <kendo-icon [style.display]="tab?.contentLoading ? 'inline' : 'none'" name="clock" (contextmenu)="onTabContextMenu($event, i)"></kendo-icon>
+            <kendo-icon [style.display]="!tab?.contentLoading && tab?.icon ? 'inline' : 'none'" [name]="tab.icon" (contextmenu)="onTabContextMenu($event, i)"></kendo-icon>
+            <!-- <kendo-icon *ngIf="tab?.contentLoading" name="clock"></kendo-icon>
+            <kendo-icon *ngIf="!tab?.contentLoading && tab?.icon" [name]="tab.icon"></kendo-icon> -->
+            <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, i)">{{ tab.labelLoading ? 'Loading...' : tab.label }}</span>
+          </ng-template>
+          <ng-template kendoTabContent class="navigation-tab-contents">
+            <app-resource [Data]="tab.data" [isVisible]="tab?.id === getActiveTabId()"
+                          (ResourceRecordSaved)="SaveSingleWorkspaceItem(tab)"
+                          (ContentLoadingStarted)="setTabContentLoadingStatus(tab, true)"
+                          (ContentLoadingComplete)="setTabContentLoadingStatus(tab, false)"
+                          ></app-resource>
+          </ng-template>
+        </kendo-tabstrip-tab>
+      </kendo-tabstrip>
+    </kendo-drawer-content>
+  </kendo-drawer-container>
+</div>
+
+<div class="context-menu" [ngStyle]="contextMenuStyle" *ngIf="contextMenuVisible">
+  <div class="context-menu-item" (click)="handleContextMenuOption(1)">Close All</div>
+  <div class="context-menu-item" (click)="handleContextMenuOption(2)">Close Others</div>
+  <div class="context-menu-item" (click)="handleContextMenuOption(3)">Close Tabs to the Right</div>
+ </div>

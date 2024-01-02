@@ -1,0 +1,55 @@
+<div class="header-wrap">
+  <div class="header header-bg">
+    <div class="nav-container">
+      <div class="menu-button">
+        <span class="k-icon hamburger-icon" (click)="onButtonClick()"></span>
+      </div>
+
+      <div class="title">
+        <img kendoCardMedia src="assets/MJ-Logo.png" height="45px" class="app-logo" />
+        <h1 class="k-ml-2.5">{{appName}}</h1>
+      </div>
+
+      <div class="user-info-wrapper">
+        <div class="search-wrapper">
+            <kendo-dropdownlist
+              [data]="searchableEntities"
+              textField="Name"
+              valueField="ID"
+              class = "search-entity-list"
+              [(ngModel)]="selectedEntity"
+            >
+            </kendo-dropdownlist>
+            <input 
+            type="text"
+            id="txtSearch"
+            placeholder="Search"
+            kendoTextBox
+            (keydown.enter)="onSearch($event)"
+            #searchInput
+          />
+                        <span class="k-icon k-i-zoom" (click)="onSearch($event)"></span>
+                </div>
+      <div class="icon-inbox" (click)="showNotifications($event)">
+          <span class="k-icon k-i-inbox" style="cursor: pointer;"></span>
+          <span class="notification" *ngIf="UnreadNotificationCount > 0">{{UnreadNotificationCount}}</span>
+      </div>
+        <kendo-avatar class="k-m-0" style="margin: 0;" [imageSrc]="userImageURL" shape="circle"> </kendo-avatar>
+        <div class="user-info">
+          <div class="example-col">
+              <kendo-dropdownlist [data]="menuItems"  [value]="selectedMenuItem" (valueChange)="valueChange($event)">
+              </kendo-dropdownlist>
+            
+          </div>
+      </div>
+     
+
+       
+      </div>
+    </div>
+  </div>
+  <!-- <div class="nav-breadcrumb">
+        <kendo-breadcrumb (itemClick)="onBreadCrumbClick($event)" [items]="breadCrumbItems">
+        </kendo-breadcrumb>
+    </div> -->
+</div>

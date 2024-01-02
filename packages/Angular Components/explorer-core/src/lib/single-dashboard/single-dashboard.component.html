@@ -1,0 +1,46 @@
+<app-add-item-dialog *ngIf="isItemDialogOpened" (onClose)="closeDialog($event)" [selectedResource]="selectedResource"></app-add-item-dialog>
+<div *ngIf="isEditDialogOpened">
+  <app-edit-dashboard (onClose)="closeDashboardDialog($event)" (triggerAddItem)="addItem($event)" [items]="items" [config]="config" (onSave)="saveChanges($event)"></app-edit-dashboard>
+</div>
+
+
+<div class="dashboard-container">
+  <div class="main-head-dashboard">
+    <div class="dashboard-title">
+      <span class="k-icon k-i-star"></span>
+      <h3>{{ResourceData.Name}}</h3> 
+    </div>
+    <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
+      <!-- <kendo-button class="btn-ref" >
+        <span class="k-icon k-i-reload"></span> 
+        Refresh
+      </kendo-button> -->
+      <kendo-button (click)="addItem()">
+        <span class="k-icon k-i-plus"></span>
+        Add Item
+      </kendo-button>
+      <kendo-button (click)="editDashboard()" [primary]="true">
+        <span class="k-icon k-i-gear"></span>
+        Edit Dashboard
+      </kendo-button>
+    </div>
+  </div>
+  <div class="tile-resource-container">
+    <kendo-tilelayout
+      [columns]="config.columns"
+      [rowHeight]="config.rowHeight"
+      [resizable]="false"
+      [reorderable]="false"
+    >
+      <kendo-tilelayout-item *ngFor="let item of items" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
+        <kendo-tilelayout-item-header>
+          {{item.title}}
+          <!-- <kendo-button class="k-float-right" *ngIf="editMode" (click)="removeItem(item)">X</kendo-button> -->
+        </kendo-tilelayout-item-header>
+        <kendo-tilelayout-item-body>
+          <app-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></app-resource>
+        </kendo-tilelayout-item-body>
+      </kendo-tilelayout-item>
+    </kendo-tilelayout>
+  </div>
+</div>

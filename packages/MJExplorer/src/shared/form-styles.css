@@ -1,0 +1,76 @@
+a {
+  font-size: 14px;
+  font-weight: bolder;
+}
+
+.record-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.record-form-group {
+  margin-top: 0px;
+}
+
+button {
+  margin-right: 5px;
+}
+
+.record-form h2 {
+  margin-bottom: 10px;
+}
+
+.k-splitter {
+  border-width: 0px;
+}
+
+.record-form-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+
+/* .record-form .record-form-row:nth-child(odd) {
+  background-color: #f2f2f2; 
+} */
+
+/* 
+.record-form .record-form-row:nth-child(even) {
+  background-color: #ffffff;  
+} */
+
+.record-form .record-form-row > :first-child {
+  font-weight: bold;
+  padding-right: 10px;
+} 
+
+.record-form .record-form-row > span {
+  white-space: pre-line;
+  max-height: 300px;
+  overflow: auto;
+}
+
+ 
+
+@media (min-width: 768px) {
+  .record-form {
+      padding-left: 5px;
+      padding-right: 5px;
+      padding-bottom: 5px;
+  }
+
+  .record-form-row {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .record-form-row label {
+    width: 240px;
+    margin-bottom: 0;
+  }
+}

@@ -1,0 +1,52 @@
+<div class="k-overlay"></div>
+<kendo-window 
+  class="kendo-window-hide-restore"
+  [width]="500" 
+  [minHeight]="300" 
+  [minWidth]="400" 
+  [resizable]="true" 
+  (close)="closeDialog($event)"
+  [state]="'maximized'" 
+  title="Customize Dashboard">
+    <div class="k-d-flex k-flex-col k-justify-content-between k-h-full custom-dialog-body">
+      <div class="dialog-content ">
+        <div class="dialog-actions">
+            <kendo-dropdownbutton class="k-m-2" themeColor="primary" [data]="ResourceTypes" [textField]="'DisplayName'" (itemClick)="onItemSelect($event)">
+              <span class="k-icon k-i-plus"></span> Add item
+            </kendo-dropdownbutton>
+        </div>
+        <kendo-tilelayout
+          [columns]="config.columns"
+          [rowHeight]="config.rowHeight"
+          [resizable]="true"
+          [reorderable]="true"
+          (resize)="onResize($event)"
+          (reorder)="onReorder($event)"
+        >
+          <kendo-tilelayout-item *ngFor="let item of _items" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
+            <kendo-tilelayout-item-header>
+              {{item.title}}
+              <kendo-button class="k-float-right" (click)="removeItem(item)">X</kendo-button>
+            </kendo-tilelayout-item-header>
+            <kendo-tilelayout-item-body>
+              <!-- <div class="overlay"></div> -->
+              <!-- <app-resource [Data]="item.ResourceData" [isVisible]="false"></app-resource> -->
+            </kendo-tilelayout-item-body>
+          </kendo-tilelayout-item>
+        </kendo-tilelayout>
+        
+      </div>
+      <div class="dialog-footer">
+        <div class="k-card-footer !k-border-none">
+          <kendo-button (click)="closeDialog($event)" >
+            <span class="k-icon k-i-close"></span>
+            Cancel
+          </kendo-button>
+          <kendo-button (click)="saveChanges()" [primary]="true" >
+            <span class="k-icon k-i-check"></span>
+            Save
+          </kendo-button>
+        </div>
+      </div>
+    </div>
+</kendo-window>

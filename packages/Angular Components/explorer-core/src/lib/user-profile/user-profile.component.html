@@ -1,0 +1,5 @@
+<ul *ngIf="User | async">
+    <li>{{ User.name }}</li>
+    <li>{{ User.email }}</li>
+    <li>{{ JSON.stringify(User) }}</li>
+</ul>

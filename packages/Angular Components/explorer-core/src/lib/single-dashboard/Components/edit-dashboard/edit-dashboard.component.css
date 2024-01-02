@@ -1,0 +1,34 @@
+.dialog-content .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: auto;
+    height: 40px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: #FFF;
+    padding: 8px 16px;
+}
+.custom-dialog-body {
+flex: 1;
+}
+.custom-dialog-body .dialog-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    box-sizing: border-box;
+}
+.dialog-footer .k-card-footer {
+    display: flex;
+    gap: 8px;
+    padding: 0;
+}
+::ng-deep .kendo-window-hide-restore .k-window-content {
+    padding: 0;
+}
+.custom-dialog-body .dialog-content .k-tilelayout {
+    background: #fff;
+}

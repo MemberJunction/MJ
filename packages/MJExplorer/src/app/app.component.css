@@ -1,0 +1,17 @@
+.app-main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+}
+
+.app-header {
+    height: 80px;
+    width: 100%;
+}
+
+.app-body {
+    flex-grow: 1; /* Takes up the remaining space */
+    width: 100%;
+}
+  

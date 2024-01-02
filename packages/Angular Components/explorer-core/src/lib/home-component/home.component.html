@@ -1,0 +1,33 @@
+<div  class="card-container">
+    <div class="card-header-entity">
+        <div class="title-wrap">
+            <h1>Home</h1>
+        </div>
+    </div>
+    <div class="main-area"> 
+        <div class="nav-container">
+            <div class="nav-item" (click)="navigate('askskip')">
+                <span class="k-icon k-i-user"></span>
+                <span>Ask Skip</span>
+            </div>
+            <div class="nav-item" (click)="navigate('data')">
+                <span class="k-icon k-i-table"></span>
+                <span>Data</span>
+            </div>
+            <div class="nav-item" (click)="navigate('dashboards')">
+                <span class="k-icon k-i-aggregate-fields"></span>
+                <span>Dashboards</span>
+            </div>
+            <div class="nav-item" (click)="navigate('reports')">
+                <span class="k-icon k-i-graph"></span>
+                <span>Reports</span>
+            </div>
+            <div class="nav-item" (click)="navigate('settings')">
+                <span class="k-icon k-i-gear"></span>
+                <span>Settings</span>
+            </div>
+        </div>
+
+        <app-favorites class="home-favorites"></app-favorites>
+    </div>
+</div>
