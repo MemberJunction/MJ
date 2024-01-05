@@ -205,7 +205,7 @@ function generateServerRelationship (r: EntityRelationshipInfo): string {
     else { // many to many
         return `
     @Field(() => [${relatedClassName + _graphQLTypeSuffix}])
-    @ManyToMany(() => ${relatedClassName + _graphQLTypeSuffix}, (${relatedClassName.toLowerCase()}) => ${relatedClassName.toLowerCase()}.${r.Entity})
+    @ManyToMany(() => ${relatedClassName + _graphQLTypeSuffix}, (${relatedClassName.toLowerCase()}) => ${relatedClassName.toLowerCase()}.${r.Entity}Array)
     @JoinTable({
         name: '${r.JoinView}',
         joinColumn: { name: '${r.JoinEntityJoinField}', referencedColumnName: '${r.RelatedEntityJoinField}' },
