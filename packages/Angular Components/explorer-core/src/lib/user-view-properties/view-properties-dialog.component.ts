@@ -45,8 +45,8 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
   public sortFields: any[] = [];
   public sortState: any[] = [];
   public sortDirections= [
-    { Name: 'Up', Value: 1 }, 
-    { Name: 'Down', Value: 2 }
+    { Name: 'Up', Value: 'asc' }, 
+    { Name: 'Down', Value: 'desc' }
   ];
 
   @ViewChild(WindowComponent) kendoWindow!: WindowComponent;
@@ -133,7 +133,7 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
     this.sortState = this.sortState.map((s: any) => {
       return {
         field: this.ViewEntityInfo?.Fields.find((f: EntityFieldInfo) => f.Name === s.field),
-        direction: this.sortDirections.find((d: any) => d.Value === s.direction)
+        direction: this.sortDirections.find((d: any) => d.Value.trim().toLowerCase() === s.direction.trim().toLowerCase())
       }
     });
 

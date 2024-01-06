@@ -208,7 +208,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           
         // now stringify the grid state and save it
         this._viewEntity.Set('GridState', JSON.stringify(tempGridState));
-        const newSortState = tempGridState.sortSettings.map((s: any) => {return {field: s.field, direction: s.dir === 'asc' ? 1 : 2}})
+        const newSortState = tempGridState.sortSettings.map((s: any) => {return {field: s.field, direction: s.dir}})
         const oldSortState = JSON.parse(this._viewEntity.Get('SortState'));
         this._viewEntity.Set('SortState', JSON.stringify(newSortState));
   
@@ -306,14 +306,22 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
   public async sortChanged(sort: any) {
-    this._newGridState.sortSettings = sort;
-    this.sortSettings = sort; // for the UI display - grid binding to this shows that the sort is applied via arrows in the column headers
+    if (sort && sort.length > 0) {
+      // remove any sort settings that don't have a direction
+      const filterSort = sort.filter((s: any) => s.dir !== undefined && s.dir !== null && s.dir !== "");
+      this._newGridState.sortSettings = filterSort;
+    }
+    else
+      this._newGridState.sortSettings = sort;
+
+      
+    this.sortSettings = this._newGridState.sortSettings; // for the UI display - grid binding to this shows that the sort is applied via arrows in the column headers
 
     if (this.IsDynamicView()) {
       // Dynamic View, we have this.Params and can add an OrderBy and then just Refresh() the entire component
       // that will result in going to the server for a refreshed set of data
       if (this.Params) {
-        this.Params.OrderBy = sort[0].field + ' ' + (sort[0].dir === 'asc' ? 'ASC' : 'DESC');
+        this.Params.OrderBy = sort[0].field + ' ' + (sort[0].dir);
         this.Refresh(this.Params);  
       }
       else {
@@ -579,7 +587,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         // sorting setup
         if (this._viewEntity) {
           const temp = this._viewEntity.ViewSortInfo;
-          const kendoSortSettings = temp.map((s: any) => {return {field: s.field, dir: s.direction === 1 ? 'asc' : 'desc'}})
+          const kendoSortSettings = temp.map((s: any) => {return {field: s.field, dir: s.direction.trim().toLowerCase()}})
           this.sortSettings = kendoSortSettings;
         }
   
