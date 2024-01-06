@@ -131,9 +131,22 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
 
     // now translate the sortState into the UI format by swapping out the primitve field names and sort direction with the data objects that the kendo ui will bind to
     this.sortState = this.sortState.map((s: any) => {
+      let dir: string;
+      if (typeof s.direction === 'string') {
+        dir = s.direction;
+      }
+      else if (typeof s.direction === 'number' && s.direction === 1) { // some legacy views have 1 and 2 for asc and desc
+        dir = 'asc';
+      }
+      else if (typeof s.direction === 'number' && s.direction === 2) {
+        dir = 'desc';
+      }
+      else {
+        dir = '';
+      }
       return {
         field: this.ViewEntityInfo?.Fields.find((f: EntityFieldInfo) => f.Name === s.field),
-        direction: this.sortDirections.find((d: any) => d.Value.trim().toLowerCase() === s.direction.trim().toLowerCase())
+        direction: this.sortDirections.find((d: any) => d.Value.trim().toLowerCase() === dir)
       }
     });
 

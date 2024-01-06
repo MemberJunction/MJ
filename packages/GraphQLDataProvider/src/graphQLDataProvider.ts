@@ -399,39 +399,39 @@ npm
             // save
 
             const mutationName = `${type}${entity.EntityInfo.ClassName}`
+
+            // only pass along writable fields, AND the ID value if this is an update
+            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.Name == 'ID' && entity.ID) ));
+
             const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => f.Name).join("\n                    ")}
+                ${filteredFields.map(f => f.Name).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${entity.EntityInfo.ClassName} ($input: ${mutationName}Input!) {
                 ${inner}
             }
             `
-            for (let i = 0; i < entity.Fields.length; i++) {
-                const f = entity.Fields[i];
-                if (f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && 
-                    (f.ReadOnly == false || (f.Name == 'ID' && entity.ID)) ) {
-                    // only pass along writable fields, AND the ID value if this is an update
-                    let val = f.Value;
-                    if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
-                        val = val.getTime();
-                    if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && typeof val !== 'boolean')
-                        val = parseInt(val) === 0 ? false : true; // convert to boolean
+            for (let i = 0; i < filteredFields.length; i++) {
+                const f = filteredFields[i];
+                let val = f.Value;
+                if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
+                    val = val.getTime();
+                if (val && f.EntityFieldInfo.TSType === EntityFieldTSType.Boolean && typeof val !== 'boolean')
+                    val = parseInt(val) === 0 ? false : true; // convert to boolean
 
-                    if (val == null && f.EntityFieldInfo.AllowsNull == false) {
-                        if (f.EntityFieldInfo.DefaultValue != null) {
-                            // no value, but there is a default value, so use that, since field does NOT allow NULL
-                            val = f.EntityFieldInfo.DefaultValue;
-                        }
-                        else {
-                            // no default value, null value and field doesn't allow nulls, so set to either 0 or empty string
-                            if (f.FieldType == EntityFieldTSType.Number || f.FieldType == EntityFieldTSType.Boolean)
-                                val = 0;
-                            else
-                                val = '';
-                        }
+                if (val == null && f.EntityFieldInfo.AllowsNull == false) {
+                    if (f.EntityFieldInfo.DefaultValue != null) {
+                        // no value, but there is a default value, so use that, since field does NOT allow NULL
+                        val = f.EntityFieldInfo.DefaultValue;
                     }
-                    vars.input[f.Name] = val;
+                    else {
+                        // no default value, null value and field doesn't allow nulls, so set to either 0 or empty string
+                        if (f.FieldType == EntityFieldTSType.Number || f.FieldType == EntityFieldTSType.Boolean)
+                            val = 0;
+                        else
+                            val = '';
+                    }
                 }
+                vars.input[f.Name] = val;
             }
             
             if (entity.TransactionGroup) {

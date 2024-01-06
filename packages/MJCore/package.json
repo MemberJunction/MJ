@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core",
-  "version": "0.9.88",
+  "version": "0.9.93",
   "description": "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,6 +19,6 @@
     "typescript": "^5.0.3"
   },
   "dependencies": {
-    "@memberjunction/global": "^0.9.91"
+    "@memberjunction/global": "^0.9.95"
   }
 }

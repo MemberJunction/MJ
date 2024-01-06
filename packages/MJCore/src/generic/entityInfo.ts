@@ -336,7 +336,7 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return !this.AllowUpdateAPI || this.Name.toLowerCase() === 'id' || this.Type.toLowerCase() === 'uniqueidentifier';
+        return this.IsVirtual || !this.AllowUpdateAPI || this.Name.toLowerCase() === 'id' || this.Type.toLowerCase() === 'uniqueidentifier';
     }
 
     /**

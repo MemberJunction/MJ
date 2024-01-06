@@ -29,7 +29,7 @@ export class EntityField {
     }
 
     get ReadOnly(): boolean {
-        return ! this._entityFieldInfo.AllowUpdateAPI;
+        return this._entityFieldInfo.ReadOnly;
     }
 
     get EntityFieldInfo(): EntityFieldInfo {

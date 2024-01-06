@@ -77,7 +77,17 @@ export class UserViewEntityExtended extends UserViewEntity  {
     public get OrderByClause(): string {
         if (this.ViewSortInfo && this.ViewSortInfo.length > 0) {
             return this.ViewSortInfo.map(s => {
-                const desc = s.direction.trim().toLowerCase() === ViewSortDirectionInfo.Desc.trim().toLowerCase()
+                let dir: string;
+                if (typeof s.direction === 'string')
+                    dir = s.direction.trim().toLowerCase()
+                else if (s.direction === 1 ) // some legacy view metadata has 1/2 for asc/desc
+                    dir = 'asc' 
+                else if (s.direction === 2 )
+                    dir = 'desc'
+                else 
+                    dir = '';
+
+                const desc = dir === ViewSortDirectionInfo.Desc.trim().toLowerCase()
                 return s.field + (desc ? ' DESC' : '');
             }).join(', ')
         }

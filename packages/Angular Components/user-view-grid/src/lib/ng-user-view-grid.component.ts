@@ -587,7 +587,18 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         // sorting setup
         if (this._viewEntity) {
           const temp = this._viewEntity.ViewSortInfo;
-          const kendoSortSettings = temp.map((s: any) => {return {field: s.field, dir: s.direction.trim().toLowerCase()}})
+          const kendoSortSettings = temp.map((s: any) => {
+            let dir: string;
+            if (typeof s.direction === 'string')
+              dir = s.direction.trim().toLowerCase();
+            else if (typeof s.direction === 'number' && s.direction === 1)
+              dir = 'asc';
+            else if (typeof s.direction === 'number' && s.direction === 2)
+              dir = 'desc';
+            else
+              dir = '';
+            return {field: s.field, dir: dir}
+          })
           this.sortSettings = kendoSortSettings;
         }
   
