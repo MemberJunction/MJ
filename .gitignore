@@ -77,3 +77,4 @@ SQL Scripts/internal_only/Merge 990 Raw Data.sql
 SQL Scripts/internal_only/schema to-do.txt
 SQL Scripts/internal_only/spCreateUpdateAccountCompanyIntegration.sql
 SQL Scripts/internal_only/Trim 990 Raw Data.sql
+packages/GraphQLDataProvider/dist-browser/
