@@ -1,3 +1,37 @@
+function Get-ChangesSinceLastBuild {
+    param (
+        [string]$directoryPath
+    )
+    $buildLogPath = Join-Path $directoryPath "build.log.json"
+
+    if (Test-Path $buildLogPath) {
+        $lastBuildTime = (Get-Content $buildLogPath | ConvertFrom-Json | Select-Object -Last 1).buildTime
+        $changes = git log --since="$lastBuildTime" -- $directoryPath
+        return $null -ne $changes
+    }
+
+    return $true # Assume true if no log found
+}
+
+
+function Update-BuildLog {
+    param (
+        [string]$directoryPath
+    )
+    $buildLogPath = Join-Path $directoryPath "build.log.json"
+    $currentDateTime = Get-Date -Format "o" # ISO 8601 format
+
+    $logObject = if (Test-Path $buildLogPath) {
+        Get-Content $buildLogPath | ConvertFrom-Json
+    } else {
+        @()
+    }
+
+    $logObject += @{ "buildTime" = $currentDateTime }
+    $logObject | ConvertTo-Json -Depth 64 | Set-Content $buildLogPath
+}
+
+
 # Define function to update package.json patch version number
 function Update-PatchVersion {
     $json = Get-Content 'package.json' | ConvertFrom-Json
@@ -114,31 +148,44 @@ $baseLibraries = @(
 # Iterate over the custom objects
 foreach ($libObject in $baseLibraries) {
     $lib = $libObject.Name
-    Write-Host "Building and publishing $lib"
+    Write-Host "Checking for changes in $lib"
     Set-Location $lib
 
-    if ($lib -ne 'GeneratedEntities') {
-        Update-PatchVersion
+    if (Get-ChangesSinceLastBuild ".") {
+        Write-Host "Changes detected in $lib, proceeding with build and publish"
+
+        # Logic for building and publishing
+        Write-Host "Building and publishing $lib"
+
+        if ($lib -ne 'GeneratedEntities') {
+            Update-PatchVersion
+        }
+
+        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+        foreach ($dep in $libObject.Dependencies) {
+            UpdatePackageJSONToLatestDependencyVersion $dep $false
+        }
+
+        # build the project
+        npm run build 
+
+        if ($LASTEXITCODE -ne 0) {
+            # if the build fails, halt the script
+            Write-Host "Error building $lib. Halting the script."
+            exit
+        }    
+
+        if ($lib -ne 'GeneratedEntities' -and $publishToNPM -eq 'y') {
+            npm publish --access public
+
+            # Update build log after successful publish
+            Update-BuildLog "."
+        }        
+    } 
+    else {
+        Write-Host "No changes in $lib since last build, skipping this library"
     }
 
-    # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-    foreach ($dep in $libObject.Dependencies) {
-        UpdatePackageJSONToLatestDependencyVersion $dep $false
-    }
-
-    # build the project
-    npm run build 
-
-    if ($LASTEXITCODE -ne 0) {
-        # if the build fails, halt the script
-        Write-Host "Error building $lib. Halting the script."
-        exit
-    }    
-
-    if ($lib -ne 'GeneratedEntities' -and $publishToNPM -eq 'y') {
-        npm publish --access public
-    }
-    
     Set-Location ..
 }
 
@@ -158,27 +205,41 @@ $angularLibraries = @(
 # Iterate over the custom objects
 foreach ($libObject in $angularLibraries) {
     $lib = $libObject.Name
-    Write-Host "Building and publishing Angular Library: $lib"
+    Write-Host "Checking for changes in Angular Library: $lib"
     Set-Location ('Angular Components\' + $lib)
 
-    Update-PatchVersion
+    if (Get-ChangesSinceLastBuild ".") {
+        Write-Host "Changes detected in Angular Library: $lib, proceeding with build and publish"
 
-    # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-    foreach ($dep in $libObject.Dependencies) {
-        UpdatePackageJSONToLatestDependencyVersion $dep $true
-    }
+        # Logic for updating package JSON and building
+        Write-Host "Building and publishing Angular Library: $lib"
+        Set-Location ('Angular Components\' + $lib)
 
-    # Build the project
-    npm run build
+        Update-PatchVersion
 
-    if ($LASTEXITCODE -ne 0) {
-        # if the build fails, halt the script
-        Write-Host "Error building $lib. Halting the script."
-        exit
-    }    
+        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+        foreach ($dep in $libObject.Dependencies) {
+            UpdatePackageJSONToLatestDependencyVersion $dep $true
+        }
 
-    if ($publishToNPM -eq 'y') {
-        npm publish --access public
+        # Build the project
+        npm run build
+
+        if ($LASTEXITCODE -ne 0) {
+            # if the build fails, halt the script
+            Write-Host "Error building $lib. Halting the script."
+            exit
+        }    
+
+        if ($publishToNPM -eq 'y') {
+            npm publish --access public
+
+            # Update build log after successful publish
+            Update-BuildLog "."
+        }
+    } 
+    else {
+        Write-Host "No changes in $lib since last build, skipping this Angular library"
     }
 
     Set-Location ..\..
