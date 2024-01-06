@@ -759,9 +759,7 @@ export class IntegrationURLFormatEntity extends BaseEntity {
     get IntegrationID(): number {  
         return this.Get('IntegrationID');
     }
-    set IntegrationID(value: number) {
-        this.Set('IntegrationID', value);
-    }
+
     /**
     * Field Name: Integration
     * Display Name: Integration
@@ -1077,9 +1075,7 @@ export class CompanyIntegrationEntity extends BaseEntity {
     get CompanyID(): number {  
         return this.Get('CompanyID');
     }
-    set CompanyID(value: number) {
-        this.Set('CompanyID', value);
-    }
+
     /**
     * Field Name: IntegrationID
     * Display Name: Integration ID
@@ -1088,9 +1084,7 @@ export class CompanyIntegrationEntity extends BaseEntity {
     get IntegrationID(): number {  
         return this.Get('IntegrationID');
     }
-    set IntegrationID(value: number) {
-        this.Set('IntegrationID', value);
-    }
+
     /**
     * Field Name: Company
     * SQL Data Type: nvarchar(50)

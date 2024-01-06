@@ -68,11 +68,11 @@ import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Company ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyID" ></kendo-numerictextbox>   
+            <span >{{FormatValue('CompanyID', 0)}}</span>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Integration ID</label>
-            <kendo-numerictextbox [(value)]="record.IntegrationID" ></kendo-numerictextbox>   
+            <span >{{FormatValue('IntegrationID', 0)}}</span>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Company</label>

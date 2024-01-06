@@ -9,6 +9,7 @@ import { configInfo, customSqlScripts, dbDatabase } from './config';
 import { manageEntityFields, updateEntityFieldRelatedEntityNameFieldMap } from './manageMetadata';
 
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { combineFiles } from './util';
 //import { LoadGeneratedEntities } from 'mj_generatedentities';
 //LoadGeneratedEntities(); // make sure we have everything loaded up
 
@@ -144,7 +145,14 @@ export async function generateAndExecuteAllEntitiesSQLToSeparateFiles(ds: DataSo
             }
         }
 
-        return !bFail;
+        if (!bFail) {
+            // generate the all-entities.sql file and all-entities.permissions.sql file
+            combineFiles(directory, '_all_entities.sql', '*.generated.sql', true);
+            combineFiles(directory, '_all_entities.permissions.sql', '*.permissions.generated.sql', true);
+            return true;
+        }
+        else 
+            return false;
     }
     catch (err) {
         logError(err);
