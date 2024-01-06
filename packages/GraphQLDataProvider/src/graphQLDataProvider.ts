@@ -404,7 +404,7 @@ npm
             const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.Name == 'ID' && entity.ID) ));
 
             const inner = `                ${mutationName}(input: $input) {
-                ${filteredFields.map(f => f.Name).join("\n                    ")}
+                ${entity.Fields.map(f => f.Name).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${entity.EntityInfo.ClassName} ($input: ${mutationName}Input!) {
                 ${inner}

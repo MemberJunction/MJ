@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-compare-records",
-  "version": "0.9.93",
+  "version": "0.9.94",
   "description": "MemberJunction: Angular UI Dialog Component to Compare Records",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,8 +25,8 @@
     "@progress/kendo-angular-grid": "^12.1.0"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.93",
-    "@memberjunction/core-entities": "^0.9.64",
+    "@memberjunction/core": "^0.9.94",
+    "@memberjunction/core-entities": "^0.9.65",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
