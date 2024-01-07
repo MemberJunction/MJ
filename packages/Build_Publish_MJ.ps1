@@ -21,15 +21,19 @@ function Update-BuildLog {
     $buildLogPath = Join-Path $directoryPath "build.log.json"
     $currentDateTime = Get-Date -Format "o" # ISO 8601 format
 
-    $logObject = if (Test-Path $buildLogPath) {
-        Get-Content $buildLogPath | ConvertFrom-Json
-    } else {
-        @()
+    $logObject = @()
+    if (Test-Path $buildLogPath) {
+        # Force $logObject to be an array even if there's only one item in the JSON file
+        $logObject = @(Get-Content $buildLogPath | ConvertFrom-Json)
     }
 
+    # Safely add a new entry
     $logObject += @{ "buildTime" = $currentDateTime }
+
+    # Save back to the file
     $logObject | ConvertTo-Json -Depth 64 | Set-Content $buildLogPath
 }
+
 
 
 # Define function to update package.json patch version number
@@ -131,6 +135,7 @@ function LinkAllDependencies($dependenciesArray) {
 # Step 1: Building and Publishing foundational libraries
 # Prompt the user for local linking
 $publishToNPM = Read-Host "Do you want to publish to npm? (y/n)"
+$ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publish EVERYTHING, regardless of if things changed)? (y/n)"
 
 # Define a custom object for each library including the directory name and the dependencies list (in order)
 $baseLibraries = @(
@@ -151,8 +156,8 @@ foreach ($libObject in $baseLibraries) {
     Write-Host "Checking for changes in $lib"
     Set-Location $lib
 
-    if (Get-ChangesSinceLastBuild ".") {
-        Write-Host "Changes detected in $lib, proceeding with build and publish"
+    if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
+        Write-Host "   >>> Changes detected in $lib, proceeding with build and publish (OR, you chose to ignore the build log)"
 
         # Logic for building and publishing
         Write-Host "Building and publishing $lib"
@@ -183,7 +188,7 @@ foreach ($libObject in $baseLibraries) {
         }        
     } 
     else {
-        Write-Host "No changes in $lib since last build, skipping this library"
+        Write-Host "   >>> No changes in $lib since last build, skipping this library"
     }
 
     Set-Location ..
@@ -213,7 +218,6 @@ foreach ($libObject in $angularLibraries) {
 
         # Logic for updating package JSON and building
         Write-Host "Building and publishing Angular Library: $lib"
-        Set-Location ('Angular Components\' + $lib)
 
         Update-PatchVersion
 
