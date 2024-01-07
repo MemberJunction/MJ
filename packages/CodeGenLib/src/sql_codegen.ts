@@ -24,12 +24,19 @@ export async function manageSQLScriptsAndExecution(ds: DataSource, entities: Ent
             return false;
         logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - startTime.getTime())/1000} seconds`);
 
-        const filteredEntities = entities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
+        const includedEntities = entities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
+        const excludedEntities = entities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 
-        // STEP 2 - generate all the SQL files and execute them
+        // STEP 2(a) - generate all the SQL files and execute them
         const step2StartTime: Date = new Date();
-        if (! await generateAndExecuteAllEntitiesSQLToSeparateFiles(ds, filteredEntities, directory)) {
+        if (! await generateAndExecuteAllEntitiesSQLToSeparateFiles(ds, includedEntities, directory, false, false)) { // pass in false for createCombinedFile because we don't want to create the combined file yet, we want to do that after we've done the excluded entities below for their permissions SQL, no need to do it twice, waste of resources.
             logError('Error generating and executing all entities SQL to separate files');
+            return false;
+        }
+
+        // STEP 2(b) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
+        if (! await generateAndExecuteAllEntitiesSQLToSeparateFiles(ds, excludedEntities, directory, true, true)) {
+            logError('Error generating and executing permissions SQL for excluded entities to separate files');
             return false;
         }
         logStatus(`   Time to Generate/Execute Entity SQL: ${(new Date().getTime() - step2StartTime.getTime())/1000} seconds`);
@@ -123,7 +130,7 @@ export async function applyPermissions(ds: DataSource, directory: string, batchS
 
 
 
-export async function generateAndExecuteAllEntitiesSQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, batchSize: number = 5): Promise<boolean> {
+export async function generateAndExecuteAllEntitiesSQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, createCombinedFile: boolean, batchSize: number = 5): Promise<boolean> {
     try {
         let bFail: boolean = false;
         const totalEntities = entities.length;
@@ -136,7 +143,7 @@ export async function generateAndExecuteAllEntitiesSQLToSeparateFiles(ds: DataSo
                     logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have an ID field defined which is required for a MemberJunction entity`);
                     return false;
                 }
-                return generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory);
+                return generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions);
             });
 
             const results = await Promise.all(promises);
@@ -145,14 +152,20 @@ export async function generateAndExecuteAllEntitiesSQLToSeparateFiles(ds: DataSo
             }
         }
 
-        if (!bFail) {
-            // generate the all-entities.sql file and all-entities.permissions.sql file
-            combineFiles(directory, '_all_entities.sql', '*.generated.sql', true);
-            combineFiles(directory, '_all_entities.permissions.sql', '*.permissions.generated.sql', true);
-            return true;
+        if (!createCombinedFile) {
+            return !bFail;
         }
-        else 
-            return false;
+        else {
+            // caller wants a combined file created from the output of everything in the directory, so create it here
+            if (!bFail) {
+                // generate the all-entities.sql file and all-entities.permissions.sql file
+                combineFiles(directory, '_all_entities.sql', '*.generated.sql', true);
+                combineFiles(directory, '_all_entities.permissions.sql', '*.permissions.generated.sql', true);
+                return true;
+            }
+            else 
+                return false;
+        }
     }
     catch (err) {
         logError(err);
@@ -162,9 +175,9 @@ export async function generateAndExecuteAllEntitiesSQLToSeparateFiles(ds: DataSo
 
 
 
-export async function generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string): Promise<boolean> {
+export async function generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean): Promise<boolean> {
     try {
-        const sSQL = await generateSingleEntitySQLToSeparateFiles(ds, entity, directory); // this creates the files and returns a single string with all the SQL we can then execute
+        const sSQL = await generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions); // this creates the files and returns a single string with all the SQL we can then execute
         return await executeSQLScript(ds, sSQL, true)
     }
     catch (err) {
@@ -173,14 +186,14 @@ export async function generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataS
     }
 }
 
-export async function generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string): Promise<string> {
+export async function generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean): Promise<string> {
     try {
         if (!fs.existsSync(directory))
             fs.mkdirSync(directory, { recursive: true }); // create the directory if it doesn't exist
 
         let sRet: string = ''
         // BASE VIEW  
-        if (entity.BaseViewGenerated && !entity.VirtualEntity) {
+        if (!onlyPermissions && entity.BaseViewGenerated && !entity.VirtualEntity) {
             // generate the base view
             const s = generateSingleEntitySQLFileHeader(entity,entity.BaseView) + await generateBaseView(ds, entity)
             fs.writeFileSync(directory + `/${entity.BaseView}.generated.sql`, s)
@@ -198,7 +211,7 @@ export async function generateSingleEntitySQLToSeparateFiles(ds: DataSource, ent
         // CREATE SP
         if (entity.AllowCreateAPI && !entity.VirtualEntity) {
             const spName: string = entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.ClassName;
-            if (entity.spCreateGenerated) {
+            if (!onlyPermissions && entity.spCreateGenerated) {
                 // generate the create SP
                 const s = generateSingleEntitySQLFileHeader(entity, spName) + generateSPCreate(entity)
                 fs.writeFileSync(directory + `/${spName}.generated.sql`, s)
@@ -216,7 +229,7 @@ export async function generateSingleEntitySQLToSeparateFiles(ds: DataSource, ent
         // UPDATE SP
         if (entity.AllowUpdateAPI && !entity.VirtualEntity) {
             const spName: string = entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.ClassName;
-            if (entity.spUpdateGenerated) {
+            if (!onlyPermissions && entity.spUpdateGenerated) {
                 // generate the update SP
                 const s = generateSingleEntitySQLFileHeader(entity, spName) + generateSPUpdate(entity)
                 fs.writeFileSync(directory + `/${spName}.generated.sql`, s)    
@@ -234,7 +247,7 @@ export async function generateSingleEntitySQLToSeparateFiles(ds: DataSource, ent
         // DELETE SP
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
             const spName: string = entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.ClassName;
-            if (entity.spDeleteGenerated) {
+            if (!onlyPermissions && entity.spDeleteGenerated) {
                 // generate the delete SP
                 const s = generateSingleEntitySQLFileHeader(entity, spName) + generateSPDelete(entity)
                 fs.writeFileSync(directory + `/${spName}.generated.sql`, s)
@@ -251,9 +264,13 @@ export async function generateSingleEntitySQLToSeparateFiles(ds: DataSource, ent
 
         // check to see if the entity supports full text search or not
         if (entity.FullTextSearchEnabled) {
+            // always generate the code so we can get the function name from the below function call
             const ft = await generateEntityFullTextSearchSQL(ds, entity);
-            fs.writeFileSync(directory + `/${entity.BaseTable}.fulltext.generated.sql`, ft.sql)
-            sRet += ft.sql + '\nGO\n';
+            if (!onlyPermissions) {
+                // only write the actual sql out if we're not only generating permissions
+                fs.writeFileSync(directory + `/${entity.BaseTable}.fulltext.generated.sql`, ft.sql)
+                sRet += ft.sql + '\nGO\n';
+            }
 
             const sP = generateFullTextSearchFunctionPermissions(entity, ft.functionName) + '\n\n';
             fs.writeFileSync(directory + `/${entity.BaseTable}.fulltext.permissions.generated.sql`, sP)

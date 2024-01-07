@@ -46,7 +46,7 @@ export async function runMemberJunctionCodeGeneration() {
         // check to see if the user wants to skip database generation via the config settings
         const skipDatabaseGeneration = getSettingValue('skip_database_generation', false);
         if (!skipDatabaseGeneration) {
-            logStatus("Handling SQL Script Execution, Metadata Mainteanance, and SQL Object Generation... (to skip this, set skip_database_generation to true in the config file under settings)")
+            logStatus("Handling SQL Script Execution, Metadata Maintenance, and SQL Object Generation... (to skip this, set skip_database_generation to true in the config file under settings)")
             /****************************************************************************************
             // STEP 0 --- Precursor Step execute any commands specified in the config file
             ****************************************************************************************/
