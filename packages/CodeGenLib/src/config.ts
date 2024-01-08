@@ -20,7 +20,7 @@ export const graphqlPort = env.get('GRAPHQL_PORT').default('4000').asPortNumber(
 
 export type TableInfo = {
     schema: string
-    table: string
+    table: string 
 }
 export type OutputOptionInfo = {
     name: string;

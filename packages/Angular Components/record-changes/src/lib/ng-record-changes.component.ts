@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output, Renderer2, ElementRef, AfterViewInit, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { SortDescriptor } from '@progress/kendo-data-query';
-import { LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityFieldTSType, LogError, RunView } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-record-changes',
@@ -11,7 +11,7 @@ import { LogError, RunView } from '@memberjunction/core';
 export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy {
   public showloader: boolean = false;
   @Output() dialogClosed = new EventEmitter();
-  @Input() record: any = {};
+  @Input() record!: BaseEntity;
 
   @ViewChild('recordChangesWrapper', { static: true }) wrapper!: ElementRef;
 
@@ -66,9 +66,9 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   prepareColumns(){
     this.visibleColumns = [{
       field: 'ChangedAt',
-      title: 'Changed At (UTC)',
+      title: 'Date',
       type: 'datetime',
-      width: 110,
+      width: 175,
     },
     {
       field: 'ChangesDescription',
@@ -81,41 +81,62 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     this.dialogClosed.emit();
   }
 
-  FormatColumnValue(col: any, value: any, maxLength: number = 0, trailingChars: string = "...") {
+  FormatColumnValue(col: any, value: any, dataItem: any, maxLength: number = 0, trailingChars: string = "...") {
     if (value === null)
       return null;
 
     try {
       switch (col.type.toLowerCase()) {
         case 'datetime':
-          let date = new Date(value);
+          let utcDate = new Date(value); // UTC date
+          // Calculate the local timezone offset and adjust the date
+          const localDate = new Date(utcDate.getTime() - utcDate.getTimezoneOffset() * 60000);
+
           return new Intl.DateTimeFormat('en-US',  {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: 'numeric',
             minute: 'numeric',
-            second: 'numeric',
             hour12: true,
-          }).format(date);
+          }).format(localDate);
         case 'int':
           return new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
         
         case 'description':
-          const regex = /([^ ]+) changed from ([^]+?) to ([^]+?)(?=\n|$)/g;
-          let formattedDescription = '<ul>';
-                
-          let match;
-          while ((match = regex.exec(value)) !== null) {
-            const fieldName = match[1];
-            const oldValue = match[2];
-            const newValue = match[3];
-            const formattedFieldChange = `<li>${fieldName} changed from <span style="color: darkgray;">${oldValue}</span> to <span style="color: blue;">${newValue}</span></li>`;
-            formattedDescription += formattedFieldChange;
+          // while the database stores a description, it is easier to use the ChangesJSON field to get the structured data and then generate our HTML
+          const json = JSON.parse(dataItem.ChangesJSON);
+          if(!json)
+            return value;
+          else {
+            const fields = Object.keys(json); // each field that was changed is a key in the JSON object
+            let formattedDescription = '<div>';
+    
+            for(let i = 0; i < fields.length; i++){
+              const changeInfo: {field: string, oldValue: any, newValue: any} = json[fields[i]];
+              const field = this.record.EntityInfo.Fields.find((f: any) => f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase());
+              let innerDescription: string = "";
+              if (field) {
+                // we have field metadata, so we can use that 
+                if (field.TSType === EntityFieldTSType.Boolean) {
+                  // for boolean fields, it is cleaner to just show new value, no need to show old value as it is always the opposite
+                  innerDescription = `${this.fieldMarkup(field.DisplayNameOrName)} set to ${this.valueMarkup(changeInfo,false)}`;                  
+                }
+                else {
+                  innerDescription = `${this.fieldMarkup(field.DisplayNameOrName)} changed from ${this.valueMarkup(changeInfo,true)} to ${this.valueMarkup(changeInfo,false)}`;
+                }
+              }
+              else {
+                // we don't have field metadata - this could happen if a field was removed or renamed after a record change was recorded in the database, so just use what we have
+                innerDescription = `${this.fieldMarkup(changeInfo.field)} changed from ${this.valueMarkup(changeInfo,true)}} to ${this.valueMarkup(changeInfo,false)}`;
+              }
+
+              formattedDescription += `<div>${innerDescription}</div>`;
+            }
+          
+            formattedDescription += '</div>';
+            return this.sanitizer.bypassSecurityTrustHtml(formattedDescription);
           }
-        
-          formattedDescription += '</ul>';
-          return this.sanitizer.bypassSecurityTrustHtml(formattedDescription);
         default:
           return value;
         }
@@ -124,5 +145,11 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       LogError(e);
       return value;
     }
+  }
+  protected fieldMarkup(fieldName: string): string {
+    return `<b>${fieldName}</b>`
+  }
+  protected valueMarkup(changeInfo: {field: string, oldValue: any, newValue: any}, isOldValue: boolean): string {
+    return `<span style="color: ${isOldValue ? 'darkgray' : 'blue'};">${isOldValue ? changeInfo.oldValue : changeInfo.newValue}</span>`;
   }
 }

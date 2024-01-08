@@ -117,7 +117,7 @@ export abstract class QueueBase  {
   AddTask(task: TaskBase): boolean {
     try {
       // Add a task to the queue
-      this._queue.push(task)
+      this._queue.push(task);
 
       // fire off the process tasks function immediately but don't wait for it to finish
       this.ProcessTasks();

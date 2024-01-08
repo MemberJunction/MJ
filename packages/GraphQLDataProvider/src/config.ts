@@ -15,7 +15,7 @@ export async function setupGraphQLClient(config: GraphQLProviderConfigData) {
     await provider.Config(config);
 
     // fire off the logged in event if we get here
-    MJGlobal.Instance.RaiseEvent({ event: MJEventType.LoggedIn, eventCode: null, component: this, args: null })
+    MJGlobal.Instance.RaiseEvent({ event: MJEventType.LoggedIn, eventCode: null, component: this, args: null });
 
-    return provider
+    return provider;
 }

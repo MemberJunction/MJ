@@ -1147,7 +1147,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             for (const key in newData) {
                 const f = entityInfo.Fields.find(f => f.Name.toLowerCase() === key.toLowerCase());
                 let bDiff: boolean = false;
-                if ((oldData[key] == undefined || oldData[key] == null) && 
+                if (f.ReadOnly)
+                    bDiff = false; // read only fields are never different, they can change in the database, but we don't consider them to be a change for record changes purposes.
+                else if ((oldData[key] == undefined || oldData[key] == null) && 
                     (newData[key] == undefined || newData[key] == null))
                     bDiff = false; // this branch of logic ensures that undefined and null are treated the same
                 else {

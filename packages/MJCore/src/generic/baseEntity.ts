@@ -45,7 +45,7 @@ export class EntityField {
             this._Value = value;
 
             if (this._NeverSet && 
-                this._OldValue == null && 
+                //this._OldValue == null &&  ---- we used to check _OldValue == null, but actually that doesn't make any sense because we don't care about the old value here, we just care that _NeverSet === true 
                 value != null) {
                 // initial value set
                 this._OldValue = value;
@@ -128,7 +128,7 @@ export class EntityField {
         else if (fieldInfo.DefaultValue) {
             if (fieldInfo.TSType === EntityFieldTSType.Boolean) {
                 // special handling for booleans as we don't want a string passed into a boolean field, we want a true boolean
-                if (fieldInfo.DefaultValue === "1" || fieldInfo.DefaultValue === "true")
+                if (typeof fieldInfo.DefaultValue === "string" && fieldInfo.DefaultValue.trim() === "1" || fieldInfo.DefaultValue.trim().toLowerCase() === "true")
                     this.Value = true;
                 else
                     this.Value = false;
@@ -137,8 +137,40 @@ export class EntityField {
                 // special handling for numbers as we don't want a string passed into a value for a numeric field
                 this.Value = Number(fieldInfo.DefaultValue);
             }
+            else if (fieldInfo.Type.trim().toLowerCase() === "uniqueidentifier") {
+                // special handling for GUIDs, we don't want to populate anything here because the server always sets the value, leave blank
+                this.Value = null;
+            }
+            else if (fieldInfo.TSType === EntityFieldTSType.Date) {
+                if (fieldInfo.DefaultValue.trim().length > 0) {
+                    // special handling for dates as we don't want to use getdate() type defaults as is, we want to convert them to a JS Date object
+                    try {
+                        // attempt to convert the default value to a date
+                        const temp = new Date(fieldInfo.DefaultValue);
+                        // if we get here, that means it worked, but we could have an invalid date, so check for that
+                        if (isNaN(temp.getTime())) {
+                            // this is an invalid date, so throw an error
+                            throw new Error(); // blank error because we just end up going to the catch block anyway and in there we have logic to handle this properly
+                        }
+                        else 
+                            this.Value = temp;
+                    }
+                    catch (e) {
+                        // if we get here, that means the default value is not a valid date, so we need to check to see if the date is a getdate() type default
+                        // use includes() below because it is possible that the value is wrapped in parenthesis, like (getdate()) and that is still valid.
+                        if (fieldInfo.DefaultValue.trim().toLowerCase().includes("getdate()") || fieldInfo.DefaultValue.trim().toLowerCase().includes("getutcdate()")) {
+                            // we have a getdate() type default, this is always populated by the server, so we should set this to a blank value
+                            this.Value = null;
+                        }
+                        else {
+                            // we have a default value that is not a valid date and not a getdate() type default, so we need to throw an error
+                            throw new Error(`Invalid default value for ${fieldInfo.Entity}.${fieldInfo.Name} of ${fieldInfo.DefaultValue}. Default values for date fields must be a valid date or a getdate() type default`);
+                        }
+                    }
+                }
+            }
             else {
-                // for strings and dates, we're good to just set the value
+                // for strings we're good to just set the value
                 this.Value = fieldInfo.DefaultValue;
             }
             this._NeverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load

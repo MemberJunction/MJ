@@ -31,7 +31,7 @@
                         [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#a9c2af' }"
                     >
                         <ng-template kendoGridCellTemplate let-dataItem>
-                            <span [innerHTML]="FormatColumnValue(item, dataItem[item.field])"></span>
+                            <span [innerHTML]="FormatColumnValue(item, dataItem[item.field], dataItem)"></span>
                         </ng-template>
                     </kendo-grid-column>
                 </kendo-grid>
