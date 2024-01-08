@@ -1,3 +1,23 @@
+function Test-FileChangesRecursive {
+    param (
+        [string]$directoryPath,
+        [datetime]$lastBuildTime
+    )
+    $buildLogIdentifier = "build.log.json"
+
+    # Get all files in the directory and subdirectories, excluding the build log
+    $files = Get-ChildItem -Path $directoryPath -Recurse -File | Where-Object { $_.Name -notmatch $buildLogIdentifier }
+
+    # Check if any file has been modified since the last build time
+    foreach ($file in $files) {
+        if ($file.LastWriteTime -gt $lastBuildTime) {
+            return $true
+        }
+    }
+
+    return $false # Return false if no files have changed since the last build
+}
+
 function Get-ChangesSinceLastBuild {
     param (
         [string]$directoryPath
@@ -5,12 +25,13 @@ function Get-ChangesSinceLastBuild {
     $buildLogPath = Join-Path $directoryPath "build.log.json"
 
     if (Test-Path $buildLogPath) {
-        $lastBuildTime = (Get-Content $buildLogPath | ConvertFrom-Json | Select-Object -Last 1).buildTime
-        $changes = git log --since="$lastBuildTime" -- $directoryPath
-        return $null -ne $changes
+        $lastBuildTime = [datetime](Get-Content $buildLogPath | ConvertFrom-Json | Select-Object -Last 1).buildTime
+
+        # Check for file changes recursively
+        return Test-FileChangesRecursive -directoryPath $directoryPath -lastBuildTime $lastBuildTime
     }
 
-    return $true # Assume true if no log found
+    return $false # Assume false if no log found
 }
 
 
@@ -77,7 +98,7 @@ function UpdatePackageJSONToLatestDependencyVersion($packageName, $isAngular = $
     $directoryName = MapPackageNameToDirectoryName $packageName $isAngular
 
     if (!$directoryName) {
-        Write-Host "Couldn't map package name to directory name for $packageName, halting the script."
+        Write-Host "   Couldn't map package name to directory name for $packageName, halting the script."
         exit
     }
 
@@ -92,34 +113,44 @@ function UpdatePackageJSONToLatestDependencyVersion($packageName, $isAngular = $
         # Update the current package's package.json
         $currentPackageJsonPath = './package.json'
         $currentJson = Get-Content $currentPackageJsonPath | ConvertFrom-Json
-        $currentJson.dependencies."@memberjunction/$packageName" = "^$latestVersion"
 
-        # next up, try to update package.json - sometimes this requires a few tries as the prior iteration of this function might have a lock that hasn't released yet so we retry and wait between retries
-        $retryCount = 0
-        $maxRetries = 10
-        $retryDelay = 3 # seconds
-        $success = $false
+        # Retrieve the current version of the package
+        $currentVersion = $currentJson.dependencies."@memberjunction/$packageName"
 
-        while (-not $success -and $retryCount -lt $maxRetries) {
-            try {
-                $currentJson | ConvertTo-Json -Depth 64 | Set-Content $currentPackageJsonPath -ErrorAction Stop
-                Write-Host "Updated $packageName to version ^$latestVersion in package.json"
-                $success = $true
+        # Check if the current version is already the same as the latest version
+        if ($currentVersion -ne "^$latestVersion") {
+            $currentJson.dependencies."@memberjunction/$packageName" = "^$latestVersion"
+
+            # next up, try to update package.json - sometimes this requires a few tries as the prior iteration of this function might have a lock that hasn't released yet so we retry and wait between retries
+            $retryCount = 0
+            $maxRetries = 10
+            $retryDelay = 3 # seconds
+            $success = $false
+
+            while (-not $success -and $retryCount -lt $maxRetries) {
+                try {
+                    $currentJson | ConvertTo-Json -Depth 64 | Set-Content $currentPackageJsonPath -ErrorAction Stop
+                    Write-Host "      Updated $packageName to version ^$latestVersion in package.json"
+                    $success = $true
+                }
+                catch {
+                    $retryCount++
+                    Write-Host "      Attempt $retryCount to update $packageName failed, retrying in $retryDelay seconds..."
+                    Start-Sleep -Seconds $retryDelay
+                }
             }
-            catch {
-                $retryCount++
-                Write-Host "Attempt $retryCount to update $packageName failed, retrying in $retryDelay seconds..."
-                Start-Sleep -Seconds $retryDelay
+
+            if (-not $success) {
+                Write-Host "      Failed to update $packageName after $maxRetries attempts, halting the script."
+                exit
             }
         }
-
-        if (-not $success) {
-            Write-Host "Failed to update $packageName after $maxRetries attempts, halting the script."
-            exit
+        else {
+            Write-Host "      No need to update $packageName, it's already at the latest version."
         }
     }
     else {
-        Write-Host "Couldn't find package.json for $directoryName, halting the script."
+        Write-Host "      Couldn't find package.json for $directoryName, halting the script."
         exit
     }
 }
@@ -153,22 +184,24 @@ $baseLibraries = @(
 # Iterate over the custom objects
 foreach ($libObject in $baseLibraries) {
     $lib = $libObject.Name
-    Write-Host "Checking for changes in $lib"
+    Write-Host "Processing $lib"
+    Write-Host "   Checking for changes"
     Set-Location $lib
 
+    # always update the dependencies to the latest versions for each package before we test for changes.
+    # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+    foreach ($dep in $libObject.Dependencies) {
+        UpdatePackageJSONToLatestDependencyVersion $dep $false
+    }
+
     if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
-        Write-Host "   >>> Changes detected in $lib, proceeding with build and publish (OR, you chose to ignore the build log)"
+        Write-Host "      Changes detected in $lib, proceeding with build and publish (OR, you chose to ignore the build log)"
 
         # Logic for building and publishing
-        Write-Host "Building and publishing $lib"
+        Write-Host "   Building and publishing $lib"
 
         if ($lib -ne 'GeneratedEntities') {
             Update-PatchVersion
-        }
-
-        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-        foreach ($dep in $libObject.Dependencies) {
-            UpdatePackageJSONToLatestDependencyVersion $dep $false
         }
 
         # build the project
@@ -176,19 +209,19 @@ foreach ($libObject in $baseLibraries) {
 
         if ($LASTEXITCODE -ne 0) {
             # if the build fails, halt the script
-            Write-Host "Error building $lib. Halting the script."
+            Write-Host "   Error building $lib. Halting the script."
             exit
         }    
 
         if ($lib -ne 'GeneratedEntities' -and $publishToNPM -eq 'y') {
             npm publish --access public
-
-            # Update build log after successful publish
-            Update-BuildLog "."
         }        
+
+        # Update build log after successful publish
+        Update-BuildLog "."
     } 
     else {
-        Write-Host "   >>> No changes in $lib since last build, skipping this library"
+        Write-Host "   No changes in $lib since last build, skipping this library"
     }
 
     Set-Location ..
@@ -207,31 +240,39 @@ $angularLibraries = @(
     @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
 )
 
+Write-Host ""
+Write-Host ""
+Write-Host "Checking Angular Libraries"
+Write-Host ""
+
 # Iterate over the custom objects
 foreach ($libObject in $angularLibraries) {
     $lib = $libObject.Name
-    Write-Host "Checking for changes in Angular Library: $lib"
+    Write-Host ""
+    Write-Host "Processing Angular Library: $lib"
+    Write-Host "   Checking for changes"
     Set-Location ('Angular Components\' + $lib)
 
-    if (Get-ChangesSinceLastBuild ".") {
-        Write-Host "Changes detected in Angular Library: $lib, proceeding with build and publish"
+    # ALWAYS update the dependencies to the latest versions for each package before we test for changes.
+    # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+    foreach ($dep in $libObject.Dependencies) {
+        UpdatePackageJSONToLatestDependencyVersion $dep $true
+    }
+
+    if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
+        Write-Host "      Changes detected in Angular Library: $lib, proceeding with build and publish"
 
         # Logic for updating package JSON and building
-        Write-Host "Building and publishing Angular Library: $lib"
+        Write-Host "   Building and publishing Angular Library: $lib"
 
         Update-PatchVersion
-
-        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-        foreach ($dep in $libObject.Dependencies) {
-            UpdatePackageJSONToLatestDependencyVersion $dep $true
-        }
 
         # Build the project
         npm run build
 
         if ($LASTEXITCODE -ne 0) {
             # if the build fails, halt the script
-            Write-Host "Error building $lib. Halting the script."
+            Write-Host "   Error building $lib. Halting the script."
             exit
         }    
 
@@ -243,11 +284,17 @@ foreach ($libObject in $angularLibraries) {
         }
     } 
     else {
-        Write-Host "No changes in $lib since last build, skipping this Angular library"
+        Write-Host "   No changes in $lib since last build, skipping this Angular library"
     }
 
     Set-Location ..\..
 }
+
+
+Write-Host ""
+Write-Host ""
+Write-Host "Updating Executable Projects..."
+Write-Host ""
 
 
 # Step 3: Update dependencies in executable projects
@@ -260,7 +307,8 @@ $remainingProjects = @(
 # Iterate over the custom objects
 foreach ($projObject in $remainingProjects) {
     $proj = $projObject.Name
-    Write-Host "Updating dependencies for $proj"
+    Write-Host "Processing $proj"
+    Write-Host "   Updating dependencies"
     Set-Location $proj
 
     # Use the InstallLatestVersion function for each dependency
@@ -271,7 +319,6 @@ foreach ($projObject in $remainingProjects) {
     # Handle Angular Libraries dependencies if AngularDeps exists
     if ($projObject.AngularDeps) {
         foreach ($lib in $projObject.AngularDeps) {
-            Write-Host "   >>> Installing Latest $lib for $proj"
             UpdatePackageJSONToLatestDependencyVersion $lib $false
         }
         # # Combine AngularDeps and Dependencies into one array
@@ -286,4 +333,5 @@ foreach ($projObject in $remainingProjects) {
     Set-Location ..
 }
 
+Write-Host ""
 Write-Host "ALL DONE!"
