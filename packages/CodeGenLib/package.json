@@ -21,8 +21,8 @@
   "dependencies": {
     "@memberjunction/core": "^0.9.99",
     "@memberjunction/core-entities": "^0.9.44",
-    "@memberjunction/global": "^0.9.101",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.93",
+    "@memberjunction/global": "^0.9.102",
+    "@memberjunction/sqlserver-dataprovider": "^0.9.94",
     "env-var": "^7.4.1",
     "fs-extra": "^11.1.1",
     "glob": "^10.3.10",

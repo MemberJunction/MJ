@@ -12,7 +12,7 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
         return true;
     }
 
-    /**
+    /** 
      * This method will use AI to return a valid WHERE clause based on the provided prompt. This is automatically called at the right time if the view has SmartFilterEnabled turned on and the SmartFilterPrompt is set. If you want
      * to call this directly to get back a WHERE clause for other purposes you can call this method directly and provide both a prompt and the entity that the view is based on.
      * @param prompt 
@@ -116,7 +116,7 @@ ${
             const e = md.Entities.find(e => e.BaseView === v);
             if (e) {
                 processedViews.push(v); // already processed this view now, so we won't repeat it
-                return `* ${e.BaseView}: ${e.Fields.map(ef => {
+                return `* ${e.SchemaName}.${e.BaseView}: ${e.Fields.map(ef => {
                     return ef.Name + ' (' + ef.Type + ')';
                 }).join(',') }`
             }
@@ -134,7 +134,7 @@ ${
         if (e) {
             if (processedViews.indexOf(e.BaseView) === -1) {
                 processedViews.push(e.BaseView); // note that we are processing this view now, so we won't repeat it
-                return `* ${e.BaseView}: ${e.Fields.map(ef => {
+                return `* ${e.SchemaName}.${e.BaseView}: ${e.Fields.map(ef => {
                     let ret: string = `${ef.Name} (${ef.Type})`;
                     if (ef.RelatedEntity) {
                         ret += ` (fkey to ${ef.RelatedEntityBaseView})`;

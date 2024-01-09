@@ -58,14 +58,51 @@ function Update-BuildLog {
 
 
 # Define function to update package.json patch version number
+# function Update-PatchVersion {
+#     $json = Get-Content 'package.json' | ConvertFrom-Json
+#     $version = $json.version -split '\.'
+#     $patch = [int]$version[2] + 1
+#     $newVersion = "$($version[0]).$($version[1]).$patch"
+#     $json.version = $newVersion
+#     $json | ConvertTo-Json -Depth 64 | Set-Content 'package.json'
+# }
+
+
 function Update-PatchVersion {
-    $json = Get-Content 'package.json' | ConvertFrom-Json
-    $version = $json.version -split '\.'
-    $patch = [int]$version[2] + 1
-    $newVersion = "$($version[0]).$($version[1]).$patch"
-    $json.version = $newVersion
-    $json | ConvertTo-Json -Depth 64 | Set-Content 'package.json'
+    param (
+        [int]$maxRetries = 10, # Maximum number of retries
+        [int]$retryDelay = 4  # Delay in seconds between retries
+    )
+
+    $attempt = 0
+    $success = $false
+
+    while ($attempt -lt $maxRetries -and -not $success) {
+        try {
+            $json = Get-Content 'package.json' -Raw | ConvertFrom-Json
+            $version = $json.version -split '\.'
+            $patch = [int]$version[2] + 1
+            $newVersion = "$($version[0]).$($version[1]).$patch"
+            $json.version = $newVersion
+            $json | ConvertTo-Json -Depth 64 | Set-Content 'package.json'
+            $success = $true
+        } catch {
+            Write-Host "   Attempt $attempt to update package.json failed. Retrying in $retryDelay seconds..."
+            Start-Sleep -Seconds $retryDelay
+            $attempt++
+        }
+    }
+
+    if (-not $success) {
+        Write-Host "   Failed to update package.json after $maxRetries attempts."
+        throw "Update-PatchVersion failed after multiple retries."
+    }
 }
+
+
+
+
+
 function MapPackageNameToDirectoryName($packageName, $isCurrentAngular = $false) {
     $directoryName = $null
 
@@ -124,7 +161,7 @@ function UpdatePackageJSONToLatestDependencyVersion($packageName, $isAngular = $
             # next up, try to update package.json - sometimes this requires a few tries as the prior iteration of this function might have a lock that hasn't released yet so we retry and wait between retries
             $retryCount = 0
             $maxRetries = 10
-            $retryDelay = 3 # seconds
+            $retryDelay = 4 # seconds
             $success = $false
 
             while (-not $success -and $retryCount -lt $maxRetries) {

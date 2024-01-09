@@ -21,13 +21,23 @@ export class ClassFactory {
 
     public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0) {
         if (baseClass && subClass) {
-            let reg = new ClassRegistration();
-            reg.BaseClass = baseClass;
-            reg.SubClass = subClass;
-            reg.Key = key;
-            reg.Priority = priority;
+            // get all of hte existing registrations for this baseClass and key
+            const registrations = this.GetAllRegistrations(baseClass, key);
+            // validate to make sure that the comabintion of base class and key for the provided priority # is not already registered, if it is, then throw an exception
+            const existing = registrations.filter(r => r.Priority === priority);
+            if (existing && existing.length > 0) {
+                throw new Error(`ClassFactory.Register: Cannot register class ${subClass.name} for base class ${baseClass.name} and key ${key} because a registration (${existing[0].SubClass?.name}) already exists for that combination with priority ${priority}`);
+            }
+            else {
+                // this combination of baseclass/key/priority is NOT already registered.
+                let reg = new ClassRegistration();
+                reg.BaseClass = baseClass;
+                reg.SubClass = subClass;
+                reg.Key = key;
+                reg.Priority = priority;
 
-            this._registrations.push(reg);
+                this._registrations.push(reg);
+            }
         }
     }
 

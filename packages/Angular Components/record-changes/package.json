@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-record-changes",
-  "version": "0.9.36",
+  "version": "0.9.37",
   "description": "MemberJunction: Angular pop-up window and grid to show changes made to a specific individual record",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@memberjunction/core": "^0.9.99",
-    "@memberjunction/global": "^0.9.101",
+    "@memberjunction/global": "^0.9.102",
     "@memberjunction/ng-compare-records": "^0.9.69",
     "@memberjunction/ng-container-directives": "^0.9.45",
     "tslib": "^2.3.0"
