@@ -692,9 +692,15 @@ ON
 LEFT OUTER JOIN
 	sys.all_objects v
 ON
-	e.BaseView = v.name AND v.type = 'V'
+	e.BaseView = v.name AND 
+	v.type = 'V' 
+LEFT OUTER JOIN
+    sys.schemas s_v
+ON   
+    v.schema_id = s_v.schema_id
 WHERE   
-	t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1) -- TABLE - non-virtual entities
+    s_v.name = e.SchemaName AND
+	( t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1)) -- TABLE - non-virtual entities 
 GO
 
 DROP VIEW IF EXISTS [admin].[vwSQLColumnsAndEntityFields]
