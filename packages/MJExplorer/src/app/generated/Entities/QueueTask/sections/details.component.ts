@@ -90,7 +90,7 @@ import { QueueTaskEntity } from '@memberjunction/core-entities';
     `
 })
 export class QueueTaskDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: QueueTaskEntity | null = null;
+    @Input() override record!: QueueTaskEntity;
     @Input() override EditMode: boolean = false;
 }
 

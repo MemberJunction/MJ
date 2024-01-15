@@ -10,7 +10,7 @@ import { LoadRecordMergeLogDetailsComponent } from "./sections/details.component
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class RecordMergeLogFormComponent extends BaseFormComponent {
-    public record: RecordMergeLogEntity | null = null;
+    public record!: RecordMergeLogEntity;
 } 
 
 export function LoadRecordMergeLogFormComponent() {

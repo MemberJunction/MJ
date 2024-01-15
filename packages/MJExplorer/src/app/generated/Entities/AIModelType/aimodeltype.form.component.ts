@@ -10,7 +10,7 @@ import { LoadAIModelTypeDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class AIModelTypeFormComponent extends BaseFormComponent {
-    public record: AIModelTypeEntity | null = null;
+    public record!: AIModelTypeEntity;
 } 
 
 export function LoadAIModelTypeFormComponent() {

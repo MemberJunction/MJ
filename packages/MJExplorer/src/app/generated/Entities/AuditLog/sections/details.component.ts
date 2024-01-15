@@ -114,7 +114,7 @@ import { AuditLogEntity } from '@memberjunction/core-entities';
     `
 })
 export class AuditLogDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: AuditLogEntity | null = null;
+    @Input() override record!: AuditLogEntity;
     @Input() override EditMode: boolean = false;
 }
 

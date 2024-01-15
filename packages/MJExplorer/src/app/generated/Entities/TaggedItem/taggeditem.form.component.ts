@@ -10,7 +10,7 @@ import { LoadTaggedItemDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class TaggedItemFormComponent extends BaseFormComponent {
-    public record: TaggedItemEntity | null = null;
+    public record!: TaggedItemEntity;
 } 
 
 export function LoadTaggedItemFormComponent() {

@@ -10,7 +10,7 @@ import { LoadIntegrationDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class IntegrationFormComponent extends BaseFormComponent {
-    public record: IntegrationEntity | null = null;
+    public record!: IntegrationEntity;
 } 
 
 export function LoadIntegrationFormComponent() {

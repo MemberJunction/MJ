@@ -74,7 +74,7 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
     `
 })
 export class WorkflowDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: WorkflowEntity | null = null;
+    @Input() override record!: WorkflowEntity;
     @Input() override EditMode: boolean = false;
 }
 

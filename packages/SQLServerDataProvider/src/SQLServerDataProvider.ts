@@ -914,11 +914,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         try {
-            if (entity.ID && entity.ID > 0 && !entity.EntityInfo.AllowUpdateAPI) {
+            const pkeyName = entity.PrimaryKey.Name;
+            const pkeyVal = entity.PrimaryKey.Value;
+            if (pkeyVal && !entity.EntityInfo.AllowUpdateAPI) {
                 // existing record and not allowed to update
                 throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
             }
-            else if ( (!entity.ID || entity.ID <=0) && !entity.EntityInfo.AllowCreateAPI) {
+            else if ( (!pkeyVal) && !entity.EntityInfo.AllowCreateAPI) {
                 // new record and not allowed to create
                 throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
             }
@@ -926,7 +928,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // getting here means we are good to save, now check to see if we're dirty and need to save
                 // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
                 if ( entity.Dirty || (options && options.IgnoreDirtyState) ) {
-                    const bNewRecord = (entity.ID && entity.ID > 0) ? false : true;
+                    const bNewRecord = pkeyVal ? false : true;
                     const spName = bNewRecord ? (entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0 ? entity.EntityInfo.spCreate : 'spCreate' + entity.EntityInfo.BaseTable) : 
                                                 (entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0 ? entity.EntityInfo.spUpdate : 'spUpdate' + entity.EntityInfo.BaseTable);
 
@@ -1326,7 +1328,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const d = await this.ExecuteSQL(sSQL);
     
                     if (d && d[0] && d[0][entity.PrimaryKey.Name]) 
-                        return entity.PrimaryKey.Value === d[0][entity.PrimaryKey.Value]; // returns the pkey of the deleted record if SP is successful
+                        return entity.PrimaryKey.Value === d[0][entity.PrimaryKey.Name]; // returns the pkey of the deleted record if SP is successful
                     else
                         return false;
                 });

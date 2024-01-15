@@ -74,7 +74,7 @@ import { IntegrationURLFormatEntity } from '@memberjunction/core-entities';
     `
 })
 export class IntegrationURLFormatDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: IntegrationURLFormatEntity | null = null;
+    @Input() override record!: IntegrationURLFormatEntity;
     @Input() override EditMode: boolean = false;
 }
 

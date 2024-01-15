@@ -202,7 +202,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
     `
 })
 export class ReportDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ReportEntity | null = null;
+    @Input() override record!: ReportEntity;
     @Input() override EditMode: boolean = false;
 }
 

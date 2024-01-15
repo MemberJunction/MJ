@@ -10,7 +10,7 @@ import { LoadConversationDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ConversationFormComponent extends BaseFormComponent {
-    public record: ConversationEntity | null = null;
+    public record!: ConversationEntity;
 } 
 
 export function LoadConversationFormComponent() {

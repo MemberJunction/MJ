@@ -10,7 +10,7 @@ import { LoadListDetailDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ListDetailFormComponent extends BaseFormComponent {
-    public record: ListDetailEntity | null = null;
+    public record!: ListDetailEntity;
 } 
 
 export function LoadListDetailFormComponent() {

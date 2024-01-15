@@ -114,7 +114,7 @@ import { UserRecordLogEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserRecordLogDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserRecordLogEntity | null = null;
+    @Input() override record!: UserRecordLogEntity;
     @Input() override EditMode: boolean = false;
 }
 

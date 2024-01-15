@@ -1,5 +1,5 @@
 DROP VIEW IF EXISTS [admin].[vwTablePrimaryKeys] 
-GO
+GO 
 CREATE VIEW [admin].[vwTablePrimaryKeys] AS
 SELECT
     s.name AS SchemaName,

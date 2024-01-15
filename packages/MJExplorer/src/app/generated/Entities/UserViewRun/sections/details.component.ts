@@ -58,7 +58,7 @@ import { UserViewRunEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserViewRunDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserViewRunEntity | null = null;
+    @Input() override record!: UserViewRunEntity;
     @Input() override EditMode: boolean = false;
 }
 

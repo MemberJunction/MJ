@@ -10,7 +10,7 @@ import { LoadUserFavoriteDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class UserFavoriteFormComponent extends BaseFormComponent {
-    public record: UserFavoriteEntity | null = null;
+    public record!: UserFavoriteEntity;
 } 
 
 export function LoadUserFavoriteFormComponent() {

@@ -10,7 +10,7 @@ import { LoadAuthorizationDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class AuthorizationFormComponent extends BaseFormComponent {
-    public record: AuthorizationEntity | null = null;
+    public record!: AuthorizationEntity;
 } 
 
 export function LoadAuthorizationFormComponent() {

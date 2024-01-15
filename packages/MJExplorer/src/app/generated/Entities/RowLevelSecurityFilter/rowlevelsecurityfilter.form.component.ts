@@ -10,7 +10,7 @@ import { LoadRowLevelSecurityFilterDetailsComponent } from "./sections/details.c
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class RowLevelSecurityFilterFormComponent extends BaseFormComponent {
-    public record: RowLevelSecurityFilterEntity | null = null;
+    public record!: RowLevelSecurityFilterEntity;
 } 
 
 export function LoadRowLevelSecurityFilterFormComponent() {

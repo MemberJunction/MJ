@@ -10,7 +10,7 @@ import { LoadEntityFieldDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class EntityFieldFormComponent extends BaseFormComponent {
-    public record: EntityFieldEntity | null = null;
+    public record!: EntityFieldEntity;
 } 
 
 export function LoadEntityFieldFormComponent() {

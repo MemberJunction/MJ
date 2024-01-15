@@ -10,7 +10,7 @@ import { LoadDatasetItemDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class DatasetItemFormComponent extends BaseFormComponent {
-    public record: DatasetItemEntity | null = null;
+    public record!: DatasetItemEntity;
 } 
 
 export function LoadDatasetItemFormComponent() {

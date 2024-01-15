@@ -106,7 +106,7 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserNotificationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserNotificationEntity | null = null;
+    @Input() override record!: UserNotificationEntity;
     @Input() override EditMode: boolean = false;
 }
 

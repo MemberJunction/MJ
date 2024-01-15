@@ -10,7 +10,7 @@ import { LoadTagDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class TagFormComponent extends BaseFormComponent {
-    public record: TagEntity | null = null;
+    public record!: TagEntity;
 } 
 
 export function LoadTagFormComponent() {

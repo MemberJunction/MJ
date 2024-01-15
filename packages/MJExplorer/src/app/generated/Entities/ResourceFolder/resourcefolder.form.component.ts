@@ -10,7 +10,7 @@ import { LoadResourceFolderDetailsComponent } from "./sections/details.component
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ResourceFolderFormComponent extends BaseFormComponent {
-    public record: ResourceFolderEntity | null = null;
+    public record!: ResourceFolderEntity;
 } 
 
 export function LoadResourceFolderFormComponent() {

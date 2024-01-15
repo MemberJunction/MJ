@@ -162,7 +162,7 @@ import { EntityPermissionEntity } from '@memberjunction/core-entities';
     `
 })
 export class EntityPermissionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: EntityPermissionEntity | null = null;
+    @Input() override record!: EntityPermissionEntity;
     @Input() override EditMode: boolean = false;
 }
 

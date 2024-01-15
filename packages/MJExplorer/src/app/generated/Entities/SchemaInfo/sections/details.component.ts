@@ -66,7 +66,7 @@ import { SchemaInfoEntity } from '@memberjunction/core-entities';
     `
 })
 export class SchemaInfoDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: SchemaInfoEntity | null = null;
+    @Input() override record!: SchemaInfoEntity;
     @Input() override EditMode: boolean = false;
 }
 

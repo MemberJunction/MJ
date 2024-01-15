@@ -10,7 +10,7 @@ import { LoadEmployeeDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class EmployeeFormComponent extends BaseFormComponent {
-    public record: EmployeeEntity | null = null;
+    public record!: EmployeeEntity;
 } 
 
 export function LoadEmployeeFormComponent() {

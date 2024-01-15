@@ -10,7 +10,7 @@ import { LoadQueueTaskDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class QueueTaskFormComponent extends BaseFormComponent {
-    public record: QueueTaskEntity | null = null;
+    public record!: QueueTaskEntity;
 } 
 
 export function LoadQueueTaskFormComponent() {

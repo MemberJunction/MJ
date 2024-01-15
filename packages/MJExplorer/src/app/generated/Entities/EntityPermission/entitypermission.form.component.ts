@@ -10,7 +10,7 @@ import { LoadEntityPermissionDetailsComponent } from "./sections/details.compone
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class EntityPermissionFormComponent extends BaseFormComponent {
-    public record: EntityPermissionEntity | null = null;
+    public record!: EntityPermissionEntity;
 } 
 
 export function LoadEntityPermissionFormComponent() {

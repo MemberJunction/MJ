@@ -146,7 +146,7 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
     `
 })
 export class EntityAIActionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: EntityAIActionEntity | null = null;
+    @Input() override record!: EntityAIActionEntity;
     @Input() override EditMode: boolean = false;
 }
 

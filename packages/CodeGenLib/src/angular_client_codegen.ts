@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType } from '@memberjunction/core';
-import { logError } from './logging';
+import { logError, logStatus } from './logging';
 import fs from 'fs';
 import path from 'path';
 import { mjCoreSchema, outputOptionValue } from './config';
@@ -30,7 +30,7 @@ export function generateAngularCode(entities: EntityInfo[], directory: string): 
     for (let i:number = 0; i < entities.length; ++i) {
         const entity = entities[i];
 
-        if (entity._hasIdField && entity.IncludeInAPI) {
+        if (entity.PrimaryKey && entity.IncludeInAPI) {
             const thisEntityPath = path.join(entityPath, entity.ClassName);
             if (!fs.existsSync(thisEntityPath))
                 fs.mkdirSync(thisEntityPath, { recursive: true }); // create the directory if it doesn't exist
@@ -56,6 +56,9 @@ export function generateAngularCode(entities: EntityInfo[], directory: string): 
             const componentName: string = `${entity.ClassName}FormComponent`;
             componentImports.push (`import { ${componentName}, Load${componentName} } from "./Entities/${entity.ClassName}/${entity.ClassName.toLowerCase()}.form.component";`);
             componentNames.push(componentName);
+        }
+        else {
+            logStatus(`   Entity ${entity.Name} does not have a primary key or is not included in the API, skipping code generation for this entity`);
         }
     }
 
@@ -206,7 +209,7 @@ ${sectionImports}
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-    public record: ${entityObjectClass}Entity | null = null;
+    public record!: ${entityObjectClass}Entity;
 } 
 
 export function Load${entity.ClassName}FormComponent() {
@@ -299,7 +302,7 @@ import { ${entity.ClassName}Entity } from '${entity.SchemaName === mjCoreSchema 
     \`
 })
 export class ${entity.ClassName}${stripWhiteSpace(section.Name)}Component extends BaseFormSectionComponent {
-    @Input() override record: ${entity.ClassName}Entity | null = null;
+    @Input() override record!: ${entity.ClassName}Entity;
     @Input() override EditMode: boolean = false;
 }
 

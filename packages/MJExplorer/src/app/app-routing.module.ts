@@ -29,7 +29,7 @@ export class ResourceResolver implements Resolve<void> {
 
       const data: ResourceData = new ResourceData( {
         Name: '',
-        ResourceRecordID: resourceRecordId === null && !isNaN(resourceRecordId) ? null : parseInt(resourceRecordId),
+        ResourceRecordID: resourceRecordId,
         ResourceTypeID: this.sharedService.ResourceTypeByName(resourceType)?.ID,
         Configuration: {}
       });

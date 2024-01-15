@@ -15,7 +15,7 @@ import { LoadEntityUIComponent } from "./sections/ui.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class EntityFormComponent extends BaseFormComponent {
-    public record: EntityEntity | null = null;
+    public record!: EntityEntity;
 } 
 
 export function LoadEntityFormComponent() {

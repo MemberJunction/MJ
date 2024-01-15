@@ -74,7 +74,7 @@ import { EntityEntity } from '@memberjunction/core-entities';
     `
 })
 export class EntityAPIComponent extends BaseFormSectionComponent {
-    @Input() override record: EntityEntity | null = null;
+    @Input() override record!: EntityEntity;
     @Input() override EditMode: boolean = false;
 }
 

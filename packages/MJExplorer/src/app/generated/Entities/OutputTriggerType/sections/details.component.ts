@@ -34,7 +34,7 @@ import { OutputTriggerTypeEntity } from '@memberjunction/core-entities';
     `
 })
 export class OutputTriggerTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: OutputTriggerTypeEntity | null = null;
+    @Input() override record!: OutputTriggerTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 

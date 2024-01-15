@@ -82,7 +82,7 @@ import { ResourceTypeEntity } from '@memberjunction/core-entities';
     `
 })
 export class ResourceTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ResourceTypeEntity | null = null;
+    @Input() override record!: ResourceTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 

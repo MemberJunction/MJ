@@ -114,7 +114,7 @@ import { ApplicationEntityEntity } from '@memberjunction/core-entities';
     `
 })
 export class ApplicationEntityDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ApplicationEntityEntity | null = null;
+    @Input() override record!: ApplicationEntityEntity;
     @Input() override EditMode: boolean = false;
 }
 

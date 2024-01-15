@@ -10,7 +10,7 @@ import { LoadUserDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class UserFormComponent extends BaseFormComponent {
-    public record: UserEntity | null = null;
+    public record!: UserEntity;
 } 
 
 export function LoadUserFormComponent() {

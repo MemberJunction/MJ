@@ -82,7 +82,7 @@ import { AIActionEntity } from '@memberjunction/core-entities';
     `
 })
 export class AIActionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: AIActionEntity | null = null;
+    @Input() override record!: AIActionEntity;
     @Input() override EditMode: boolean = false;
 }
 

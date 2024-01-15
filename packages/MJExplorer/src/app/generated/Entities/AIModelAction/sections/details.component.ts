@@ -74,7 +74,7 @@ import { AIModelActionEntity } from '@memberjunction/core-entities';
     `
 })
 export class AIModelActionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: AIModelActionEntity | null = null;
+    @Input() override record!: AIModelActionEntity;
     @Input() override EditMode: boolean = false;
 }
 

@@ -80,6 +80,7 @@ import { SchemaInfoFormComponent, LoadSchemaInfoFormComponent } from "./Entities
 import { CompanyIntegrationRecordMapFormComponent, LoadCompanyIntegrationRecordMapFormComponent } from "./Entities/CompanyIntegrationRecordMap/companyintegrationrecordmap.form.component";
 import { RecordMergeLogFormComponent, LoadRecordMergeLogFormComponent } from "./Entities/RecordMergeLog/recordmergelog.form.component";
 import { RecordMergeDeletionLogFormComponent, LoadRecordMergeDeletionLogFormComponent } from "./Entities/RecordMergeDeletionLog/recordmergedeletionlog.form.component";
+import { SampleFormComponent, LoadSampleFormComponent } from "./Entities/Sample/sample.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -148,6 +149,7 @@ import { SchemaInfoDetailsComponent, LoadSchemaInfoDetailsComponent } from "./En
 import { CompanyIntegrationRecordMapDetailsComponent, LoadCompanyIntegrationRecordMapDetailsComponent } from "./Entities/CompanyIntegrationRecordMap/sections/details.component"
 import { RecordMergeLogDetailsComponent, LoadRecordMergeLogDetailsComponent } from "./Entities/RecordMergeLog/sections/details.component"
 import { RecordMergeDeletionLogDetailsComponent, LoadRecordMergeDeletionLogDetailsComponent } from "./Entities/RecordMergeDeletionLog/sections/details.component"
+import { SampleDetailsComponent, LoadSampleDetailsComponent } from "./Entities/Sample/sections/details.component"
 
 
 @NgModule({
@@ -275,6 +277,7 @@ declarations: [
     CompanyIntegrationRecordMapFormComponent,
     RecordMergeLogFormComponent,
     RecordMergeDeletionLogFormComponent,
+    SampleFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
@@ -290,8 +293,7 @@ declarations: [
     EntityAPIComponent,
     EntityDBComponent,
     EntityUIComponent,
-    UserDetailsComponent,
-    EntityRelationshipDetailsComponent],
+    UserDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -312,6 +314,7 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    EntityRelationshipDetailsComponent,
     UserRecordLogDetailsComponent,
     UserViewDetailsComponent,
     ApplicationDetailsComponent,
@@ -330,8 +333,7 @@ declarations: [
     UserRoleDetailsComponent,
     RowLevelSecurityFilterDetailsComponent,
     AuditLogDetailsComponent,
-    AuthorizationDetailsComponent,
-    AuthorizationRoleDetailsComponent],
+    AuthorizationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -352,6 +354,7 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    AuthorizationRoleDetailsComponent,
     AuditLogTypeDetailsComponent,
     EntityFieldValueDetailsComponent,
     AIModelDetailsComponent,
@@ -370,8 +373,7 @@ declarations: [
     ReportSnapshotDetailsComponent,
     ResourceTypeDetailsComponent,
     TagDetailsComponent,
-    TaggedItemDetailsComponent,
-    WorkspaceDetailsComponent],
+    TaggedItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -392,6 +394,7 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    WorkspaceDetailsComponent,
     WorkspaceItemDetailsComponent,
     DatasetDetailsComponent,
     DatasetItemDetailsComponent,
@@ -402,7 +405,8 @@ declarations: [
     SchemaInfoDetailsComponent,
     CompanyIntegrationRecordMapDetailsComponent,
     RecordMergeLogDetailsComponent,
-    RecordMergeDeletionLogDetailsComponent],
+    RecordMergeDeletionLogDetailsComponent,
+    SampleDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -505,6 +509,7 @@ export function LoadGeneratedForms() {
     LoadCompanyIntegrationRecordMapFormComponent();
     LoadRecordMergeLogFormComponent();
     LoadRecordMergeDeletionLogFormComponent();
+    LoadSampleFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -573,4 +578,5 @@ export function LoadGeneratedForms() {
     LoadCompanyIntegrationRecordMapDetailsComponent();
     LoadRecordMergeLogDetailsComponent();
     LoadRecordMergeDeletionLogDetailsComponent();
+    LoadSampleDetailsComponent();
 }

@@ -82,7 +82,7 @@ import { WorkflowRunEntity } from '@memberjunction/core-entities';
     `
 })
 export class WorkflowRunDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: WorkflowRunEntity | null = null;
+    @Input() override record!: WorkflowRunEntity;
     @Input() override EditMode: boolean = false;
 }
 

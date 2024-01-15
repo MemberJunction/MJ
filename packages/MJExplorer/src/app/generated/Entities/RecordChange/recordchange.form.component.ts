@@ -10,7 +10,7 @@ import { LoadRecordChangeDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class RecordChangeFormComponent extends BaseFormComponent {
-    public record: RecordChangeEntity | null = null;
+    public record!: RecordChangeEntity;
 } 
 
 export function LoadRecordChangeFormComponent() {

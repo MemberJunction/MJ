@@ -130,7 +130,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
     `
 })
 export class RecordMergeLogDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: RecordMergeLogEntity | null = null;
+    @Input() override record!: RecordMergeLogEntity;
     @Input() override EditMode: boolean = false;
 }
 

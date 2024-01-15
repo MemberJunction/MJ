@@ -10,7 +10,7 @@ import { LoadUserApplicationDetailsComponent } from "./sections/details.componen
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class UserApplicationFormComponent extends BaseFormComponent {
-    public record: UserApplicationEntity | null = null;
+    public record!: UserApplicationEntity;
 } 
 
 export function LoadUserApplicationFormComponent() {

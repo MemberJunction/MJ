@@ -10,7 +10,7 @@ export function LoadRecordResource() {
 @RegisterClass(BaseResourceComponent, 'Records')
 @Component({
     selector: 'record-resource',
-    template: `<app-single-record [recordId]="Data.ResourceRecordID" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()"></app-single-record>`
+    template: `<app-single-record [primaryKeyValue]="Data.ResourceRecordID" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()"></app-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -19,7 +19,8 @@ export class EntityRecordResource extends BaseResourceComponent {
         else {
             const md = new Metadata();
             const name = await md.GetEntityRecordName(data.Configuration.Entity, data.ResourceRecordID);
-            return (name ? name : data.Configuration.Entity) + ` (ID: ${data.ResourceRecordID})`;
+            const e = md.Entities.find(e => e.Name === data.Configuration.Entity);
+            return (name ? name : data.Configuration.Entity) + ` (${data.ResourceRecordID.toString().trim()})`;
         }
     }
 }

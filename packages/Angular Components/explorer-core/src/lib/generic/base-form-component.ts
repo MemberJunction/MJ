@@ -34,7 +34,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const md: Metadata = new Metadata();
    
-      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.ID)
+      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey.Value)
       this.FavoriteInitDone = true;
     }
   }
@@ -106,7 +106,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SetFavoriteStatus(isFavorite: boolean) {
     const md: Metadata = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.ID, isFavorite)
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey.Value, isFavorite)
     this._isFavorite = isFavorite;
   }
 
@@ -424,14 +424,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public async ShowDependencies() {
     // for now dump to console
     const md = new Metadata();
-    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.ID)
-    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.ID);
+    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey.Value)
+    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
     console.log(dep);
 
     // if (confirm('Do you want to merge records test?') == true) {
     //   const mergeResult = await md.MergeRecords({
     //     EntityName: this.record.EntityInfo.Name,
-    //     SurvivingRecordID: this.record.ID,
+    //     SurvivingRecordID: this.record.PrimaryKey.Value,
     //     RecordsToMerge: [4],
     //   })
     //   console.log(mergeResult);

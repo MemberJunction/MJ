@@ -19,7 +19,7 @@ import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  recordId: number;
+  primaryKeyValue: any;
 }
 
 export type GridRowEditedEvent = {
@@ -342,7 +342,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        recordId: args.dataItem.ID
+        primaryKeyValue: args.dataItem[this._entityInfo.PrimaryKey.Name]
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -356,7 +356,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (!this.InEditMode && this.AutoNavigate) {
         // tell app router to go to this record
-        this.router.navigate(['resource', 'record', args.dataItem.ID], { queryParams: { Entity: this._entityInfo.Name } })
+        this.router.navigate(['resource', 'record', args.dataItem[this._entityInfo.PrimaryKey.Name]], { queryParams: { Entity: this._entityInfo.Name } })
     }
     } 
   } 
@@ -405,21 +405,22 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           Object.assign(dataItem, formGroup.value);
   
           const md = new Metadata();
+          const pkey = this._entityInfo.PrimaryKey.Name;
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
             record = await md.GetEntityObject(this._entityInfo.Name);
-            await record.Load(dataItem.ID);
+            await record.Load(dataItem[pkey]);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
             if (!bSaved)
-              this.CreateSimpleNotification("Error saving record: " + record.ID, 'error', 5000)
+              this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
           }
           else {
-            record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.ID === dataItem.ID)?.record;
+            record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
-              await record.Load(dataItem.ID);
+              await record.Load(dataItem[pkey]);
               this._pendingRecords.push({record, 
                                          row: args.rowIndex, 
                                          dataItem}); // don't save - put the changed record on a queue for saving later by our container
@@ -671,10 +672,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if (event === 'yes') {
       if (this._entityInfo && this.recordCompareComponent) {
         const md = new Metadata();
+        const pkey = this._entityInfo.PrimaryKey.Name;
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
-          RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => r.ID).filter((id: number) => id !== this.recordCompareComponent?.selectedRecordId),
-          SurvivingRecordPrimaryKeyValue: this.recordCompareComponent.selectedRecordId,
+          RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => r.Get(pkey)).filter((pkeyVal: any) => pkeyVal !== this.recordCompareComponent?.selectedRecordPKeyVal),
+          SurvivingRecordPrimaryKeyValue: this.recordCompareComponent.selectedRecordPKeyVal,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,

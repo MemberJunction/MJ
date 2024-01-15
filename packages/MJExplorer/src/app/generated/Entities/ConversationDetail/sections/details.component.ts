@@ -82,7 +82,7 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
     `
 })
 export class ConversationDetailDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ConversationDetailEntity | null = null;
+    @Input() override record!: ConversationDetailEntity;
     @Input() override EditMode: boolean = false;
 }
 

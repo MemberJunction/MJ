@@ -10,7 +10,7 @@ import { LoadCompanyIntegrationRecordMapDetailsComponent } from "./sections/deta
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class CompanyIntegrationRecordMapFormComponent extends BaseFormComponent {
-    public record: CompanyIntegrationRecordMapEntity | null = null;
+    public record!: CompanyIntegrationRecordMapEntity;
 } 
 
 export function LoadCompanyIntegrationRecordMapFormComponent() {

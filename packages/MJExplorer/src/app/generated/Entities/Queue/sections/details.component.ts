@@ -170,7 +170,7 @@ import { QueueEntity } from '@memberjunction/core-entities';
     `
 })
 export class QueueDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: QueueEntity | null = null;
+    @Input() override record!: QueueEntity;
     @Input() override EditMode: boolean = false;
 }
 

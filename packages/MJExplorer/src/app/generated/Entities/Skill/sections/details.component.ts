@@ -58,7 +58,7 @@ import { SkillEntity } from '@memberjunction/core-entities';
     `
 })
 export class SkillDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: SkillEntity | null = null;
+    @Input() override record!: SkillEntity;
     @Input() override EditMode: boolean = false;
 }
 

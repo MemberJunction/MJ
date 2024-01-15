@@ -58,7 +58,7 @@ import { TaggedItemEntity } from '@memberjunction/core-entities';
     `
 })
 export class TaggedItemDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: TaggedItemEntity | null = null;
+    @Input() override record!: TaggedItemEntity;
     @Input() override EditMode: boolean = false;
 }
 

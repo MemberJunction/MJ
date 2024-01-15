@@ -74,7 +74,7 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
     `
 })
 export class CompanyIntegrationRecordMapDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: CompanyIntegrationRecordMapEntity | null = null;
+    @Input() override record!: CompanyIntegrationRecordMapEntity;
     @Input() override EditMode: boolean = false;
 }
 

@@ -10,7 +10,7 @@ import { LoadSchemaInfoDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class SchemaInfoFormComponent extends BaseFormComponent {
-    public record: SchemaInfoEntity | null = null;
+    public record!: SchemaInfoEntity;
 } 
 
 export function LoadSchemaInfoFormComponent() {

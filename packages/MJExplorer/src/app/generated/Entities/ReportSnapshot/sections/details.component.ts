@@ -66,7 +66,7 @@ import { ReportSnapshotEntity } from '@memberjunction/core-entities';
     `
 })
 export class ReportSnapshotDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ReportSnapshotEntity | null = null;
+    @Input() override record!: ReportSnapshotEntity;
     @Input() override EditMode: boolean = false;
 }
 

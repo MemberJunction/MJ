@@ -432,7 +432,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     else {
       existingTab = this.tabs.find(t => t.data.ResourceTypeID === data.ResourceTypeID && 
                                               t.data.ResourceRecordID === data.ResourceRecordID &&
-                                              data.ResourceRecordID !== null && data.ResourceRecordID !== undefined && data.ResourceRecordID > 0 // make sure that we don't match on null/undefined/0 ResourceRecordID's - these should always be NEW tabs
+                                              data.ResourceRecordID  // make sure that we don't match on null/undefined ResourceRecordID's - these should always be NEW tabs
                                         )
     }
     return existingTab;
@@ -611,7 +611,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         else {
           wsItem.NewRecord();
 
-          wsItem.Name = tab.data.Name ? tab.data.Name : tab.data.ResourceType + ' Record ID:' + tab.data.ResourceRecordID;
+          wsItem.Name = tab.data.Name ? tab.data.Name : tab.data.ResourceType + ' Record:' + tab.data.ResourceRecordID;
           wsItem.WorkSpaceID = this.workSpace.ID;
           wsItem.ResourceTypeID = tab.data?.ResourceTypeID;
         }

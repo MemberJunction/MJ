@@ -18,7 +18,6 @@ export class SampleEntity extends BaseEntity {
     * * Field Name: SampleID
     * * Display Name: Sample ID
     * * SQL Data Type: nchar(10)
-    * * Default Value: null
     */
     get SampleID(): string {  
         return this.Get('SampleID');
@@ -28,7 +27,6 @@ export class SampleEntity extends BaseEntity {
     * * Field Name: ValueA
     * * Display Name: Value A
     * * SQL Data Type: nvarchar(50)
-    * * Default Value: null
     */
     get ValueA(): string {  
         return this.Get('ValueA');
@@ -40,7 +38,6 @@ export class SampleEntity extends BaseEntity {
     * * Field Name: ValueB
     * * Display Name: Value B
     * * SQL Data Type: nvarchar(255)
-    * * Default Value: null
     */
     get ValueB(): string {  
         return this.Get('ValueB');

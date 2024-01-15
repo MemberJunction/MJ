@@ -10,7 +10,7 @@ import { LoadOutputFormatTypeDetailsComponent } from "./sections/details.compone
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class OutputFormatTypeFormComponent extends BaseFormComponent {
-    public record: OutputFormatTypeEntity | null = null;
+    public record!: OutputFormatTypeEntity;
 } 
 
 export function LoadOutputFormatTypeFormComponent() {

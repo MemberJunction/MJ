@@ -82,7 +82,7 @@ import { UserFavoriteEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserFavoriteDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserFavoriteEntity | null = null;
+    @Input() override record!: UserFavoriteEntity;
     @Input() override EditMode: boolean = false;
 }
 

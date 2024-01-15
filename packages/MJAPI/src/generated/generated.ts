@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 1/14/2024, 9:02:46 PM
+* GENERATED: 1/15/2024, 12:49:24 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -158,7 +158,7 @@ export class CompanyResolver extends ResolverBase {
     }
 
     @Query(() => Company_, { nullable: true })
-    async Company(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
+    async Company(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
         this.CheckUserReadPermissions('Companies', userPayload);
         const sSQL = `SELECT * FROM [admin].vwCompanies WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -265,10 +265,10 @@ export class CompanyResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -475,7 +475,7 @@ export class EmployeeResolver extends ResolverBase {
     }
 
     @Query(() => Employee_, { nullable: true })
-    async Employee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
+    async Employee(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
         this.CheckUserReadPermissions('Employees', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEmployees WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -589,10 +589,10 @@ export class EmployeeResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -726,7 +726,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
 
     @Query(() => UserFavorite_, { nullable: true })
-    async UserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
+    async UserFavorite(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserFavorites WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -805,10 +805,10 @@ export class UserFavoriteResolverBase extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -920,7 +920,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     }
 
     @Query(() => EmployeeCompanyIntegration_, { nullable: true })
-    async EmployeeCompanyIntegration(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
+    async EmployeeCompanyIntegration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEmployeeCompanyIntegrations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -1048,7 +1048,7 @@ export class EmployeeRoleResolver extends ResolverBase {
     }
 
     @Query(() => EmployeeRole_, { nullable: true })
-    async EmployeeRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
+    async EmployeeRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEmployeeRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -1176,7 +1176,7 @@ export class EmployeeSkillResolver extends ResolverBase {
     }
 
     @Query(() => EmployeeSkill_, { nullable: true })
-    async EmployeeSkill(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
+    async EmployeeSkill(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEmployeeSkills WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -1328,7 +1328,7 @@ export class RoleResolver extends ResolverBase {
     }
 
     @Query(() => Role_, { nullable: true })
-    async Role(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
+    async Role(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
         this.CheckUserReadPermissions('Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].vwRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -1482,7 +1482,7 @@ export class SkillResolver extends ResolverBase {
     }
 
     @Query(() => Skill_, { nullable: true })
-    async Skill(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
+    async Skill(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
         this.CheckUserReadPermissions('Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].vwSkills WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -1611,7 +1611,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
     }
 
     @Query(() => IntegrationURLFormat_, { nullable: true })
-    async IntegrationURLFormat(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
+    async IntegrationURLFormat(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const sSQL = `SELECT * FROM [admin].vwIntegrationURLFormats WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -1783,7 +1783,7 @@ export class IntegrationResolver extends ResolverBase {
     }
 
     @Query(() => Integration_, { nullable: true })
-    async Integration(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
+    async Integration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
         this.CheckUserReadPermissions('Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].vwIntegrations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -2043,7 +2043,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
     }
 
     @Query(() => CompanyIntegration_, { nullable: true })
-    async CompanyIntegration(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
+    async CompanyIntegration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].vwCompanyIntegrations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -2483,7 +2483,7 @@ export class EntityFieldResolver extends ResolverBase {
     }
 
     @Query(() => EntityField_, { nullable: true })
-    async EntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
+    async EntityField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEntityFields WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -2576,10 +2576,10 @@ export class EntityFieldResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -3091,7 +3091,7 @@ export class EntityResolverBase extends ResolverBase {
     }
 
     @Query(() => Entity_, { nullable: true })
-    async Entity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
+    async Entity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
         this.CheckUserReadPermissions('Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEntities WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -3317,10 +3317,10 @@ export class EntityResolverBase extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -3598,7 +3598,7 @@ export class UserResolverBase extends ResolverBase {
     }
 
     @Query(() => User_, { nullable: true })
-    async User(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
+    async User(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
         this.CheckUserReadPermissions('Users', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUsers WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -4044,7 +4044,7 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
 
     @Query(() => EntityRelationship_, { nullable: true })
-    async EntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
+    async EntityRelationship(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEntityRelationships WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -4130,10 +4130,10 @@ export class EntityRelationshipResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -4275,7 +4275,7 @@ export class UserRecordLogResolver extends ResolverBase {
     }
 
     @Query(() => UserRecordLog_, { nullable: true })
-    async UserRecordLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
+    async UserRecordLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserRecordLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -4573,7 +4573,7 @@ export class UserViewResolverBase extends ResolverBase {
     }
 
     @Query(() => UserView_, { nullable: true })
-    async UserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
+    async UserView(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserViews WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -4673,10 +4673,10 @@ export class UserViewResolverBase extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -4806,7 +4806,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
     }
 
     @Query(() => CompanyIntegrationRun_, { nullable: true })
-    async CompanyIntegrationRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
+    async CompanyIntegrationRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRuns WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -4985,7 +4985,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
     }
 
     @Query(() => CompanyIntegrationRunDetail_, { nullable: true })
-    async CompanyIntegrationRunDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
+    async CompanyIntegrationRunDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -5152,7 +5152,7 @@ export class ErrorLogResolver extends ResolverBase {
     }
 
     @Query(() => ErrorLog_, { nullable: true })
-    async ErrorLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
+    async ErrorLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwErrorLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -5284,7 +5284,7 @@ export class ApplicationResolver extends ResolverBase {
     }
 
     @Query(() => Application_, { nullable: true })
-    async Application(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
+    async Application(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
         this.CheckUserReadPermissions('Applications', userPayload);
         const sSQL = `SELECT * FROM [admin].vwApplications WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -5488,7 +5488,7 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
 
     @Query(() => ApplicationEntity_, { nullable: true })
-    async ApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
+    async ApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].vwApplicationEntities WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -5567,10 +5567,10 @@ export class ApplicationEntityResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -5782,7 +5782,7 @@ export class EntityPermissionResolver extends ResolverBase {
     }
 
     @Query(() => EntityPermission_, { nullable: true })
-    async EntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
+    async EntityPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEntityPermissions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -5868,10 +5868,10 @@ export class EntityPermissionResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -5999,7 +5999,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
 
     @Query(() => UserApplicationEntity_, { nullable: true })
-    async UserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
+    async UserApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserApplicationEntities WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -6078,10 +6078,10 @@ export class UserApplicationEntityResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -6195,7 +6195,7 @@ export class UserApplicationResolver extends ResolverBase {
     }
 
     @Query(() => UserApplication_, { nullable: true })
-    async UserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
+    async UserApplication(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserApplications WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -6344,7 +6344,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
     }
 
     @Query(() => CompanyIntegrationRunAPILog_, { nullable: true })
-    async CompanyIntegrationRunAPILog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
+    async CompanyIntegrationRunAPILog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunAPILogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -6533,7 +6533,7 @@ export class ListResolver extends ResolverBase {
     }
 
     @Query(() => List_, { nullable: true })
-    async List(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
+    async List(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [admin].vwLists WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -6619,10 +6619,10 @@ export class ListResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -6739,7 +6739,7 @@ export class ListDetailResolver extends ResolverBase {
     }
 
     @Query(() => ListDetail_, { nullable: true })
-    async ListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
+    async ListDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
         this.CheckUserReadPermissions('List Details', userPayload);
         const sSQL = `SELECT * FROM [admin].vwListDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -6818,10 +6818,10 @@ export class ListDetailResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -6949,7 +6949,7 @@ export class UserViewRunResolver extends ResolverBase {
     }
 
     @Query(() => UserViewRun_, { nullable: true })
-    async UserViewRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
+    async UserViewRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserViewRuns WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -7127,7 +7127,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
     }
 
     @Query(() => UserViewRunDetail_, { nullable: true })
-    async UserViewRunDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
+    async UserViewRunDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserViewRunDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -7312,7 +7312,7 @@ export class WorkflowRunResolver extends ResolverBase {
     }
 
     @Query(() => WorkflowRun_, { nullable: true })
-    async WorkflowRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
+    async WorkflowRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwWorkflowRuns WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -7464,7 +7464,7 @@ export class WorkflowResolver extends ResolverBase {
     }
 
     @Query(() => Workflow_, { nullable: true })
-    async Workflow(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
+    async Workflow(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const sSQL = `SELECT * FROM [admin].vwWorkflows WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -7620,7 +7620,7 @@ export class WorkflowEngineResolver extends ResolverBase {
     }
 
     @Query(() => WorkflowEngine_, { nullable: true })
-    async WorkflowEngine(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
+    async WorkflowEngine(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
         this.CheckUserReadPermissions('Workflow Engines', userPayload);
         const sSQL = `SELECT * FROM [admin].vwWorkflowEngines WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Engines', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -7793,7 +7793,7 @@ export class RecordChangeResolver extends ResolverBase {
     }
 
     @Query(() => RecordChange_, { nullable: true })
-    async RecordChange(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
+    async RecordChange(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [admin].vwRecordChanges WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -7920,7 +7920,7 @@ export class UserRoleResolver extends ResolverBase {
     }
 
     @Query(() => UserRole_, { nullable: true })
-    async UserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
+    async UserRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8043,7 +8043,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
     }
 
     @Query(() => RowLevelSecurityFilter_, { nullable: true })
-    async RowLevelSecurityFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
+    async RowLevelSecurityFilter(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
         const sSQL = `SELECT * FROM [admin].vwRowLevelSecurityFilters WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8229,7 +8229,7 @@ export class AuditLogResolver extends ResolverBase {
     }
 
     @Query(() => AuditLog_, { nullable: true })
-    async AuditLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
+    async AuditLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAuditLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8391,7 +8391,7 @@ export class AuthorizationResolver extends ResolverBase {
     }
 
     @Query(() => Authorization_, { nullable: true })
-    async Authorization(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
+    async Authorization(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAuthorizations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8509,7 +8509,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
     }
 
     @Query(() => AuthorizationRole_, { nullable: true })
-    async AuthorizationRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
+    async AuthorizationRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAuthorizationRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8611,7 +8611,7 @@ export class AuditLogTypeResolver extends ResolverBase {
     }
 
     @Query(() => AuditLogType_, { nullable: true })
-    async AuditLogType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
+    async AuditLogType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAuditLogTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8728,7 +8728,7 @@ export class EntityFieldValueResolver extends ResolverBase {
     }
 
     @Query(() => EntityFieldValue_, { nullable: true })
-    async EntityFieldValue(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
+    async EntityFieldValue(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEntityFieldValues WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -8871,7 +8871,7 @@ export class AIModelResolver extends ResolverBase {
     }
 
     @Query(() => AIModel_, { nullable: true })
-    async AIModel(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
+    async AIModel(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAIModels WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -9052,7 +9052,7 @@ export class AIActionResolver extends ResolverBase {
     }
 
     @Query(() => AIAction_, { nullable: true })
-    async AIAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
+    async AIAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAIActions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -9211,7 +9211,7 @@ export class AIModelActionResolver extends ResolverBase {
     }
 
     @Query(() => AIModelAction_, { nullable: true })
-    async AIModelAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
+    async AIModelAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAIModelActions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -9414,7 +9414,7 @@ export class EntityAIActionResolver extends ResolverBase {
     }
 
     @Query(() => EntityAIAction_, { nullable: true })
-    async EntityAIAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
+    async EntityAIAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].vwEntityAIActions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -9541,7 +9541,7 @@ export class AIModelTypeResolver extends ResolverBase {
     }
 
     @Query(() => AIModelType_, { nullable: true })
-    async AIModelType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
+    async AIModelType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwAIModelTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -9670,7 +9670,7 @@ export class QueueTypeResolver extends ResolverBase {
     }
 
     @Query(() => QueueType_, { nullable: true })
-    async QueueType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
+    async QueueType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
         this.CheckUserReadPermissions('Queue Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwQueueTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Types', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -9928,7 +9928,7 @@ export class QueueResolver extends ResolverBase {
     }
 
     @Query(() => Queue_, { nullable: true })
-    async Queue(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
+    async Queue(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
         this.CheckUserReadPermissions('Queues', userPayload);
         const sSQL = `SELECT * FROM [admin].vwQueues WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -10162,7 +10162,7 @@ export class QueueTaskResolver extends ResolverBase {
     }
 
     @Query(() => QueueTask_, { nullable: true })
-    async QueueTask(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
+    async QueueTask(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
         const sSQL = `SELECT * FROM [admin].vwQueueTasks WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -10346,7 +10346,7 @@ export class DashboardResolver extends ResolverBase {
     }
 
     @Query(() => Dashboard_, { nullable: true })
-    async Dashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
+    async Dashboard(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [admin].vwDashboards WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Dashboards', ID)
@@ -10426,10 +10426,10 @@ export class DashboardResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -10508,7 +10508,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
     }
 
     @Query(() => OutputTriggerType_, { nullable: true })
-    async OutputTriggerType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
+    async OutputTriggerType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
         this.CheckUserReadPermissions('Output Trigger Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwOutputTriggerTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Trigger Types', ID)
@@ -10592,7 +10592,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
     }
 
     @Query(() => OutputFormatType_, { nullable: true })
-    async OutputFormatType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
+    async OutputFormatType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
         this.CheckUserReadPermissions('Output Format Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwOutputFormatTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Format Types', ID)
@@ -10673,7 +10673,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
     }
 
     @Query(() => OutputDeliveryType_, { nullable: true })
-    async OutputDeliveryType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
+    async OutputDeliveryType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
         this.CheckUserReadPermissions('Output Delivery Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwOutputDeliveryTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Delivery Types', ID)
@@ -10935,7 +10935,7 @@ export class ReportResolver extends ResolverBase {
     }
 
     @Query(() => Report_, { nullable: true })
-    async Report(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
+    async Report(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].vwReports WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -11021,10 +11021,10 @@ export class ReportResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -11149,7 +11149,7 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
 
     @Query(() => ReportSnapshot_, { nullable: true })
-    async ReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
+    async ReportSnapshot(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const sSQL = `SELECT * FROM [admin].vwReportSnapshots WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -11228,10 +11228,10 @@ export class ReportSnapshotResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -11336,7 +11336,7 @@ export class ResourceTypeResolver extends ResolverBase {
     }
 
     @Query(() => ResourceType_, { nullable: true })
-    async ResourceType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
+    async ResourceType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const sSQL = `SELECT * FROM [admin].vwResourceTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Resource Types', ID)
@@ -11438,7 +11438,7 @@ export class TagResolver extends ResolverBase {
     }
 
     @Query(() => Tag_, { nullable: true })
-    async Tag(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
+    async Tag(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
         this.CheckUserReadPermissions('Tags', userPayload);
         const sSQL = `SELECT * FROM [admin].vwTags WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Tags', ID)
@@ -11534,7 +11534,7 @@ export class TaggedItemResolver extends ResolverBase {
     }
 
     @Query(() => TaggedItem_, { nullable: true })
-    async TaggedItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
+    async TaggedItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [admin].vwTaggedItems WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Tagged Items', ID)
@@ -11650,7 +11650,7 @@ export class WorkspaceResolver extends ResolverBase {
     }
 
     @Query(() => Workspace_, { nullable: true })
-    async Workspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
+    async Workspace(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const sSQL = `SELECT * FROM [admin].vwWorkspaces WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Workspaces', ID)
@@ -11737,10 +11737,10 @@ export class WorkspaceResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -11775,8 +11775,9 @@ export class WorkspaceItem_ {
     @Field(() => Int) 
     ResourceTypeID: number;
       
-    @Field(() => Int, {nullable: true}) 
-    ResourceRecordID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ResourceRecordID?: string;
       
     @Field(() => Int) 
     Sequence: number;
@@ -11811,8 +11812,8 @@ export class CreateWorkspaceItemInput {
     @Field(() => Int, )
     ResourceTypeID: number;
 
-    @Field(() => Int, { nullable: true })
-    ResourceRecordID: number;
+    @Field({ nullable: true })
+    ResourceRecordID: string;
 
     @Field(() => Int, )
     Sequence: number;
@@ -11842,8 +11843,8 @@ export class UpdateWorkspaceItemInput {
     @Field(() => Int, )
     ResourceTypeID: number;
 
-    @Field(() => Int, { nullable: true })
-    ResourceRecordID: number;
+    @Field({ nullable: true })
+    ResourceRecordID: string;
 
     @Field(() => Int, )
     Sequence: number;
@@ -11898,7 +11899,7 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
 
     @Query(() => WorkspaceItem_, { nullable: true })
-    async WorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
+    async WorkspaceItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [admin].vwWorkspaceItems WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Workspace Items', ID)
@@ -11978,10 +11979,10 @@ export class WorkspaceItemResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -12068,7 +12069,7 @@ export class DatasetResolver extends ResolverBase {
     }
 
     @Query(() => Dataset_, { nullable: true })
-    async Dataset(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
+    async Dataset(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
         this.CheckUserReadPermissions('Datasets', userPayload);
         const sSQL = `SELECT * FROM [admin].vwDatasets WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Datasets', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -12174,7 +12175,7 @@ export class DatasetItemResolver extends ResolverBase {
     }
 
     @Query(() => DatasetItem_, { nullable: true })
-    async DatasetItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
+    async DatasetItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const sSQL = `SELECT * FROM [admin].vwDatasetItems WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -12316,7 +12317,7 @@ export class ConversationDetailResolver extends ResolverBase {
     }
 
     @Query(() => ConversationDetail_, { nullable: true })
-    async ConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
+    async ConversationDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const sSQL = `SELECT * FROM [admin].vwConversationDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -12402,10 +12403,10 @@ export class ConversationDetailResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -12538,7 +12539,7 @@ export class ConversationResolver extends ResolverBase {
     }
 
     @Query(() => Conversation_, { nullable: true })
-    async Conversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
+    async Conversation(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [admin].vwConversations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -12631,10 +12632,10 @@ export class ConversationResolver extends ResolverBase {
                 return ID;
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
@@ -12806,7 +12807,7 @@ export class UserNotificationResolver extends ResolverBase {
     }
 
     @Query(() => UserNotification_, { nullable: true })
-    async UserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
+    async UserNotification(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const sSQL = `SELECT * FROM [admin].vwUserNotifications WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -13015,7 +13016,7 @@ export class ResourceFolderResolver extends ResolverBase {
     }
 
     @Query(() => ResourceFolder_, { nullable: true })
-    async ResourceFolder(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceFolder_ | null> {
+    async ResourceFolder(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceFolder_ | null> {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
         const sSQL = `SELECT * FROM [admin].vwResourceFolders WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -13210,7 +13211,7 @@ export class SchemaInfoResolver extends ResolverBase {
     }
 
     @Query(() => SchemaInfo_, { nullable: true })
-    async SchemaInfo(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
+    async SchemaInfo(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
         this.CheckUserReadPermissions('Schema Info', userPayload);
         const sSQL = `SELECT * FROM [admin].vwSchemaInfos WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Schema Info', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -13403,7 +13404,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     }
 
     @Query(() => CompanyIntegrationRecordMap_, { nullable: true })
-    async CompanyIntegrationRecordMap(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
+    async CompanyIntegrationRecordMap(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRecordMaps WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -13660,7 +13661,7 @@ export class RecordMergeLogResolver extends ResolverBase {
     }
 
     @Query(() => RecordMergeLog_, { nullable: true })
-    async RecordMergeLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
+    async RecordMergeLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwRecordMergeLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -13856,7 +13857,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
     }
 
     @Query(() => RecordMergeDeletionLog_, { nullable: true })
-    async RecordMergeDeletionLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
+    async RecordMergeDeletionLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].vwRecordMergeDeletionLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
@@ -14031,9 +14032,9 @@ export class SampleResolver extends ResolverBase {
     }
 
     @Query(() => Sample_, { nullable: true })
-    async Sample(@Arg('SampleID', () => String) SampleID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Sample_ | null> {
+    async Sample(@Arg('SampleID', () => String) SampleID: String, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Sample_ | null> {
         this.CheckUserReadPermissions('Samples', userPayload);
-        const sSQL = `SELECT * FROM [test].vwSamples WHERE SampleID=${SampleID} ` + this.getRowLevelSecurityWhereClause('Samples', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [test].vwSamples WHERE SampleID='${SampleID}' ` + this.getRowLevelSecurityWhereClause('Samples', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
     }
 

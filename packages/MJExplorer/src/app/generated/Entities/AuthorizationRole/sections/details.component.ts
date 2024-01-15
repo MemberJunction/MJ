@@ -58,7 +58,7 @@ import { AuthorizationRoleEntity } from '@memberjunction/core-entities';
     `
 })
 export class AuthorizationRoleDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: AuthorizationRoleEntity | null = null;
+    @Input() override record!: AuthorizationRoleEntity;
     @Input() override EditMode: boolean = false;
 }
 

@@ -42,7 +42,7 @@ import { OutputFormatTypeEntity } from '@memberjunction/core-entities';
     `
 })
 export class OutputFormatTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: OutputFormatTypeEntity | null = null;
+    @Input() override record!: OutputFormatTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 

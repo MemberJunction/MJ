@@ -10,7 +10,7 @@ import { LoadReportDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ReportFormComponent extends BaseFormComponent {
-    public record: ReportEntity | null = null;
+    public record!: ReportEntity;
 } 
 
 export function LoadReportFormComponent() {

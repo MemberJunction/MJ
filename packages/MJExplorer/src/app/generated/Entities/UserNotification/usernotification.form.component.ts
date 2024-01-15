@@ -10,7 +10,7 @@ import { LoadUserNotificationDetailsComponent } from "./sections/details.compone
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class UserNotificationFormComponent extends BaseFormComponent {
-    public record: UserNotificationEntity | null = null;
+    public record!: UserNotificationEntity;
 } 
 
 export function LoadUserNotificationFormComponent() {

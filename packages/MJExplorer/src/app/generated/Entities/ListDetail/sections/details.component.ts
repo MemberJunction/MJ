@@ -42,7 +42,7 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
     `
 })
 export class ListDetailDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ListDetailEntity | null = null;
+    @Input() override record!: ListDetailEntity;
     @Input() override EditMode: boolean = false;
 }
 

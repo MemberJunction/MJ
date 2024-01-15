@@ -10,7 +10,7 @@ import { LoadQueueTypeDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class QueueTypeFormComponent extends BaseFormComponent {
-    public record: QueueTypeEntity | null = null;
+    public record!: QueueTypeEntity;
 } 
 
 export function LoadQueueTypeFormComponent() {

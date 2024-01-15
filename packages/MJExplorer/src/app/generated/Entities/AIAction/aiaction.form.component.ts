@@ -10,7 +10,7 @@ import { LoadAIActionDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class AIActionFormComponent extends BaseFormComponent {
-    public record: AIActionEntity | null = null;
+    public record!: AIActionEntity;
 } 
 
 export function LoadAIActionFormComponent() {

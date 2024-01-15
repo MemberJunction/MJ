@@ -10,7 +10,7 @@ import { LoadAuditLogTypeDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class AuditLogTypeFormComponent extends BaseFormComponent {
-    public record: AuditLogTypeEntity | null = null;
+    public record!: AuditLogTypeEntity;
 } 
 
 export function LoadAuditLogTypeFormComponent() {

@@ -23,8 +23,8 @@ export class CompareRecordsComponent {
   public columns: any[] = [];
   public showDifferences: boolean = true;
   public suppressBlankFields: boolean = true;
-  public selectedRecordId: number = 0;
-  public fieldMap: {fieldName: string, recordId: number, value: any}[] = [];
+  public selectedRecordPKeyVal: any = null;
+  public fieldMap: {fieldName: string, recordId: any, value: any}[] = [];
 
   @ViewChild('kendoGrid', { read: GridComponent }) kendoGridElement: GridComponent | null = null;
   @ViewChild('kendoGrid', { read: ElementRef }) kendoGridElementRef: ElementRef | null = null;
@@ -79,8 +79,8 @@ export class CompareRecordsComponent {
             let obj: any = {};
             obj['Fields'] = column.Name;
             this.recordsToCompare.forEach((record, index: number) => { 
-              obj[record.ID] = { Field: column.Name, Value: record[column.Name], metaData: column, recordId: record.ID };
-              this.columns[index + 1] = { field: record.ID, recordId: record.ID, title: record.ID, width: 200, locked: true, lockable: false, filterable: false, sortable: false };
+              obj[record.PrimaryKey.Value] = { Field: column.Name, Value: record[column.Name], metaData: column, recordId: record.PrimaryKey.Value };
+              this.columns[index + 1] = { field: record.PrimaryKey.Value, recordId: record.PrimaryKey.Value, title: record.PrimaryKey.Value, width: 200, locked: true, lockable: false, filterable: false, sortable: false };
             });
             if ((this.suppressBlankFields || this.showDifferences) && !['ID', 'Name'].includes(obj.Fields)) {
               let tempObj = { ...obj };
@@ -118,7 +118,7 @@ export class CompareRecordsComponent {
     }
   }
 
-  protected _recordDependencies: {recordId: number, dependencies: EntityDependency[]}[] = [];  
+  protected _recordDependencies: {pkeyValue: any, dependencies: EntityDependency[]}[] = [];  
   public async SetDefaultSelectedRecord() {
     try {
       // find out how many dependencies each record has
@@ -127,20 +127,20 @@ export class CompareRecordsComponent {
         // dependencies not loaded yet, so load 'em up
         this._recordDependencies = [];
         for (const record of this.recordsToCompare) {
-          const dependencies = await md.GetRecordDependencies(this.entityName, record.ID)
-          this._recordDependencies.push({recordId: record.ID, dependencies: dependencies});
+          const dependencies = await md.GetRecordDependencies(this.entityName, record.PrimaryKey.Value)
+          this._recordDependencies.push({pkeyValue: record.PrimaryKey.Value, dependencies: dependencies});
         }
       }
       // the default is simply the record with the most dependencies, and if they're all equal, the first one
       let maxDependencies = 0;
-      let defaultRecordId = 0;
+      let defaultPkeyValue: any = null;
       for (const record of this._recordDependencies) {
         if (record.dependencies.length > maxDependencies) {
           maxDependencies = record.dependencies.length;
-          defaultRecordId = record.recordId;
+          defaultPkeyValue = record.pkeyValue;
         }
       }
-      this.selectedRecordId = defaultRecordId;
+      this.selectedRecordPKeyVal = defaultPkeyValue;
     }
     catch (e) {
       LogError(e)
@@ -177,7 +177,7 @@ export class CompareRecordsComponent {
       else {
         // we do not have a field map for this field, so see if the recordId matches the selected recordId
         // as we default to the selected record when we don't have a field map
-        return (parseInt(recordId) === this.selectedRecordId)
+        return (parseInt(recordId) === this.selectedRecordPKeyVal)
       }
     }
     else
@@ -227,11 +227,11 @@ export class CompareRecordsComponent {
       return false;
   }
 
-  public GetColumnHeaderText(recordId: number) {
+  public GetColumnHeaderText(recordId: any) {
     if (recordId) {
       // see if we have any dependencies
-      const r = this._recordDependencies.find(r => r.recordId === recordId);
-      const prefix = this.selectedRecordId === recordId ? '✓✓✓ ' : '';
+      const r = this._recordDependencies.find(r => r.pkeyValue === recordId);
+      const prefix = this.selectedRecordPKeyVal === recordId ? '✓✓✓ ' : '';
       if (r) {
         return `${prefix}Record: ${recordId} (${r.dependencies.length} dependencies)`;
       }
@@ -252,13 +252,13 @@ export class CompareRecordsComponent {
       // entry in the this.fieldMap array to mark that field from that other record as overriding the selected record's field
       // so if we select a field from record 2, we will have an entry in the fieldMap array that looks like this:
       // { fieldName: 'FirstName', recordId: 2 }
-      const currentRecordId = this.recordsToCompare[col].ID;
+      const currentRecordId = this.recordsToCompare[col].PrimaryKey.Value;
       const fieldName = this.viewData[row].Fields; // get the field name from the row -- use this.viewData, not visibleColumns because that visibleColumns stuff gets filtered down based on what is matching
 
       // first check to see if the user selected a read-only field
       if (!event.dataItem[currentRecordId].metaData.EntityField.ReadOnly) {
         // only make writeable fields selectable
-        if (this.selectedRecordId !== currentRecordId) {
+        if (this.selectedRecordPKeyVal !== currentRecordId) {
           // check to see if we have a fieldmap for the current field. If we do have one, then update it to the current record
           // if we don't have one, then add it
           const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
@@ -293,14 +293,14 @@ export class CompareRecordsComponent {
           const columnText = element.innerText;
           const recordId = this.extractRecordId(columnText);
           if (recordId) {
-            this.selectedRecordId = recordId; // selected the record here
+            this.selectedRecordPKeyVal = recordId; // selected the record here
           }
         }
     }
   }
 
-  protected extractRecordId(str: string): number | null {
+  protected extractRecordId(str: string): any {
     const match = str.match(/Record: (\d+)/);
-    return match ? parseInt(match[1], 10) : null;
+    return match ? match[1] : null;
   }
 }

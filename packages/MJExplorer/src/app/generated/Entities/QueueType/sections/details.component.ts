@@ -58,7 +58,7 @@ import { QueueTypeEntity } from '@memberjunction/core-entities';
     `
 })
 export class QueueTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: QueueTypeEntity | null = null;
+    @Input() override record!: QueueTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 

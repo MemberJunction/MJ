@@ -90,7 +90,7 @@ import { ResourceFolderEntity } from '@memberjunction/core-entities';
     `
 })
 export class ResourceFolderDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: ResourceFolderEntity | null = null;
+    @Input() override record!: ResourceFolderEntity;
     @Input() override EditMode: boolean = false;
 }
 

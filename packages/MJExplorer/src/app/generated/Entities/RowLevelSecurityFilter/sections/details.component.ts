@@ -58,7 +58,7 @@ import { RowLevelSecurityFilterEntity } from '@memberjunction/core-entities';
     `
 })
 export class RowLevelSecurityFilterDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: RowLevelSecurityFilterEntity | null = null;
+    @Input() override record!: RowLevelSecurityFilterEntity;
     @Input() override EditMode: boolean = false;
 }
 

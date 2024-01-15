@@ -202,7 +202,7 @@ import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
     `
 })
 export class CompanyIntegrationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: CompanyIntegrationEntity | null = null;
+    @Input() override record!: CompanyIntegrationEntity;
     @Input() override EditMode: boolean = false;
 }
 

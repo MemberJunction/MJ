@@ -66,7 +66,7 @@ import { UserApplicationEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserApplicationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserApplicationEntity | null = null;
+    @Input() override record!: UserApplicationEntity;
     @Input() override EditMode: boolean = false;
 }
 

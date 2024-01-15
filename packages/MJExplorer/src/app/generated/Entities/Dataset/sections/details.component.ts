@@ -50,7 +50,7 @@ import { DatasetEntity } from '@memberjunction/core-entities';
     `
 })
 export class DatasetDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: DatasetEntity | null = null;
+    @Input() override record!: DatasetEntity;
     @Input() override EditMode: boolean = false;
 }
 

@@ -10,7 +10,7 @@ import { LoadDashboardDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class DashboardFormComponent extends BaseFormComponent {
-    public record: DashboardEntity | null = null;
+    public record!: DashboardEntity;
 } 
 
 export function LoadDashboardFormComponent() {

@@ -170,7 +170,7 @@ import { UserEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserEntity | null = null;
+    @Input() override record!: UserEntity;
     @Input() override EditMode: boolean = false;
 }
 

@@ -7799,12 +7799,12 @@ export class WorkspaceItemEntity extends BaseEntity {
     /**
     * * Field Name: ResourceRecordID
     * * Display Name: Resource Record ID
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ResourceRecordID(): number {  
+    get ResourceRecordID(): string {  
         return this.Get('ResourceRecordID');
     }
-    set ResourceRecordID(value: number) {
+    set ResourceRecordID(value: string) {
         this.Set('ResourceRecordID', value);
     }
     /**

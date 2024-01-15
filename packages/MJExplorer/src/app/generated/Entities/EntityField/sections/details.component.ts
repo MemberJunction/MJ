@@ -394,7 +394,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
     `
 })
 export class EntityFieldDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: EntityFieldEntity | null = null;
+    @Input() override record!: EntityFieldEntity;
     @Input() override EditMode: boolean = false;
 }
 

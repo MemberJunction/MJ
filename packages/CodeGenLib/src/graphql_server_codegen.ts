@@ -235,9 +235,9 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
     }
 
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
-    async ${entity.BaseTableCodeName}(@Arg('${entity.PrimaryKey.Name}', () => ${entity.PrimaryKey.GraphQLType}) ${entity.PrimaryKey.Name}: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+    async ${entity.BaseTableCodeName}(@Arg('${entity.PrimaryKey.Name}', () => ${entity.PrimaryKey.GraphQLType}) ${entity.PrimaryKey.Name}: ${entity.PrimaryKey.TSType}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
-        const sSQL = \`SELECT * FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=\${${entity.PrimaryKey.Name}} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
+        const sSQL = \`SELECT * FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${idQuotes}\${${entity.PrimaryKey.Name}}${idQuotes} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
         return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
     }
 `
@@ -393,7 +393,7 @@ function generateServerGraphQLMutations(entity: EntityInfo, serverGraphQLTypeNam
     }
     if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
 sRet += `
-    @Mutation(() => Int)
+    @Mutation(() => ${entity.PrimaryKey.GraphQLType})
     async Delete${entity.BaseTableCodeName}(@Arg('${entity.PrimaryKey.Name}', () => ${entity.PrimaryKey.GraphQLType}) ${entity.PrimaryKey.Name}: ${entity.PrimaryKey.TSType}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ${entity.PrimaryKey.Name})) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
@@ -403,10 +403,10 @@ sRet += `
                 return ${entity.PrimaryKey.Name};
             }
             else 
-                return null; // delete failed
+                return null; // delete failed, this will cause an exception
         }
         else
-            return null;
+            return null; // BeforeDelete canceled the operation, this will cause an exception
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override

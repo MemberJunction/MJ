@@ -642,7 +642,7 @@ input CreateWorkspaceItemInput {
   Configuration: String
   Description: String
   Name: String!
-  ResourceRecordID: Int
+  ResourceRecordID: String
   ResourceTypeID: Int!
   Sequence: Int!
   WorkSpaceID: Int!
@@ -873,12 +873,12 @@ type EntityPermission_ {
 
 input EntityRecordNameInput {
   EntityName: String!
-  RecordID: Int!
+  RecordID: String!
 }
 
 type EntityRecordNameResult {
   EntityName: String!
-  RecordID: Int!
+  RecordID: String!
   RecordName: String
   Status: String!
   Success: Boolean!
@@ -1289,7 +1289,7 @@ type Query {
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!, recordId: Int!): [EntityDependencyResult!]!
-  GetEntityRecordName(EntityName: String!, RecordID: Int!): EntityRecordNameResult!
+  GetEntityRecordName(EntityName: String!, RecordID: String!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetRecordDependencies(entityName: String!, recordId: Int!): [RecordDependencyResult!]!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
@@ -3302,7 +3302,7 @@ input UpdateWorkspaceItemInput {
   Description: String
   ID: Int!
   Name: String!
-  ResourceRecordID: Int
+  ResourceRecordID: String
   ResourceTypeID: Int!
   Sequence: Int!
   WorkSpaceID: Int!
@@ -3539,7 +3539,7 @@ type WorkspaceItem_ {
   Description: String
   ID: Int!
   Name: String!
-  ResourceRecordID: Int
+  ResourceRecordID: String
   ResourceType: String!
   ResourceTypeID: Int!
   Sequence: Int!

@@ -10,7 +10,7 @@ import { LoadRoleDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class RoleFormComponent extends BaseFormComponent {
-    public record: RoleEntity | null = null;
+    public record!: RoleEntity;
 } 
 
 export function LoadRoleFormComponent() {

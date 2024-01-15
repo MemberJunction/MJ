@@ -6,8 +6,8 @@ export class EntityRecordNameInput {
   @Field(() => String)
   EntityName: string;
 
-  @Field(() => Int)
-  RecordID: number;
+  @Field(() => String)
+  RecordID: string;
 }
 
 @ObjectType()
@@ -18,8 +18,8 @@ export class EntityRecordNameResult {
   @Field(() => String)
   Status: string;
 
-  @Field(() => Int)
-  RecordID: number;
+  @Field(() => String)
+  RecordID: string;
 
   @Field(() => String)
   EntityName: string;
@@ -33,7 +33,7 @@ export class EntityRecordNameResolver {
   @Query(() => EntityRecordNameResult)
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
-    @Arg('RecordID', () => Int) RecordID: number,
+    @Arg('RecordID', () => String) RecordID: string,
     @Ctx() {}: AppContext
   ): Promise<EntityRecordNameResult> {
     const md = new Metadata();
@@ -53,7 +53,7 @@ export class EntityRecordNameResolver {
     return result;
   }
 
-  async InnerGetEntityRecordName(md: Metadata, EntityName: string, RecordID: number): Promise<EntityRecordNameResult> {
+  async InnerGetEntityRecordName(md: Metadata, EntityName: string, RecordID: string): Promise<EntityRecordNameResult> {
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
       const recordName = await md.GetEntityRecordName(e.Name, RecordID);

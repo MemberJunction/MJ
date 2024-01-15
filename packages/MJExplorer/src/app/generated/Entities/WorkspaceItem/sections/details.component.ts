@@ -28,7 +28,7 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Resource Record ID</label>
-            <kendo-numerictextbox [(value)]="record.ResourceRecordID" ></kendo-numerictextbox>   
+            <kendo-textarea [(ngModel)]="record.ResourceRecordID" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Sequence</label>
@@ -90,7 +90,7 @@ import { WorkspaceItemEntity } from '@memberjunction/core-entities';
     `
 })
 export class WorkspaceItemDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: WorkspaceItemEntity | null = null;
+    @Input() override record!: WorkspaceItemEntity;
     @Input() override EditMode: boolean = false;
 }
 

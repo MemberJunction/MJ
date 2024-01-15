@@ -106,7 +106,7 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
     `
 })
 export class RecordChangeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: RecordChangeEntity | null = null;
+    @Input() override record!: RecordChangeEntity;
     @Input() override EditMode: boolean = false;
 }
 

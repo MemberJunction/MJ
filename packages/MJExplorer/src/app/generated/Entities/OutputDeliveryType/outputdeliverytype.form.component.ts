@@ -10,7 +10,7 @@ import { LoadOutputDeliveryTypeDetailsComponent } from "./sections/details.compo
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class OutputDeliveryTypeFormComponent extends BaseFormComponent {
-    public record: OutputDeliveryTypeEntity | null = null;
+    public record!: OutputDeliveryTypeEntity;
 } 
 
 export function LoadOutputDeliveryTypeFormComponent() {

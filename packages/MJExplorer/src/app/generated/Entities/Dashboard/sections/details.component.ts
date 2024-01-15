@@ -58,7 +58,7 @@ import { DashboardEntity } from '@memberjunction/core-entities';
     `
 })
 export class DashboardDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: DashboardEntity | null = null;
+    @Input() override record!: DashboardEntity;
     @Input() override EditMode: boolean = false;
 }
 

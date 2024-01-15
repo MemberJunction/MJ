@@ -50,7 +50,7 @@ import { WorkspaceEntity } from '@memberjunction/core-entities';
     `
 })
 export class WorkspaceDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: WorkspaceEntity | null = null;
+    @Input() override record!: WorkspaceEntity;
     @Input() override EditMode: boolean = false;
 }
 

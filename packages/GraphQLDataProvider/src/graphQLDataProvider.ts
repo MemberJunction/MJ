@@ -278,14 +278,11 @@ npm
                 // would happen if we dno't check for c.EntityField? in the below
 
                 // first make sure we have the primary key field in the view column list, always should, but make sure
-                if (v.Columns.find(c => c.EntityField?.Name?.trim().toLowerCase() === pkeyName.toLowerCase() && c.hidden === false) === undefined)
-                    fieldList.push(pkeyName); // always include the primary key field in the result data, don't need to display the data, but we need to always provide record pkey to the caller
+                fieldList.push(pkeyName); // always include the primary key field in the result data, don't need to display the data, but we need to always provide record pkey to the caller
                 
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
-                    if (c.hidden === false && 
-                        c.EntityField && 
-                        c.EntityField.Name.trim().toLowerCase() !== pkeyName.toLowerCase()) // don't include hidden fields and don't include the pkey field again
+                    if (c.hidden === false && c.EntityField?.Name.trim().toLowerCase() !== pkeyName.toLowerCase()) // don't include hidden fields and don't include the pkey field again
                         fieldList.push(c.EntityField.Name)
                 });
             }
@@ -491,7 +488,13 @@ npm
             }
             `
             const vars = {};
-            vars[pkeyName] = PrimaryKeyValue;
+            if (entity.PrimaryKey.EntityFieldInfo.TSType === EntityFieldTSType.Number) {
+                if (isNaN(PrimaryKeyValue))
+                    throw new Error(`Primary Key value ${PrimaryKeyValue} is not a valid number`);
+                vars[pkeyName] =  parseInt(PrimaryKeyValue); // converting to number here for graphql type to work properly
+            }
+            else
+                vars[pkeyName] = PrimaryKeyValue;
             const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
             if (d && d[entity.EntityInfo.ClassName]) {
                 return  d[entity.EntityInfo.ClassName];
@@ -661,7 +664,7 @@ npm
                 IsFavorite
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, RecordID: primaryKeyValue} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, PrimaryKeyValue: primaryKeyValue.toString()} });
         if (data && data.GetRecordFavoriteStatus && data.GetRecordFavoriteStatus.Success)
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
@@ -676,7 +679,7 @@ npm
                 Success
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, RecordID: primaryKeyValue, IsFavorite: isFavorite} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, PrimaryKeyValue: primaryKeyValue, IsFavorite: isFavorite} });
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;        
     }
@@ -692,7 +695,7 @@ npm
                 RecordName
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {EntityName: entityName, RecordID: primaryKeyValue});
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {EntityName: entityName, RecordID: primaryKeyValue.toString()});
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
     }
@@ -710,7 +713,7 @@ npm
                 RecordName
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info});
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => {return {EntityName: i.EntityName, RecordID: i.PrimaryKeyValue.toString()}})});
         if (data && data.GetEntityRecordNames)
             return data.GetEntityRecordNames;
     }

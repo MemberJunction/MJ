@@ -146,7 +146,7 @@ import { EmployeeEntity } from '@memberjunction/core-entities';
     `
 })
 export class EmployeeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: EmployeeEntity | null = null;
+    @Input() override record!: EmployeeEntity;
     @Input() override EditMode: boolean = false;
 }
 

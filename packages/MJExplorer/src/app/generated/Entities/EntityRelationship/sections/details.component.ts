@@ -226,7 +226,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
     `
 })
 export class EntityRelationshipDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: EntityRelationshipEntity | null = null;
+    @Input() override record!: EntityRelationshipEntity;
     @Input() override EditMode: boolean = false;
 }
 

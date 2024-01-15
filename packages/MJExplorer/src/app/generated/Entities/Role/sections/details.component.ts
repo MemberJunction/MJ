@@ -66,7 +66,7 @@ import { RoleEntity } from '@memberjunction/core-entities';
     `
 })
 export class RoleDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: RoleEntity | null = null;
+    @Input() override record!: RoleEntity;
     @Input() override EditMode: boolean = false;
 }
 

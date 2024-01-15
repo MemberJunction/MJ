@@ -10,7 +10,7 @@ import { LoadWorkflowRunDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class WorkflowRunFormComponent extends BaseFormComponent {
-    public record: WorkflowRunEntity | null = null;
+    public record!: WorkflowRunEntity;
 } 
 
 export function LoadWorkflowRunFormComponent() {

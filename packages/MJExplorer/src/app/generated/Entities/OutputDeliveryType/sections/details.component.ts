@@ -34,7 +34,7 @@ import { OutputDeliveryTypeEntity } from '@memberjunction/core-entities';
     `
 })
 export class OutputDeliveryTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: OutputDeliveryTypeEntity | null = null;
+    @Input() override record!: OutputDeliveryTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 

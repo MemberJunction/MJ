@@ -10,7 +10,7 @@ import { LoadUserViewRunDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class UserViewRunFormComponent extends BaseFormComponent {
-    public record: UserViewRunEntity | null = null;
+    public record!: UserViewRunEntity;
 } 
 
 export function LoadUserViewRunFormComponent() {

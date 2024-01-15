@@ -10,7 +10,7 @@ import { LoadWorkspaceDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class WorkspaceFormComponent extends BaseFormComponent {
-    public record: WorkspaceEntity | null = null;
+    public record!: WorkspaceEntity;
 } 
 
 export function LoadWorkspaceFormComponent() {

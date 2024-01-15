@@ -31,7 +31,7 @@ export class ResolverBase {
 
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserView_ | null = await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName });
+      const viewInfo: UserView_ | null = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }));
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -57,7 +57,7 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserView_ | null = await await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID });
+      const viewInfo: UserView_ | null = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,

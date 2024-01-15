@@ -58,7 +58,7 @@ import { UserRoleEntity } from '@memberjunction/core-entities';
     `
 })
 export class UserRoleDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: UserRoleEntity | null = null;
+    @Input() override record!: UserRoleEntity;
     @Input() override EditMode: boolean = false;
 }
 

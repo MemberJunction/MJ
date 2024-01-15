@@ -74,7 +74,7 @@ import { CompanyEntity } from '@memberjunction/core-entities';
     `
 })
 export class CompanyDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: CompanyEntity | null = null;
+    @Input() override record!: CompanyEntity;
     @Input() override EditMode: boolean = false;
 }
 

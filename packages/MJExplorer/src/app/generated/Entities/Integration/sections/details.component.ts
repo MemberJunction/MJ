@@ -90,7 +90,7 @@ import { IntegrationEntity } from '@memberjunction/core-entities';
     `
 })
 export class IntegrationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: IntegrationEntity | null = null;
+    @Input() override record!: IntegrationEntity;
     @Input() override EditMode: boolean = false;
 }
 

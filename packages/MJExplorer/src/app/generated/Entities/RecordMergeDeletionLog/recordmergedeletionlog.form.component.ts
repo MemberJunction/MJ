@@ -10,7 +10,7 @@ import { LoadRecordMergeDeletionLogDetailsComponent } from "./sections/details.c
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class RecordMergeDeletionLogFormComponent extends BaseFormComponent {
-    public record: RecordMergeDeletionLogEntity | null = null;
+    public record!: RecordMergeDeletionLogEntity;
 } 
 
 export function LoadRecordMergeDeletionLogFormComponent() {

@@ -90,7 +90,7 @@ import { AIModelEntity } from '@memberjunction/core-entities';
     `
 })
 export class AIModelDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: AIModelEntity | null = null;
+    @Input() override record!: AIModelEntity;
     @Input() override EditMode: boolean = false;
 }
 

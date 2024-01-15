@@ -10,7 +10,7 @@ import { LoadEntityRelationshipDetailsComponent } from "./sections/details.compo
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class EntityRelationshipFormComponent extends BaseFormComponent {
-    public record: EntityRelationshipEntity | null = null;
+    public record!: EntityRelationshipEntity;
 } 
 
 export function LoadEntityRelationshipFormComponent() {

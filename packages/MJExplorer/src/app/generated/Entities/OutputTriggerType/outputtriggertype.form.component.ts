@@ -10,7 +10,7 @@ import { LoadOutputTriggerTypeDetailsComponent } from "./sections/details.compon
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class OutputTriggerTypeFormComponent extends BaseFormComponent {
-    public record: OutputTriggerTypeEntity | null = null;
+    public record!: OutputTriggerTypeEntity;
 } 
 
 export function LoadOutputTriggerTypeFormComponent() {

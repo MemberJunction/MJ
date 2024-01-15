@@ -10,7 +10,7 @@ import { LoadResourceTypeDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class ResourceTypeFormComponent extends BaseFormComponent {
-    public record: ResourceTypeEntity | null = null;
+    public record!: ResourceTypeEntity;
 } 
 
 export function LoadResourceTypeFormComponent() {

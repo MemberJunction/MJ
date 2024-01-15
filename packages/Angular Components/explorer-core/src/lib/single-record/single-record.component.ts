@@ -13,7 +13,7 @@ import { BaseFormComponent } from '../generic/base-form-component';
 })
 export class SingleRecordComponent implements OnInit, AfterViewInit {
   @ViewChild(Container, {static: true}) formContainer!: Container;
-  @Input() public recordId: number = -1;
+  @Input() public primaryKeyValue: any = null;
   @Input() public entityName: string | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
@@ -30,14 +30,14 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    this.LoadForm(this.recordId, <string>this.entityName)
+    this.LoadForm(this.primaryKeyValue, <string>this.entityName)
   }
 
-  async LoadForm(recordId: number, entityName: string) {
+  async LoadForm(primaryKeyValue: any, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (recordId && entityName) {
+    if (primaryKeyValue && entityName) {
       this.entityName = entityName
-      this.recordId = recordId
+      this.primaryKeyValue = primaryKeyValue
 
       const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
       const md = new Metadata();
@@ -49,7 +49,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       if (formReg) {
         const record = await md.GetEntityObject(entityName);
         if (record) {
-          await record.Load(recordId);
+          await record.Load(primaryKeyValue);
 
           const viewContainerRef = this.formContainer.viewContainerRef;
           viewContainerRef.clear();
@@ -62,7 +62,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
           this.loadComplete.emit();
         }
         else
-          throw new Error(`Unable to load entity ${entityName} with ID ${recordId}`)
+          throw new Error(`Unable to load entity ${entityName} with primary key value of: ${primaryKeyValue}`)
       }
 
       this.loading = false;

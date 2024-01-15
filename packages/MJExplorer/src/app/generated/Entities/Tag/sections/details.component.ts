@@ -58,7 +58,7 @@ import { TagEntity } from '@memberjunction/core-entities';
     `
 })
 export class TagDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record: TagEntity | null = null;
+    @Input() override record!: TagEntity;
     @Input() override EditMode: boolean = false;
 }
 

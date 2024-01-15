@@ -11,9 +11,10 @@ export abstract class BaseRecordComponent {
         if (!this.record) 
             throw new Error('this.record not set');
 
-        const f = (<BaseEntity>this.record).Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+        const r = <BaseEntity>this.record;      
+        const f = r.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
         if (!f) 
-            throw new Error(`Field ${fieldName} not found in entity ${this.record.EntityInfo.Name}`);
+            throw new Error(`Field ${fieldName} not found in entity ${r.EntityInfo.Name}`);
 
         return f.FormatValue(decimals, currency);
     }

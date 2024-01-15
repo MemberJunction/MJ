@@ -10,7 +10,7 @@ import { LoadSkillDetailsComponent } from "./sections/details.component"
     styleUrls: ['../../../../shared/form-styles.css']
 })
 export class SkillFormComponent extends BaseFormComponent {
-    public record: SkillEntity | null = null;
+    public record!: SkillEntity;
 } 
 
 export function LoadSkillFormComponent() {
