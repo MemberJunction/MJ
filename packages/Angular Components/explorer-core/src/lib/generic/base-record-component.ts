@@ -1,7 +1,7 @@
 import { BaseEntity, EntityFieldInfo } from "@memberjunction/core";
 
 export abstract class BaseRecordComponent {
-    public abstract record: any
+    public abstract record: BaseEntity
 
     public FormatField(entityFieldInfo: EntityFieldInfo, value: any, decimals: number = 2, currency: string = 'USD') {
         return entityFieldInfo.FormatValue(value, decimals, currency);
