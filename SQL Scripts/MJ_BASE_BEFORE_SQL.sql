@@ -777,7 +777,7 @@ LEFT OUTER JOIN
 ON   
     v.schema_id = s_v.schema_id
 WHERE   
-    s_v.name = e.SchemaName AND
+    (s_v.name = e.SchemaName OR s_v.name IS NULL) AND
 	( t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1)) -- TABLE - non-virtual entities 
 GO
 

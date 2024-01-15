@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 1/14/2024, 8:16:25 PM
+* GENERATED: 1/14/2024, 9:02:46 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -13922,6 +13922,181 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Samples
+//****************************************************************************
+@ObjectType()
+export class Sample_ {  
+    @Field() 
+    @MaxLength(20)
+    SampleID: string;
+      
+    @Field() 
+    @MaxLength(100)
+    ValueA: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ValueB?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Samples   
+//****************************************************************************
+@InputType()
+export class CreateSampleInput {
+    @Field()
+    SampleID: string;
+
+    @Field()
+    ValueA: string;
+
+    @Field({ nullable: true })
+    ValueB: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Samples   
+//****************************************************************************
+@InputType()
+export class UpdateSampleInput {
+    @Field()
+    SampleID: string;
+
+    @Field()
+    ValueA: string;
+
+    @Field({ nullable: true })
+    ValueB: string;
+}
+
+//****************************************************************************
+// RESOLVER for Samples
+//****************************************************************************
+@ObjectType()
+export class RunSampleViewResult {
+    @Field(() => [Sample_])
+    Results: Sample_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Sample_)
+export class SampleResolver extends ResolverBase {
+    @Query(() => RunSampleViewResult)
+    async RunSampleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunSampleViewResult)
+    async RunSampleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunSampleViewResult)
+    async RunSampleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Samples';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => Sample_, { nullable: true })
+    async Sample(@Arg('SampleID', () => String) SampleID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Sample_ | null> {
+        this.CheckUserReadPermissions('Samples', userPayload);
+        const sSQL = `SELECT * FROM [test].vwSamples WHERE SampleID=${SampleID} ` + this.getRowLevelSecurityWhereClause('Samples', userPayload, EntityPermissionType.Read, 'AND');
+        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+    }
+
+    @Mutation(() => Sample_)
+    async CreateSample(
+        @Arg('input', () => CreateSampleInput) input: CreateSampleInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = await new Metadata().GetEntityObject('Samples', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateSampleInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateSampleInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+    @Mutation(() => Sample_)
+    async UpdateSample(
+        @Arg('input', () => UpdateSampleInput) input: UpdateSampleInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = await new Metadata().GetEntityObject('Samples', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Samples
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateSampleInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateSampleInput) {
         const i = input, d = dataSource; // prevent error
     }
 
