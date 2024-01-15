@@ -10,19 +10,20 @@ export class UserResolver extends UserResolverBase {
 
   @Query(() => User_)
   async UserByID(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource }: AppContext) {
-    return super.safeFirstArrayElement(await dataSource.getRepository(User_).findBy({ ID }));
+    return super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { ID }));
   }
 
   @Query(() => User_)
   async UserByEmployeeID(@Arg('EmployeeID', () => Int) EmployeeID: number, @Ctx() { dataSource }: AppContext) {
-    return super.safeFirstArrayElement(await dataSource.getRepository(User_).findBy({ EmployeeID }));
+    return super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { EmployeeID }));
   }
 
   @Query(() => User_)
   async UserByEmail(@Arg('Email', () => String) Email: string, @Ctx() { dataSource }: AppContext) {
     // const searchEmail = userEmailMap[Email] ?? Email;
     const searchEmail = Email;
-    return super.safeFirstArrayElement(await dataSource.getRepository(User_).findBy({ Email: searchEmail }));
+    const returnVal = super.safeFirstArrayElement(await this.findBy(dataSource, 'Users', { Email: searchEmail }));
+    return returnVal;
   }
 }
 export default UserResolver;

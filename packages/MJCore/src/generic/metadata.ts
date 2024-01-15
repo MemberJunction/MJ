@@ -92,38 +92,38 @@ export class Metadata {
     }
 
     /**
-     * Returns true if the combination of userId/entityName/recordId has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
+     * Returns true if the combination of userId/entityName/primaryKeyValue has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
      * @param userId 
      * @param entityName 
-     * @param recordId 
+     * @param primaryKeyValue 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, recordId: number): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, recordId);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKeyValue);
     }
 
     /**
-     * Sets the favorite status for a given user for a specific entityName/recordId
+     * Sets the favorite status for a given user for a specific entityName/primaryKeyValue
      * @param userId 
      * @param entityName 
-     * @param recordId 
+     * @param primaryKeyValue 
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, recordId: number, isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, recordId, isFavorite, contextUser);
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo = null) {
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKeyValue, isFavorite, contextUser);
     }
 
     /**
-     * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
+     * Returns a list of dependencies - records that are linked to the specified Entity/Primary Key Value combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param recordId the recordId to check
+     * @param primaryKeyValue the primary key value to check
      */
-    public async GetRecordDependencies(entityName: string, recordId: number): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, recordId);
+    public async GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> { 
+        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKeyValue);
     }
 
     /**
@@ -138,7 +138,7 @@ export class Metadata {
     /**
      * This method will merge two or more records based on the request provided. The RecordMergeRequest type you pass in specifies the record that will survive the merge, the records to merge into the surviving record, and an optional field map that can update values in the surviving record, if desired. The process followed is:
      * 1. The surviving record is loaded and fields are updated from the field map, if provided, and the record is saved. If a FieldMap not provided within the request object, this step is skipped.
-     * 2. For each of the records that will be merged INTO the surviving record, we call the GetEntityDependencies() method and get a list of all other records in the database are linked to the record to be deleted. We then go through each of those dependencies and update the link to point to the SurvivingRecordID and save the record.
+     * 2. For each of the records that will be merged INTO the surviving record, we call the GetEntityDependencies() method and get a list of all other records in the database are linked to the record to be deleted. We then go through each of those dependencies and update the link to point to the SurvivingRecordPrimaryKeyValue and save the record.
      * 3. The record to be deleted is then deleted.
      * 
      * The return value from this method contains detailed information about the execution of the process. In addition, all attempted merges are logged in the RecordMergeLog and RecordMergeDeletionLog tables.
@@ -166,15 +166,15 @@ export class Metadata {
     }
 
     /**
-     * Returns the Name of the specific recordId for a given entityName. This is done by 
+     * Returns the Name of the specific primaryKeyValue for a given entityName. This is done by 
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param recordId 
+     * @param primaryKeyValue 
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, recordId: number): Promise<string> {
-        return await Metadata.Provider.GetEntityRecordName(entityName, recordId);
+    public async GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string> {
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKeyValue);
     }
 
     /**

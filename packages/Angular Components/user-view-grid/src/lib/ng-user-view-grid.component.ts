@@ -674,7 +674,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => r.ID).filter((id: number) => id !== this.recordCompareComponent?.selectedRecordId),
-          SurvivingRecordID: this.recordCompareComponent.selectedRecordId,
+          SurvivingRecordPrimaryKeyValue: this.recordCompareComponent.selectedRecordId,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,

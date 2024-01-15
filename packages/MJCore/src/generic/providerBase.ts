@@ -39,12 +39,12 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public abstract get ProviderType(): ProviderType;
 
-    public abstract GetEntityRecordName(entityName: string, recordId: number): Promise<string>;
+    public abstract GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, recordId: number): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean>;
 
-    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, recordId: number, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
@@ -264,9 +264,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param recordId the recordId to check
+     * @param primaryKeyValue the value of the primary key of the record to check
      */
-    public abstract GetRecordDependencies(entityName: string, recordId: number): Promise<RecordDependency[]> 
+    public abstract GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> 
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

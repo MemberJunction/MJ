@@ -6,9 +6,9 @@
 
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
-import { EntityInfo, LogError, LogStatus, Metadata } from "@memberjunction/core";
+import { LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { logError, logStatus } from "./logging";
-import { executeSQLScript, recompileAllBaseViews } from "./sql";
+import { recompileAllBaseViews } from "./sql";
 
 export const newEntityList: string[] = [];
 
@@ -277,6 +277,18 @@ SELECT
    re.ID RelatedEntityID,
    fk.referenced_column RelatedEntityFieldName,
    IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
+   IsPrimaryKey =	CASE 
+         WHEN pk.ColumnName IS NOT NULL THEN 1 
+         ELSE 0 
+      END,
+   IsUnique =		CASE 
+         WHEN pk.ColumnName IS NOT NULL THEN 1 
+         ELSE 
+            CASE 
+               WHEN uk.ColumnName IS NOT NULL THEN 1 
+               ELSE 0 
+            END 
+      END,
    ROW_NUMBER() OVER (PARTITION BY sf.EntityID, sf.FieldName ORDER BY (SELECT NULL)) AS rn
 FROM
    [${mj_core_schema()}].vwSQLColumnsAndEntityFields sf
@@ -295,6 +307,18 @@ LEFT OUTER JOIN
 ON
    re.BaseTable = fk.referenced_table AND
    re.SchemaName = fk.[schema_name]
+LEFT OUTER JOIN 
+   [${mj_core_schema()}].vwTablePrimaryKeys pk
+ON
+   e.BaseTable = pk.TableName AND
+   sf.FieldName = pk.ColumnName AND
+   e.SchemaName = pk.SchemaName
+LEFT OUTER JOIN 
+   [${mj_core_schema()}].vwTableUniqueKeys uk
+ON
+   e.BaseTable = uk.TableName AND
+   sf.FieldName = uk.ColumnName AND
+   e.SchemaName = uk.SchemaName
 WHERE
    EntityFieldID IS NULL -- only where we have NOT YET CREATED EntityField records\n${createExcludeTablesAndSchemasFilter('sf.')}
 )
@@ -331,7 +355,9 @@ function getPendingEntityFieldINSERTSQL(n: any): string {
       IsNameField,
       IncludeInUserSearchAPI,
       IncludeRelatedEntityNameFieldInBaseView,
-      DefaultInView
+      DefaultInView,
+      IsPrimaryKey,
+      IsUnique
    )
    VALUES
    (
@@ -353,7 +379,9 @@ function getPendingEntityFieldINSERTSQL(n: any): string {
       ${n.IsNameField !== null ? n.IsNameField : 0},
       ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
       ${n.RelatedEntityID && n.RelatedEntityID > 0 && n.Type.trim().toLowerCase() === 'int' ? 1 : 0},
-      ${bDefaultInView ? 1 : 0}
+      ${bDefaultInView ? 1 : 0},
+      ${n.IsPrimaryKey},
+      ${n.IsUnique}
    )`      
 }
 
@@ -491,42 +519,15 @@ async function createNewEntities(ds: DataSource): Promise<boolean> {
 async function shouldCreateNewEntity(ds: DataSource, newEntity: any): Promise<{shouldCreate: boolean, validationMessage: string}> {
    // validate that the new entity meets our criteria for creation
    // criteria:
-   // 1) entity has a field called "ID"
-   // 2) the ID column is an integer, smallint, or bigint
-   // 3) the ID column is NOT nullable
-   // 4) the ID column is an identity column (e.g. it is auto-incrementing)
+   // 1) entity has a field that is a primary key
    // validate all of these factors by getting the sql from SQL Server and check the result, if failure, shouldCreate=false and generate validation message, otherwise return empty validation message and true for shouldCreate.
 
-   const tableName = newEntity.SchemaName + '.' + newEntity.TableName
-   const query = `
-       SELECT 
-           COLUMNPROPERTY(object_id('${tableName}'), 'ID', 'IsIdentity') as is_identity,
-           c.is_nullable,
-           t.name as data_type
-       FROM 
-           sys.columns c
-       JOIN 
-           sys.types t ON c.user_type_id = t.user_type_id
-       WHERE 
-           object_id = object_id('${tableName}') AND
-           c.name = 'ID'
-   `;
+   const query = `EXEC admin.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}' @SchemaName='${newEntity.SchemaName}'`;
 
    try {
        const result = await ds.query(query);
        if (result.length === 0) {
-           return { shouldCreate: false, validationMessage: "ID column not found." };
-       }
-
-       const { is_identity, is_nullable, data_type } = result[0];
-       const isValidType = ['int', 'smallint', 'bigint'].includes(data_type);
-
-       if (!is_identity || is_nullable || !isValidType) {
-           let validationMessage = 'Validation failed for ID column: ';
-           validationMessage += !is_identity ? 'Not an identity column. ' : '';
-           validationMessage += is_nullable ? 'Column is nullable. ' : '';
-           validationMessage += !isValidType ? 'Invalid data type. ' : '';
-           return { shouldCreate: false, validationMessage };
+           return { shouldCreate: false, validationMessage: "No primary key found" };
        }
 
        return { shouldCreate: true, validationMessage: '' };

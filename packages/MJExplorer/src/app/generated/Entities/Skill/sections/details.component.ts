@@ -16,7 +16,7 @@ import { SkillEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Parent</label>
-            <kendo-textbox [(ngModel)]="record.ParentID"  />   
+            <kendo-numerictextbox [(value)]="record.ParentID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
@@ -25,6 +25,10 @@ import { SkillEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Parent</label>
+            <span >{{FormatValue('Parent', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -35,7 +39,7 @@ import { SkillEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Parent</label>
-            <span >{{FormatValue('ParentID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="ParentID" >{{FormatValue('ParentID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
@@ -44,6 +48,10 @@ import { SkillEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Parent</label>
+            <span >{{FormatValue('Parent', 0)}}</span>
         </div>
     </div>
 </div>

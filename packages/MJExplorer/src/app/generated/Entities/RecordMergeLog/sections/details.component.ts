@@ -16,7 +16,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Surviving Record ID</label>
-            <kendo-numerictextbox [(value)]="record.SurvivingRecordID" ></kendo-numerictextbox>   
+            <kendo-textarea [(ngModel)]="record.SurvivingRecordID" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Initiated By User ID</label>

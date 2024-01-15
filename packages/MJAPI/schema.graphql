@@ -108,7 +108,7 @@ type AuditLog_ {
   Entity: String
   EntityID: Int
   ID: Int!
-  RecordID: Int
+  RecordID: String
   Status: String!
   UpdatedAt: Timestamp!
   User: String!
@@ -155,7 +155,7 @@ type CompanyIntegrationRecordMap_ {
   CreatedAt: Timestamp!
   Entity: String!
   EntityID: Int!
-  EntityRecordID: Int!
+  EntityRecordID: String!
   ExternalSystemRecordID: String!
   ID: Int!
   UpdatedAt: Timestamp!
@@ -181,7 +181,7 @@ type CompanyIntegrationRunDetail_ {
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
-  RecordID: Int!
+  RecordID: String!
   RunEndedAt: Timestamp
   RunStartedAt: Timestamp
 }
@@ -288,7 +288,7 @@ input CreateAuditLogInput {
   Description: String
   Details: String
   EntityID: Int
-  RecordID: Int
+  RecordID: String
   Status: String!
   UserID: Int!
 }
@@ -304,7 +304,7 @@ input CreateCompanyInput {
 input CreateCompanyIntegrationRecordMapInput {
   CompanyIntegrationID: Int!
   EntityID: Int!
-  EntityRecordID: Int!
+  EntityRecordID: String!
   ExternalSystemRecordID: String!
 }
 
@@ -355,6 +355,8 @@ input CreateEntityFieldInput {
   IncludeInUserSearchAPI: Boolean!
   IncludeRelatedEntityNameFieldInBaseView: Boolean!
   IsNameField: Boolean!
+  IsPrimaryKey: Boolean!
+  IsUnique: Boolean!
   RelatedEntityFieldName: String
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
@@ -433,7 +435,7 @@ input CreateEntityRelationshipInput {
 input CreateListDetailInput {
   ID: Int!
   ListID: Int!
-  RecordID: Int!
+  RecordID: String!
   Sequence: Int!
 }
 
@@ -485,13 +487,13 @@ input CreateRecordChangeInput {
   Comments: String
   EntityID: Int!
   FullRecordJSON: String!
-  RecordID: Int!
+  RecordID: String!
   Status: String!
   UserID: Int!
 }
 
 input CreateRecordMergeDeletionLogInput {
-  DeletedRecordID: Int!
+  DeletedRecordID: String!
   ProcessingLog: String
   RecordMergeLogID: Int!
   Status: String!
@@ -507,7 +509,7 @@ input CreateRecordMergeLogInput {
   ProcessingLog: String
   ProcessingStartedAt: Timestamp!
   ProcessingStatus: String!
-  SurvivingRecordID: Int!
+  SurvivingRecordID: String!
 }
 
 input CreateReportInput {
@@ -558,7 +560,7 @@ input CreateUserApplicationEntityInput {
 
 input CreateUserFavoriteInput {
   EntityID: Int!
-  RecordID: Int!
+  RecordID: String!
   UserID: Int!
 }
 
@@ -613,7 +615,7 @@ input CreateUserViewInput {
 
 input CreateUserViewRunDetailInput {
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   UserViewRunID: Int!
 }
 
@@ -719,7 +721,7 @@ type EmployeeSkill_ {
   EmployeeID: Int!
   ID: Int!
   Skill: String!
-  SkillID: String!
+  SkillID: Int!
   UpdatedAt: Timestamp!
 }
 
@@ -816,6 +818,8 @@ type EntityField_ {
   IncludeInUserSearchAPI: Boolean!
   IncludeRelatedEntityNameFieldInBaseView: Boolean!
   IsNameField: Boolean!
+  IsPrimaryKey: Boolean!
+  IsUnique: Boolean!
   IsVirtual: Boolean!
   Length: Int
   Name: String!
@@ -1053,7 +1057,7 @@ type Integration_ {
 type ListDetail_ {
   ID: Int!
   ListID: Int!
-  RecordID: Int!
+  RecordID: String!
   Sequence: Int!
 }
 
@@ -1600,7 +1604,7 @@ type RecordChange_ {
   EntityID: Int!
   FullRecordJSON: String!
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   Status: String!
   User: String!
   UserID: Int!
@@ -1615,7 +1619,7 @@ type RecordDependencyResult {
 
 type RecordMergeDeletionLog_ {
   CreatedAt: Timestamp!
-  DeletedRecordID: Int!
+  DeletedRecordID: String!
   ID: Int!
   ProcessingLog: String
   RecordMergeLogID: Int!
@@ -1645,7 +1649,7 @@ type RecordMergeLog_ {
   ProcessingStartedAt: Timestamp!
   ProcessingStatus: String!
   RecordMergeDeletionLogsArray: [RecordMergeDeletionLog_!]!
-  SurvivingRecordID: Int!
+  SurvivingRecordID: String!
   UpdatedAt: Timestamp
 }
 
@@ -1653,7 +1657,7 @@ input RecordMergeRequest {
   EntityName: String!
   FieldMap: [FieldMapping!]
   RecordsToMerge: [Int!]!
-  SurvivingRecordID: Int!
+  SurvivingRecordPrimaryKeyValue: String!
 }
 
 type RecordMergeRequestOutput {
@@ -2653,7 +2657,9 @@ type Skill_ {
   EmployeeSkillsArray: [EmployeeSkill_!]!
   ID: Int!
   Name: String!
-  ParentID: String!
+  Parent: String
+  ParentID: Int
+  SkillsArray: [Skill_!]!
   UpdatedAt: Timestamp!
 }
 
@@ -2677,7 +2683,7 @@ type TaggedItem_ {
   Entity: String!
   EntityID: Int!
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   Tag: String!
   TagID: Int!
 }
@@ -2741,7 +2747,7 @@ input UpdateAuditLogInput {
   Details: String
   EntityID: Int
   ID: Int!
-  RecordID: Int
+  RecordID: String
   Status: String!
   UserID: Int!
 }
@@ -2774,7 +2780,7 @@ input UpdateCompanyIntegrationInput {
 input UpdateCompanyIntegrationRecordMapInput {
   CompanyIntegrationID: Int!
   EntityID: Int!
-  EntityRecordID: Int!
+  EntityRecordID: String!
   ExternalSystemRecordID: String!
   ID: Int!
 }
@@ -2796,7 +2802,7 @@ input UpdateCompanyIntegrationRunDetailInput {
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
-  RecordID: Int!
+  RecordID: String!
 }
 
 input UpdateCompanyIntegrationRunInput {
@@ -2862,7 +2868,7 @@ input UpdateEmployeeRoleInput {
 input UpdateEmployeeSkillInput {
   EmployeeID: Int!
   ID: Int!
-  SkillID: String!
+  SkillID: Int!
 }
 
 input UpdateEntityAIActionInput {
@@ -2897,6 +2903,8 @@ input UpdateEntityFieldInput {
   IncludeInUserSearchAPI: Boolean!
   IncludeRelatedEntityNameFieldInBaseView: Boolean!
   IsNameField: Boolean!
+  IsPrimaryKey: Boolean!
+  IsUnique: Boolean!
   RelatedEntityFieldName: String
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
@@ -3007,7 +3015,7 @@ input UpdateIntegrationURLFormatInput {
 input UpdateListDetailInput {
   ID: Int!
   ListID: Int!
-  RecordID: Int!
+  RecordID: String!
   Sequence: Int!
 }
 
@@ -3055,7 +3063,7 @@ input UpdateQueueTaskInput {
 }
 
 input UpdateRecordMergeDeletionLogInput {
-  DeletedRecordID: Int!
+  DeletedRecordID: String!
   ID: Int!
   ProcessingLog: String
   RecordMergeLogID: Int!
@@ -3073,7 +3081,7 @@ input UpdateRecordMergeLogInput {
   ProcessingLog: String
   ProcessingStartedAt: Timestamp!
   ProcessingStatus: String!
-  SurvivingRecordID: Int!
+  SurvivingRecordID: String!
 }
 
 input UpdateReportInput {
@@ -3145,7 +3153,7 @@ input UpdateUserApplicationInput {
 input UpdateUserFavoriteInput {
   EntityID: Int!
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   UserID: Int!
 }
 
@@ -3181,7 +3189,7 @@ input UpdateUserRecordLogInput {
   EntityID: Int!
   ID: Int!
   LatestAt: Timestamp!
-  RecordID: Int!
+  RecordID: String!
   TotalCount: Int!
   UserID: Int!
 }
@@ -3208,7 +3216,7 @@ input UpdateUserViewInput {
 
 input UpdateUserViewRunDetailInput {
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   UserViewRunID: Int!
 }
 
@@ -3288,21 +3296,21 @@ type UserApplication_ {
 type UserFavoriteResult {
   EntityID: Int!
   IsFavorite: Boolean!
-  RecordID: Int!
+  PrimaryKeyValue: String!
   Success: Boolean!
   UserID: Int!
 }
 
 input UserFavoriteSearchParams {
   EntityID: Int!
-  RecordID: Int!
+  PrimaryKeyValue: String!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
   EntityID: Int!
   IsFavorite: Boolean!
-  RecordID: Int!
+  PrimaryKeyValue: String!
   UserID: Int!
 }
 
@@ -3313,7 +3321,7 @@ type UserFavorite_ {
   EntityBaseView: String!
   EntityID: Int!
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   UpdatedAt: Timestamp!
   UserID: Int!
 }
@@ -3342,7 +3350,7 @@ type UserRecordLog_ {
   EntityID: Int!
   ID: Int!
   LatestAt: Timestamp!
-  RecordID: Int!
+  RecordID: String!
   TotalCount: Int!
   UserEmail: String!
   UserFirstLast: String
@@ -3364,7 +3372,7 @@ type UserRole_ {
 type UserViewRunDetail_ {
   EntityID: Int!
   ID: Int!
-  RecordID: Int!
+  RecordID: String!
   UserViewID: Int!
   UserViewRunID: Int!
 }

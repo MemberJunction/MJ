@@ -254,7 +254,7 @@ foreach ($libObject in $baseLibraries) {
             npm publish --access public
         }        
 
-        # Update build log after successful publish
+        # Update build log 
         Update-BuildLog "."
     } 
     else {
@@ -315,10 +315,9 @@ foreach ($libObject in $angularLibraries) {
 
         if ($publishToNPM -eq 'y') {
             npm publish --access public
-
-            # Update build log after successful publish
-            Update-BuildLog "."
         }
+        
+        Update-BuildLog "."
     } 
     else {
         Write-Host "   No changes in $lib since last build, skipping this Angular library"

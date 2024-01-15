@@ -46,7 +46,7 @@ export declare class GraphQLDataProvider extends ProviderBase implements IEntity
     /**************************************************************************/
     /**************************************************************************/
     get ProviderType(): ProviderType;
-    GetRecordChanges(entityName: string, recordId: number): Promise<RecordChange[]>;
+    GetRecordChanges(entityName: string, primaryKeyValue: any): Promise<RecordChange[]>;
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
@@ -55,10 +55,10 @@ export declare class GraphQLDataProvider extends ProviderBase implements IEntity
      * @param entityName the name of the entity to check
      * @param recordId the recordId to check
      */
-    GetRecordDependencies(entityName: string, recordId: number): Promise<RecordDependency[]>;
+    GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]>;
     MergeRecords(request: RecordMergeRequest): Promise<RecordMergeResult>;
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions): Promise<{}>;
-    Load(entity: BaseEntity, RecordID: number, EntityRelationshipsToLoad: string[], user: UserInfo): Promise<{}>;
+    Load(entity: BaseEntity, PrimaryKeyValue: any, EntityRelationshipsToLoad: string[], user: UserInfo): Promise<{}>;
     protected getRelatedEntityString(entityInfo: EntityInfo, EntityRelationshipsToLoad: string[]): string;
     Delete(entity: BaseEntity, user: UserInfo): Promise<boolean>;
     /**************************************************************************/
@@ -68,9 +68,9 @@ export declare class GraphQLDataProvider extends ProviderBase implements IEntity
     GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType>;
     GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType>;
     CreateTransactionGroup(): Promise<TransactionGroupBase>;
-    GetRecordFavoriteStatus(userId: number, entityName: string, recordId: number): Promise<boolean>;
-    SetRecordFavoriteStatus(userId: number, entityName: string, recordId: number, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
-    GetEntityRecordName(entityName: string, recordId: number): Promise<string>;
+    GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean>;
+    SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string>;
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
     static ExecuteGQL(query: string, variables: any): Promise<any>;
     private _allLatestMetadataUpdatesQuery;

@@ -3,10 +3,12 @@ import { RegisterClass } from "@memberjunction/global";
 
 /**
  * Companies - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Company
- * Base View: vwCompanies
+ * * Schema: admin
+ * * Base Table: Company
+ * * Base View: vwCompanies
  * @description List of Companies/Organizations within the top-level business, used for subsidiaries
+ * * Primary Key: ID
+ * * Description: List of Companies/Organizations within the top-level business, used for subsidiaries
  * @extends {BaseEntity}
  * @class
  * @public
@@ -14,8 +16,16 @@ import { RegisterClass } from "@memberjunction/global";
 @RegisterClass(BaseEntity, 'Companies')
 export class CompanyEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -24,8 +34,8 @@ export class CompanyEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(200)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(200)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -34,8 +44,8 @@ export class CompanyEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: Website
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Website
+    * * SQL Data Type: nvarchar(100)
     */
     get Website(): string {  
         return this.Get('Website');
@@ -44,9 +54,9 @@ export class CompanyEntity extends BaseEntity {
         this.Set('Website', value);
     }
     /**
-    * Field Name: LogoURL
-    * Display Name: Logo URL
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: LogoURL
+    * * Display Name: Logo URL
+    * * SQL Data Type: nvarchar(500)
     */
     get LogoURL(): string {  
         return this.Get('LogoURL');
@@ -55,29 +65,29 @@ export class CompanyEntity extends BaseEntity {
         this.Set('LogoURL', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Domain
-    * Display Name: Domain
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Domain
+    * * Display Name: Domain
+    * * SQL Data Type: nvarchar(255)
     */
     get Domain(): string {  
         return this.Get('Domain');
@@ -90,10 +100,12 @@ export class CompanyEntity extends BaseEntity {
 
 /**
  * Employees - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Employee
- * Base View: vwEmployees
+ * * Schema: admin
+ * * Base Table: Employee
+ * * Base View: vwEmployees
  * @description Employees
+ * * Primary Key: ID
+ * * Description: Employees
  * @extends {BaseEntity}
  * @class
  * @public
@@ -101,19 +113,27 @@ export class CompanyEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Employees')
 export class EmployeeEntity extends BaseEntity {
     /**
-    * Field Name: BCMID
-    * Display Name: BCMID
-    * SQL Data Type: uniqueidentifier
-    * Default Value: newid()
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: BCMID
+    * * Display Name: BCMID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
     */
     get BCMID(): string {  
         return this.Get('BCMID');
     }
 
     /**
-    * Field Name: FirstName
-    * Display Name: First Name
-    * SQL Data Type: nvarchar(30)
+    * * Field Name: FirstName
+    * * Display Name: First Name
+    * * SQL Data Type: nvarchar(30)
     */
     get FirstName(): string {  
         return this.Get('FirstName');
@@ -122,9 +142,9 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('FirstName', value);
     }
     /**
-    * Field Name: LastName
-    * Display Name: Last Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: LastName
+    * * Display Name: Last Name
+    * * SQL Data Type: nvarchar(50)
     */
     get LastName(): string {  
         return this.Get('LastName');
@@ -133,8 +153,8 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('LastName', value);
     }
     /**
-    * Field Name: Title
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Title
+    * * SQL Data Type: nvarchar(50)
     */
     get Title(): string {  
         return this.Get('Title');
@@ -143,9 +163,9 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('Title', value);
     }
     /**
-    * Field Name: Email
-    * SQL Data Type: nvarchar(100)
-    * Description: 5
+    * * Field Name: Email
+    * * SQL Data Type: nvarchar(100)
+    * * Description: 5
     */
     get Email(): string {  
         return this.Get('Email');
@@ -154,8 +174,8 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('Email', value);
     }
     /**
-    * Field Name: Phone
-    * SQL Data Type: nvarchar(20)
+    * * Field Name: Phone
+    * * SQL Data Type: nvarchar(20)
     */
     get Phone(): string {  
         return this.Get('Phone');
@@ -164,9 +184,9 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('Phone', value);
     }
     /**
-    * Field Name: Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get Active(): boolean {  
         return this.Get('Active');
@@ -175,10 +195,10 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('Active', value);
     }
     /**
-    * Field Name: CompanyID
-    * Display Name: Company ID
-    * SQL Data Type: int
-    * Related Entity: Companies
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: int
+    * * Related Entity: Companies
     */
     get CompanyID(): number {  
         return this.Get('CompanyID');
@@ -187,10 +207,10 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('CompanyID', value);
     }
     /**
-    * Field Name: SupervisorID
-    * Display Name: Supervisor ID
-    * SQL Data Type: int
-    * Related Entity: Employees
+    * * Field Name: SupervisorID
+    * * Display Name: Supervisor ID
+    * * SQL Data Type: int
+    * * Related Entity: Employees
     */
     get SupervisorID(): number {  
         return this.Get('SupervisorID');
@@ -199,65 +219,65 @@ export class EmployeeEntity extends BaseEntity {
         this.Set('SupervisorID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: FirstLast
-    * Display Name: First Last
-    * SQL Data Type: nvarchar(81)
+    * * Field Name: FirstLast
+    * * Display Name: First Last
+    * * SQL Data Type: nvarchar(81)
     */
     get FirstLast(): string {  
         return this.Get('FirstLast');
     }
 
     /**
-    * Field Name: Supervisor
-    * Display Name: Supervisor
-    * SQL Data Type: nvarchar(81)
+    * * Field Name: Supervisor
+    * * Display Name: Supervisor
+    * * SQL Data Type: nvarchar(81)
     */
     get Supervisor(): string {  
         return this.Get('Supervisor');
     }
 
     /**
-    * Field Name: SupervisorFirstName
-    * Display Name: Supervisor First Name
-    * SQL Data Type: nvarchar(30)
+    * * Field Name: SupervisorFirstName
+    * * Display Name: Supervisor First Name
+    * * SQL Data Type: nvarchar(30)
     */
     get SupervisorFirstName(): string {  
         return this.Get('SupervisorFirstName');
     }
 
     /**
-    * Field Name: SupervisorLastName
-    * Display Name: Supervisor Last Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: SupervisorLastName
+    * * Display Name: Supervisor Last Name
+    * * SQL Data Type: nvarchar(50)
     */
     get SupervisorLastName(): string {  
         return this.Get('SupervisorLastName');
     }
 
     /**
-    * Field Name: SupervisorEmail
-    * Display Name: Supervisor Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: SupervisorEmail
+    * * Display Name: Supervisor Email
+    * * SQL Data Type: nvarchar(100)
     */
     get SupervisorEmail(): string {  
         return this.Get('SupervisorEmail');
@@ -268,9 +288,11 @@ export class EmployeeEntity extends BaseEntity {
 
 /**
  * User Favorites - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserFavorite
- * Base View: vwUserFavorites
+ * * Schema: admin
+ * * Base Table: UserFavorite
+ * * Base View: vwUserFavorites
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -278,10 +300,18 @@ export class EmployeeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Favorites')
 export class UserFavoriteEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -290,10 +320,10 @@ export class UserFavoriteEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -302,57 +332,57 @@ export class UserFavoriteEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: EntityBaseTable
-    * Display Name: Entity Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityBaseTable
+    * * Display Name: Entity Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityBaseTable(): string {  
         return this.Get('EntityBaseTable');
     }
 
     /**
-    * Field Name: EntityBaseView
-    * Display Name: Entity Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityBaseView
+    * * Display Name: Entity Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityBaseView(): string {  
         return this.Get('EntityBaseView');
@@ -363,9 +393,11 @@ export class UserFavoriteEntity extends BaseEntity {
 
 /**
  * Employee Company Integrations - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EmployeeCompanyIntegration
- * Base View: vwEmployeeCompanyIntegrations
+ * * Schema: admin
+ * * Base Table: EmployeeCompanyIntegration
+ * * Base View: vwEmployeeCompanyIntegrations
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -373,10 +405,18 @@ export class UserFavoriteEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Employee Company Integrations')
 export class EmployeeCompanyIntegrationEntity extends BaseEntity {
     /**
-    * Field Name: EmployeeID
-    * Display Name: Employee ID
-    * SQL Data Type: int
-    * Related Entity: Employees
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EmployeeID
+    * * Display Name: Employee ID
+    * * SQL Data Type: int
+    * * Related Entity: Employees
     */
     get EmployeeID(): number {  
         return this.Get('EmployeeID');
@@ -385,10 +425,10 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity {
         this.Set('EmployeeID', value);
     }
     /**
-    * Field Name: CompanyIntegrationID
-    * Display Name: Company Integration ID
-    * SQL Data Type: int
-    * Related Entity: Company Integrations
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integrations
     */
     get CompanyIntegrationID(): number {  
         return this.Get('CompanyIntegrationID');
@@ -397,9 +437,9 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity {
         this.Set('CompanyIntegrationID', value);
     }
     /**
-    * Field Name: ExternalSystemRecordID
-    * Display Name: External System Record
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalSystemRecordID
+    * * Display Name: External System Record
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalSystemRecordID(): string {  
         return this.Get('ExternalSystemRecordID');
@@ -408,10 +448,10 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity {
         this.Set('ExternalSystemRecordID', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -420,20 +460,20 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -444,9 +484,11 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity {
 
 /**
  * Employee Roles - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EmployeeRole
- * Base View: vwEmployeeRoles
+ * * Schema: admin
+ * * Base Table: EmployeeRole
+ * * Base View: vwEmployeeRoles
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -454,10 +496,19 @@ export class EmployeeCompanyIntegrationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Employee Roles')
 export class EmployeeRoleEntity extends BaseEntity {
     /**
-    * Field Name: EmployeeID
-    * Display Name: Employee ID
-    * SQL Data Type: int
-    * Related Entity: Employees
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EmployeeID
+    * * Display Name: Employee ID
+    * * SQL Data Type: int
+    * * Related Entity: Employees
     */
     get EmployeeID(): number {  
         return this.Get('EmployeeID');
@@ -466,10 +517,10 @@ export class EmployeeRoleEntity extends BaseEntity {
         this.Set('EmployeeID', value);
     }
     /**
-    * Field Name: RoleID
-    * Display Name: Role ID
-    * SQL Data Type: int
-    * Related Entity: Roles
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: int
+    * * Related Entity: Roles
     */
     get RoleID(): number {  
         return this.Get('RoleID');
@@ -478,29 +529,29 @@ export class EmployeeRoleEntity extends BaseEntity {
         this.Set('RoleID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Role
-    * Display Name: Role
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
     */
     get Role(): string {  
         return this.Get('Role');
@@ -511,9 +562,11 @@ export class EmployeeRoleEntity extends BaseEntity {
 
 /**
  * Employee Skills - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EmployeeSkill
- * Base View: vwEmployeeSkills
+ * * Schema: admin
+ * * Base Table: EmployeeSkill
+ * * Base View: vwEmployeeSkills
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -521,10 +574,19 @@ export class EmployeeRoleEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Employee Skills')
 export class EmployeeSkillEntity extends BaseEntity {
     /**
-    * Field Name: EmployeeID
-    * Display Name: Employee ID
-    * SQL Data Type: int
-    * Related Entity: Employees
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EmployeeID
+    * * Display Name: Employee ID
+    * * SQL Data Type: int
+    * * Related Entity: Employees
     */
     get EmployeeID(): number {  
         return this.Get('EmployeeID');
@@ -533,41 +595,41 @@ export class EmployeeSkillEntity extends BaseEntity {
         this.Set('EmployeeID', value);
     }
     /**
-    * Field Name: SkillID
-    * Display Name: Skill ID
-    * SQL Data Type: char(36)
-    * Related Entity: Skills
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: int
+    * * Related Entity: Skills
     */
-    get SkillID(): string {  
+    get SkillID(): number {  
         return this.Get('SkillID');
     }
-    set SkillID(value: string) {
+    set SkillID(value: number) {
         this.Set('SkillID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Skill
-    * Display Name: Skill
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(50)
     */
     get Skill(): string {  
         return this.Get('Skill');
@@ -578,9 +640,11 @@ export class EmployeeSkillEntity extends BaseEntity {
 
 /**
  * Roles - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Role
- * Base View: vwRoles
+ * * Schema: admin
+ * * Base Table: Role
+ * * Base View: vwRoles
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -588,8 +652,16 @@ export class EmployeeSkillEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Roles')
 export class RoleEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -598,8 +670,8 @@ export class RoleEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(500)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -608,9 +680,9 @@ export class RoleEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: AzureID
-    * Display Name: Azure
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: AzureID
+    * * Display Name: Azure
+    * * SQL Data Type: nvarchar(50)
     */
     get AzureID(): string {  
         return this.Get('AzureID');
@@ -619,8 +691,8 @@ export class RoleEntity extends BaseEntity {
         this.Set('AzureID', value);
     }
     /**
-    * Field Name: SQLName
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: SQLName
+    * * SQL Data Type: nvarchar(50)
     */
     get SQLName(): string {  
         return this.Get('SQLName');
@@ -629,20 +701,20 @@ export class RoleEntity extends BaseEntity {
         this.Set('SQLName', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -653,9 +725,11 @@ export class RoleEntity extends BaseEntity {
 
 /**
  * Skills - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Skill
- * Base View: vwSkills
+ * * Schema: admin
+ * * Base Table: Skill
+ * * Base View: vwSkills
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -663,8 +737,16 @@ export class RoleEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Skills')
 export class SkillEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -673,34 +755,44 @@ export class SkillEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: ParentID
-    * Display Name: Parent
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ParentID
+    * * Display Name: Parent
+    * * SQL Data Type: int
+    * * Related Entity: Skills
     */
-    get ParentID(): string {  
+    get ParentID(): number {  
         return this.Get('ParentID');
     }
-    set ParentID(value: string) {
+    set ParentID(value: number) {
         this.Set('ParentID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Parent(): string {  
+        return this.Get('Parent');
     }
 
 
@@ -708,9 +800,11 @@ export class SkillEntity extends BaseEntity {
 
 /**
  * Integration URL Formats - strongly typed entity sub-class
- * Schema: admin
- * Base Table: IntegrationURLFormat
- * Base View: vwIntegrationURLFormats
+ * * Schema: admin
+ * * Base Table: IntegrationURLFormat
+ * * Base View: vwIntegrationURLFormats
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -718,10 +812,18 @@ export class SkillEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Integration URL Formats')
 export class IntegrationURLFormatEntity extends BaseEntity {
     /**
-    * Field Name: IntegrationName
-    * Display Name: Integration Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Integrations
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: IntegrationName
+    * * Display Name: Integration Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Integrations
     */
     get IntegrationName(): string {  
         return this.Get('IntegrationName');
@@ -730,10 +832,10 @@ export class IntegrationURLFormatEntity extends BaseEntity {
         this.Set('IntegrationName', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -742,8 +844,8 @@ export class IntegrationURLFormatEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: URLFormat
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: URLFormat
+    * * SQL Data Type: nvarchar(500)
     */
     get URLFormat(): string {  
         return this.Get('URLFormat');
@@ -752,36 +854,36 @@ export class IntegrationURLFormatEntity extends BaseEntity {
         this.Set('URLFormat', value);
     }
     /**
-    * Field Name: IntegrationID
-    * Display Name: Integration ID
-    * SQL Data Type: int
+    * * Field Name: IntegrationID
+    * * Display Name: Integration ID
+    * * SQL Data Type: int
     */
     get IntegrationID(): number {  
         return this.Get('IntegrationID');
     }
 
     /**
-    * Field Name: Integration
-    * Display Name: Integration
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Integration
+    * * Display Name: Integration
+    * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {  
         return this.Get('Integration');
     }
 
     /**
-    * Field Name: NavigationBaseURL
-    * Display Name: Navigation Base URL
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: NavigationBaseURL
+    * * Display Name: Navigation Base URL
+    * * SQL Data Type: nvarchar(500)
     */
     get NavigationBaseURL(): string {  
         return this.Get('NavigationBaseURL');
     }
 
     /**
-    * Field Name: FullURLFormat
-    * Display Name: Full URLFormat
-    * SQL Data Type: nvarchar(1000)
+    * * Field Name: FullURLFormat
+    * * Display Name: Full URLFormat
+    * * SQL Data Type: nvarchar(1000)
     */
     get FullURLFormat(): string {  
         return this.Get('FullURLFormat');
@@ -792,10 +894,12 @@ export class IntegrationURLFormatEntity extends BaseEntity {
 
 /**
  * Integrations - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Integration
- * Base View: vwIntegrations
+ * * Schema: admin
+ * * Base Table: Integration
+ * * Base View: vwIntegrations
  * @description List of integrations that can be executed using the MemberJunction integration architecture.
+ * * Primary Key: ID
+ * * Description: List of integrations that can be executed using the MemberJunction integration architecture.
  * @extends {BaseEntity}
  * @class
  * @public
@@ -803,8 +907,16 @@ export class IntegrationURLFormatEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Integrations')
 export class IntegrationEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -813,8 +925,8 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(255)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -823,9 +935,9 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: NavigationBaseURL
-    * Display Name: Navigation Base URL
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: NavigationBaseURL
+    * * Display Name: Navigation Base URL
+    * * SQL Data Type: nvarchar(500)
     */
     get NavigationBaseURL(): string {  
         return this.Get('NavigationBaseURL');
@@ -834,9 +946,9 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('NavigationBaseURL', value);
     }
     /**
-    * Field Name: ClassName
-    * Display Name: Class Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ClassName
+    * * Display Name: Class Name
+    * * SQL Data Type: nvarchar(100)
     */
     get ClassName(): string {  
         return this.Get('ClassName');
@@ -845,9 +957,9 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('ClassName', value);
     }
     /**
-    * Field Name: ImportPath
-    * Display Name: Import Path
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ImportPath
+    * * Display Name: Import Path
+    * * SQL Data Type: nvarchar(100)
     */
     get ImportPath(): string {  
         return this.Get('ImportPath');
@@ -856,10 +968,10 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('ImportPath', value);
     }
     /**
-    * Field Name: BatchMaxRequestCount
-    * Display Name: Batch Max Request Count
-    * SQL Data Type: int
-    * Default Value: -1
+    * * Field Name: BatchMaxRequestCount
+    * * Display Name: Batch Max Request Count
+    * * SQL Data Type: int
+    * * Default Value: -1
     */
     get BatchMaxRequestCount(): number {  
         return this.Get('BatchMaxRequestCount');
@@ -868,10 +980,10 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('BatchMaxRequestCount', value);
     }
     /**
-    * Field Name: BatchRequestWaitTime
-    * Display Name: Batch Request Wait Time
-    * SQL Data Type: int
-    * Default Value: -1
+    * * Field Name: BatchRequestWaitTime
+    * * Display Name: Batch Request Wait Time
+    * * SQL Data Type: int
+    * * Default Value: -1
     */
     get BatchRequestWaitTime(): number {  
         return this.Get('BatchRequestWaitTime');
@@ -880,20 +992,20 @@ export class IntegrationEntity extends BaseEntity {
         this.Set('BatchRequestWaitTime', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -904,9 +1016,11 @@ export class IntegrationEntity extends BaseEntity {
 
 /**
  * Company Integrations - strongly typed entity sub-class
- * Schema: admin
- * Base Table: CompanyIntegration
- * Base View: vwCompanyIntegrations
+ * * Schema: admin
+ * * Base Table: CompanyIntegration
+ * * Base View: vwCompanyIntegrations
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -914,10 +1028,18 @@ export class IntegrationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Company Integrations')
 export class CompanyIntegrationEntity extends BaseEntity {
     /**
-    * Field Name: CompanyName
-    * Display Name: Company Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Companies
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyName
+    * * Display Name: Company Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Companies
     */
     get CompanyName(): string {  
         return this.Get('CompanyName');
@@ -926,10 +1048,10 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('CompanyName', value);
     }
     /**
-    * Field Name: IntegrationName
-    * Display Name: Integration Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Integrations
+    * * Field Name: IntegrationName
+    * * Display Name: Integration Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Integrations
     */
     get IntegrationName(): string {  
         return this.Get('IntegrationName');
@@ -938,9 +1060,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('IntegrationName', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -949,9 +1071,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: AccessToken
-    * Display Name: Access Token
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: AccessToken
+    * * Display Name: Access Token
+    * * SQL Data Type: nvarchar(255)
     */
     get AccessToken(): string {  
         return this.Get('AccessToken');
@@ -960,9 +1082,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('AccessToken', value);
     }
     /**
-    * Field Name: RefreshToken
-    * Display Name: Refresh Token
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RefreshToken
+    * * Display Name: Refresh Token
+    * * SQL Data Type: nvarchar(255)
     */
     get RefreshToken(): string {  
         return this.Get('RefreshToken');
@@ -971,9 +1093,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('RefreshToken', value);
     }
     /**
-    * Field Name: TokenExpirationDate
-    * Display Name: Token Expiration Date
-    * SQL Data Type: datetime
+    * * Field Name: TokenExpirationDate
+    * * Display Name: Token Expiration Date
+    * * SQL Data Type: datetime
     */
     get TokenExpirationDate(): Date {  
         return this.Get('TokenExpirationDate');
@@ -982,8 +1104,8 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('TokenExpirationDate', value);
     }
     /**
-    * Field Name: APIKey
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: APIKey
+    * * SQL Data Type: nvarchar(255)
     */
     get APIKey(): string {  
         return this.Get('APIKey');
@@ -992,29 +1114,29 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('APIKey', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: ExternalSystemID
-    * Display Name: ExternalSystem
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalSystemID
+    * * Display Name: ExternalSystem
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalSystemID(): string {  
         return this.Get('ExternalSystemID');
@@ -1023,10 +1145,10 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('ExternalSystemID', value);
     }
     /**
-    * Field Name: IsExternalSystemReadOnly
-    * Display Name: Is External System Read Only
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsExternalSystemReadOnly
+    * * Display Name: Is External System Read Only
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsExternalSystemReadOnly(): boolean {  
         return this.Get('IsExternalSystemReadOnly');
@@ -1035,9 +1157,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('IsExternalSystemReadOnly', value);
     }
     /**
-    * Field Name: ClientID
-    * Display Name: Client
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ClientID
+    * * Display Name: Client
+    * * SQL Data Type: nvarchar(255)
     */
     get ClientID(): string {  
         return this.Get('ClientID');
@@ -1046,9 +1168,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('ClientID', value);
     }
     /**
-    * Field Name: ClientSecret
-    * Display Name: Client Secret
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ClientSecret
+    * * Display Name: Client Secret
+    * * SQL Data Type: nvarchar(255)
     */
     get ClientSecret(): string {  
         return this.Get('ClientSecret');
@@ -1057,9 +1179,9 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('ClientSecret', value);
     }
     /**
-    * Field Name: CustomAttribute1
-    * Display Name: Custom Attribute 1
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: CustomAttribute1
+    * * Display Name: Custom Attribute 1
+    * * SQL Data Type: nvarchar(255)
     */
     get CustomAttribute1(): string {  
         return this.Get('CustomAttribute1');
@@ -1068,79 +1190,79 @@ export class CompanyIntegrationEntity extends BaseEntity {
         this.Set('CustomAttribute1', value);
     }
     /**
-    * Field Name: CompanyID
-    * Display Name: Company ID
-    * SQL Data Type: int
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: int
     */
     get CompanyID(): number {  
         return this.Get('CompanyID');
     }
 
     /**
-    * Field Name: IntegrationID
-    * Display Name: Integration ID
-    * SQL Data Type: int
+    * * Field Name: IntegrationID
+    * * Display Name: Integration ID
+    * * SQL Data Type: int
     */
     get IntegrationID(): number {  
         return this.Get('IntegrationID');
     }
 
     /**
-    * Field Name: Company
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Company
+    * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {  
         return this.Get('Company');
     }
 
     /**
-    * Field Name: Integration
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Integration
+    * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {  
         return this.Get('Integration');
     }
 
     /**
-    * Field Name: DriverClassName
-    * Display Name: Driver Class Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DriverClassName
+    * * Display Name: Driver Class Name
+    * * SQL Data Type: nvarchar(100)
     */
     get DriverClassName(): string {  
         return this.Get('DriverClassName');
     }
 
     /**
-    * Field Name: DriverImportPath
-    * Display Name: Driver Import Path
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DriverImportPath
+    * * Display Name: Driver Import Path
+    * * SQL Data Type: nvarchar(100)
     */
     get DriverImportPath(): string {  
         return this.Get('DriverImportPath');
     }
 
     /**
-    * Field Name: LastRunID
-    * Display Name: LastRun
-    * SQL Data Type: int
+    * * Field Name: LastRunID
+    * * Display Name: LastRun
+    * * SQL Data Type: int
     */
     get LastRunID(): number {  
         return this.Get('LastRunID');
     }
 
     /**
-    * Field Name: LastRunStartedAt
-    * Display Name: Last Run Started At
-    * SQL Data Type: datetime
+    * * Field Name: LastRunStartedAt
+    * * Display Name: Last Run Started At
+    * * SQL Data Type: datetime
     */
     get LastRunStartedAt(): Date {  
         return this.Get('LastRunStartedAt');
     }
 
     /**
-    * Field Name: LastRunEndedAt
-    * Display Name: Last Run Ended At
-    * SQL Data Type: datetime
+    * * Field Name: LastRunEndedAt
+    * * Display Name: Last Run Ended At
+    * * SQL Data Type: datetime
     */
     get LastRunEndedAt(): Date {  
         return this.Get('LastRunEndedAt');
@@ -1151,9 +1273,11 @@ export class CompanyIntegrationEntity extends BaseEntity {
 
 /**
  * Entity Fields - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EntityField
- * Base View: vwEntityFields
+ * * Schema: admin
+ * * Base Table: EntityField
+ * * Base View: vwEntityFields
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -1161,36 +1285,44 @@ export class CompanyIntegrationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Entity Fields')
 export class EntityFieldEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
     }
 
     /**
-    * Field Name: Sequence
-    * SQL Data Type: int
-    * Default Value: 0
+    * * Field Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
     */
     get Sequence(): number {  
         return this.Get('Sequence');
     }
 
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
     }
 
     /**
-    * Field Name: DisplayName
-    * Display Name: Display Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
     */
     get DisplayName(): string {  
         return this.Get('DisplayName');
@@ -1199,8 +1331,8 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('DisplayName', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -1209,9 +1341,33 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: Category
-    * Display Name: Category
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: IsPrimaryKey
+    * * Display Name: Is Primary Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get IsPrimaryKey(): boolean {  
+        return this.Get('IsPrimaryKey');
+    }
+    set IsPrimaryKey(value: boolean) {
+        this.Set('IsPrimaryKey', value);
+    }
+    /**
+    * * Field Name: IsUnique
+    * * Display Name: Is Unique
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    */
+    get IsUnique(): boolean {  
+        return this.Get('IsUnique');
+    }
+    set IsUnique(value: boolean) {
+        this.Set('IsUnique', value);
+    }
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(255)
     */
     get Category(): string {  
         return this.Get('Category');
@@ -1220,71 +1376,71 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('Category', value);
     }
     /**
-    * Field Name: Type
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Type
+    * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {  
         return this.Get('Type');
     }
 
     /**
-    * Field Name: Length
-    * SQL Data Type: int
+    * * Field Name: Length
+    * * SQL Data Type: int
     */
     get Length(): number {  
         return this.Get('Length');
     }
 
     /**
-    * Field Name: Precision
-    * SQL Data Type: int
+    * * Field Name: Precision
+    * * SQL Data Type: int
     */
     get Precision(): number {  
         return this.Get('Precision');
     }
 
     /**
-    * Field Name: Scale
-    * SQL Data Type: int
+    * * Field Name: Scale
+    * * SQL Data Type: int
     */
     get Scale(): number {  
         return this.Get('Scale');
     }
 
     /**
-    * Field Name: AllowsNull
-    * Display Name: Allows Null
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: AllowsNull
+    * * Display Name: Allows Null
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get AllowsNull(): boolean {  
         return this.Get('AllowsNull');
     }
 
     /**
-    * Field Name: DefaultValue
-    * Display Name: Default Value
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: DefaultValue
+    * * Display Name: Default Value
+    * * SQL Data Type: nvarchar(255)
     */
     get DefaultValue(): string {  
         return this.Get('DefaultValue');
     }
 
     /**
-    * Field Name: AutoIncrement
-    * Display Name: Auto Increment
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: AutoIncrement
+    * * Display Name: Auto Increment
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get AutoIncrement(): boolean {  
         return this.Get('AutoIncrement');
     }
 
     /**
-    * Field Name: ValueListType
-    * Display Name: Value List Type
-    * SQL Data Type: nvarchar(20)
-    * Default Value: N'None'
+    * * Field Name: ValueListType
+    * * Display Name: Value List Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: N'None'
     */
     get ValueListType(): string {  
         return this.Get('ValueListType');
@@ -1293,9 +1449,9 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('ValueListType', value);
     }
     /**
-    * Field Name: ExtendedType
-    * Display Name: Extended Type
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ExtendedType
+    * * Display Name: Extended Type
+    * * SQL Data Type: nvarchar(50)
     */
     get ExtendedType(): string {  
         return this.Get('ExtendedType');
@@ -1304,10 +1460,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('ExtendedType', value);
     }
     /**
-    * Field Name: DefaultInView
-    * Display Name: Default In View
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: DefaultInView
+    * * Display Name: Default In View
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get DefaultInView(): boolean {  
         return this.Get('DefaultInView');
@@ -1316,9 +1472,9 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('DefaultInView', value);
     }
     /**
-    * Field Name: ViewCellTemplate
-    * Display Name: View Cell Template
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ViewCellTemplate
+    * * Display Name: View Cell Template
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ViewCellTemplate(): string {  
         return this.Get('ViewCellTemplate');
@@ -1327,9 +1483,9 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('ViewCellTemplate', value);
     }
     /**
-    * Field Name: DefaultColumnWidth
-    * Display Name: Default Column Width
-    * SQL Data Type: int
+    * * Field Name: DefaultColumnWidth
+    * * Display Name: Default Column Width
+    * * SQL Data Type: int
     */
     get DefaultColumnWidth(): number {  
         return this.Get('DefaultColumnWidth');
@@ -1338,10 +1494,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('DefaultColumnWidth', value);
     }
     /**
-    * Field Name: AllowUpdateAPI
-    * Display Name: Allow Update API
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: AllowUpdateAPI
+    * * Display Name: Allow Update API
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get AllowUpdateAPI(): boolean {  
         return this.Get('AllowUpdateAPI');
@@ -1350,10 +1506,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('AllowUpdateAPI', value);
     }
     /**
-    * Field Name: AllowUpdateInView
-    * Display Name: Allow Update In View
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: AllowUpdateInView
+    * * Display Name: Allow Update In View
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get AllowUpdateInView(): boolean {  
         return this.Get('AllowUpdateInView');
@@ -1362,10 +1518,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('AllowUpdateInView', value);
     }
     /**
-    * Field Name: IncludeInUserSearchAPI
-    * Display Name: Include In User Search API
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IncludeInUserSearchAPI
+    * * Display Name: Include In User Search API
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IncludeInUserSearchAPI(): boolean {  
         return this.Get('IncludeInUserSearchAPI');
@@ -1374,10 +1530,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('IncludeInUserSearchAPI', value);
     }
     /**
-    * Field Name: FullTextSearchEnabled
-    * Display Name: Full Text Search Enabled
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: FullTextSearchEnabled
+    * * Display Name: Full Text Search Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get FullTextSearchEnabled(): boolean {  
         return this.Get('FullTextSearchEnabled');
@@ -1386,9 +1542,9 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('FullTextSearchEnabled', value);
     }
     /**
-    * Field Name: UserSearchParamFormatAPI
-    * Display Name: User Search Param Format API
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: UserSearchParamFormatAPI
+    * * Display Name: User Search Param Format API
+    * * SQL Data Type: nvarchar(500)
     */
     get UserSearchParamFormatAPI(): string {  
         return this.Get('UserSearchParamFormatAPI');
@@ -1397,10 +1553,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('UserSearchParamFormatAPI', value);
     }
     /**
-    * Field Name: IncludeInGeneratedForm
-    * Display Name: Include In Generated Form
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IncludeInGeneratedForm
+    * * Display Name: Include In Generated Form
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IncludeInGeneratedForm(): boolean {  
         return this.Get('IncludeInGeneratedForm');
@@ -1409,10 +1565,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('IncludeInGeneratedForm', value);
     }
     /**
-    * Field Name: GeneratedFormSection
-    * Display Name: Generated Form Section
-    * SQL Data Type: nvarchar(10)
-    * Default Value: N'Details'
+    * * Field Name: GeneratedFormSection
+    * * Display Name: Generated Form Section
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: N'Details'
     */
     get GeneratedFormSection(): string {  
         return this.Get('GeneratedFormSection');
@@ -1421,20 +1577,20 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('GeneratedFormSection', value);
     }
     /**
-    * Field Name: IsVirtual
-    * Display Name: Is Virtual
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsVirtual
+    * * Display Name: Is Virtual
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsVirtual(): boolean {  
         return this.Get('IsVirtual');
     }
 
     /**
-    * Field Name: IsNameField
-    * Display Name: Is Name Field
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsNameField
+    * * Display Name: Is Name Field
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsNameField(): boolean {  
         return this.Get('IsNameField');
@@ -1443,10 +1599,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('IsNameField', value);
     }
     /**
-    * Field Name: RelatedEntityID
-    * Display Name: RelatedEntity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: RelatedEntityID
+    * * Display Name: RelatedEntity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get RelatedEntityID(): number {  
         return this.Get('RelatedEntityID');
@@ -1455,9 +1611,9 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('RelatedEntityID', value);
     }
     /**
-    * Field Name: RelatedEntityFieldName
-    * Display Name: Related Entity Field Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityFieldName
+    * * Display Name: Related Entity Field Name
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityFieldName(): string {  
         return this.Get('RelatedEntityFieldName');
@@ -1466,10 +1622,10 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('RelatedEntityFieldName', value);
     }
     /**
-    * Field Name: IncludeRelatedEntityNameFieldInBaseView
-    * Display Name: Include Related Entity Name Field In Base View
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IncludeRelatedEntityNameFieldInBaseView
+    * * Display Name: Include Related Entity Name Field In Base View
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IncludeRelatedEntityNameFieldInBaseView(): boolean {  
         return this.Get('IncludeRelatedEntityNameFieldInBaseView');
@@ -1478,9 +1634,9 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('IncludeRelatedEntityNameFieldInBaseView', value);
     }
     /**
-    * Field Name: RelatedEntityNameFieldMap
-    * Display Name: Related Entity Name Field Map
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityNameFieldMap
+    * * Display Name: Related Entity Name Field Map
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityNameFieldMap(): string {  
         return this.Get('RelatedEntityNameFieldMap');
@@ -1489,127 +1645,127 @@ export class EntityFieldEntity extends BaseEntity {
         this.Set('RelatedEntityNameFieldMap', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: SchemaName
-    * Display Name: Schema Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: SchemaName
+    * * Display Name: Schema Name
+    * * SQL Data Type: nvarchar(255)
     */
     get SchemaName(): string {  
         return this.Get('SchemaName');
     }
 
     /**
-    * Field Name: BaseTable
-    * Display Name: Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: BaseTable
+    * * Display Name: Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get BaseTable(): string {  
         return this.Get('BaseTable');
     }
 
     /**
-    * Field Name: BaseView
-    * Display Name: Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: BaseView
+    * * Display Name: Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get BaseView(): string {  
         return this.Get('BaseView');
     }
 
     /**
-    * Field Name: EntityCodeName
-    * Display Name: Entity Code Name
-    * SQL Data Type: nvarchar(4000)
+    * * Field Name: EntityCodeName
+    * * Display Name: Entity Code Name
+    * * SQL Data Type: nvarchar(4000)
     */
     get EntityCodeName(): string {  
         return this.Get('EntityCodeName');
     }
 
     /**
-    * Field Name: EntityClassName
-    * Display Name: Entity Class Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: EntityClassName
+    * * Display Name: Entity Class Name
+    * * SQL Data Type: nvarchar(511)
     */
     get EntityClassName(): string {  
         return this.Get('EntityClassName');
     }
 
     /**
-    * Field Name: RelatedEntity
-    * Display Name: Related Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string {  
         return this.Get('RelatedEntity');
     }
 
     /**
-    * Field Name: RelatedEntitySchemaName
-    * Display Name: Related Entity Schema Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntitySchemaName
+    * * Display Name: Related Entity Schema Name
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntitySchemaName(): string {  
         return this.Get('RelatedEntitySchemaName');
     }
 
     /**
-    * Field Name: RelatedEntityBaseTable
-    * Display Name: Related Entity Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityBaseTable
+    * * Display Name: Related Entity Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseTable(): string {  
         return this.Get('RelatedEntityBaseTable');
     }
 
     /**
-    * Field Name: RelatedEntityBaseView
-    * Display Name: Related Entity Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityBaseView
+    * * Display Name: Related Entity Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseView(): string {  
         return this.Get('RelatedEntityBaseView');
     }
 
     /**
-    * Field Name: RelatedEntityCodeName
-    * Display Name: Related Entity Code Name
-    * SQL Data Type: nvarchar(4000)
+    * * Field Name: RelatedEntityCodeName
+    * * Display Name: Related Entity Code Name
+    * * SQL Data Type: nvarchar(4000)
     */
     get RelatedEntityCodeName(): string {  
         return this.Get('RelatedEntityCodeName');
     }
 
     /**
-    * Field Name: RelatedEntityClassName
-    * Display Name: Related Entity Class Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: RelatedEntityClassName
+    * * Display Name: Related Entity Class Name
+    * * SQL Data Type: nvarchar(511)
     */
     get RelatedEntityClassName(): string {  
         return this.Get('RelatedEntityClassName');
@@ -1620,10 +1776,12 @@ export class EntityFieldEntity extends BaseEntity {
 
 /**
  * Entities - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Entity
- * Base View: vwEntities
+ * * Schema: admin
+ * * Base Table: Entity
+ * * Base View: vwEntities
  * @description Metadata about all of the entities in the system. This information is managed by CodeGen, don't modify the parts that come from SQL Server
+ * * Primary Key: ID
+ * * Description: Metadata about all of the entities in the system. This information is managed by CodeGen, don't modify the parts that come from SQL Server
  * @extends {BaseEntity}
  * @class
  * @public
@@ -1631,11 +1789,19 @@ export class EntityFieldEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Entities')
 export class EntityEntity extends BaseEntity {
     /**
-    * Field Name: ParentID
-    * Display Name: Parent ID
-    * SQL Data Type: int
-    * Related Entity: Entities
-    * Description: Reserved for future use
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
+    * * Description: Reserved for future use
     */
     get ParentID(): number {  
         return this.Get('ParentID');
@@ -1644,8 +1810,8 @@ export class EntityEntity extends BaseEntity {
         this.Set('ParentID', value);
     }
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -1654,9 +1820,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: NameSuffix
-    * Display Name: Name Suffix
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: NameSuffix
+    * * Display Name: Name Suffix
+    * * SQL Data Type: nvarchar(255)
     */
     get NameSuffix(): string {  
         return this.Get('NameSuffix');
@@ -1665,8 +1831,8 @@ export class EntityEntity extends BaseEntity {
         this.Set('NameSuffix', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -1675,18 +1841,18 @@ export class EntityEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: BaseTable
-    * Display Name: Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: BaseTable
+    * * Display Name: Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get BaseTable(): string {  
         return this.Get('BaseTable');
     }
 
     /**
-    * Field Name: BaseView
-    * Display Name: Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: BaseView
+    * * Display Name: Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get BaseView(): string {  
         return this.Get('BaseView');
@@ -1695,10 +1861,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('BaseView', value);
     }
     /**
-    * Field Name: BaseViewGenerated
-    * Display Name: Base View Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: BaseViewGenerated
+    * * Display Name: Base View Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get BaseViewGenerated(): boolean {  
         return this.Get('BaseViewGenerated');
@@ -1707,21 +1873,21 @@ export class EntityEntity extends BaseEntity {
         this.Set('BaseViewGenerated', value);
     }
     /**
-    * Field Name: SchemaName
-    * Display Name: Schema Name
-    * SQL Data Type: nvarchar(255)
-    * Default Value: N'dbo'
-    * Description: Database Schema Name
+    * * Field Name: SchemaName
+    * * Display Name: Schema Name
+    * * SQL Data Type: nvarchar(255)
+    * * Default Value: N'dbo'
+    * * Description: Database Schema Name
     */
     get SchemaName(): string {  
         return this.Get('SchemaName');
     }
 
     /**
-    * Field Name: VirtualEntity
-    * Display Name: Virtual Entity
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: VirtualEntity
+    * * Display Name: Virtual Entity
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get VirtualEntity(): boolean {  
         return this.Get('VirtualEntity');
@@ -1730,10 +1896,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('VirtualEntity', value);
     }
     /**
-    * Field Name: TrackRecordChanges
-    * Display Name: Track Record Changes
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: TrackRecordChanges
+    * * Display Name: Track Record Changes
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get TrackRecordChanges(): boolean {  
         return this.Get('TrackRecordChanges');
@@ -1742,10 +1908,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('TrackRecordChanges', value);
     }
     /**
-    * Field Name: AuditRecordAccess
-    * Display Name: Audit Record Access
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: AuditRecordAccess
+    * * Display Name: Audit Record Access
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get AuditRecordAccess(): boolean {  
         return this.Get('AuditRecordAccess');
@@ -1754,10 +1920,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('AuditRecordAccess', value);
     }
     /**
-    * Field Name: AuditViewRuns
-    * Display Name: Audit View Runs
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: AuditViewRuns
+    * * Display Name: Audit View Runs
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get AuditViewRuns(): boolean {  
         return this.Get('AuditViewRuns');
@@ -1766,11 +1932,11 @@ export class EntityEntity extends BaseEntity {
         this.Set('AuditViewRuns', value);
     }
     /**
-    * Field Name: IncludeInAPI
-    * Display Name: Include In API
-    * SQL Data Type: bit
-    * Default Value: 0
-    * Description: Master switch to control if the field is included in the API or not
+    * * Field Name: IncludeInAPI
+    * * Display Name: Include In API
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Master switch to control if the field is included in the API or not
     */
     get IncludeInAPI(): boolean {  
         return this.Get('IncludeInAPI');
@@ -1779,10 +1945,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('IncludeInAPI', value);
     }
     /**
-    * Field Name: AllowAllRowsAPI
-    * Display Name: Allow All Rows API
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: AllowAllRowsAPI
+    * * Display Name: Allow All Rows API
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get AllowAllRowsAPI(): boolean {  
         return this.Get('AllowAllRowsAPI');
@@ -1791,11 +1957,11 @@ export class EntityEntity extends BaseEntity {
         this.Set('AllowAllRowsAPI', value);
     }
     /**
-    * Field Name: AllowUpdateAPI
-    * Display Name: Allow Update API
-    * SQL Data Type: bit
-    * Default Value: 0
-    * Description: If set to 1, allows updates to occur via API. Role based permissions are required in addition to turning this bit on.
+    * * Field Name: AllowUpdateAPI
+    * * Display Name: Allow Update API
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If set to 1, allows updates to occur via API. Role based permissions are required in addition to turning this bit on.
     */
     get AllowUpdateAPI(): boolean {  
         return this.Get('AllowUpdateAPI');
@@ -1804,10 +1970,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('AllowUpdateAPI', value);
     }
     /**
-    * Field Name: AllowCreateAPI
-    * Display Name: Allow Create API
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: AllowCreateAPI
+    * * Display Name: Allow Create API
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get AllowCreateAPI(): boolean {  
         return this.Get('AllowCreateAPI');
@@ -1816,10 +1982,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('AllowCreateAPI', value);
     }
     /**
-    * Field Name: AllowDeleteAPI
-    * Display Name: Allow Delete API
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: AllowDeleteAPI
+    * * Display Name: Allow Delete API
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get AllowDeleteAPI(): boolean {  
         return this.Get('AllowDeleteAPI');
@@ -1828,10 +1994,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('AllowDeleteAPI', value);
     }
     /**
-    * Field Name: CustomResolverAPI
-    * Display Name: Custom Resolver API
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CustomResolverAPI
+    * * Display Name: Custom Resolver API
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CustomResolverAPI(): boolean {  
         return this.Get('CustomResolverAPI');
@@ -1840,11 +2006,11 @@ export class EntityEntity extends BaseEntity {
         this.Set('CustomResolverAPI', value);
     }
     /**
-    * Field Name: AllowUserSearchAPI
-    * Display Name: Allow User Search API
-    * SQL Data Type: bit
-    * Default Value: 0
-    * Description: If set to 1, allows an end user to add their own search string when running a user view or searching without saving a view
+    * * Field Name: AllowUserSearchAPI
+    * * Display Name: Allow User Search API
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If set to 1, allows an end user to add their own search string when running a user view or searching without saving a view
     */
     get AllowUserSearchAPI(): boolean {  
         return this.Get('AllowUserSearchAPI');
@@ -1853,10 +2019,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('AllowUserSearchAPI', value);
     }
     /**
-    * Field Name: FullTextSearchEnabled
-    * Display Name: Full Text Search Enabled
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: FullTextSearchEnabled
+    * * Display Name: Full Text Search Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get FullTextSearchEnabled(): boolean {  
         return this.Get('FullTextSearchEnabled');
@@ -1865,9 +2031,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextSearchEnabled', value);
     }
     /**
-    * Field Name: FullTextCatalog
-    * Display Name: Full Text Catalog
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: FullTextCatalog
+    * * Display Name: Full Text Catalog
+    * * SQL Data Type: nvarchar(255)
     */
     get FullTextCatalog(): string {  
         return this.Get('FullTextCatalog');
@@ -1876,10 +2042,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextCatalog', value);
     }
     /**
-    * Field Name: FullTextCatalogGenerated
-    * Display Name: Full Text Catalog Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: FullTextCatalogGenerated
+    * * Display Name: Full Text Catalog Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get FullTextCatalogGenerated(): boolean {  
         return this.Get('FullTextCatalogGenerated');
@@ -1888,9 +2054,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextCatalogGenerated', value);
     }
     /**
-    * Field Name: FullTextIndex
-    * Display Name: Full Text Index
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: FullTextIndex
+    * * Display Name: Full Text Index
+    * * SQL Data Type: nvarchar(255)
     */
     get FullTextIndex(): string {  
         return this.Get('FullTextIndex');
@@ -1899,10 +2065,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextIndex', value);
     }
     /**
-    * Field Name: FullTextIndexGenerated
-    * Display Name: Full Text Index Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: FullTextIndexGenerated
+    * * Display Name: Full Text Index Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get FullTextIndexGenerated(): boolean {  
         return this.Get('FullTextIndexGenerated');
@@ -1911,9 +2077,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextIndexGenerated', value);
     }
     /**
-    * Field Name: FullTextSearchFunction
-    * Display Name: Full Text Search Function
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: FullTextSearchFunction
+    * * Display Name: Full Text Search Function
+    * * SQL Data Type: nvarchar(255)
     */
     get FullTextSearchFunction(): string {  
         return this.Get('FullTextSearchFunction');
@@ -1922,10 +2088,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextSearchFunction', value);
     }
     /**
-    * Field Name: FullTextSearchFunctionGenerated
-    * Display Name: Full Text Search Function Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: FullTextSearchFunctionGenerated
+    * * Display Name: Full Text Search Function Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get FullTextSearchFunctionGenerated(): boolean {  
         return this.Get('FullTextSearchFunctionGenerated');
@@ -1934,10 +2100,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('FullTextSearchFunctionGenerated', value);
     }
     /**
-    * Field Name: UserViewMaxRows
-    * Display Name: User View Max Rows
-    * SQL Data Type: int
-    * Default Value: 1000
+    * * Field Name: UserViewMaxRows
+    * * Display Name: User View Max Rows
+    * * SQL Data Type: int
+    * * Default Value: 1000
     */
     get UserViewMaxRows(): number {  
         return this.Get('UserViewMaxRows');
@@ -1946,9 +2112,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('UserViewMaxRows', value);
     }
     /**
-    * Field Name: spCreate
-    * Display Name: spCreate
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: spCreate
+    * * Display Name: spCreate
+    * * SQL Data Type: nvarchar(255)
     */
     get spCreate(): string {  
         return this.Get('spCreate');
@@ -1957,9 +2123,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('spCreate', value);
     }
     /**
-    * Field Name: spUpdate
-    * Display Name: spUpdate
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: spUpdate
+    * * Display Name: spUpdate
+    * * SQL Data Type: nvarchar(255)
     */
     get spUpdate(): string {  
         return this.Get('spUpdate');
@@ -1968,9 +2134,9 @@ export class EntityEntity extends BaseEntity {
         this.Set('spUpdate', value);
     }
     /**
-    * Field Name: spDelete
-    * Display Name: spDelete
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: spDelete
+    * * Display Name: spDelete
+    * * SQL Data Type: nvarchar(255)
     */
     get spDelete(): string {  
         return this.Get('spDelete');
@@ -1979,10 +2145,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('spDelete', value);
     }
     /**
-    * Field Name: spCreateGenerated
-    * Display Name: sp CreateGenerated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: spCreateGenerated
+    * * Display Name: sp CreateGenerated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get spCreateGenerated(): boolean {  
         return this.Get('spCreateGenerated');
@@ -1991,10 +2157,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('spCreateGenerated', value);
     }
     /**
-    * Field Name: spUpdateGenerated
-    * Display Name: sp Update Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: spUpdateGenerated
+    * * Display Name: sp Update Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get spUpdateGenerated(): boolean {  
         return this.Get('spUpdateGenerated');
@@ -2003,10 +2169,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('spUpdateGenerated', value);
     }
     /**
-    * Field Name: spDeleteGenerated
-    * Display Name: sp Delete Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: spDeleteGenerated
+    * * Display Name: sp Delete Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get spDeleteGenerated(): boolean {  
         return this.Get('spDeleteGenerated');
@@ -2015,10 +2181,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('spDeleteGenerated', value);
     }
     /**
-    * Field Name: CascadeDeletes
-    * Display Name: Cascade Deletes
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CascadeDeletes
+    * * Display Name: Cascade Deletes
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CascadeDeletes(): boolean {  
         return this.Get('CascadeDeletes');
@@ -2027,10 +2193,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('CascadeDeletes', value);
     }
     /**
-    * Field Name: UserFormGenerated
-    * Display Name: User Form Generated
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: UserFormGenerated
+    * * Display Name: User Form Generated
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get UserFormGenerated(): boolean {  
         return this.Get('UserFormGenerated');
@@ -2039,10 +2205,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('UserFormGenerated', value);
     }
     /**
-    * Field Name: EntityObjectSubclassName
-    * Display Name: Entity Object Subclass Name
-    * SQL Data Type: nvarchar(255)
-    * Description: Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassImport, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassImport with the name of the module to import that contains an exported class of the name you provide in EntityObjectSubclassName.
+    * * Field Name: EntityObjectSubclassName
+    * * Display Name: Entity Object Subclass Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassImport, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassImport with the name of the module to import that contains an exported class of the name you provide in EntityObjectSubclassName.
     */
     get EntityObjectSubclassName(): string {  
         return this.Get('EntityObjectSubclassName');
@@ -2051,10 +2217,10 @@ export class EntityEntity extends BaseEntity {
         this.Set('EntityObjectSubclassName', value);
     }
     /**
-    * Field Name: EntityObjectSubclassImport
-    * Display Name: Entity Object Subclass Import
-    * SQL Data Type: nvarchar(255)
-    * Description: Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassName, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassName with the name of the class itself. This field should have the name of the module  to import that contains an exported class of the name you provide in EntityObjectSubclassName.
+    * * Field Name: EntityObjectSubclassImport
+    * * Display Name: Entity Object Subclass Import
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassName, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassName with the name of the class itself. This field should have the name of the module  to import that contains an exported class of the name you provide in EntityObjectSubclassName.
     */
     get EntityObjectSubclassImport(): string {  
         return this.Get('EntityObjectSubclassImport');
@@ -2063,74 +2229,74 @@ export class EntityEntity extends BaseEntity {
         this.Set('EntityObjectSubclassImport', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: CodeName
-    * Display Name: Code Name
-    * SQL Data Type: nvarchar(4000)
+    * * Field Name: CodeName
+    * * Display Name: Code Name
+    * * SQL Data Type: nvarchar(4000)
     */
     get CodeName(): string {  
         return this.Get('CodeName');
     }
 
     /**
-    * Field Name: ClassName
-    * Display Name: Class Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: ClassName
+    * * Display Name: Class Name
+    * * SQL Data Type: nvarchar(511)
     */
     get ClassName(): string {  
         return this.Get('ClassName');
     }
 
     /**
-    * Field Name: BaseTableCodeName
-    * Display Name: Base Table Code Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: BaseTableCodeName
+    * * Display Name: Base Table Code Name
+    * * SQL Data Type: nvarchar(511)
     */
     get BaseTableCodeName(): string {  
         return this.Get('BaseTableCodeName');
     }
 
     /**
-    * Field Name: ParentEntity
-    * Display Name: Parent Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ParentEntity
+    * * Display Name: Parent Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get ParentEntity(): string {  
         return this.Get('ParentEntity');
     }
 
     /**
-    * Field Name: ParentBaseTable
-    * Display Name: Parent Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ParentBaseTable
+    * * Display Name: Parent Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get ParentBaseTable(): string {  
         return this.Get('ParentBaseTable');
     }
 
     /**
-    * Field Name: ParentBaseView
-    * Display Name: Parent Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ParentBaseView
+    * * Display Name: Parent Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get ParentBaseView(): string {  
         return this.Get('ParentBaseView');
@@ -2141,9 +2307,11 @@ export class EntityEntity extends BaseEntity {
 
 /**
  * Users - strongly typed entity sub-class
- * Schema: admin
- * Base Table: User
- * Base View: vwUsers
+ * * Schema: admin
+ * * Base Table: User
+ * * Base View: vwUsers
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -2151,8 +2319,16 @@ export class EntityEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Users')
 export class UserEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -2161,9 +2337,9 @@ export class UserEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: FirstName
-    * Display Name: First Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: FirstName
+    * * Display Name: First Name
+    * * SQL Data Type: nvarchar(50)
     */
     get FirstName(): string {  
         return this.Get('FirstName');
@@ -2172,9 +2348,9 @@ export class UserEntity extends BaseEntity {
         this.Set('FirstName', value);
     }
     /**
-    * Field Name: LastName
-    * Display Name: Last Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: LastName
+    * * Display Name: Last Name
+    * * SQL Data Type: nvarchar(50)
     */
     get LastName(): string {  
         return this.Get('LastName');
@@ -2183,9 +2359,9 @@ export class UserEntity extends BaseEntity {
         this.Set('LastName', value);
     }
     /**
-    * Field Name: Title
-    * Display Name: Title
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(50)
     */
     get Title(): string {  
         return this.Get('Title');
@@ -2194,8 +2370,8 @@ export class UserEntity extends BaseEntity {
         this.Set('Title', value);
     }
     /**
-    * Field Name: Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Email
+    * * SQL Data Type: nvarchar(100)
     */
     get Email(): string {  
         return this.Get('Email');
@@ -2204,8 +2380,8 @@ export class UserEntity extends BaseEntity {
         this.Set('Email', value);
     }
     /**
-    * Field Name: Type
-    * SQL Data Type: nchar(15)
+    * * Field Name: Type
+    * * SQL Data Type: nchar(15)
     */
     get Type(): string {  
         return this.Get('Type');
@@ -2214,10 +2390,10 @@ export class UserEntity extends BaseEntity {
         this.Set('Type', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -2226,10 +2402,10 @@ export class UserEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: LinkedRecordType
-    * Display Name: Linked Record Type
-    * SQL Data Type: nchar(10)
-    * Default Value: N'None'
+    * * Field Name: LinkedRecordType
+    * * Display Name: Linked Record Type
+    * * SQL Data Type: nchar(10)
+    * * Default Value: N'None'
     */
     get LinkedRecordType(): string {  
         return this.Get('LinkedRecordType');
@@ -2238,9 +2414,9 @@ export class UserEntity extends BaseEntity {
         this.Set('LinkedRecordType', value);
     }
     /**
-    * Field Name: EmployeeID
-    * Display Name: Employee
-    * SQL Data Type: int
+    * * Field Name: EmployeeID
+    * * Display Name: Employee
+    * * SQL Data Type: int
     */
     get EmployeeID(): number {  
         return this.Get('EmployeeID');
@@ -2249,9 +2425,9 @@ export class UserEntity extends BaseEntity {
         this.Set('EmployeeID', value);
     }
     /**
-    * Field Name: LinkedEntityID
-    * Display Name: Linked Entity ID
-    * SQL Data Type: int
+    * * Field Name: LinkedEntityID
+    * * Display Name: Linked Entity ID
+    * * SQL Data Type: int
     */
     get LinkedEntityID(): number {  
         return this.Get('LinkedEntityID');
@@ -2260,9 +2436,9 @@ export class UserEntity extends BaseEntity {
         this.Set('LinkedEntityID', value);
     }
     /**
-    * Field Name: LinkedEntityRecordID
-    * Display Name: Linked Entity Record ID
-    * SQL Data Type: int
+    * * Field Name: LinkedEntityRecordID
+    * * Display Name: Linked Entity Record ID
+    * * SQL Data Type: int
     */
     get LinkedEntityRecordID(): number {  
         return this.Get('LinkedEntityRecordID');
@@ -2271,74 +2447,74 @@ export class UserEntity extends BaseEntity {
         this.Set('LinkedEntityRecordID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: FirstLast
-    * Display Name: First Last
-    * SQL Data Type: nvarchar(101)
+    * * Field Name: FirstLast
+    * * Display Name: First Last
+    * * SQL Data Type: nvarchar(101)
     */
     get FirstLast(): string {  
         return this.Get('FirstLast');
     }
 
     /**
-    * Field Name: EmployeeFirstLast
-    * Display Name: Employee First Last
-    * SQL Data Type: nvarchar(81)
+    * * Field Name: EmployeeFirstLast
+    * * Display Name: Employee First Last
+    * * SQL Data Type: nvarchar(81)
     */
     get EmployeeFirstLast(): string {  
         return this.Get('EmployeeFirstLast');
     }
 
     /**
-    * Field Name: EmployeeEmail
-    * Display Name: Employee Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: EmployeeEmail
+    * * Display Name: Employee Email
+    * * SQL Data Type: nvarchar(100)
     */
     get EmployeeEmail(): string {  
         return this.Get('EmployeeEmail');
     }
 
     /**
-    * Field Name: EmployeeTitle
-    * Display Name: Employee Title
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: EmployeeTitle
+    * * Display Name: Employee Title
+    * * SQL Data Type: nvarchar(50)
     */
     get EmployeeTitle(): string {  
         return this.Get('EmployeeTitle');
     }
 
     /**
-    * Field Name: EmployeeSupervisor
-    * Display Name: Employee Supervisor
-    * SQL Data Type: nvarchar(81)
+    * * Field Name: EmployeeSupervisor
+    * * Display Name: Employee Supervisor
+    * * SQL Data Type: nvarchar(81)
     */
     get EmployeeSupervisor(): string {  
         return this.Get('EmployeeSupervisor');
     }
 
     /**
-    * Field Name: EmployeeSupervisorEmail
-    * Display Name: Employee Supervisor Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: EmployeeSupervisorEmail
+    * * Display Name: Employee Supervisor Email
+    * * SQL Data Type: nvarchar(100)
     */
     get EmployeeSupervisorEmail(): string {  
         return this.Get('EmployeeSupervisorEmail');
@@ -2349,9 +2525,11 @@ export class UserEntity extends BaseEntity {
 
 /**
  * Entity Relationships - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EntityRelationship
- * Base View: vwEntityRelationships
+ * * Schema: admin
+ * * Base Table: EntityRelationship
+ * * Base View: vwEntityRelationships
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -2359,10 +2537,18 @@ export class UserEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Entity Relationships')
 export class EntityRelationshipEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -2371,10 +2557,10 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RelatedEntityID
-    * Display Name: Related Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: RelatedEntityID
+    * * Display Name: Related Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get RelatedEntityID(): number {  
         return this.Get('RelatedEntityID');
@@ -2383,10 +2569,10 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('RelatedEntityID', value);
     }
     /**
-    * Field Name: BundleInAPI
-    * Display Name: Bundle In API
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: BundleInAPI
+    * * Display Name: Bundle In API
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get BundleInAPI(): boolean {  
         return this.Get('BundleInAPI');
@@ -2395,10 +2581,10 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('BundleInAPI', value);
     }
     /**
-    * Field Name: IncludeInParentAllQuery
-    * Display Name: Include In Parent All Query
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IncludeInParentAllQuery
+    * * Display Name: Include In Parent All Query
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IncludeInParentAllQuery(): boolean {  
         return this.Get('IncludeInParentAllQuery');
@@ -2407,9 +2593,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('IncludeInParentAllQuery', value);
     }
     /**
-    * Field Name: Type
-    * SQL Data Type: nchar(20)
-    * Default Value: N'One To Many'
+    * * Field Name: Type
+    * * SQL Data Type: nchar(20)
+    * * Default Value: N'One To Many'
     */
     get Type(): string {  
         return this.Get('Type');
@@ -2418,9 +2604,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('Type', value);
     }
     /**
-    * Field Name: EntityKeyField
-    * Display Name: Entity Key Field
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityKeyField
+    * * Display Name: Entity Key Field
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityKeyField(): string {  
         return this.Get('EntityKeyField');
@@ -2429,9 +2615,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('EntityKeyField', value);
     }
     /**
-    * Field Name: RelatedEntityJoinField
-    * Display Name: Related Entity Join Field
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityJoinField
+    * * Display Name: Related Entity Join Field
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityJoinField(): string {  
         return this.Get('RelatedEntityJoinField');
@@ -2440,9 +2626,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('RelatedEntityJoinField', value);
     }
     /**
-    * Field Name: JoinView
-    * Display Name: Join View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: JoinView
+    * * Display Name: Join View
+    * * SQL Data Type: nvarchar(255)
     */
     get JoinView(): string {  
         return this.Get('JoinView');
@@ -2451,9 +2637,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('JoinView', value);
     }
     /**
-    * Field Name: JoinEntityJoinField
-    * Display Name: Join Entity Join Field
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: JoinEntityJoinField
+    * * Display Name: Join Entity Join Field
+    * * SQL Data Type: nvarchar(255)
     */
     get JoinEntityJoinField(): string {  
         return this.Get('JoinEntityJoinField');
@@ -2462,9 +2648,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('JoinEntityJoinField', value);
     }
     /**
-    * Field Name: JoinEntityInverseJoinField
-    * Display Name: Join Entity Inverse Join Field
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: JoinEntityInverseJoinField
+    * * Display Name: Join Entity Inverse Join Field
+    * * SQL Data Type: nvarchar(255)
     */
     get JoinEntityInverseJoinField(): string {  
         return this.Get('JoinEntityInverseJoinField');
@@ -2473,10 +2659,10 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('JoinEntityInverseJoinField', value);
     }
     /**
-    * Field Name: DisplayInForm
-    * Display Name: Display In Form
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: DisplayInForm
+    * * Display Name: Display In Form
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get DisplayInForm(): boolean {  
         return this.Get('DisplayInForm');
@@ -2485,9 +2671,9 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('DisplayInForm', value);
     }
     /**
-    * Field Name: DisplayName
-    * Display Name: Display Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
     */
     get DisplayName(): string {  
         return this.Get('DisplayName');
@@ -2496,128 +2682,128 @@ export class EntityRelationshipEntity extends BaseEntity {
         this.Set('DisplayName', value);
     }
     /**
-    * Field Name: DisplayUserViewGUID
-    * Display Name: Display User View GUID
-    * SQL Data Type: uniqueidentifier
-    * Related Entity: User Views
+    * * Field Name: DisplayUserViewGUID
+    * * Display Name: Display User View GUID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity: User Views
     */
     get DisplayUserViewGUID(): string {  
         return this.Get('DisplayUserViewGUID');
     }
 
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: EntityBaseTable
-    * Display Name: Entity Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityBaseTable
+    * * Display Name: Entity Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityBaseTable(): string {  
         return this.Get('EntityBaseTable');
     }
 
     /**
-    * Field Name: EntityBaseView
-    * Display Name: Entity Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityBaseView
+    * * Display Name: Entity Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityBaseView(): string {  
         return this.Get('EntityBaseView');
     }
 
     /**
-    * Field Name: RelatedEntity
-    * Display Name: Related Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string {  
         return this.Get('RelatedEntity');
     }
 
     /**
-    * Field Name: RelatedEntityBaseTable
-    * Display Name: Related Entity Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityBaseTable
+    * * Display Name: Related Entity Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseTable(): string {  
         return this.Get('RelatedEntityBaseTable');
     }
 
     /**
-    * Field Name: RelatedEntityBaseView
-    * Display Name: Related Entity Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: RelatedEntityBaseView
+    * * Display Name: Related Entity Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseView(): string {  
         return this.Get('RelatedEntityBaseView');
     }
 
     /**
-    * Field Name: RelatedEntityClassName
-    * Display Name: Related Entity Class Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: RelatedEntityClassName
+    * * Display Name: Related Entity Class Name
+    * * SQL Data Type: nvarchar(511)
     */
     get RelatedEntityClassName(): string {  
         return this.Get('RelatedEntityClassName');
     }
 
     /**
-    * Field Name: RelatedEntityCodeName
-    * Display Name: Related Entity Code Name
-    * SQL Data Type: nvarchar(4000)
+    * * Field Name: RelatedEntityCodeName
+    * * Display Name: Related Entity Code Name
+    * * SQL Data Type: nvarchar(4000)
     */
     get RelatedEntityCodeName(): string {  
         return this.Get('RelatedEntityCodeName');
     }
 
     /**
-    * Field Name: RelatedEntityBaseTableCodeName
-    * Display Name: Related Entity Base Table Code Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: RelatedEntityBaseTableCodeName
+    * * Display Name: Related Entity Base Table Code Name
+    * * SQL Data Type: nvarchar(511)
     */
     get RelatedEntityBaseTableCodeName(): string {  
         return this.Get('RelatedEntityBaseTableCodeName');
     }
 
     /**
-    * Field Name: DisplayUserViewName
-    * Display Name: Display User View Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DisplayUserViewName
+    * * Display Name: Display User View Name
+    * * SQL Data Type: nvarchar(100)
     */
     get DisplayUserViewName(): string {  
         return this.Get('DisplayUserViewName');
     }
 
     /**
-    * Field Name: DisplayUserViewID
-    * Display Name: Display User View ID
-    * SQL Data Type: int
+    * * Field Name: DisplayUserViewID
+    * * Display Name: Display User View ID
+    * * SQL Data Type: int
     */
     get DisplayUserViewID(): number {  
         return this.Get('DisplayUserViewID');
@@ -2628,10 +2814,12 @@ export class EntityRelationshipEntity extends BaseEntity {
 
 /**
  * User Record Logs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserRecordLog
- * Base View: vwUserRecordLogs
+ * * Schema: admin
+ * * Base Table: UserRecordLog
+ * * Base View: vwUserRecordLogs
  * @description Tracks history of user access to records across the system, tracks reads and writes
+ * * Primary Key: ID
+ * * Description: Tracks history of user access to records across the system, tracks reads and writes
  * @extends {BaseEntity}
  * @class
  * @public
@@ -2639,10 +2827,18 @@ export class EntityRelationshipEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Record Logs')
 export class UserRecordLogEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -2651,10 +2847,10 @@ export class UserRecordLogEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -2663,21 +2859,21 @@ export class UserRecordLogEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: EarliestAt
-    * Display Name: Earliest At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: EarliestAt
+    * * Display Name: Earliest At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get EarliestAt(): Date {  
         return this.Get('EarliestAt');
@@ -2686,10 +2882,10 @@ export class UserRecordLogEntity extends BaseEntity {
         this.Set('EarliestAt', value);
     }
     /**
-    * Field Name: LatestAt
-    * Display Name: Latest At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: LatestAt
+    * * Display Name: Latest At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get LatestAt(): Date {  
         return this.Get('LatestAt');
@@ -2698,10 +2894,10 @@ export class UserRecordLogEntity extends BaseEntity {
         this.Set('LatestAt', value);
     }
     /**
-    * Field Name: TotalCount
-    * Display Name: Total Count
-    * SQL Data Type: int
-    * Default Value: 0
+    * * Field Name: TotalCount
+    * * Display Name: Total Count
+    * * SQL Data Type: int
+    * * Default Value: 0
     */
     get TotalCount(): number {  
         return this.Get('TotalCount');
@@ -2710,54 +2906,54 @@ export class UserRecordLogEntity extends BaseEntity {
         this.Set('TotalCount', value);
     }
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: UserName
-    * Display Name: User Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UserName
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
     */
     get UserName(): string {  
         return this.Get('UserName');
     }
 
     /**
-    * Field Name: UserFirstLast
-    * Display Name: User First Last
-    * SQL Data Type: nvarchar(101)
+    * * Field Name: UserFirstLast
+    * * Display Name: User First Last
+    * * SQL Data Type: nvarchar(101)
     */
     get UserFirstLast(): string {  
         return this.Get('UserFirstLast');
     }
 
     /**
-    * Field Name: UserEmail
-    * Display Name: User Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UserEmail
+    * * Display Name: User Email
+    * * SQL Data Type: nvarchar(100)
     */
     get UserEmail(): string {  
         return this.Get('UserEmail');
     }
 
     /**
-    * Field Name: UserSupervisor
-    * Display Name: User Supervisor
-    * SQL Data Type: nvarchar(81)
+    * * Field Name: UserSupervisor
+    * * Display Name: User Supervisor
+    * * SQL Data Type: nvarchar(81)
     */
     get UserSupervisor(): string {  
         return this.Get('UserSupervisor');
     }
 
     /**
-    * Field Name: UserSupervisorEmail
-    * Display Name: User Supervisor Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UserSupervisorEmail
+    * * Display Name: User Supervisor Email
+    * * SQL Data Type: nvarchar(100)
     */
     get UserSupervisorEmail(): string {  
         return this.Get('UserSupervisorEmail');
@@ -2768,10 +2964,12 @@ export class UserRecordLogEntity extends BaseEntity {
 
 /**
  * User Views - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserView
- * Base View: vwUserViews
+ * * Schema: admin
+ * * Base Table: UserView
+ * * Base View: vwUserViews
  * @description User Views contain the metadata for the user viewing system of entity data
+ * * Primary Key: ID
+ * * Description: User Views contain the metadata for the user viewing system of entity data
  * @extends {BaseEntity}
  * @class
  * @public
@@ -2779,10 +2977,18 @@ export class UserRecordLogEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Views')
 export class UserViewEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -2791,10 +2997,10 @@ export class UserViewEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -2803,8 +3009,8 @@ export class UserViewEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -2813,18 +3019,18 @@ export class UserViewEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: GUID
-    * Display Name: GUID
-    * SQL Data Type: uniqueidentifier
-    * Default Value: newid()
+    * * Field Name: GUID
+    * * Display Name: GUID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newid()
     */
     get GUID(): string {  
         return this.Get('GUID');
     }
 
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -2833,10 +3039,10 @@ export class UserViewEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: IsShared
-    * Display Name: Is Shared
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsShared
+    * * Display Name: Is Shared
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsShared(): boolean {  
         return this.Get('IsShared');
@@ -2845,10 +3051,10 @@ export class UserViewEntity extends BaseEntity {
         this.Set('IsShared', value);
     }
     /**
-    * Field Name: IsDefault
-    * Display Name: Is Default
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsDefault(): boolean {  
         return this.Get('IsDefault');
@@ -2857,9 +3063,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('IsDefault', value);
     }
     /**
-    * Field Name: GridState
-    * Display Name: Grid State
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: GridState
+    * * Display Name: Grid State
+    * * SQL Data Type: nvarchar(MAX)
     */
     get GridState(): string {  
         return this.Get('GridState');
@@ -2868,9 +3074,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('GridState', value);
     }
     /**
-    * Field Name: FilterState
-    * Display Name: Filter State
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: FilterState
+    * * Display Name: Filter State
+    * * SQL Data Type: nvarchar(MAX)
     */
     get FilterState(): string {  
         return this.Get('FilterState');
@@ -2879,10 +3085,10 @@ export class UserViewEntity extends BaseEntity {
         this.Set('FilterState', value);
     }
     /**
-    * Field Name: CustomFilterState
-    * Display Name: Custom Filter State
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CustomFilterState
+    * * Display Name: Custom Filter State
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CustomFilterState(): boolean {  
         return this.Get('CustomFilterState');
@@ -2891,10 +3097,10 @@ export class UserViewEntity extends BaseEntity {
         this.Set('CustomFilterState', value);
     }
     /**
-    * Field Name: SmartFilterEnabled
-    * Display Name: Smart Filter Enabled
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: SmartFilterEnabled
+    * * Display Name: Smart Filter Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get SmartFilterEnabled(): boolean {  
         return this.Get('SmartFilterEnabled');
@@ -2903,9 +3109,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('SmartFilterEnabled', value);
     }
     /**
-    * Field Name: SmartFilterPrompt
-    * Display Name: Smart Filter Prompt
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: SmartFilterPrompt
+    * * Display Name: Smart Filter Prompt
+    * * SQL Data Type: nvarchar(MAX)
     */
     get SmartFilterPrompt(): string {  
         return this.Get('SmartFilterPrompt');
@@ -2914,9 +3120,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('SmartFilterPrompt', value);
     }
     /**
-    * Field Name: SmartFilterWhereClause
-    * Display Name: Smart Filter Where Clause
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: SmartFilterWhereClause
+    * * Display Name: Smart Filter Where Clause
+    * * SQL Data Type: nvarchar(MAX)
     */
     get SmartFilterWhereClause(): string {  
         return this.Get('SmartFilterWhereClause');
@@ -2925,9 +3131,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('SmartFilterWhereClause', value);
     }
     /**
-    * Field Name: SmartFilterExplanation
-    * Display Name: Smart Filter Explanation
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: SmartFilterExplanation
+    * * Display Name: Smart Filter Explanation
+    * * SQL Data Type: nvarchar(MAX)
     */
     get SmartFilterExplanation(): string {  
         return this.Get('SmartFilterExplanation');
@@ -2936,9 +3142,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('SmartFilterExplanation', value);
     }
     /**
-    * Field Name: WhereClause
-    * Display Name: Where Clause
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: WhereClause
+    * * Display Name: Where Clause
+    * * SQL Data Type: nvarchar(MAX)
     */
     get WhereClause(): string {  
         return this.Get('WhereClause');
@@ -2947,10 +3153,10 @@ export class UserViewEntity extends BaseEntity {
         this.Set('WhereClause', value);
     }
     /**
-    * Field Name: CustomWhereClause
-    * Display Name: Custom Where Clause
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CustomWhereClause
+    * * Display Name: Custom Where Clause
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CustomWhereClause(): boolean {  
         return this.Get('CustomWhereClause');
@@ -2959,9 +3165,9 @@ export class UserViewEntity extends BaseEntity {
         this.Set('CustomWhereClause', value);
     }
     /**
-    * Field Name: SortState
-    * Display Name: Sort State
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: SortState
+    * * Display Name: Sort State
+    * * SQL Data Type: nvarchar(MAX)
     */
     get SortState(): string {  
         return this.Get('SortState');
@@ -2970,74 +3176,74 @@ export class UserViewEntity extends BaseEntity {
         this.Set('SortState', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: UserName
-    * Display Name: User Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UserName
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
     */
     get UserName(): string {  
         return this.Get('UserName');
     }
 
     /**
-    * Field Name: UserFirstLast
-    * Display Name: User First Last
-    * SQL Data Type: nvarchar(101)
+    * * Field Name: UserFirstLast
+    * * Display Name: User First Last
+    * * SQL Data Type: nvarchar(101)
     */
     get UserFirstLast(): string {  
         return this.Get('UserFirstLast');
     }
 
     /**
-    * Field Name: UserEmail
-    * Display Name: User Email
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UserEmail
+    * * Display Name: User Email
+    * * SQL Data Type: nvarchar(100)
     */
     get UserEmail(): string {  
         return this.Get('UserEmail');
     }
 
     /**
-    * Field Name: UserType
-    * Display Name: User Type
-    * SQL Data Type: nchar(15)
+    * * Field Name: UserType
+    * * Display Name: User Type
+    * * SQL Data Type: nchar(15)
     */
     get UserType(): string {  
         return this.Get('UserType');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: EntityBaseView
-    * Display Name: Entity Base View
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityBaseView
+    * * Display Name: Entity Base View
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityBaseView(): string {  
         return this.Get('EntityBaseView');
@@ -3048,10 +3254,12 @@ export class UserViewEntity extends BaseEntity {
 
 /**
  * Company Integration Runs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: CompanyIntegrationRun
- * Base View: vwCompanyIntegrationRuns
+ * * Schema: admin
+ * * Base Table: CompanyIntegrationRun
+ * * Base View: vwCompanyIntegrationRuns
  * @description Audit Trail for each run of a given company integration
+ * * Primary Key: ID
+ * * Description: Audit Trail for each run of a given company integration
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3059,10 +3267,18 @@ export class UserViewEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Company Integration Runs')
 export class CompanyIntegrationRunEntity extends BaseEntity {
     /**
-    * Field Name: CompanyIntegrationID
-    * Display Name: CompanyIntegration ID
-    * SQL Data Type: int
-    * Related Entity: Company Integrations
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: CompanyIntegration ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integrations
     */
     get CompanyIntegrationID(): number {  
         return this.Get('CompanyIntegrationID');
@@ -3071,10 +3287,10 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
         this.Set('CompanyIntegrationID', value);
     }
     /**
-    * Field Name: RunByUserID
-    * Display Name: RunByUser ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: RunByUserID
+    * * Display Name: RunByUser ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get RunByUserID(): number {  
         return this.Get('RunByUserID');
@@ -3083,9 +3299,9 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
         this.Set('RunByUserID', value);
     }
     /**
-    * Field Name: StartedAt
-    * Display Name: Started At
-    * SQL Data Type: datetime
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetime
     */
     get StartedAt(): Date {  
         return this.Get('StartedAt');
@@ -3094,9 +3310,9 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
         this.Set('StartedAt', value);
     }
     /**
-    * Field Name: EndedAt
-    * Display Name: Ended At
-    * SQL Data Type: datetime
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetime
     */
     get EndedAt(): Date {  
         return this.Get('EndedAt');
@@ -3105,9 +3321,9 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
         this.Set('EndedAt', value);
     }
     /**
-    * Field Name: TotalRecords
-    * Display Name: Total Records
-    * SQL Data Type: int
+    * * Field Name: TotalRecords
+    * * Display Name: Total Records
+    * * SQL Data Type: int
     */
     get TotalRecords(): number {  
         return this.Get('TotalRecords');
@@ -3116,8 +3332,8 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
         this.Set('TotalRecords', value);
     }
     /**
-    * Field Name: Comments
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string {  
         return this.Get('Comments');
@@ -3126,9 +3342,9 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
         this.Set('Comments', value);
     }
     /**
-    * Field Name: RunByUser
-    * Display Name: Run By User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: RunByUser
+    * * Display Name: Run By User
+    * * SQL Data Type: nvarchar(100)
     */
     get RunByUser(): string {  
         return this.Get('RunByUser');
@@ -3139,10 +3355,12 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
 
 /**
  * Company Integration Run Details - strongly typed entity sub-class
- * Schema: admin
- * Base Table: CompanyIntegrationRunDetail
- * Base View: vwCompanyIntegrationRunDetails
+ * * Schema: admin
+ * * Base Table: CompanyIntegrationRunDetail
+ * * Base View: vwCompanyIntegrationRunDetails
  * @description Record-level details for the audit trail for each integration run
+ * * Primary Key: ID
+ * * Description: Record-level details for the audit trail for each integration run
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3150,10 +3368,18 @@ export class CompanyIntegrationRunEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Company Integration Run Details')
 export class CompanyIntegrationRunDetailEntity extends BaseEntity {
     /**
-    * Field Name: CompanyIntegrationRunID
-    * Display Name: CompanyIntegrationRun ID
-    * SQL Data Type: int
-    * Related Entity: Company Integration Runs
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationRunID
+    * * Display Name: CompanyIntegrationRun ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integration Runs
     */
     get CompanyIntegrationRunID(): number {  
         return this.Get('CompanyIntegrationRunID');
@@ -3162,10 +3388,10 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
         this.Set('CompanyIntegrationRunID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -3174,19 +3400,19 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: Action
-    * SQL Data Type: nchar(20)
+    * * Field Name: Action
+    * * SQL Data Type: nchar(20)
     */
     get Action(): string {  
         return this.Get('Action');
@@ -3195,10 +3421,10 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
         this.Set('Action', value);
     }
     /**
-    * Field Name: ExecutedAt
-    * Display Name: Executed At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: ExecutedAt
+    * * Display Name: Executed At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get ExecutedAt(): Date {  
         return this.Get('ExecutedAt');
@@ -3207,10 +3433,10 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
         this.Set('ExecutedAt', value);
     }
     /**
-    * Field Name: IsSuccess
-    * Display Name: Is Success
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsSuccess
+    * * Display Name: Is Success
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsSuccess(): boolean {  
         return this.Get('IsSuccess');
@@ -3219,26 +3445,26 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
         this.Set('IsSuccess', value);
     }
     /**
-    * Field Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: RunStartedAt
-    * Display Name: Run Started At
-    * SQL Data Type: datetime
+    * * Field Name: RunStartedAt
+    * * Display Name: Run Started At
+    * * SQL Data Type: datetime
     */
     get RunStartedAt(): Date {  
         return this.Get('RunStartedAt');
     }
 
     /**
-    * Field Name: RunEndedAt
-    * Display Name: Run Ended At
-    * SQL Data Type: datetime
+    * * Field Name: RunEndedAt
+    * * Display Name: Run Ended At
+    * * SQL Data Type: datetime
     */
     get RunEndedAt(): Date {  
         return this.Get('RunEndedAt');
@@ -3249,9 +3475,11 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
 
 /**
  * Error Logs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ErrorLog
- * Base View: vwErrorLogs
+ * * Schema: admin
+ * * Base Table: ErrorLog
+ * * Base View: vwErrorLogs
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3259,10 +3487,18 @@ export class CompanyIntegrationRunDetailEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Error Logs')
 export class ErrorLogEntity extends BaseEntity {
     /**
-    * Field Name: CompanyIntegrationRunID
-    * Display Name: CompanyIntegrationRun ID
-    * SQL Data Type: int
-    * Related Entity: Company Integration Runs
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationRunID
+    * * Display Name: CompanyIntegrationRun ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integration Runs
     */
     get CompanyIntegrationRunID(): number {  
         return this.Get('CompanyIntegrationRunID');
@@ -3271,10 +3507,10 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('CompanyIntegrationRunID', value);
     }
     /**
-    * Field Name: CompanyIntegrationRunDetailID
-    * Display Name: CompanyIntegrationRunDetail ID
-    * SQL Data Type: int
-    * Related Entity: Company Integration Run Details
+    * * Field Name: CompanyIntegrationRunDetailID
+    * * Display Name: CompanyIntegrationRunDetail ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integration Run Details
     */
     get CompanyIntegrationRunDetailID(): number {  
         return this.Get('CompanyIntegrationRunDetailID');
@@ -3283,8 +3519,8 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('CompanyIntegrationRunDetailID', value);
     }
     /**
-    * Field Name: Code
-    * SQL Data Type: nchar(20)
+    * * Field Name: Code
+    * * SQL Data Type: nchar(20)
     */
     get Code(): string {  
         return this.Get('Code');
@@ -3293,8 +3529,8 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('Code', value);
     }
     /**
-    * Field Name: Message
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Message
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Message(): string {  
         return this.Get('Message');
@@ -3303,20 +3539,20 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('Message', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: CreatedBy
-    * Display Name: Created By
-    * SQL Data Type: nvarchar(50)
-    * Default Value: suser_name()
+    * * Field Name: CreatedBy
+    * * Display Name: Created By
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: suser_name()
     */
     get CreatedBy(): string {  
         return this.Get('CreatedBy');
@@ -3325,8 +3561,8 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('CreatedBy', value);
     }
     /**
-    * Field Name: Status
-    * SQL Data Type: nvarchar(10)
+    * * Field Name: Status
+    * * SQL Data Type: nvarchar(10)
     */
     get Status(): string {  
         return this.Get('Status');
@@ -3335,8 +3571,8 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('Status', value);
     }
     /**
-    * Field Name: Category
-    * SQL Data Type: nvarchar(20)
+    * * Field Name: Category
+    * * SQL Data Type: nvarchar(20)
     */
     get Category(): string {  
         return this.Get('Category');
@@ -3345,8 +3581,8 @@ export class ErrorLogEntity extends BaseEntity {
         this.Set('Category', value);
     }
     /**
-    * Field Name: Details
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Details
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Details(): string {  
         return this.Get('Details');
@@ -3359,9 +3595,11 @@ export class ErrorLogEntity extends BaseEntity {
 
 /**
  * Applications - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Application
- * Base View: vwApplications
+ * * Schema: admin
+ * * Base Table: Application
+ * * Base View: vwApplications
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3369,8 +3607,16 @@ export class ErrorLogEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Applications')
 export class ApplicationEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -3379,8 +3625,8 @@ export class ApplicationEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(500)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -3389,20 +3635,20 @@ export class ApplicationEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -3413,9 +3659,11 @@ export class ApplicationEntity extends BaseEntity {
 
 /**
  * Application Entities - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ApplicationEntity
- * Base View: vwApplicationEntities
+ * * Schema: admin
+ * * Base Table: ApplicationEntity
+ * * Base View: vwApplicationEntities
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3423,10 +3671,18 @@ export class ApplicationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Application Entities')
 export class ApplicationEntityEntity extends BaseEntity {
     /**
-    * Field Name: ApplicationName
-    * Display Name: Application Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Applications
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ApplicationName
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Applications
     */
     get ApplicationName(): string {  
         return this.Get('ApplicationName');
@@ -3435,10 +3691,10 @@ export class ApplicationEntityEntity extends BaseEntity {
         this.Set('ApplicationName', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -3447,8 +3703,8 @@ export class ApplicationEntityEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: Sequence
-    * SQL Data Type: int
+    * * Field Name: Sequence
+    * * SQL Data Type: int
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -3457,10 +3713,10 @@ export class ApplicationEntityEntity extends BaseEntity {
         this.Set('Sequence', value);
     }
     /**
-    * Field Name: DefaultForNewUser
-    * Display Name: Default For New User
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: DefaultForNewUser
+    * * Display Name: Default For New User
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get DefaultForNewUser(): boolean {  
         return this.Get('DefaultForNewUser');
@@ -3469,72 +3725,72 @@ export class ApplicationEntityEntity extends BaseEntity {
         this.Set('DefaultForNewUser', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Application
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Application
+    * * SQL Data Type: nvarchar(50)
     */
     get Application(): string {  
         return this.Get('Application');
     }
 
     /**
-    * Field Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: EntityBaseTable
-    * Display Name: Entity Base Table
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: EntityBaseTable
+    * * Display Name: Entity Base Table
+    * * SQL Data Type: nvarchar(255)
     */
     get EntityBaseTable(): string {  
         return this.Get('EntityBaseTable');
     }
 
     /**
-    * Field Name: EntityCodeName
-    * Display Name: Entity Code Name
-    * SQL Data Type: nvarchar(4000)
+    * * Field Name: EntityCodeName
+    * * Display Name: Entity Code Name
+    * * SQL Data Type: nvarchar(4000)
     */
     get EntityCodeName(): string {  
         return this.Get('EntityCodeName');
     }
 
     /**
-    * Field Name: EntityClassName
-    * Display Name: Entity Class Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: EntityClassName
+    * * Display Name: Entity Class Name
+    * * SQL Data Type: nvarchar(511)
     */
     get EntityClassName(): string {  
         return this.Get('EntityClassName');
     }
 
     /**
-    * Field Name: EntityBaseTableCodeName
-    * Display Name: Entity Base Table Code Name
-    * SQL Data Type: nvarchar(511)
+    * * Field Name: EntityBaseTableCodeName
+    * * Display Name: Entity Base Table Code Name
+    * * SQL Data Type: nvarchar(511)
     */
     get EntityBaseTableCodeName(): string {  
         return this.Get('EntityBaseTableCodeName');
@@ -3545,9 +3801,11 @@ export class ApplicationEntityEntity extends BaseEntity {
 
 /**
  * Entity Permissions - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EntityPermission
- * Base View: vwEntityPermissions
+ * * Schema: admin
+ * * Base Table: EntityPermission
+ * * Base View: vwEntityPermissions
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3555,10 +3813,18 @@ export class ApplicationEntityEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Entity Permissions')
 export class EntityPermissionEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -3567,10 +3833,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RoleName
-    * Display Name: Role Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Roles
+    * * Field Name: RoleName
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Roles
     */
     get RoleName(): string {  
         return this.Get('RoleName');
@@ -3579,10 +3845,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('RoleName', value);
     }
     /**
-    * Field Name: CanCreate
-    * Display Name: Can Create
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CanCreate
+    * * Display Name: Can Create
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CanCreate(): boolean {  
         return this.Get('CanCreate');
@@ -3591,10 +3857,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('CanCreate', value);
     }
     /**
-    * Field Name: CanRead
-    * Display Name: Can Read
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CanRead(): boolean {  
         return this.Get('CanRead');
@@ -3603,10 +3869,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('CanRead', value);
     }
     /**
-    * Field Name: CanUpdate
-    * Display Name: Can Update
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CanUpdate
+    * * Display Name: Can Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CanUpdate(): boolean {  
         return this.Get('CanUpdate');
@@ -3615,10 +3881,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('CanUpdate', value);
     }
     /**
-    * Field Name: CanDelete
-    * Display Name: Can Delete
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get CanDelete(): boolean {  
         return this.Get('CanDelete');
@@ -3627,10 +3893,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('CanDelete', value);
     }
     /**
-    * Field Name: ReadRLSFilterID
-    * Display Name: Read RLSFilter ID
-    * SQL Data Type: int
-    * Related Entity: Row Level Security Filters
+    * * Field Name: ReadRLSFilterID
+    * * Display Name: Read RLSFilter ID
+    * * SQL Data Type: int
+    * * Related Entity: Row Level Security Filters
     */
     get ReadRLSFilterID(): number {  
         return this.Get('ReadRLSFilterID');
@@ -3639,10 +3905,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('ReadRLSFilterID', value);
     }
     /**
-    * Field Name: CreateRLSFilterID
-    * Display Name: Create RLSFilter ID
-    * SQL Data Type: int
-    * Related Entity: Row Level Security Filters
+    * * Field Name: CreateRLSFilterID
+    * * Display Name: Create RLSFilter ID
+    * * SQL Data Type: int
+    * * Related Entity: Row Level Security Filters
     */
     get CreateRLSFilterID(): number {  
         return this.Get('CreateRLSFilterID');
@@ -3651,10 +3917,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('CreateRLSFilterID', value);
     }
     /**
-    * Field Name: UpdateRLSFilterID
-    * Display Name: Update RLSFilter ID
-    * SQL Data Type: int
-    * Related Entity: Row Level Security Filters
+    * * Field Name: UpdateRLSFilterID
+    * * Display Name: Update RLSFilter ID
+    * * SQL Data Type: int
+    * * Related Entity: Row Level Security Filters
     */
     get UpdateRLSFilterID(): number {  
         return this.Get('UpdateRLSFilterID');
@@ -3663,10 +3929,10 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('UpdateRLSFilterID', value);
     }
     /**
-    * Field Name: DeleteRLSFilterID
-    * Display Name: Delete RLSFilter ID
-    * SQL Data Type: int
-    * Related Entity: Row Level Security Filters
+    * * Field Name: DeleteRLSFilterID
+    * * Display Name: Delete RLSFilter ID
+    * * SQL Data Type: int
+    * * Related Entity: Row Level Security Filters
     */
     get DeleteRLSFilterID(): number {  
         return this.Get('DeleteRLSFilterID');
@@ -3675,73 +3941,73 @@ export class EntityPermissionEntity extends BaseEntity {
         this.Set('DeleteRLSFilterID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: RoleSQLName
-    * Display Name: Role SQLName
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: RoleSQLName
+    * * Display Name: Role SQLName
+    * * SQL Data Type: nvarchar(50)
     */
     get RoleSQLName(): string {  
         return this.Get('RoleSQLName');
     }
 
     /**
-    * Field Name: CreateRLSFilter
-    * Display Name: Create RLSFilter
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: CreateRLSFilter
+    * * Display Name: Create RLSFilter
+    * * SQL Data Type: nvarchar(100)
     */
     get CreateRLSFilter(): string {  
         return this.Get('CreateRLSFilter');
     }
 
     /**
-    * Field Name: ReadRLSFilter
-    * Display Name: Read RLSFilter
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ReadRLSFilter
+    * * Display Name: Read RLSFilter
+    * * SQL Data Type: nvarchar(100)
     */
     get ReadRLSFilter(): string {  
         return this.Get('ReadRLSFilter');
     }
 
     /**
-    * Field Name: UpdateRLSFilter
-    * Display Name: Update RLSFilter
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UpdateRLSFilter
+    * * Display Name: Update RLSFilter
+    * * SQL Data Type: nvarchar(100)
     */
     get UpdateRLSFilter(): string {  
         return this.Get('UpdateRLSFilter');
     }
 
     /**
-    * Field Name: DeleteRLSFilter
-    * Display Name: Delete RLSFilter
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DeleteRLSFilter
+    * * Display Name: Delete RLSFilter
+    * * SQL Data Type: nvarchar(100)
     */
     get DeleteRLSFilter(): string {  
         return this.Get('DeleteRLSFilter');
@@ -3752,9 +4018,11 @@ export class EntityPermissionEntity extends BaseEntity {
 
 /**
  * User Application Entities - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserApplicationEntity
- * Base View: vwUserApplicationEntities
+ * * Schema: admin
+ * * Base Table: UserApplicationEntity
+ * * Base View: vwUserApplicationEntities
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3762,10 +4030,18 @@ export class EntityPermissionEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Application Entities')
 export class UserApplicationEntityEntity extends BaseEntity {
     /**
-    * Field Name: UserApplicationID
-    * Display Name: UserApplication ID
-    * SQL Data Type: int
-    * Related Entity: User Applications
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserApplicationID
+    * * Display Name: UserApplication ID
+    * * SQL Data Type: int
+    * * Related Entity: User Applications
     */
     get UserApplicationID(): number {  
         return this.Get('UserApplicationID');
@@ -3774,10 +4050,10 @@ export class UserApplicationEntityEntity extends BaseEntity {
         this.Set('UserApplicationID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -3786,9 +4062,9 @@ export class UserApplicationEntityEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: Sequence
-    * SQL Data Type: int
-    * Default Value: 0
+    * * Field Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -3797,27 +4073,27 @@ export class UserApplicationEntityEntity extends BaseEntity {
         this.Set('Sequence', value);
     }
     /**
-    * Field Name: Application
-    * Display Name: Application
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(50)
     */
     get Application(): string {  
         return this.Get('Application');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -3828,9 +4104,11 @@ export class UserApplicationEntityEntity extends BaseEntity {
 
 /**
  * User Applications - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserApplication
- * Base View: vwUserApplications
+ * * Schema: admin
+ * * Base Table: UserApplication
+ * * Base View: vwUserApplications
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3838,10 +4116,18 @@ export class UserApplicationEntityEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Applications')
 export class UserApplicationEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -3850,10 +4136,10 @@ export class UserApplicationEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: ApplicationID
-    * Display Name: Application ID
-    * SQL Data Type: int
-    * Related Entity: Applications
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: int
+    * * Related Entity: Applications
     */
     get ApplicationID(): number {  
         return this.Get('ApplicationID');
@@ -3862,9 +4148,9 @@ export class UserApplicationEntity extends BaseEntity {
         this.Set('ApplicationID', value);
     }
     /**
-    * Field Name: Sequence
-    * SQL Data Type: int
-    * Default Value: 0
+    * * Field Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -3873,10 +4159,10 @@ export class UserApplicationEntity extends BaseEntity {
         this.Set('Sequence', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -3885,18 +4171,18 @@ export class UserApplicationEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
     }
 
     /**
-    * Field Name: Application
-    * Display Name: Application
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(50)
     */
     get Application(): string {  
         return this.Get('Application');
@@ -3907,9 +4193,11 @@ export class UserApplicationEntity extends BaseEntity {
 
 /**
  * Company Integration Run API Logs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: CompanyIntegrationRunAPILog
- * Base View: vwCompanyIntegrationRunAPILogs
+ * * Schema: admin
+ * * Base Table: CompanyIntegrationRunAPILog
+ * * Base View: vwCompanyIntegrationRunAPILogs
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3917,10 +4205,18 @@ export class UserApplicationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Company Integration Run API Logs')
 export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
     /**
-    * Field Name: CompanyIntegrationRunID
-    * Display Name: Company Integration Run ID
-    * SQL Data Type: int
-    * Related Entity: Company Integration Runs
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationRunID
+    * * Display Name: Company Integration Run ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integration Runs
     */
     get CompanyIntegrationRunID(): number {  
         return this.Get('CompanyIntegrationRunID');
@@ -3929,10 +4225,10 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
         this.Set('CompanyIntegrationRunID', value);
     }
     /**
-    * Field Name: ExecutedAt
-    * Display Name: Executed At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: ExecutedAt
+    * * Display Name: Executed At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get ExecutedAt(): Date {  
         return this.Get('ExecutedAt');
@@ -3941,10 +4237,10 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
         this.Set('ExecutedAt', value);
     }
     /**
-    * Field Name: IsSuccess
-    * Display Name: Is Success
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsSuccess
+    * * Display Name: Is Success
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsSuccess(): boolean {  
         return this.Get('IsSuccess');
@@ -3953,9 +4249,9 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
         this.Set('IsSuccess', value);
     }
     /**
-    * Field Name: RequestMethod
-    * Display Name: Request Method
-    * SQL Data Type: nvarchar(12)
+    * * Field Name: RequestMethod
+    * * Display Name: Request Method
+    * * SQL Data Type: nvarchar(12)
     */
     get RequestMethod(): string {  
         return this.Get('RequestMethod');
@@ -3964,8 +4260,8 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
         this.Set('RequestMethod', value);
     }
     /**
-    * Field Name: URL
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: URL
+    * * SQL Data Type: nvarchar(MAX)
     */
     get URL(): string {  
         return this.Get('URL');
@@ -3974,8 +4270,8 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
         this.Set('URL', value);
     }
     /**
-    * Field Name: Parameters
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Parameters
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Parameters(): string {  
         return this.Get('Parameters');
@@ -3988,9 +4284,11 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
 
 /**
  * Lists - strongly typed entity sub-class
- * Schema: admin
- * Base Table: List
- * Base View: vwLists
+ * * Schema: admin
+ * * Base Table: List
+ * * Base View: vwLists
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -3998,8 +4296,16 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Lists')
 export class ListEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -4008,8 +4314,8 @@ export class ListEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -4018,10 +4324,10 @@ export class ListEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -4030,10 +4336,10 @@ export class ListEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -4042,9 +4348,9 @@ export class ListEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: ExternalSystemRecordID
-    * Display Name: External System Record ID
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalSystemRecordID
+    * * Display Name: External System Record ID
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalSystemRecordID(): string {  
         return this.Get('ExternalSystemRecordID');
@@ -4053,10 +4359,10 @@ export class ListEntity extends BaseEntity {
         this.Set('ExternalSystemRecordID', value);
     }
     /**
-    * Field Name: CompanyIntegrationID
-    * Display Name: Company Integration ID
-    * SQL Data Type: int
-    * Related Entity: Company Integrations
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integrations
     */
     get CompanyIntegrationID(): number {  
         return this.Get('CompanyIntegrationID');
@@ -4065,38 +4371,38 @@ export class ListEntity extends BaseEntity {
         this.Set('CompanyIntegrationID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -4107,9 +4413,11 @@ export class ListEntity extends BaseEntity {
 
 /**
  * List Details - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ListDetail
- * Base View: vwListDetails
+ * * Schema: admin
+ * * Base Table: ListDetail
+ * * Base View: vwListDetails
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4117,10 +4425,18 @@ export class ListEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'List Details')
 export class ListDetailEntity extends BaseEntity {
     /**
-    * Field Name: ListID
-    * Display Name: List ID
-    * SQL Data Type: int
-    * Related Entity: Lists
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ListID
+    * * Display Name: List ID
+    * * SQL Data Type: int
+    * * Related Entity: Lists
     */
     get ListID(): number {  
         return this.Get('ListID');
@@ -4129,20 +4445,20 @@ export class ListDetailEntity extends BaseEntity {
         this.Set('ListID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: Sequence
-    * SQL Data Type: int
-    * Default Value: 0
+    * * Field Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -4155,9 +4471,11 @@ export class ListDetailEntity extends BaseEntity {
 
 /**
  * User View Runs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserViewRun
- * Base View: vwUserViewRuns
+ * * Schema: admin
+ * * Base Table: UserViewRun
+ * * Base View: vwUserViewRuns
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4165,10 +4483,18 @@ export class ListDetailEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User View Runs')
 export class UserViewRunEntity extends BaseEntity {
     /**
-    * Field Name: UserViewID
-    * Display Name: User View ID
-    * SQL Data Type: int
-    * Related Entity: User Views
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserViewID
+    * * Display Name: User View ID
+    * * SQL Data Type: int
+    * * Related Entity: User Views
     */
     get UserViewID(): number {  
         return this.Get('UserViewID');
@@ -4177,9 +4503,9 @@ export class UserViewRunEntity extends BaseEntity {
         this.Set('UserViewID', value);
     }
     /**
-    * Field Name: RunAt
-    * Display Name: Run At
-    * SQL Data Type: datetime
+    * * Field Name: RunAt
+    * * Display Name: Run At
+    * * SQL Data Type: datetime
     */
     get RunAt(): Date {  
         return this.Get('RunAt');
@@ -4188,10 +4514,10 @@ export class UserViewRunEntity extends BaseEntity {
         this.Set('RunAt', value);
     }
     /**
-    * Field Name: RunByUserID
-    * Display Name: Run By User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: RunByUserID
+    * * Display Name: Run By User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get RunByUserID(): number {  
         return this.Get('RunByUserID');
@@ -4200,18 +4526,18 @@ export class UserViewRunEntity extends BaseEntity {
         this.Set('RunByUserID', value);
     }
     /**
-    * Field Name: UserView
-    * Display Name: User View
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: UserView
+    * * Display Name: User View
+    * * SQL Data Type: nvarchar(100)
     */
     get UserView(): string {  
         return this.Get('UserView');
     }
 
     /**
-    * Field Name: RunByUser
-    * Display Name: Run By User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: RunByUser
+    * * Display Name: Run By User
+    * * SQL Data Type: nvarchar(100)
     */
     get RunByUser(): string {  
         return this.Get('RunByUser');
@@ -4222,9 +4548,11 @@ export class UserViewRunEntity extends BaseEntity {
 
 /**
  * User View Run Details - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserViewRunDetail
- * Base View: vwUserViewRunDetails
+ * * Schema: admin
+ * * Base Table: UserViewRunDetail
+ * * Base View: vwUserViewRunDetails
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4232,10 +4560,18 @@ export class UserViewRunEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User View Run Details')
 export class UserViewRunDetailEntity extends BaseEntity {
     /**
-    * Field Name: UserViewRunID
-    * Display Name: User View Run ID
-    * SQL Data Type: int
-    * Related Entity: User View Runs
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserViewRunID
+    * * Display Name: User View Run ID
+    * * SQL Data Type: int
+    * * Related Entity: User View Runs
     */
     get UserViewRunID(): number {  
         return this.Get('UserViewRunID');
@@ -4244,29 +4580,29 @@ export class UserViewRunDetailEntity extends BaseEntity {
         this.Set('UserViewRunID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: UserViewID
-    * Display Name: User View
-    * SQL Data Type: int
+    * * Field Name: UserViewID
+    * * Display Name: User View
+    * * SQL Data Type: int
     */
     get UserViewID(): number {  
         return this.Get('UserViewID');
     }
 
     /**
-    * Field Name: EntityID
-    * Display Name: Entity
-    * SQL Data Type: int
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: int
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -4277,9 +4613,11 @@ export class UserViewRunDetailEntity extends BaseEntity {
 
 /**
  * Workflow Runs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: WorkflowRun
- * Base View: vwWorkflowRuns
+ * * Schema: admin
+ * * Base Table: WorkflowRun
+ * * Base View: vwWorkflowRuns
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4287,10 +4625,18 @@ export class UserViewRunDetailEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Workflow Runs')
 export class WorkflowRunEntity extends BaseEntity {
     /**
-    * Field Name: WorkflowName
-    * Display Name: Workflow Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Workflows
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: WorkflowName
+    * * Display Name: Workflow Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Workflows
     */
     get WorkflowName(): string {  
         return this.Get('WorkflowName');
@@ -4299,9 +4645,9 @@ export class WorkflowRunEntity extends BaseEntity {
         this.Set('WorkflowName', value);
     }
     /**
-    * Field Name: ExternalSystemRecordID
-    * Display Name: External System Record
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalSystemRecordID
+    * * Display Name: External System Record
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalSystemRecordID(): string {  
         return this.Get('ExternalSystemRecordID');
@@ -4310,9 +4656,9 @@ export class WorkflowRunEntity extends BaseEntity {
         this.Set('ExternalSystemRecordID', value);
     }
     /**
-    * Field Name: StartedAt
-    * Display Name: Started At
-    * SQL Data Type: datetime
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetime
     */
     get StartedAt(): Date {  
         return this.Get('StartedAt');
@@ -4321,9 +4667,9 @@ export class WorkflowRunEntity extends BaseEntity {
         this.Set('StartedAt', value);
     }
     /**
-    * Field Name: EndedAt
-    * Display Name: Ended At
-    * SQL Data Type: datetime
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetime
     */
     get EndedAt(): Date {  
         return this.Get('EndedAt');
@@ -4332,9 +4678,9 @@ export class WorkflowRunEntity extends BaseEntity {
         this.Set('EndedAt', value);
     }
     /**
-    * Field Name: Status
-    * SQL Data Type: nchar(10)
-    * Default Value: N'Pending'
+    * * Field Name: Status
+    * * SQL Data Type: nchar(10)
+    * * Default Value: N'Pending'
     */
     get Status(): string {  
         return this.Get('Status');
@@ -4343,8 +4689,8 @@ export class WorkflowRunEntity extends BaseEntity {
         this.Set('Status', value);
     }
     /**
-    * Field Name: Results
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Results
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Results(): string {  
         return this.Get('Results');
@@ -4353,18 +4699,18 @@ export class WorkflowRunEntity extends BaseEntity {
         this.Set('Results', value);
     }
     /**
-    * Field Name: Workflow
-    * Display Name: Workflow
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Workflow
+    * * Display Name: Workflow
+    * * SQL Data Type: nvarchar(100)
     */
     get Workflow(): string {  
         return this.Get('Workflow');
     }
 
     /**
-    * Field Name: WorkflowEngineName
-    * Display Name: Workflow Engine Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: WorkflowEngineName
+    * * Display Name: Workflow Engine Name
+    * * SQL Data Type: nvarchar(100)
     */
     get WorkflowEngineName(): string {  
         return this.Get('WorkflowEngineName');
@@ -4375,9 +4721,11 @@ export class WorkflowRunEntity extends BaseEntity {
 
 /**
  * Workflows - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Workflow
- * Base View: vwWorkflows
+ * * Schema: admin
+ * * Base Table: Workflow
+ * * Base View: vwWorkflows
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4385,8 +4733,16 @@ export class WorkflowRunEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Workflows')
 export class WorkflowEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -4395,8 +4751,8 @@ export class WorkflowEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -4405,10 +4761,10 @@ export class WorkflowEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: WorkflowEngineName
-    * Display Name: Workflow Engine Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Workflow Engines
+    * * Field Name: WorkflowEngineName
+    * * Display Name: Workflow Engine Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Workflow Engines
     */
     get WorkflowEngineName(): string {  
         return this.Get('WorkflowEngineName');
@@ -4417,10 +4773,10 @@ export class WorkflowEntity extends BaseEntity {
         this.Set('WorkflowEngineName', value);
     }
     /**
-    * Field Name: CompanyName
-    * Display Name: Company Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Companies
+    * * Field Name: CompanyName
+    * * Display Name: Company Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Companies
     */
     get CompanyName(): string {  
         return this.Get('CompanyName');
@@ -4429,9 +4785,9 @@ export class WorkflowEntity extends BaseEntity {
         this.Set('CompanyName', value);
     }
     /**
-    * Field Name: ExternalSystemRecordID
-    * Display Name: External System Record
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalSystemRecordID
+    * * Display Name: External System Record
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalSystemRecordID(): string {  
         return this.Get('ExternalSystemRecordID');
@@ -4440,20 +4796,20 @@ export class WorkflowEntity extends BaseEntity {
         this.Set('ExternalSystemRecordID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -4464,9 +4820,11 @@ export class WorkflowEntity extends BaseEntity {
 
 /**
  * Workflow Engines - strongly typed entity sub-class
- * Schema: admin
- * Base Table: WorkflowEngine
- * Base View: vwWorkflowEngines
+ * * Schema: admin
+ * * Base Table: WorkflowEngine
+ * * Base View: vwWorkflowEngines
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4474,8 +4832,16 @@ export class WorkflowEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Workflow Engines')
 export class WorkflowEngineEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -4484,8 +4850,8 @@ export class WorkflowEngineEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -4494,9 +4860,9 @@ export class WorkflowEngineEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: DriverPath
-    * Display Name: Driver Path
-    * SQL Data Type: nvarchar(500)
+    * * Field Name: DriverPath
+    * * Display Name: Driver Path
+    * * SQL Data Type: nvarchar(500)
     */
     get DriverPath(): string {  
         return this.Get('DriverPath');
@@ -4505,9 +4871,9 @@ export class WorkflowEngineEntity extends BaseEntity {
         this.Set('DriverPath', value);
     }
     /**
-    * Field Name: DriverClass
-    * Display Name: Driver Class
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
     */
     get DriverClass(): string {  
         return this.Get('DriverClass');
@@ -4516,20 +4882,20 @@ export class WorkflowEngineEntity extends BaseEntity {
         this.Set('DriverClass', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -4540,10 +4906,12 @@ export class WorkflowEngineEntity extends BaseEntity {
 
 /**
  * Record Changes - strongly typed entity sub-class
- * Schema: admin
- * Base Table: RecordChange
- * Base View: vwRecordChanges
+ * * Schema: admin
+ * * Base Table: RecordChange
+ * * Base View: vwRecordChanges
  * @description Tracks history of all pending and complete data changes to records
+ * * Primary Key: ID
+ * * Description: Tracks history of all pending and complete data changes to records
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4551,10 +4919,18 @@ export class WorkflowEngineEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Record Changes')
 export class RecordChangeEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -4563,21 +4939,21 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -4586,10 +4962,10 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: ChangedAt
-    * Display Name: Changed At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: ChangedAt
+    * * Display Name: Changed At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get ChangedAt(): Date {  
         return this.Get('ChangedAt');
@@ -4598,9 +4974,9 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('ChangedAt', value);
     }
     /**
-    * Field Name: ChangesJSON
-    * Display Name: Changes JSON
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ChangesJSON
+    * * Display Name: Changes JSON
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ChangesJSON(): string {  
         return this.Get('ChangesJSON');
@@ -4609,9 +4985,9 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('ChangesJSON', value);
     }
     /**
-    * Field Name: ChangesDescription
-    * Display Name: Changes Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ChangesDescription
+    * * Display Name: Changes Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ChangesDescription(): string {  
         return this.Get('ChangesDescription');
@@ -4620,9 +4996,9 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('ChangesDescription', value);
     }
     /**
-    * Field Name: FullRecordJSON
-    * Display Name: Full Record JSON
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: FullRecordJSON
+    * * Display Name: Full Record JSON
+    * * SQL Data Type: nvarchar(MAX)
     */
     get FullRecordJSON(): string {  
         return this.Get('FullRecordJSON');
@@ -4631,9 +5007,9 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('FullRecordJSON', value);
     }
     /**
-    * Field Name: Status
-    * SQL Data Type: nchar(15)
-    * Default Value: N'Complete'
+    * * Field Name: Status
+    * * SQL Data Type: nchar(15)
+    * * Default Value: N'Complete'
     */
     get Status(): string {  
         return this.Get('Status');
@@ -4642,8 +5018,8 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('Status', value);
     }
     /**
-    * Field Name: Comments
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string {  
         return this.Get('Comments');
@@ -4652,18 +5028,18 @@ export class RecordChangeEntity extends BaseEntity {
         this.Set('Comments', value);
     }
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -4674,9 +5050,11 @@ export class RecordChangeEntity extends BaseEntity {
 
 /**
  * User Roles - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserRole
- * Base View: vwUserRoles
+ * * Schema: admin
+ * * Base Table: UserRole
+ * * Base View: vwUserRoles
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4684,10 +5062,19 @@ export class RecordChangeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Roles')
 export class UserRoleEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -4696,10 +5083,10 @@ export class UserRoleEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: RoleName
-    * Display Name: Role Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Roles
+    * * Field Name: RoleName
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Roles
     */
     get RoleName(): string {  
         return this.Get('RoleName');
@@ -4708,29 +5095,29 @@ export class UserRoleEntity extends BaseEntity {
         this.Set('RoleName', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -4741,9 +5128,11 @@ export class UserRoleEntity extends BaseEntity {
 
 /**
  * Row Level Security Filters - strongly typed entity sub-class
- * Schema: admin
- * Base Table: RowLevelSecurityFilter
- * Base View: vwRowLevelSecurityFilters
+ * * Schema: admin
+ * * Base Table: RowLevelSecurityFilter
+ * * Base View: vwRowLevelSecurityFilters
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4751,9 +5140,18 @@ export class UserRoleEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Row Level Security Filters')
 export class RowLevelSecurityFilterEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -4762,9 +5160,9 @@ export class RowLevelSecurityFilterEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -4773,9 +5171,9 @@ export class RowLevelSecurityFilterEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: FilterText
-    * Display Name: Filter Text
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: FilterText
+    * * Display Name: Filter Text
+    * * SQL Data Type: nvarchar(MAX)
     */
     get FilterText(): string {  
         return this.Get('FilterText');
@@ -4784,20 +5182,20 @@ export class RowLevelSecurityFilterEntity extends BaseEntity {
         this.Set('FilterText', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -4808,9 +5206,11 @@ export class RowLevelSecurityFilterEntity extends BaseEntity {
 
 /**
  * Audit Logs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AuditLog
- * Base View: vwAuditLogs
+ * * Schema: admin
+ * * Base Table: AuditLog
+ * * Base View: vwAuditLogs
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4818,10 +5218,19 @@ export class RowLevelSecurityFilterEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Audit Logs')
 export class AuditLogEntity extends BaseEntity {
     /**
-    * Field Name: AuditLogTypeName
-    * Display Name: Audit Log Type Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Audit Log Types
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AuditLogTypeName
+    * * Display Name: Audit Log Type Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Audit Log Types
     */
     get AuditLogTypeName(): string {  
         return this.Get('AuditLogTypeName');
@@ -4830,10 +5239,10 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('AuditLogTypeName', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -4842,10 +5251,10 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: AuthorizationName
-    * Display Name: Authorization Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Authorizations
+    * * Field Name: AuthorizationName
+    * * Display Name: Authorization Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Authorizations
     */
     get AuthorizationName(): string {  
         return this.Get('AuthorizationName');
@@ -4854,10 +5263,10 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('AuthorizationName', value);
     }
     /**
-    * Field Name: Status
-    * Display Name: Status
-    * SQL Data Type: nvarchar(50)
-    * Default Value: N'Allow'
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: N'Allow'
     */
     get Status(): string {  
         return this.Get('Status');
@@ -4866,9 +5275,9 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('Status', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -4877,9 +5286,9 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: Details
-    * Display Name: Details
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Details
+    * * Display Name: Details
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Details(): string {  
         return this.Get('Details');
@@ -4888,10 +5297,10 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('Details', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -4900,49 +5309,49 @@ export class AuditLogEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -4953,9 +5362,11 @@ export class AuditLogEntity extends BaseEntity {
 
 /**
  * Authorizations - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Authorization
- * Base View: vwAuthorizations
+ * * Schema: admin
+ * * Base Table: Authorization
+ * * Base View: vwAuthorizations
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -4963,10 +5374,19 @@ export class AuditLogEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Authorizations')
 export class AuthorizationEntity extends BaseEntity {
     /**
-    * Field Name: ParentID
-    * Display Name: Parent ID
-    * SQL Data Type: int
-    * Related Entity: Authorizations
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: int
+    * * Related Entity: Authorizations
     */
     get ParentID(): number {  
         return this.Get('ParentID');
@@ -4975,9 +5395,9 @@ export class AuthorizationEntity extends BaseEntity {
         this.Set('ParentID', value);
     }
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -4986,10 +5406,10 @@ export class AuthorizationEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -4998,10 +5418,10 @@ export class AuthorizationEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: UseAuditLog
-    * Display Name: Use Audit Log
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: UseAuditLog
+    * * Display Name: Use Audit Log
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get UseAuditLog(): boolean {  
         return this.Get('UseAuditLog');
@@ -5010,9 +5430,9 @@ export class AuthorizationEntity extends BaseEntity {
         this.Set('UseAuditLog', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5021,20 +5441,20 @@ export class AuthorizationEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -5045,9 +5465,11 @@ export class AuthorizationEntity extends BaseEntity {
 
 /**
  * Authorization Roles - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AuthorizationRole
- * Base View: vwAuthorizationRoles
+ * * Schema: admin
+ * * Base Table: AuthorizationRole
+ * * Base View: vwAuthorizationRoles
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5055,10 +5477,19 @@ export class AuthorizationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Authorization Roles')
 export class AuthorizationRoleEntity extends BaseEntity {
     /**
-    * Field Name: AuthorizationName
-    * Display Name: Authorization Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Authorizations
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AuthorizationName
+    * * Display Name: Authorization Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Authorizations
     */
     get AuthorizationName(): string {  
         return this.Get('AuthorizationName');
@@ -5067,10 +5498,10 @@ export class AuthorizationRoleEntity extends BaseEntity {
         this.Set('AuthorizationName', value);
     }
     /**
-    * Field Name: RoleName
-    * Display Name: Role Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Roles
+    * * Field Name: RoleName
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Roles
     */
     get RoleName(): string {  
         return this.Get('RoleName');
@@ -5079,10 +5510,10 @@ export class AuthorizationRoleEntity extends BaseEntity {
         this.Set('RoleName', value);
     }
     /**
-    * Field Name: Type
-    * Display Name: Type
-    * SQL Data Type: nchar(10)
-    * Default Value: N'grant'
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nchar(10)
+    * * Default Value: N'grant'
     * Value List Type: List
     * Possible Values 
     * Allow - User allowed to execute tasks linked to this authorization
@@ -5105,20 +5536,20 @@ export class AuthorizationRoleEntity extends BaseEntity {
         this.Set('Type', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -5129,9 +5560,11 @@ export class AuthorizationRoleEntity extends BaseEntity {
 
 /**
  * Audit Log Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AuditLogType
- * Base View: vwAuditLogTypes
+ * * Schema: admin
+ * * Base Table: AuditLogType
+ * * Base View: vwAuditLogTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5139,10 +5572,19 @@ export class AuthorizationRoleEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Audit Log Types')
 export class AuditLogTypeEntity extends BaseEntity {
     /**
-    * Field Name: ParentID
-    * Display Name: Parent ID
-    * SQL Data Type: int
-    * Related Entity: Audit Log Types
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: int
+    * * Related Entity: Audit Log Types
     */
     get ParentID(): number {  
         return this.Get('ParentID');
@@ -5151,9 +5593,9 @@ export class AuditLogTypeEntity extends BaseEntity {
         this.Set('ParentID', value);
     }
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5162,9 +5604,9 @@ export class AuditLogTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5173,10 +5615,10 @@ export class AuditLogTypeEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: AuthorizationName
-    * Display Name: Authorization Name
-    * SQL Data Type: nvarchar(100)
-    * Related Entity: Authorizations
+    * * Field Name: AuthorizationName
+    * * Display Name: Authorization Name
+    * * SQL Data Type: nvarchar(100)
+    * * Related Entity: Authorizations
     */
     get AuthorizationName(): string {  
         return this.Get('AuthorizationName');
@@ -5185,29 +5627,29 @@ export class AuditLogTypeEntity extends BaseEntity {
         this.Set('AuthorizationName', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Parent
-    * Display Name: Parent
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(50)
     */
     get Parent(): string {  
         return this.Get('Parent');
@@ -5218,9 +5660,11 @@ export class AuditLogTypeEntity extends BaseEntity {
 
 /**
  * Entity Field Values - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EntityFieldValue
- * Base View: vwEntityFieldValues
+ * * Schema: admin
+ * * Base Table: EntityFieldValue
+ * * Base View: vwEntityFieldValues
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5228,10 +5672,19 @@ export class AuditLogTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Entity Field Values')
 export class EntityFieldValueEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entity Fields
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entity Fields
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -5240,10 +5693,10 @@ export class EntityFieldValueEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: EntityFieldName
-    * Display Name: Entity Field Name
-    * SQL Data Type: nvarchar(255)
-    * Related Entity: Entity Fields
+    * * Field Name: EntityFieldName
+    * * Display Name: Entity Field Name
+    * * SQL Data Type: nvarchar(255)
+    * * Related Entity: Entity Fields
     */
     get EntityFieldName(): string {  
         return this.Get('EntityFieldName');
@@ -5252,9 +5705,9 @@ export class EntityFieldValueEntity extends BaseEntity {
         this.Set('EntityFieldName', value);
     }
     /**
-    * Field Name: Sequence
-    * Display Name: Sequence
-    * SQL Data Type: int
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -5263,9 +5716,9 @@ export class EntityFieldValueEntity extends BaseEntity {
         this.Set('Sequence', value);
     }
     /**
-    * Field Name: Value
-    * Display Name: Value
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(255)
     */
     get Value(): string {  
         return this.Get('Value');
@@ -5274,9 +5727,9 @@ export class EntityFieldValueEntity extends BaseEntity {
         this.Set('Value', value);
     }
     /**
-    * Field Name: Code
-    * Display Name: Code
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(50)
     */
     get Code(): string {  
         return this.Get('Code');
@@ -5285,9 +5738,9 @@ export class EntityFieldValueEntity extends BaseEntity {
         this.Set('Code', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5296,29 +5749,29 @@ export class EntityFieldValueEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -5329,9 +5782,11 @@ export class EntityFieldValueEntity extends BaseEntity {
 
 /**
  * AI Models - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AIModel
- * Base View: vwAIModels
+ * * Schema: admin
+ * * Base Table: AIModel
+ * * Base View: vwAIModels
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5339,9 +5794,18 @@ export class EntityFieldValueEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'AI Models')
 export class AIModelEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5350,9 +5814,9 @@ export class AIModelEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Vendor
-    * Display Name: Vendor
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Vendor
+    * * Display Name: Vendor
+    * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {  
         return this.Get('Vendor');
@@ -5361,10 +5825,10 @@ export class AIModelEntity extends BaseEntity {
         this.Set('Vendor', value);
     }
     /**
-    * Field Name: AIModelTypeID
-    * Display Name: AI Model Type ID
-    * SQL Data Type: int
-    * Related Entity: AI Model Types
+    * * Field Name: AIModelTypeID
+    * * Display Name: AI Model Type ID
+    * * SQL Data Type: int
+    * * Related Entity: AI Model Types
     */
     get AIModelTypeID(): number {  
         return this.Get('AIModelTypeID');
@@ -5373,9 +5837,9 @@ export class AIModelEntity extends BaseEntity {
         this.Set('AIModelTypeID', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5384,9 +5848,9 @@ export class AIModelEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: DriverClass
-    * Display Name: Driver Class
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
     */
     get DriverClass(): string {  
         return this.Get('DriverClass');
@@ -5395,9 +5859,9 @@ export class AIModelEntity extends BaseEntity {
         this.Set('DriverClass', value);
     }
     /**
-    * Field Name: DriverImportPath
-    * Display Name: Driver Import Path
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: DriverImportPath
+    * * Display Name: Driver Import Path
+    * * SQL Data Type: nvarchar(255)
     */
     get DriverImportPath(): string {  
         return this.Get('DriverImportPath');
@@ -5406,10 +5870,10 @@ export class AIModelEntity extends BaseEntity {
         this.Set('DriverImportPath', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -5418,20 +5882,20 @@ export class AIModelEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -5442,9 +5906,11 @@ export class AIModelEntity extends BaseEntity {
 
 /**
  * AI Actions - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AIAction
- * Base View: vwAIActions
+ * * Schema: admin
+ * * Base Table: AIAction
+ * * Base View: vwAIActions
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5452,9 +5918,18 @@ export class AIModelEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'AI Actions')
 export class AIActionEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5463,9 +5938,9 @@ export class AIActionEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5474,10 +5949,10 @@ export class AIActionEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: DefaultModelID
-    * Display Name: Default Model ID
-    * SQL Data Type: int
-    * Related Entity: AI Models
+    * * Field Name: DefaultModelID
+    * * Display Name: Default Model ID
+    * * SQL Data Type: int
+    * * Related Entity: AI Models
     */
     get DefaultModelID(): number {  
         return this.Get('DefaultModelID');
@@ -5486,9 +5961,9 @@ export class AIActionEntity extends BaseEntity {
         this.Set('DefaultModelID', value);
     }
     /**
-    * Field Name: DefaultPrompt
-    * Display Name: Default Prompt
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: DefaultPrompt
+    * * Display Name: Default Prompt
+    * * SQL Data Type: nvarchar(MAX)
     */
     get DefaultPrompt(): string {  
         return this.Get('DefaultPrompt');
@@ -5497,10 +5972,10 @@ export class AIActionEntity extends BaseEntity {
         this.Set('DefaultPrompt', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -5509,29 +5984,29 @@ export class AIActionEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: DefaultModel
-    * Display Name: Default Model
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: DefaultModel
+    * * Display Name: Default Model
+    * * SQL Data Type: nvarchar(50)
     */
     get DefaultModel(): string {  
         return this.Get('DefaultModel');
@@ -5542,9 +6017,11 @@ export class AIActionEntity extends BaseEntity {
 
 /**
  * AI Model Actions - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AIModelAction
- * Base View: vwAIModelActions
+ * * Schema: admin
+ * * Base Table: AIModelAction
+ * * Base View: vwAIModelActions
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5552,10 +6029,19 @@ export class AIActionEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'AI Model Actions')
 export class AIModelActionEntity extends BaseEntity {
     /**
-    * Field Name: AIModelID
-    * Display Name: AI Model ID
-    * SQL Data Type: int
-    * Related Entity: AI Models
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: AIModelID
+    * * Display Name: AI Model ID
+    * * SQL Data Type: int
+    * * Related Entity: AI Models
     */
     get AIModelID(): number {  
         return this.Get('AIModelID');
@@ -5564,10 +6050,10 @@ export class AIModelActionEntity extends BaseEntity {
         this.Set('AIModelID', value);
     }
     /**
-    * Field Name: AIActionID
-    * Display Name: AI Action ID
-    * SQL Data Type: int
-    * Related Entity: AI Actions
+    * * Field Name: AIActionID
+    * * Display Name: AI Action ID
+    * * SQL Data Type: int
+    * * Related Entity: AI Actions
     */
     get AIActionID(): number {  
         return this.Get('AIActionID');
@@ -5576,10 +6062,10 @@ export class AIModelActionEntity extends BaseEntity {
         this.Set('AIActionID', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -5588,38 +6074,38 @@ export class AIModelActionEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: AIModel
-    * Display Name: AIModel
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: AIModel
+    * * Display Name: AIModel
+    * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {  
         return this.Get('AIModel');
     }
 
     /**
-    * Field Name: AIAction
-    * Display Name: AIAction
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: AIAction
+    * * Display Name: AIAction
+    * * SQL Data Type: nvarchar(50)
     */
     get AIAction(): string {  
         return this.Get('AIAction');
@@ -5630,9 +6116,11 @@ export class AIModelActionEntity extends BaseEntity {
 
 /**
  * Entity AI Actions - strongly typed entity sub-class
- * Schema: admin
- * Base Table: EntityAIAction
- * Base View: vwEntityAIActions
+ * * Schema: admin
+ * * Base Table: EntityAIAction
+ * * Base View: vwEntityAIActions
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5640,10 +6128,19 @@ export class AIModelActionEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Entity AI Actions')
 export class EntityAIActionEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -5652,10 +6149,10 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: AIActionID
-    * Display Name: AI Action ID
-    * SQL Data Type: int
-    * Related Entity: AI Actions
+    * * Field Name: AIActionID
+    * * Display Name: AI Action ID
+    * * SQL Data Type: int
+    * * Related Entity: AI Actions
     */
     get AIActionID(): number {  
         return this.Get('AIActionID');
@@ -5664,10 +6161,10 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('AIActionID', value);
     }
     /**
-    * Field Name: AIModelID
-    * Display Name: AI Model ID
-    * SQL Data Type: int
-    * Related Entity: AI Models
+    * * Field Name: AIModelID
+    * * Display Name: AI Model ID
+    * * SQL Data Type: int
+    * * Related Entity: AI Models
     */
     get AIModelID(): number {  
         return this.Get('AIModelID');
@@ -5676,9 +6173,9 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('AIModelID', value);
     }
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(25)
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(25)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5687,9 +6184,9 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Prompt
-    * Display Name: Prompt
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Prompt(): string {  
         return this.Get('Prompt');
@@ -5698,10 +6195,10 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('Prompt', value);
     }
     /**
-    * Field Name: TriggerEvent
-    * Display Name: Trigger Event
-    * SQL Data Type: nchar(15)
-    * Default Value: N'After Save'
+    * * Field Name: TriggerEvent
+    * * Display Name: Trigger Event
+    * * SQL Data Type: nchar(15)
+    * * Default Value: N'After Save'
     */
     get TriggerEvent(): string {  
         return this.Get('TriggerEvent');
@@ -5710,9 +6207,9 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('TriggerEvent', value);
     }
     /**
-    * Field Name: UserMessage
-    * Display Name: User Message
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: UserMessage
+    * * Display Name: User Message
+    * * SQL Data Type: nvarchar(MAX)
     */
     get UserMessage(): string {  
         return this.Get('UserMessage');
@@ -5721,10 +6218,10 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('UserMessage', value);
     }
     /**
-    * Field Name: OutputType
-    * Display Name: Output Type
-    * SQL Data Type: nchar(10)
-    * Default Value: N'FIeld'
+    * * Field Name: OutputType
+    * * Display Name: Output Type
+    * * SQL Data Type: nchar(10)
+    * * Default Value: N'FIeld'
     */
     get OutputType(): string {  
         return this.Get('OutputType');
@@ -5733,9 +6230,9 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('OutputType', value);
     }
     /**
-    * Field Name: OutputField
-    * Display Name: Output Field
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: OutputField
+    * * Display Name: Output Field
+    * * SQL Data Type: nvarchar(50)
     */
     get OutputField(): string {  
         return this.Get('OutputField');
@@ -5744,10 +6241,10 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('OutputField', value);
     }
     /**
-    * Field Name: SkipIfOutputFieldNotEmpty
-    * Display Name: Skip If Output Field Not Empty
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: SkipIfOutputFieldNotEmpty
+    * * Display Name: Skip If Output Field Not Empty
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get SkipIfOutputFieldNotEmpty(): boolean {  
         return this.Get('SkipIfOutputFieldNotEmpty');
@@ -5756,10 +6253,10 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('SkipIfOutputFieldNotEmpty', value);
     }
     /**
-    * Field Name: OutputEntityID
-    * Display Name: Output Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: OutputEntityID
+    * * Display Name: Output Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get OutputEntityID(): number {  
         return this.Get('OutputEntityID');
@@ -5768,9 +6265,9 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('OutputEntityID', value);
     }
     /**
-    * Field Name: Comments
-    * Display Name: Comments
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string {  
         return this.Get('Comments');
@@ -5779,36 +6276,36 @@ export class EntityAIActionEntity extends BaseEntity {
         this.Set('Comments', value);
     }
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: AIAction
-    * Display Name: AIAction
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: AIAction
+    * * Display Name: AIAction
+    * * SQL Data Type: nvarchar(50)
     */
     get AIAction(): string {  
         return this.Get('AIAction');
     }
 
     /**
-    * Field Name: AIModel
-    * Display Name: AIModel
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: AIModel
+    * * Display Name: AIModel
+    * * SQL Data Type: nvarchar(50)
     */
     get AIModel(): string {  
         return this.Get('AIModel');
     }
 
     /**
-    * Field Name: OutputEntity
-    * Display Name: Output Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: OutputEntity
+    * * Display Name: Output Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get OutputEntity(): string {  
         return this.Get('OutputEntity');
@@ -5819,9 +6316,11 @@ export class EntityAIActionEntity extends BaseEntity {
 
 /**
  * AI Model Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: AIModelType
- * Base View: vwAIModelTypes
+ * * Schema: admin
+ * * Base Table: AIModelType
+ * * Base View: vwAIModelTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5829,9 +6328,18 @@ export class EntityAIActionEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'AI Model Types')
 export class AIModelTypeEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5840,9 +6348,9 @@ export class AIModelTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5855,9 +6363,11 @@ export class AIModelTypeEntity extends BaseEntity {
 
 /**
  * Queue Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: QueueType
- * Base View: vwQueueTypes
+ * * Schema: admin
+ * * Base Table: QueueType
+ * * Base View: vwQueueTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5865,9 +6375,18 @@ export class AIModelTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Queue Types')
 export class QueueTypeEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5876,9 +6395,9 @@ export class QueueTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5887,9 +6406,9 @@ export class QueueTypeEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: DriverClass
-    * Display Name: Driver Class
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
     */
     get DriverClass(): string {  
         return this.Get('DriverClass');
@@ -5898,9 +6417,9 @@ export class QueueTypeEntity extends BaseEntity {
         this.Set('DriverClass', value);
     }
     /**
-    * Field Name: DriverImportPath
-    * Display Name: Driver Import Path
-    * SQL Data Type: nvarchar(200)
+    * * Field Name: DriverImportPath
+    * * Display Name: Driver Import Path
+    * * SQL Data Type: nvarchar(200)
     */
     get DriverImportPath(): string {  
         return this.Get('DriverImportPath');
@@ -5909,10 +6428,10 @@ export class QueueTypeEntity extends BaseEntity {
         this.Set('DriverImportPath', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -5925,9 +6444,11 @@ export class QueueTypeEntity extends BaseEntity {
 
 /**
  * Queues - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Queue
- * Base View: vwQueues
+ * * Schema: admin
+ * * Base Table: Queue
+ * * Base View: vwQueues
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -5935,9 +6456,18 @@ export class QueueTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Queues')
 export class QueueEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -5946,9 +6476,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -5957,10 +6487,10 @@ export class QueueEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: QueueTypeID
-    * Display Name: Queue Type ID
-    * SQL Data Type: int
-    * Related Entity: Queue Types
+    * * Field Name: QueueTypeID
+    * * Display Name: Queue Type ID
+    * * SQL Data Type: int
+    * * Related Entity: Queue Types
     */
     get QueueTypeID(): number {  
         return this.Get('QueueTypeID');
@@ -5969,10 +6499,10 @@ export class QueueEntity extends BaseEntity {
         this.Set('QueueTypeID', value);
     }
     /**
-    * Field Name: IsActive
-    * Display Name: Is Active
-    * SQL Data Type: bit
-    * Default Value: 0
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 0
     */
     get IsActive(): boolean {  
         return this.Get('IsActive');
@@ -5981,9 +6511,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('IsActive', value);
     }
     /**
-    * Field Name: ProcessPID
-    * Display Name: Process PID
-    * SQL Data Type: int
+    * * Field Name: ProcessPID
+    * * Display Name: Process PID
+    * * SQL Data Type: int
     */
     get ProcessPID(): number {  
         return this.Get('ProcessPID');
@@ -5992,9 +6522,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessPID', value);
     }
     /**
-    * Field Name: ProcessPlatform
-    * Display Name: Process Platform
-    * SQL Data Type: nvarchar(30)
+    * * Field Name: ProcessPlatform
+    * * Display Name: Process Platform
+    * * SQL Data Type: nvarchar(30)
     */
     get ProcessPlatform(): string {  
         return this.Get('ProcessPlatform');
@@ -6003,9 +6533,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessPlatform', value);
     }
     /**
-    * Field Name: ProcessVersion
-    * Display Name: Process Version
-    * SQL Data Type: nvarchar(15)
+    * * Field Name: ProcessVersion
+    * * Display Name: Process Version
+    * * SQL Data Type: nvarchar(15)
     */
     get ProcessVersion(): string {  
         return this.Get('ProcessVersion');
@@ -6014,9 +6544,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessVersion', value);
     }
     /**
-    * Field Name: ProcessCwd
-    * Display Name: Process Cwd
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ProcessCwd
+    * * Display Name: Process Cwd
+    * * SQL Data Type: nvarchar(100)
     */
     get ProcessCwd(): string {  
         return this.Get('ProcessCwd');
@@ -6025,9 +6555,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessCwd', value);
     }
     /**
-    * Field Name: ProcessIPAddress
-    * Display Name: Process IPAddress
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ProcessIPAddress
+    * * Display Name: Process IPAddress
+    * * SQL Data Type: nvarchar(50)
     */
     get ProcessIPAddress(): string {  
         return this.Get('ProcessIPAddress');
@@ -6036,9 +6566,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessIPAddress', value);
     }
     /**
-    * Field Name: ProcessMacAddress
-    * Display Name: Process Mac Address
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ProcessMacAddress
+    * * Display Name: Process Mac Address
+    * * SQL Data Type: nvarchar(50)
     */
     get ProcessMacAddress(): string {  
         return this.Get('ProcessMacAddress');
@@ -6047,9 +6577,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessMacAddress', value);
     }
     /**
-    * Field Name: ProcessOSName
-    * Display Name: Process OSName
-    * SQL Data Type: nvarchar(25)
+    * * Field Name: ProcessOSName
+    * * Display Name: Process OSName
+    * * SQL Data Type: nvarchar(25)
     */
     get ProcessOSName(): string {  
         return this.Get('ProcessOSName');
@@ -6058,9 +6588,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessOSName', value);
     }
     /**
-    * Field Name: ProcessOSVersion
-    * Display Name: Process OSVersion
-    * SQL Data Type: nvarchar(10)
+    * * Field Name: ProcessOSVersion
+    * * Display Name: Process OSVersion
+    * * SQL Data Type: nvarchar(10)
     */
     get ProcessOSVersion(): string {  
         return this.Get('ProcessOSVersion');
@@ -6069,9 +6599,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessOSVersion', value);
     }
     /**
-    * Field Name: ProcessHostName
-    * Display Name: Process Host Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ProcessHostName
+    * * Display Name: Process Host Name
+    * * SQL Data Type: nvarchar(50)
     */
     get ProcessHostName(): string {  
         return this.Get('ProcessHostName');
@@ -6080,9 +6610,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessHostName', value);
     }
     /**
-    * Field Name: ProcessUserID
-    * Display Name: Process User ID
-    * SQL Data Type: nvarchar(25)
+    * * Field Name: ProcessUserID
+    * * Display Name: Process User ID
+    * * SQL Data Type: nvarchar(25)
     */
     get ProcessUserID(): string {  
         return this.Get('ProcessUserID');
@@ -6091,9 +6621,9 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessUserID', value);
     }
     /**
-    * Field Name: ProcessUserName
-    * Display Name: Process User Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ProcessUserName
+    * * Display Name: Process User Name
+    * * SQL Data Type: nvarchar(50)
     */
     get ProcessUserName(): string {  
         return this.Get('ProcessUserName');
@@ -6102,10 +6632,10 @@ export class QueueEntity extends BaseEntity {
         this.Set('ProcessUserName', value);
     }
     /**
-    * Field Name: LastHeartbeat
-    * Display Name: Last Heartbeat
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: LastHeartbeat
+    * * Display Name: Last Heartbeat
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get LastHeartbeat(): Date {  
         return this.Get('LastHeartbeat');
@@ -6114,29 +6644,29 @@ export class QueueEntity extends BaseEntity {
         this.Set('LastHeartbeat', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: QueueType
-    * Display Name: Queue Type
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: QueueType
+    * * Display Name: Queue Type
+    * * SQL Data Type: nvarchar(50)
     */
     get QueueType(): string {  
         return this.Get('QueueType');
@@ -6147,9 +6677,11 @@ export class QueueEntity extends BaseEntity {
 
 /**
  * Queue Tasks - strongly typed entity sub-class
- * Schema: admin
- * Base Table: QueueTask
- * Base View: vwQueueTasks
+ * * Schema: admin
+ * * Base Table: QueueTask
+ * * Base View: vwQueueTasks
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6157,10 +6689,19 @@ export class QueueEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Queue Tasks')
 export class QueueTaskEntity extends BaseEntity {
     /**
-    * Field Name: QueueID
-    * Display Name: Queue ID
-    * SQL Data Type: int
-    * Related Entity: Queues
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: QueueID
+    * * Display Name: Queue ID
+    * * SQL Data Type: int
+    * * Related Entity: Queues
     */
     get QueueID(): number {  
         return this.Get('QueueID');
@@ -6169,10 +6710,10 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('QueueID', value);
     }
     /**
-    * Field Name: Status
-    * Display Name: Status
-    * SQL Data Type: nchar(10)
-    * Default Value: N'Pending'
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nchar(10)
+    * * Default Value: N'Pending'
     */
     get Status(): string {  
         return this.Get('Status');
@@ -6181,9 +6722,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('Status', value);
     }
     /**
-    * Field Name: StartedAt
-    * Display Name: Started At
-    * SQL Data Type: datetime
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetime
     */
     get StartedAt(): Date {  
         return this.Get('StartedAt');
@@ -6192,9 +6733,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('StartedAt', value);
     }
     /**
-    * Field Name: EndedAt
-    * Display Name: Ended At
-    * SQL Data Type: datetime
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetime
     */
     get EndedAt(): Date {  
         return this.Get('EndedAt');
@@ -6203,9 +6744,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('EndedAt', value);
     }
     /**
-    * Field Name: Data
-    * Display Name: Data
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Data(): string {  
         return this.Get('Data');
@@ -6214,9 +6755,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('Data', value);
     }
     /**
-    * Field Name: Options
-    * Display Name: Options
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Options
+    * * Display Name: Options
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Options(): string {  
         return this.Get('Options');
@@ -6225,9 +6766,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('Options', value);
     }
     /**
-    * Field Name: Output
-    * Display Name: Output
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Output
+    * * Display Name: Output
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Output(): string {  
         return this.Get('Output');
@@ -6236,9 +6777,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('Output', value);
     }
     /**
-    * Field Name: ErrorMessage
-    * Display Name: Error Message
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ErrorMessage(): string {  
         return this.Get('ErrorMessage');
@@ -6247,9 +6788,9 @@ export class QueueTaskEntity extends BaseEntity {
         this.Set('ErrorMessage', value);
     }
     /**
-    * Field Name: Comments
-    * Display Name: Comments
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string {  
         return this.Get('Comments');
@@ -6262,9 +6803,11 @@ export class QueueTaskEntity extends BaseEntity {
 
 /**
  * Dashboards - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Dashboard
- * Base View: vwDashboards
+ * * Schema: admin
+ * * Base Table: Dashboard
+ * * Base View: vwDashboards
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6272,9 +6815,18 @@ export class QueueTaskEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Dashboards')
 export class DashboardEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6283,9 +6835,9 @@ export class DashboardEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6294,9 +6846,9 @@ export class DashboardEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: UIConfigDetails
-    * Display Name: UIConfig Details
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: UIConfigDetails
+    * * Display Name: UIConfig Details
+    * * SQL Data Type: nvarchar(MAX)
     */
     get UIConfigDetails(): string {  
         return this.Get('UIConfigDetails');
@@ -6305,10 +6857,10 @@ export class DashboardEntity extends BaseEntity {
         this.Set('UIConfigDetails', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -6317,9 +6869,9 @@ export class DashboardEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -6330,9 +6882,11 @@ export class DashboardEntity extends BaseEntity {
 
 /**
  * Output Trigger Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: OutputTriggerType
- * Base View: vwOutputTriggerTypes
+ * * Schema: admin
+ * * Base Table: OutputTriggerType
+ * * Base View: vwOutputTriggerTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6340,9 +6894,18 @@ export class DashboardEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Output Trigger Types')
 export class OutputTriggerTypeEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6351,9 +6914,9 @@ export class OutputTriggerTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6366,9 +6929,11 @@ export class OutputTriggerTypeEntity extends BaseEntity {
 
 /**
  * Output Format Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: OutputFormatType
- * Base View: vwOutputFormatTypes
+ * * Schema: admin
+ * * Base Table: OutputFormatType
+ * * Base View: vwOutputFormatTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6376,9 +6941,18 @@ export class OutputTriggerTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Output Format Types')
 export class OutputFormatTypeEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6387,9 +6961,9 @@ export class OutputFormatTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6398,9 +6972,9 @@ export class OutputFormatTypeEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: DisplayFormat
-    * Display Name: Display Format
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: DisplayFormat
+    * * Display Name: Display Format
+    * * SQL Data Type: nvarchar(MAX)
     */
     get DisplayFormat(): string {  
         return this.Get('DisplayFormat');
@@ -6413,9 +6987,11 @@ export class OutputFormatTypeEntity extends BaseEntity {
 
 /**
  * Output Delivery Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: OutputDeliveryType
- * Base View: vwOutputDeliveryTypes
+ * * Schema: admin
+ * * Base Table: OutputDeliveryType
+ * * Base View: vwOutputDeliveryTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6423,9 +6999,18 @@ export class OutputFormatTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Output Delivery Types')
 export class OutputDeliveryTypeEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6434,9 +7019,9 @@ export class OutputDeliveryTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6449,9 +7034,11 @@ export class OutputDeliveryTypeEntity extends BaseEntity {
 
 /**
  * Reports - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Report
- * Base View: vwReports
+ * * Schema: admin
+ * * Base Table: Report
+ * * Base View: vwReports
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6459,9 +7046,18 @@ export class OutputDeliveryTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Reports')
 export class ReportEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6470,9 +7066,9 @@ export class ReportEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6481,10 +7077,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -6493,10 +7089,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: SharingScope
-    * Display Name: Sharing Scope
-    * SQL Data Type: nvarchar(20)
-    * Default Value: N'Personal'
+    * * Field Name: SharingScope
+    * * Display Name: Sharing Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: N'Personal'
     */
     get SharingScope(): string {  
         return this.Get('SharingScope');
@@ -6505,10 +7101,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('SharingScope', value);
     }
     /**
-    * Field Name: ConversationID
-    * Display Name: Conversation ID
-    * SQL Data Type: int
-    * Related Entity: Conversations
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: int
+    * * Related Entity: Conversations
     */
     get ConversationID(): number {  
         return this.Get('ConversationID');
@@ -6517,10 +7113,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('ConversationID', value);
     }
     /**
-    * Field Name: ConversationDetailID
-    * Display Name: Conversation Detail ID
-    * SQL Data Type: int
-    * Related Entity: Conversation Details
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail ID
+    * * SQL Data Type: int
+    * * Related Entity: Conversation Details
     */
     get ConversationDetailID(): number {  
         return this.Get('ConversationDetailID');
@@ -6529,9 +7125,9 @@ export class ReportEntity extends BaseEntity {
         this.Set('ConversationDetailID', value);
     }
     /**
-    * Field Name: ReportSQL
-    * Display Name: Report SQL
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ReportSQL
+    * * Display Name: Report SQL
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ReportSQL(): string {  
         return this.Get('ReportSQL');
@@ -6540,9 +7136,9 @@ export class ReportEntity extends BaseEntity {
         this.Set('ReportSQL', value);
     }
     /**
-    * Field Name: ReportConfiguration
-    * Display Name: Report Configuration
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ReportConfiguration
+    * * Display Name: Report Configuration
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ReportConfiguration(): string {  
         return this.Get('ReportConfiguration');
@@ -6551,10 +7147,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('ReportConfiguration', value);
     }
     /**
-    * Field Name: OutputTriggerTypeID
-    * Display Name: Output Trigger Type ID
-    * SQL Data Type: int
-    * Related Entity: Output Trigger Types
+    * * Field Name: OutputTriggerTypeID
+    * * Display Name: Output Trigger Type ID
+    * * SQL Data Type: int
+    * * Related Entity: Output Trigger Types
     */
     get OutputTriggerTypeID(): number {  
         return this.Get('OutputTriggerTypeID');
@@ -6563,10 +7159,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputTriggerTypeID', value);
     }
     /**
-    * Field Name: OutputFormatTypeID
-    * Display Name: Output Format Type ID
-    * SQL Data Type: int
-    * Related Entity: Output Format Types
+    * * Field Name: OutputFormatTypeID
+    * * Display Name: Output Format Type ID
+    * * SQL Data Type: int
+    * * Related Entity: Output Format Types
     */
     get OutputFormatTypeID(): number {  
         return this.Get('OutputFormatTypeID');
@@ -6575,10 +7171,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputFormatTypeID', value);
     }
     /**
-    * Field Name: OutputDeliveryTypeID
-    * Display Name: Output Delivery Type ID
-    * SQL Data Type: int
-    * Related Entity: Output Delivery Types
+    * * Field Name: OutputDeliveryTypeID
+    * * Display Name: Output Delivery Type ID
+    * * SQL Data Type: int
+    * * Related Entity: Output Delivery Types
     */
     get OutputDeliveryTypeID(): number {  
         return this.Get('OutputDeliveryTypeID');
@@ -6587,10 +7183,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputDeliveryTypeID', value);
     }
     /**
-    * Field Name: OutputEventID
-    * Display Name: Output Event ID
-    * SQL Data Type: int
-    * Related Entity: Output Delivery Types
+    * * Field Name: OutputEventID
+    * * Display Name: Output Event ID
+    * * SQL Data Type: int
+    * * Related Entity: Output Delivery Types
     */
     get OutputEventID(): number {  
         return this.Get('OutputEventID');
@@ -6599,9 +7195,9 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputEventID', value);
     }
     /**
-    * Field Name: OutputFrequency
-    * Display Name: Output Frequency
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: OutputFrequency
+    * * Display Name: Output Frequency
+    * * SQL Data Type: nvarchar(50)
     */
     get OutputFrequency(): string {  
         return this.Get('OutputFrequency');
@@ -6610,9 +7206,9 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputFrequency', value);
     }
     /**
-    * Field Name: OutputTargetEmail
-    * Display Name: Output Target Email
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: OutputTargetEmail
+    * * Display Name: Output Target Email
+    * * SQL Data Type: nvarchar(255)
     */
     get OutputTargetEmail(): string {  
         return this.Get('OutputTargetEmail');
@@ -6621,10 +7217,10 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputTargetEmail', value);
     }
     /**
-    * Field Name: OutputWorkflowID
-    * Display Name: Output Workflow ID
-    * SQL Data Type: int
-    * Related Entity: Workflows
+    * * Field Name: OutputWorkflowID
+    * * Display Name: Output Workflow ID
+    * * SQL Data Type: int
+    * * Related Entity: Workflows
     */
     get OutputWorkflowID(): number {  
         return this.Get('OutputWorkflowID');
@@ -6633,74 +7229,74 @@ export class ReportEntity extends BaseEntity {
         this.Set('OutputWorkflowID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
     }
 
     /**
-    * Field Name: Conversation
-    * Display Name: Conversation
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(100)
     */
     get Conversation(): string {  
         return this.Get('Conversation');
     }
 
     /**
-    * Field Name: OutputTriggerType
-    * Display Name: Output Trigger Type
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: OutputTriggerType
+    * * Display Name: Output Trigger Type
+    * * SQL Data Type: nvarchar(255)
     */
     get OutputTriggerType(): string {  
         return this.Get('OutputTriggerType');
     }
 
     /**
-    * Field Name: OutputFormatType
-    * Display Name: Output Format Type
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: OutputFormatType
+    * * Display Name: Output Format Type
+    * * SQL Data Type: nvarchar(255)
     */
     get OutputFormatType(): string {  
         return this.Get('OutputFormatType');
     }
 
     /**
-    * Field Name: OutputDeliveryType
-    * Display Name: Output Delivery Type
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: OutputDeliveryType
+    * * Display Name: Output Delivery Type
+    * * SQL Data Type: nvarchar(255)
     */
     get OutputDeliveryType(): string {  
         return this.Get('OutputDeliveryType');
     }
 
     /**
-    * Field Name: OutputEvent
-    * Display Name: Output Event
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: OutputEvent
+    * * Display Name: Output Event
+    * * SQL Data Type: nvarchar(255)
     */
     get OutputEvent(): string {  
         return this.Get('OutputEvent');
@@ -6711,9 +7307,11 @@ export class ReportEntity extends BaseEntity {
 
 /**
  * Report Snapshots - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ReportSnapshot
- * Base View: vwReportSnapshots
+ * * Schema: admin
+ * * Base Table: ReportSnapshot
+ * * Base View: vwReportSnapshots
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6721,10 +7319,19 @@ export class ReportEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Report Snapshots')
 export class ReportSnapshotEntity extends BaseEntity {
     /**
-    * Field Name: ReportID
-    * Display Name: Report ID
-    * SQL Data Type: int
-    * Related Entity: Reports
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ReportID
+    * * Display Name: Report ID
+    * * SQL Data Type: int
+    * * Related Entity: Reports
     */
     get ReportID(): number {  
         return this.Get('ReportID');
@@ -6733,9 +7340,9 @@ export class ReportSnapshotEntity extends BaseEntity {
         this.Set('ReportID', value);
     }
     /**
-    * Field Name: ResultSet
-    * Display Name: Result Set
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ResultSet
+    * * Display Name: Result Set
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ResultSet(): string {  
         return this.Get('ResultSet');
@@ -6744,20 +7351,20 @@ export class ReportSnapshotEntity extends BaseEntity {
         this.Set('ResultSet', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -6766,18 +7373,18 @@ export class ReportSnapshotEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: Report
-    * Display Name: Report
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Report
+    * * Display Name: Report
+    * * SQL Data Type: nvarchar(255)
     */
     get Report(): string {  
         return this.Get('Report');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -6788,9 +7395,11 @@ export class ReportSnapshotEntity extends BaseEntity {
 
 /**
  * Resource Types - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ResourceType
- * Base View: vwResourceTypes
+ * * Schema: admin
+ * * Base Table: ResourceType
+ * * Base View: vwResourceTypes
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6798,9 +7407,18 @@ export class ReportSnapshotEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Resource Types')
 export class ResourceTypeEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6809,9 +7427,9 @@ export class ResourceTypeEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: DisplayName
-    * Display Name: Display Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
     */
     get DisplayName(): string {  
         return this.Get('DisplayName');
@@ -6820,9 +7438,9 @@ export class ResourceTypeEntity extends BaseEntity {
         this.Set('DisplayName', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6831,9 +7449,9 @@ export class ResourceTypeEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: Icon
-    * Display Name: Icon
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
     */
     get Icon(): string {  
         return this.Get('Icon');
@@ -6842,10 +7460,10 @@ export class ResourceTypeEntity extends BaseEntity {
         this.Set('Icon', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -6854,29 +7472,29 @@ export class ResourceTypeEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -6887,9 +7505,11 @@ export class ResourceTypeEntity extends BaseEntity {
 
 /**
  * Tags - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Tag
- * Base View: vwTags
+ * * Schema: admin
+ * * Base Table: Tag
+ * * Base View: vwTags
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6897,9 +7517,18 @@ export class ResourceTypeEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Tags')
 export class TagEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -6908,9 +7537,9 @@ export class TagEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: DisplayName
-    * Display Name: Display Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
     */
     get DisplayName(): string {  
         return this.Get('DisplayName');
@@ -6919,9 +7548,9 @@ export class TagEntity extends BaseEntity {
         this.Set('DisplayName', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -6930,10 +7559,10 @@ export class TagEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: ParentID
-    * Display Name: Parent ID
-    * SQL Data Type: int
-    * Related Entity: Tags
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: int
+    * * Related Entity: Tags
     */
     get ParentID(): number {  
         return this.Get('ParentID');
@@ -6942,9 +7571,9 @@ export class TagEntity extends BaseEntity {
         this.Set('ParentID', value);
     }
     /**
-    * Field Name: Parent
-    * Display Name: Parent
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string {  
         return this.Get('Parent');
@@ -6955,9 +7584,11 @@ export class TagEntity extends BaseEntity {
 
 /**
  * Tagged Items - strongly typed entity sub-class
- * Schema: admin
- * Base Table: TaggedItem
- * Base View: vwTaggedItems
+ * * Schema: admin
+ * * Base Table: TaggedItem
+ * * Base View: vwTaggedItems
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -6965,10 +7596,19 @@ export class TagEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Tagged Items')
 export class TaggedItemEntity extends BaseEntity {
     /**
-    * Field Name: TagID
-    * Display Name: Tag ID
-    * SQL Data Type: int
-    * Related Entity: Tags
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: TagID
+    * * Display Name: Tag ID
+    * * SQL Data Type: int
+    * * Related Entity: Tags
     */
     get TagID(): number {  
         return this.Get('TagID');
@@ -6977,10 +7617,10 @@ export class TaggedItemEntity extends BaseEntity {
         this.Set('TagID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -6989,29 +7629,29 @@ export class TaggedItemEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: RecordID
-    * Display Name: Record ID
-    * SQL Data Type: int
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(255)
     */
-    get RecordID(): number {  
+    get RecordID(): string {  
         return this.Get('RecordID');
     }
-    set RecordID(value: number) {
+    set RecordID(value: string) {
         this.Set('RecordID', value);
     }
     /**
-    * Field Name: Tag
-    * Display Name: Tag
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Tag
+    * * Display Name: Tag
+    * * SQL Data Type: nvarchar(255)
     */
     get Tag(): string {  
         return this.Get('Tag');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -7022,9 +7662,11 @@ export class TaggedItemEntity extends BaseEntity {
 
 /**
  * Workspaces - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Workspace
- * Base View: vwWorkspaces
+ * * Schema: admin
+ * * Base Table: Workspace
+ * * Base View: vwWorkspaces
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7032,9 +7674,18 @@ export class TaggedItemEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Workspaces')
 export class WorkspaceEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -7043,9 +7694,9 @@ export class WorkspaceEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -7054,10 +7705,10 @@ export class WorkspaceEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -7066,9 +7717,9 @@ export class WorkspaceEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -7079,9 +7730,11 @@ export class WorkspaceEntity extends BaseEntity {
 
 /**
  * Workspace Items - strongly typed entity sub-class
- * Schema: admin
- * Base Table: WorkspaceItem
- * Base View: vwWorkspaceItems
+ * * Schema: admin
+ * * Base Table: WorkspaceItem
+ * * Base View: vwWorkspaceItems
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7089,9 +7742,18 @@ export class WorkspaceEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Workspace Items')
 export class WorkspaceItemEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -7100,9 +7762,9 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -7111,10 +7773,10 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: WorkSpaceID
-    * Display Name: Work Space ID
-    * SQL Data Type: int
-    * Related Entity: Workspaces
+    * * Field Name: WorkSpaceID
+    * * Display Name: Work Space ID
+    * * SQL Data Type: int
+    * * Related Entity: Workspaces
     */
     get WorkSpaceID(): number {  
         return this.Get('WorkSpaceID');
@@ -7123,10 +7785,10 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('WorkSpaceID', value);
     }
     /**
-    * Field Name: ResourceTypeID
-    * Display Name: Resource Type ID
-    * SQL Data Type: int
-    * Related Entity: Resource Types
+    * * Field Name: ResourceTypeID
+    * * Display Name: Resource Type ID
+    * * SQL Data Type: int
+    * * Related Entity: Resource Types
     */
     get ResourceTypeID(): number {  
         return this.Get('ResourceTypeID');
@@ -7135,9 +7797,9 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('ResourceTypeID', value);
     }
     /**
-    * Field Name: ResourceRecordID
-    * Display Name: Resource Record ID
-    * SQL Data Type: int
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: int
     */
     get ResourceRecordID(): number {  
         return this.Get('ResourceRecordID');
@@ -7146,9 +7808,9 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('ResourceRecordID', value);
     }
     /**
-    * Field Name: Sequence
-    * Display Name: Sequence
-    * SQL Data Type: int
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -7157,9 +7819,9 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('Sequence', value);
     }
     /**
-    * Field Name: Configuration
-    * Display Name: Configuration
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Configuration(): string {  
         return this.Get('Configuration');
@@ -7168,18 +7830,18 @@ export class WorkspaceItemEntity extends BaseEntity {
         this.Set('Configuration', value);
     }
     /**
-    * Field Name: WorkSpace
-    * Display Name: Work Space
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: WorkSpace
+    * * Display Name: Work Space
+    * * SQL Data Type: nvarchar(255)
     */
     get WorkSpace(): string {  
         return this.Get('WorkSpace');
     }
 
     /**
-    * Field Name: ResourceType
-    * Display Name: Resource Type
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: ResourceType
+    * * Display Name: Resource Type
+    * * SQL Data Type: nvarchar(255)
     */
     get ResourceType(): string {  
         return this.Get('ResourceType');
@@ -7190,9 +7852,11 @@ export class WorkspaceItemEntity extends BaseEntity {
 
 /**
  * Datasets - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Dataset
- * Base View: vwDatasets
+ * * Schema: admin
+ * * Base Table: Dataset
+ * * Base View: vwDatasets
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7200,9 +7864,18 @@ export class WorkspaceItemEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Datasets')
 export class DatasetEntity extends BaseEntity {
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -7211,9 +7884,9 @@ export class DatasetEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -7222,20 +7895,20 @@ export class DatasetEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -7246,9 +7919,11 @@ export class DatasetEntity extends BaseEntity {
 
 /**
  * Dataset Items - strongly typed entity sub-class
- * Schema: admin
- * Base Table: DatasetItem
- * Base View: vwDatasetItems
+ * * Schema: admin
+ * * Base Table: DatasetItem
+ * * Base View: vwDatasetItems
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7256,9 +7931,18 @@ export class DatasetEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Dataset Items')
 export class DatasetItemEntity extends BaseEntity {
     /**
-    * Field Name: Code
-    * Display Name: Code
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(50)
     */
     get Code(): string {  
         return this.Get('Code');
@@ -7267,10 +7951,10 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('Code', value);
     }
     /**
-    * Field Name: DatasetName
-    * Display Name: Dataset Name
-    * SQL Data Type: nvarchar(50)
-    * Related Entity: Datasets
+    * * Field Name: DatasetName
+    * * Display Name: Dataset Name
+    * * SQL Data Type: nvarchar(50)
+    * * Related Entity: Datasets
     */
     get DatasetName(): string {  
         return this.Get('DatasetName');
@@ -7279,10 +7963,10 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('DatasetName', value);
     }
     /**
-    * Field Name: Sequence
-    * Display Name: Sequence
-    * SQL Data Type: int
-    * Default Value: 0
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
     */
     get Sequence(): number {  
         return this.Get('Sequence');
@@ -7291,10 +7975,10 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('Sequence', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -7303,9 +7987,9 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: WhereClause
-    * Display Name: Where Clause
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: WhereClause
+    * * Display Name: Where Clause
+    * * SQL Data Type: nvarchar(MAX)
     */
     get WhereClause(): string {  
         return this.Get('WhereClause');
@@ -7314,9 +7998,9 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('WhereClause', value);
     }
     /**
-    * Field Name: DateFieldToCheck
-    * Display Name: Date Field To Check
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: DateFieldToCheck
+    * * Display Name: Date Field To Check
+    * * SQL Data Type: nvarchar(100)
     */
     get DateFieldToCheck(): string {  
         return this.Get('DateFieldToCheck');
@@ -7325,9 +8009,9 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('DateFieldToCheck', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -7336,29 +8020,29 @@ export class DatasetItemEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -7369,9 +8053,11 @@ export class DatasetItemEntity extends BaseEntity {
 
 /**
  * Conversation Details - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ConversationDetail
- * Base View: vwConversationDetails
+ * * Schema: admin
+ * * Base Table: ConversationDetail
+ * * Base View: vwConversationDetails
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7379,10 +8065,19 @@ export class DatasetItemEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Conversation Details')
 export class ConversationDetailEntity extends BaseEntity {
     /**
-    * Field Name: ConversationID
-    * Display Name: Conversation ID
-    * SQL Data Type: int
-    * Related Entity: Conversations
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: int
+    * * Related Entity: Conversations
     */
     get ConversationID(): number {  
         return this.Get('ConversationID');
@@ -7391,9 +8086,9 @@ export class ConversationDetailEntity extends BaseEntity {
         this.Set('ConversationID', value);
     }
     /**
-    * Field Name: ExternalID
-    * Display Name: External ID
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalID(): string {  
         return this.Get('ExternalID');
@@ -7402,10 +8097,10 @@ export class ConversationDetailEntity extends BaseEntity {
         this.Set('ExternalID', value);
     }
     /**
-    * Field Name: Role
-    * Display Name: Role
-    * SQL Data Type: nvarchar(20)
-    * Default Value: user_name()
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: user_name()
     */
     get Role(): string {  
         return this.Get('Role');
@@ -7414,9 +8109,9 @@ export class ConversationDetailEntity extends BaseEntity {
         this.Set('Role', value);
     }
     /**
-    * Field Name: Message
-    * Display Name: Message
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Message
+    * * Display Name: Message
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Message(): string {  
         return this.Get('Message');
@@ -7425,9 +8120,9 @@ export class ConversationDetailEntity extends BaseEntity {
         this.Set('Message', value);
     }
     /**
-    * Field Name: Error
-    * Display Name: Error
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Error
+    * * Display Name: Error
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Error(): string {  
         return this.Get('Error');
@@ -7436,29 +8131,29 @@ export class ConversationDetailEntity extends BaseEntity {
         this.Set('Error', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Conversation
-    * Display Name: Conversation
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(100)
     */
     get Conversation(): string {  
         return this.Get('Conversation');
@@ -7469,9 +8164,11 @@ export class ConversationDetailEntity extends BaseEntity {
 
 /**
  * Conversations - strongly typed entity sub-class
- * Schema: admin
- * Base Table: Conversation
- * Base View: vwConversations
+ * * Schema: admin
+ * * Base Table: Conversation
+ * * Base View: vwConversations
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7479,10 +8176,19 @@ export class ConversationDetailEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Conversations')
 export class ConversationEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -7491,9 +8197,9 @@ export class ConversationEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: ExternalID
-    * Display Name: External ID
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalID(): string {  
         return this.Get('ExternalID');
@@ -7502,9 +8208,9 @@ export class ConversationEntity extends BaseEntity {
         this.Set('ExternalID', value);
     }
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -7513,29 +8219,29 @@ export class ConversationEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -7546,9 +8252,11 @@ export class ConversationEntity extends BaseEntity {
 
 /**
  * User Notifications - strongly typed entity sub-class
- * Schema: admin
- * Base Table: UserNotification
- * Base View: vwUserNotifications
+ * * Schema: admin
+ * * Base Table: UserNotification
+ * * Base View: vwUserNotifications
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7556,10 +8264,19 @@ export class ConversationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'User Notifications')
 export class UserNotificationEntity extends BaseEntity {
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -7568,9 +8285,9 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: Title
-    * Display Name: Title
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(255)
     */
     get Title(): string {  
         return this.Get('Title');
@@ -7579,9 +8296,9 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('Title', value);
     }
     /**
-    * Field Name: Message
-    * Display Name: Message
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Message
+    * * Display Name: Message
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Message(): string {  
         return this.Get('Message');
@@ -7590,9 +8307,9 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('Message', value);
     }
     /**
-    * Field Name: ResourceTypeID
-    * Display Name: Resource Type ID
-    * SQL Data Type: int
+    * * Field Name: ResourceTypeID
+    * * Display Name: Resource Type ID
+    * * SQL Data Type: int
     */
     get ResourceTypeID(): number {  
         return this.Get('ResourceTypeID');
@@ -7601,9 +8318,9 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('ResourceTypeID', value);
     }
     /**
-    * Field Name: ResourceRecordID
-    * Display Name: Resource Record ID
-    * SQL Data Type: int
+    * * Field Name: ResourceRecordID
+    * * Display Name: Resource Record ID
+    * * SQL Data Type: int
     */
     get ResourceRecordID(): number {  
         return this.Get('ResourceRecordID');
@@ -7612,9 +8329,9 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('ResourceRecordID', value);
     }
     /**
-    * Field Name: ResourceConfiguration
-    * Display Name: Resource Configuration
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ResourceConfiguration
+    * * Display Name: Resource Configuration
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ResourceConfiguration(): string {  
         return this.Get('ResourceConfiguration');
@@ -7623,10 +8340,10 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('ResourceConfiguration', value);
     }
     /**
-    * Field Name: Unread
-    * Display Name: Unread
-    * SQL Data Type: bit
-    * Default Value: 1
+    * * Field Name: Unread
+    * * Display Name: Unread
+    * * SQL Data Type: bit
+    * * Default Value: 1
     */
     get Unread(): boolean {  
         return this.Get('Unread');
@@ -7635,9 +8352,9 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('Unread', value);
     }
     /**
-    * Field Name: ReadAt
-    * Display Name: Read At
-    * SQL Data Type: datetime
+    * * Field Name: ReadAt
+    * * Display Name: Read At
+    * * SQL Data Type: datetime
     */
     get ReadAt(): Date {  
         return this.Get('ReadAt');
@@ -7646,29 +8363,29 @@ export class UserNotificationEntity extends BaseEntity {
         this.Set('ReadAt', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -7679,9 +8396,11 @@ export class UserNotificationEntity extends BaseEntity {
 
 /**
  * Resource Folders - strongly typed entity sub-class
- * Schema: admin
- * Base Table: ResourceFolder
- * Base View: vwResourceFolders
+ * * Schema: admin
+ * * Base Table: ResourceFolder
+ * * Base View: vwResourceFolders
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7689,10 +8408,19 @@ export class UserNotificationEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Resource Folders')
 export class ResourceFolderEntity extends BaseEntity {
     /**
-    * Field Name: ParentID
-    * Display Name: Parent ID
-    * SQL Data Type: int
-    * Related Entity: Resource Folders
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: int
+    * * Related Entity: Resource Folders
     */
     get ParentID(): number {  
         return this.Get('ParentID');
@@ -7701,9 +8429,9 @@ export class ResourceFolderEntity extends BaseEntity {
         this.Set('ParentID', value);
     }
     /**
-    * Field Name: Name
-    * Display Name: Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {  
         return this.Get('Name');
@@ -7712,10 +8440,10 @@ export class ResourceFolderEntity extends BaseEntity {
         this.Set('Name', value);
     }
     /**
-    * Field Name: ResourceTypeName
-    * Display Name: Resource Type Name
-    * SQL Data Type: nvarchar(255)
-    * Related Entity: Resource Types
+    * * Field Name: ResourceTypeName
+    * * Display Name: Resource Type Name
+    * * SQL Data Type: nvarchar(255)
+    * * Related Entity: Resource Types
     */
     get ResourceTypeName(): string {  
         return this.Get('ResourceTypeName');
@@ -7724,9 +8452,9 @@ export class ResourceFolderEntity extends BaseEntity {
         this.Set('ResourceTypeName', value);
     }
     /**
-    * Field Name: Description
-    * Display Name: Description
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string {  
         return this.Get('Description');
@@ -7735,10 +8463,10 @@ export class ResourceFolderEntity extends BaseEntity {
         this.Set('Description', value);
     }
     /**
-    * Field Name: UserID
-    * Display Name: User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get UserID(): number {  
         return this.Get('UserID');
@@ -7747,38 +8475,38 @@ export class ResourceFolderEntity extends BaseEntity {
         this.Set('UserID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Parent
-    * Display Name: Parent
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(50)
     */
     get Parent(): string {  
         return this.Get('Parent');
     }
 
     /**
-    * Field Name: User
-    * Display Name: User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
     */
     get User(): string {  
         return this.Get('User');
@@ -7789,9 +8517,11 @@ export class ResourceFolderEntity extends BaseEntity {
 
 /**
  * Schema Info - strongly typed entity sub-class
- * Schema: admin
- * Base Table: SchemaInfo
- * Base View: vwSchemaInfos
+ * * Schema: admin
+ * * Base Table: SchemaInfo
+ * * Base View: vwSchemaInfos
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7799,9 +8529,18 @@ export class ResourceFolderEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Schema Info')
 export class SchemaInfoEntity extends BaseEntity {
     /**
-    * Field Name: SchemaName
-    * Display Name: Schema Name
-    * SQL Data Type: nvarchar(50)
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: SchemaName
+    * * Display Name: Schema Name
+    * * SQL Data Type: nvarchar(50)
     */
     get SchemaName(): string {  
         return this.Get('SchemaName');
@@ -7810,9 +8549,9 @@ export class SchemaInfoEntity extends BaseEntity {
         this.Set('SchemaName', value);
     }
     /**
-    * Field Name: EntityIDMin
-    * Display Name: Entity IDMin
-    * SQL Data Type: int
+    * * Field Name: EntityIDMin
+    * * Display Name: Entity IDMin
+    * * SQL Data Type: int
     */
     get EntityIDMin(): number {  
         return this.Get('EntityIDMin');
@@ -7821,9 +8560,9 @@ export class SchemaInfoEntity extends BaseEntity {
         this.Set('EntityIDMin', value);
     }
     /**
-    * Field Name: EntityIDMax
-    * Display Name: Entity IDMax
-    * SQL Data Type: int
+    * * Field Name: EntityIDMax
+    * * Display Name: Entity IDMax
+    * * SQL Data Type: int
     */
     get EntityIDMax(): number {  
         return this.Get('EntityIDMax');
@@ -7832,9 +8571,9 @@ export class SchemaInfoEntity extends BaseEntity {
         this.Set('EntityIDMax', value);
     }
     /**
-    * Field Name: Comments
-    * Display Name: Comments
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string {  
         return this.Get('Comments');
@@ -7843,20 +8582,20 @@ export class SchemaInfoEntity extends BaseEntity {
         this.Set('Comments', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
@@ -7867,9 +8606,11 @@ export class SchemaInfoEntity extends BaseEntity {
 
 /**
  * Company Integration Record Maps - strongly typed entity sub-class
- * Schema: admin
- * Base Table: CompanyIntegrationRecordMap
- * Base View: vwCompanyIntegrationRecordMaps
+ * * Schema: admin
+ * * Base Table: CompanyIntegrationRecordMap
+ * * Base View: vwCompanyIntegrationRecordMaps
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7877,10 +8618,19 @@ export class SchemaInfoEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Company Integration Record Maps')
 export class CompanyIntegrationRecordMapEntity extends BaseEntity {
     /**
-    * Field Name: CompanyIntegrationID
-    * Display Name: Company Integration ID
-    * SQL Data Type: int
-    * Related Entity: Company Integrations
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration ID
+    * * SQL Data Type: int
+    * * Related Entity: Company Integrations
     */
     get CompanyIntegrationID(): number {  
         return this.Get('CompanyIntegrationID');
@@ -7889,9 +8639,9 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity {
         this.Set('CompanyIntegrationID', value);
     }
     /**
-    * Field Name: ExternalSystemRecordID
-    * Display Name: External System Record ID
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: ExternalSystemRecordID
+    * * Display Name: External System Record ID
+    * * SQL Data Type: nvarchar(100)
     */
     get ExternalSystemRecordID(): string {  
         return this.Get('ExternalSystemRecordID');
@@ -7900,10 +8650,10 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity {
         this.Set('ExternalSystemRecordID', value);
     }
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -7912,40 +8662,40 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: EntityRecordID
-    * Display Name: Entity Record ID
-    * SQL Data Type: int
+    * * Field Name: EntityRecordID
+    * * Display Name: Entity Record ID
+    * * SQL Data Type: nvarchar(255)
     */
-    get EntityRecordID(): number {  
+    get EntityRecordID(): string {  
         return this.Get('EntityRecordID');
     }
-    set EntityRecordID(value: number) {
+    set EntityRecordID(value: string) {
         this.Set('EntityRecordID', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
@@ -7956,9 +8706,11 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity {
 
 /**
  * Record Merge Logs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: RecordMergeLog
- * Base View: vwRecordMergeLogs
+ * * Schema: admin
+ * * Base Table: RecordMergeLog
+ * * Base View: vwRecordMergeLogs
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -7966,10 +8718,19 @@ export class CompanyIntegrationRecordMapEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Record Merge Logs')
 export class RecordMergeLogEntity extends BaseEntity {
     /**
-    * Field Name: EntityID
-    * Display Name: Entity ID
-    * SQL Data Type: int
-    * Related Entity: Entities
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: int
+    * * Related Entity: Entities
     */
     get EntityID(): number {  
         return this.Get('EntityID');
@@ -7978,21 +8739,21 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('EntityID', value);
     }
     /**
-    * Field Name: SurvivingRecordID
-    * Display Name: Surviving Record ID
-    * SQL Data Type: int
+    * * Field Name: SurvivingRecordID
+    * * Display Name: Surviving Record ID
+    * * SQL Data Type: nvarchar(255)
     */
-    get SurvivingRecordID(): number {  
+    get SurvivingRecordID(): string {  
         return this.Get('SurvivingRecordID');
     }
-    set SurvivingRecordID(value: number) {
+    set SurvivingRecordID(value: string) {
         this.Set('SurvivingRecordID', value);
     }
     /**
-    * Field Name: InitiatedByUserID
-    * Display Name: Initiated By User ID
-    * SQL Data Type: int
-    * Related Entity: Users
+    * * Field Name: InitiatedByUserID
+    * * Display Name: Initiated By User ID
+    * * SQL Data Type: int
+    * * Related Entity: Users
     */
     get InitiatedByUserID(): number {  
         return this.Get('InitiatedByUserID');
@@ -8001,10 +8762,10 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('InitiatedByUserID', value);
     }
     /**
-    * Field Name: ApprovalStatus
-    * Display Name: Approval Status
-    * SQL Data Type: nvarchar(10)
-    * Default Value: N'Pending'
+    * * Field Name: ApprovalStatus
+    * * Display Name: Approval Status
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: N'Pending'
     */
     get ApprovalStatus(): string {  
         return this.Get('ApprovalStatus');
@@ -8013,9 +8774,9 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('ApprovalStatus', value);
     }
     /**
-    * Field Name: ApprovedByUserID
-    * Display Name: Approved By User ID
-    * SQL Data Type: int
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: int
     */
     get ApprovedByUserID(): number {  
         return this.Get('ApprovedByUserID');
@@ -8024,10 +8785,10 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('ApprovedByUserID', value);
     }
     /**
-    * Field Name: ProcessingStatus
-    * Display Name: Processing Status
-    * SQL Data Type: nvarchar(10)
-    * Default Value: N'Pending'
+    * * Field Name: ProcessingStatus
+    * * Display Name: Processing Status
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: N'Pending'
     */
     get ProcessingStatus(): string {  
         return this.Get('ProcessingStatus');
@@ -8036,10 +8797,10 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('ProcessingStatus', value);
     }
     /**
-    * Field Name: ProcessingStartedAt
-    * Display Name: Processing Started At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: ProcessingStartedAt
+    * * Display Name: Processing Started At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get ProcessingStartedAt(): Date {  
         return this.Get('ProcessingStartedAt');
@@ -8048,9 +8809,9 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('ProcessingStartedAt', value);
     }
     /**
-    * Field Name: ProcessingEndedAt
-    * Display Name: Processing Ended At
-    * SQL Data Type: datetime
+    * * Field Name: ProcessingEndedAt
+    * * Display Name: Processing Ended At
+    * * SQL Data Type: datetime
     */
     get ProcessingEndedAt(): Date {  
         return this.Get('ProcessingEndedAt');
@@ -8059,9 +8820,9 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('ProcessingEndedAt', value);
     }
     /**
-    * Field Name: ProcessingLog
-    * Display Name: Processing Log
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ProcessingLog
+    * * Display Name: Processing Log
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ProcessingLog(): string {  
         return this.Get('ProcessingLog');
@@ -8070,9 +8831,9 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('ProcessingLog', value);
     }
     /**
-    * Field Name: Comments
-    * Display Name: Comments
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
     */
     get Comments(): string {  
         return this.Get('Comments');
@@ -8081,38 +8842,38 @@ export class RecordMergeLogEntity extends BaseEntity {
         this.Set('Comments', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');
     }
 
     /**
-    * Field Name: Entity
-    * Display Name: Entity
-    * SQL Data Type: nvarchar(255)
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {  
         return this.Get('Entity');
     }
 
     /**
-    * Field Name: InitiatedByUser
-    * Display Name: Initiated By User
-    * SQL Data Type: nvarchar(100)
+    * * Field Name: InitiatedByUser
+    * * Display Name: Initiated By User
+    * * SQL Data Type: nvarchar(100)
     */
     get InitiatedByUser(): string {  
         return this.Get('InitiatedByUser');
@@ -8123,9 +8884,11 @@ export class RecordMergeLogEntity extends BaseEntity {
 
 /**
  * Record Merge Deletion Logs - strongly typed entity sub-class
- * Schema: admin
- * Base Table: RecordMergeDeletionLog
- * Base View: vwRecordMergeDeletionLogs
+ * * Schema: admin
+ * * Base Table: RecordMergeDeletionLog
+ * * Base View: vwRecordMergeDeletionLogs
+ * * Primary Key: ID
+ * * Description: null
  * @extends {BaseEntity}
  * @class
  * @public
@@ -8133,10 +8896,19 @@ export class RecordMergeLogEntity extends BaseEntity {
 @RegisterClass(BaseEntity, 'Record Merge Deletion Logs')
 export class RecordMergeDeletionLogEntity extends BaseEntity {
     /**
-    * Field Name: RecordMergeLogID
-    * Display Name: Record Merge Log ID
-    * SQL Data Type: int
-    * Related Entity: Record Merge Logs
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: int
+    */
+    get ID(): number {  
+        return this.Get('ID');
+    }
+
+    /**
+    * * Field Name: RecordMergeLogID
+    * * Display Name: Record Merge Log ID
+    * * SQL Data Type: int
+    * * Related Entity: Record Merge Logs
     */
     get RecordMergeLogID(): number {  
         return this.Get('RecordMergeLogID');
@@ -8145,21 +8917,21 @@ export class RecordMergeDeletionLogEntity extends BaseEntity {
         this.Set('RecordMergeLogID', value);
     }
     /**
-    * Field Name: DeletedRecordID
-    * Display Name: Deleted Record ID
-    * SQL Data Type: int
+    * * Field Name: DeletedRecordID
+    * * Display Name: Deleted Record ID
+    * * SQL Data Type: nvarchar(255)
     */
-    get DeletedRecordID(): number {  
+    get DeletedRecordID(): string {  
         return this.Get('DeletedRecordID');
     }
-    set DeletedRecordID(value: number) {
+    set DeletedRecordID(value: string) {
         this.Set('DeletedRecordID', value);
     }
     /**
-    * Field Name: Status
-    * Display Name: Status
-    * SQL Data Type: nvarchar(10)
-    * Default Value: N'Pending'
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: N'Pending'
     */
     get Status(): string {  
         return this.Get('Status');
@@ -8168,9 +8940,9 @@ export class RecordMergeDeletionLogEntity extends BaseEntity {
         this.Set('Status', value);
     }
     /**
-    * Field Name: ProcessingLog
-    * Display Name: Processing Log
-    * SQL Data Type: nvarchar(MAX)
+    * * Field Name: ProcessingLog
+    * * Display Name: Processing Log
+    * * SQL Data Type: nvarchar(MAX)
     */
     get ProcessingLog(): string {  
         return this.Get('ProcessingLog');
@@ -8179,20 +8951,20 @@ export class RecordMergeDeletionLogEntity extends BaseEntity {
         this.Set('ProcessingLog', value);
     }
     /**
-    * Field Name: CreatedAt
-    * Display Name: Created At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get CreatedAt(): Date {  
         return this.Get('CreatedAt');
     }
 
     /**
-    * Field Name: UpdatedAt
-    * Display Name: Updated At
-    * SQL Data Type: datetime
-    * Default Value: getdate()
+    * * Field Name: UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetime
+    * * Default Value: getdate()
     */
     get UpdatedAt(): Date {  
         return this.Get('UpdatedAt');

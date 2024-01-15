@@ -23,32 +23,28 @@ import { RegisterClass } from "@memberjunction/global";
 
 export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false ) : string { 
     const fields: string = entity.Fields.map(e => {
-        if (e.Name.toLowerCase() === 'id')
-            return ''
-        else {
-            let values: string = '';
-            let valueList: string = '';
-            if (e.ValueListType && 
-                e.ValueListType.length > 0 && 
-                e.ValueListType.trim().toLowerCase() !== 'none') {
-                values = e.EntityFieldValues.map(v => `\n    * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
-                valueList = `\n    * Value List Type: ${e.ValueListType}\n    * Possible Values `+ values  
-            }
-            let sRet: string = `    /**
-    * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * Display Name: ' + e.DisplayName : ''}
-    * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * Related Entity: ' +  e.RelatedEntity : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * Description: ' + e.Description : ''}
+        let values: string = '';
+        let valueList: string = '';
+        if (e.ValueListType && 
+            e.ValueListType.length > 0 && 
+            e.ValueListType.trim().toLowerCase() !== 'none') {
+            values = e.EntityFieldValues.map(v => `\n    * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
+            valueList = `\n    * Value List Type: ${e.ValueListType}\n    * Possible Values `+ values  
+        }
+        let sRet: string = `    /**
+    * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
+    * * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity: ' +  e.RelatedEntity : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}
     */
     get ${e.Name}(): ${TypeScriptTypeFromSQLType(e.Type)} {  
         return this.Get('${e.Name}');
     }
 `
-            if (!e.ReadOnly) {
-                sRet += `    set ${e.Name}(value: ${TypeScriptTypeFromSQLType(e.Type)}) {
+        if (!e.ReadOnly) {
+            sRet += `    set ${e.Name}(value: ${TypeScriptTypeFromSQLType(e.Type)}) {
         this.Set('${e.Name}', value);
     }`
-            }
-            return sRet + '\n';
         }
+        return sRet + '\n';
     }).join('')
 
     const sClassName: string = `${entity.ClassName}Entity`
@@ -59,9 +55,11 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
     let sRet: string = `
 /**
  * ${entity.Name} - strongly typed entity sub-class
- * Schema: ${entity.SchemaName}
- * Base Table: ${entity.BaseTable}
- * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * @description ' + entity.Description : ''}
+ * * Schema: ${entity.SchemaName}
+ * * Base Table: ${entity.BaseTable}
+ * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * @description ' + entity.Description : ''}
+ * * Primary Key: ${entity.PrimaryKey.Name}
+ * * Description: ${entity.Description}
  * @extends {BaseEntity}
  * @class
  * @public

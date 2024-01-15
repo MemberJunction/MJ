@@ -362,10 +362,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): string[] {
         const fieldList: string[] = []
+        let pKeyName: string = null;
+        if (viewEntity) {
+            pKeyName = viewEntity.ViewEntityInfo.PrimaryKey.Name;
+        }
+        else {
+            if (params.EntityName) {
+                const entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
+                if (entityInfo)
+                    pKeyName = entityInfo.PrimaryKey.Name;
+            }
+        }
         if (params.Fields) {
-            // fields provided, if ID isn't included, add it first
-            if (params.Fields.find((f) => f.trim().toLowerCase() === 'id') === undefined)
-                fieldList.push('ID')
+            // fields provided, if primary key isn't included, add it first
+            if (params.Fields.find((f) => f.trim().toLowerCase() === pKeyName.toLowerCase()) === undefined)
+                fieldList.push(pKeyName)
             
             // now add the rest of the param.Fields to fields
             params.Fields.forEach((f) => {
@@ -382,8 +393,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (!c.hidden) // only return the non-hidden fields
                         fieldList.push(c.EntityField.Name);
                 });
-                if (fieldList.find((f) => f.trim().toLowerCase() === 'id') === undefined)
-                    fieldList.push('ID') // this should never happen, all views should always have ID in them, but just in case we do this here to ensure it
+                if (fieldList.find((f) => f.trim().toLowerCase() === pKeyName.toLowerCase()) === undefined)
+                    fieldList.push(pKeyName) // this should never happen, all views should always have primary key in them, but just in case we do this here to ensure it
             }
             else // dynamic view
                 fieldList.push('*'); // no fields provided, include everything 
@@ -394,13 +405,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: number }> {
         const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
         const sSQL = `
-            DECLARE @ViewIDList TABLE ( ID INT );
-            INSERT INTO @ViewIDList (ID) (SELECT ID FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
+            DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
+            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.PrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `
         const runIDResult = await this._dataSource.query(sSQL);
         const runID: number = runIDResult[0].UserViewRunID;
-        const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ID IN 
+        const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.PrimaryKey.Name} IN 
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ' ORDER BY ' + orderBySQL : ''}`
         return { executeViewSQL: sRetSQL, runID: runID };
@@ -440,7 +451,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 }
             }
 
-            sUserSearchSQL = `ID IN (SELECT ID FROM ${entityInfo.SchemaName}.${entityInfo.FullTextSearchFunction}('${u}'))`;            
+            sUserSearchSQL = `${entityInfo.PrimaryKey.Name} IN (SELECT ${entityInfo.PrimaryKey.Name} FROM ${entityInfo.SchemaName}.${entityInfo.FullTextSearchFunction}('${u}'))`;            
         }
         else {
             const entityFields = entityInfo.Fields;
@@ -469,7 +480,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     
-    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: number | null, auditLogDescription: string | null): Promise<any> {
+    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: any | null, auditLogDescription: string | null): Promise<any> {
         try {
             const authorization = authorizationName ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase()) : null;
             const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
@@ -534,14 +545,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return ProviderType.Database;
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, recordId: number): Promise<boolean> {
-        const id = await this.GetRecordFavoriteID(userId, entityName, recordId);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean> {
+        const id = await this.GetRecordFavoriteID(userId, entityName, primaryKeyValue);
         return id !== null;
     }
 
-    public async GetRecordFavoriteID(userId: number, entityName: string, recordId: number): Promise<number | null> {
+    public async GetRecordFavoriteID(userId: number, entityName: string, primaryKeyValue: any): Promise<number | null> {
         try {
-            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID = ${userId} AND Entity='${entityName}' AND RecordID=${recordId}`
+            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${primaryKeyValue}'`
             const result = await this.ExecuteSQL(sSQL);
             if (result && result.length > 0)
                 return result[0].ID;
@@ -554,9 +565,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, recordId: number, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: string, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         try {
-            const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, recordId);
+            const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, primaryKeyValue);
             if ((currentFavoriteId === null && isFavorite === false) ||
                 (currentFavoriteId !== null && isFavorite === true)) 
                 return; // no change
@@ -576,7 +587,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // create the record since we are setting isFavorite to TRUE
                 ufEntity.NewRecord();
                 ufEntity.Set('EntityID', e.ID)
-                ufEntity.Set('RecordID', recordId);
+                ufEntity.Set('RecordID', primaryKeyValue);
                 ufEntity.Set('UserID', userId);
                 if(await ufEntity.Save())
                     return;
@@ -590,9 +601,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }        
     }
 
-    public async GetRecordChanges(entityName: string, recordId: number): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, primaryKeyValue: any): Promise<RecordChange[]> {
         try {
-            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID=${recordId} ORDER BY ChangedAt DESC`
+            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${primaryKeyValue}' ORDER BY ChangedAt DESC`
             return this.ExecuteSQL(sSQL)                                      
         }
         catch (e) {
@@ -610,7 +621,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      * @param entityName the name of the entity to check
      * @param recordId the recordId to check
      */
-    public async GetRecordDependencies(entityName: string, recordId: number): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> {
         try {
             // first, get the entity dependencies for this entity
             const entityDependencies = await this.GetEntityDependencies(entityName);
@@ -624,12 +635,12 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 sSQL += `SELECT 
                             '${entityDependency.EntityName}' AS EntityName, 
                             '${entityDependency.RelatedEntityName}' AS RelatedEntityName, 
-                            ID AS RecordID, 
+                            ${entityInfo.PrimaryKey.Name} AS RecordID, 
                             '${entityDependency.FieldName}' AS FieldName 
                         FROM 
                             [${relatedEntityInfo.SchemaName}].${relatedEntityInfo.BaseView} 
                         WHERE 
-                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, recordId)}`
+                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, primaryKeyValue)}`
             }
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
@@ -653,18 +664,19 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, recordId: number): string {
+    protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, primaryKeyValue: any): string {
         const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
         if (!f) 
             throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
 
         if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id')  {
             // simple link to ID, most common scenario for linkages
-            return recordId.toString();
+            return primaryKeyValue.toString();
         }
         else {
             // linking to something else, so we need to use that field in a sub-query
-            return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ID=${recordId})`
+            const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
+            return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${primaryKeyValue}${quotes})`
         }
     }
 
@@ -694,7 +706,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 2 - update the surviving record, but only do this if we were provided a field map
             if (request.FieldMap && request.FieldMap.length > 0) {
                 const survivor: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser)
-                await survivor.Load(request.SurvivingRecordID);
+                await survivor.Load(request.SurvivingRecordPrimaryKeyValue);
                 for (const fieldMap of request.FieldMap) {
                     survivor.Set(fieldMap.FieldName, fieldMap.Value);
                 }
@@ -707,7 +719,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 3 - update the dependencies for each of the records we will delete
             for (const recordIdToDelete of request.RecordsToMerge) {
                 const newRecStatus: RecordMergeDetailResult = {
-                    RecordID: recordIdToDelete,
+                    PrimaryKeyValue: recordIdToDelete,
                     Success: false,
                     RecordMergeDeletionLogID: null,
                     Message: null,
@@ -720,10 +732,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName?.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
                     await relatedEntity.Load(dependency.RecordID);
-                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordID);
+                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordPrimaryKeyValue);
                     if (!await relatedEntity.Save()) {
                         newRecStatus.Success = false;
-                        newRecStatus.Message = `Error updating dependency record ${dependency.RecordID} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordID}`
+                        newRecStatus.Message = `Error updating dependency record ${dependency.RecordID} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordPrimaryKeyValue}`
                         throw new Error(newRecStatus.Message);
                     }
                 }
@@ -771,7 +783,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             recordMergeLog.NewRecord();
             recordMergeLog.EntityID = entity.ID;
-            recordMergeLog.SurvivingRecordID = request.SurvivingRecordID;    
+            recordMergeLog.SurvivingRecordID = request.SurvivingRecordPrimaryKeyValue;    
             recordMergeLog.InitiatedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
             recordMergeLog.ApprovalStatus = 'Approved';
             recordMergeLog.ApprovedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
@@ -806,7 +818,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
                     recordMergeDeletionLog.NewRecord();
                     recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
-                    recordMergeDeletionLog.DeletedRecordID = d.RecordID;
+                    recordMergeDeletionLog.DeletedRecordID = d.PrimaryKeyValue;
                     recordMergeDeletionLog.Status = d.Success ? 'Success' : 'Error';
                     recordMergeDeletionLog.ProcessingLog = d.Success ? null : d.Message; // only save the message if it failed
                     if (!await recordMergeDeletionLog.Save())
@@ -841,20 +853,20 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     INSERT INTO @ResultTable
                     ${sSimpleSQL}
 
-                    DECLARE @ID INT
-                    SELECT @ID = ID FROM @ResultTable
-                    IF @ID IS NOT NULL AND @ID > 0
+                    DECLARE @ID NVARCHAR(255)
+                    SELECT @ID = ${entity.PrimaryKey.Name} FROM @ResultTable
+                    IF @ID IS NOT NULL 
                     BEGIN
                         DECLARE @ResultChangesTable TABLE (
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}                            
                         )                              
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, user)}
+                        ${this.GetLogRecordChangeSQL(entity.GetAll(false), oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, user, false)}
                     END
 
                     SELECT * FROM @ResultTable`
-        }
+        } 
         else {
             // not doing track changes for this entity, keep it simple
             sSQL = sSimpleSQL;
@@ -997,7 +1009,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     private generateSPParams(entity: BaseEntity, isUpdate: boolean): string {
-        let sRet: string = '',bFirst: boolean = true;
+        let sRet: string = '', bFirst: boolean = true;
         for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
             const f = entity.EntityInfo.Fields[i];
             if (f.AllowUpdateAPI) {
@@ -1014,7 +1026,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             }
         }
         if (isUpdate && bFirst === false) {
-            sRet += ', @ID = ' + entity.ID  // add ID to update SP at end, but only if other fields included
+            sRet += `, @${entity.PrimaryKey.Name} = ` + entity.PrimaryKey.Value  // add pkey to update SP at end, but only if other fields included
             bFirst = false;
         }
 
@@ -1072,14 +1084,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return (paramValue === null || paramValue === undefined) ? null : quoteString + pVal + quoteString
     }
     
-    protected GetLogRecordChangeSQL(newData: any, oldData: any, entityName: string, recordID: string, entityInfo: EntityInfo, user: UserInfo) {
+    protected GetLogRecordChangeSQL(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, user: UserInfo, wrapRecordIdInQuotes: boolean) {
         const fullRecordJSON: string = JSON.stringify(this.escapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
         const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
         const changesKeys = changes ? Object.keys(changes) : [];
         if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
             const changesJSON: string = changes !== null ? JSON.stringify(changes) : '';
+            const quotes = wrapRecordIdInQuotes ? "'" : '';
             const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange @EntityName='${entityName}', 
-                                                                               @RecordID=${recordID}, 
+                                                                               @RecordID=${quotes}${recordID}${quotes}, 
                                                                                @UserID=${user.ID},
                                                                                @ChangesJSON='${changesJSON}', 
                                                                                @ChangesDescription='${oldData && newData ? this.CreateUserDescription(changes) : !oldData ? 'Record Created' : 'Record Deleted'}', 
@@ -1091,8 +1104,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         else
             return null;
     }
-    protected async LogRecordChange(newData: any, oldData: any, entityName: string, recordID: number, entityInfo: EntityInfo, user: UserInfo) {
-        const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID.toString(), entityInfo, user);
+    protected async LogRecordChange(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, user: UserInfo) {
+        const sSQL = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, user, true);
         if (sSQL) {
             const result = await this.ExecuteSQL(sSQL);
             return result;
@@ -1188,7 +1201,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
 
     public async Load(entity: BaseEntity, RecordID: number, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
-        const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ID = ${RecordID}`
+        const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
+
+        const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${RecordID}${quotes}`
         const d = await this.ExecuteSQL(sql);
         if (d && d.length > 0) {
             // got the record, now process the relationships if there are any
@@ -1207,7 +1222,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                         FROM 
                                             [${relEntitySchemaName}].${relInfo.RelatedEntityBaseView} 
                                         WHERE 
-                                            ${relInfo.RelatedEntityJoinField} = ${ret.ID}`
+                                            ${relInfo.RelatedEntityJoinField} = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
                         else 
                             // many to many - need to use join view
                             relSql = `  SELECT 
@@ -1217,7 +1232,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                         INNER JOIN 
                                             [${relEntitySchemaName}].${relInfo.JoinView} _jv ON _theview.${relInfo.RelatedEntityJoinField} = _jv.${relInfo.JoinEntityInverseJoinField} 
                                         WHERE 
-                                            _jv.${relInfo.JoinEntityJoinField} = ${ret.ID}`
+                                            _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
                         
                         const relData = await this.ExecuteSQL(relSql);
                         if (relData && relData.length > 0) {
@@ -1234,8 +1249,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected GetDeleteSQL(entity: BaseEntity, user: UserInfo) : string {
         let sSQL: string = '';
+        const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
         const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.ClassName}`;
-        const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] @ID=${entity.ID}`;
+        const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] @${entity.PrimaryKey.Name}=${quotes}${entity.PrimaryKey.Value}${quotes}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
 
         if (entity.EntityInfo.TrackRecordChanges) {
@@ -1246,25 +1262,25 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         DROP TABLE #ResultTable
 
                     DECLARE @ResultTable TABLE (
-                        ID INT
+                        ID NVARCHAR(255)
                     )
 
                     INSERT INTO @ResultTable
                     ${sSimpleSQL}
 
                     DECLARE @ID INT
-                    SELECT @ID = ID FROM @ResultTable
-                    IF @ID IS NOT NULL AND @ID > 0
+                    SELECT @ID = ${entity.PrimaryKey.Name} FROM @ResultTable
+                    IF @ID IS NOT NULL 
                     BEGIN
                         DECLARE @ResultChangesTable TABLE (
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}                            
                         )                              
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, entity.ID.toString(), entity.EntityInfo, user)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, entity.PrimaryKey.Value, entity.EntityInfo, user, true)}
                     END
 
-                    SELECT @ID AS ID`;
+                    SELECT @ID AS ${entity.PrimaryKey.Name}`;
         }
         else {
             // no record change tracking
@@ -1297,7 +1313,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         // we get here whenever the transaction group does gets around to committing
                         // our query.  
                         if (success && results) 
-                            resolve (entity.ID === results[0].ID)
+                            resolve (entity.PrimaryKey.Value === results[0][entity.PrimaryKey.Name])
                         else 
                             // the transaction failed, nothing to update, but we need to call Reject so the 
                             // promise resolves with a rejection so our outer caller knows
@@ -1309,8 +1325,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 return this._dataSource.transaction(async () => {
                     const d = await this.ExecuteSQL(sSQL);
     
-                    if (d && d[0] && d[0].ID) 
-                        return entity.ID === d[0].ID; // returns the ID of the deleted record if SP is successful
+                    if (d && d[0] && d[0][entity.PrimaryKey.Name]) 
+                        return entity.PrimaryKey.Value === d[0][entity.PrimaryKey.Value]; // returns the pkey of the deleted record if SP is successful
                     else
                         return false;
                 });
@@ -1645,15 +1661,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         const result: EntityRecordNameResult[] = [];
         for (let i = 0; i < info.length; i++) {
-            const r = await this.GetEntityRecordName(info[i].EntityName, info[i].RecordID);
-            result.push({ EntityName: info[i].EntityName, RecordID: info[i].RecordID, RecordName: r, Success: r ? true : false, Status: r ? 'Success' : 'Error' });
+            const r = await this.GetEntityRecordName(info[i].EntityName, info[i].PrimaryKeyValue);
+            result.push({ EntityName: info[i].EntityName, PrimaryKeyValue: info[i].PrimaryKeyValue, RecordName: r, Success: r ? true : false, Status: r ? 'Success' : 'Error' });
         }
         return result;
     }
 
-    public async GetEntityRecordName(entityName: string, recordId: number): Promise<string> {
+    public async GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string> {
         try {
-            const sql = this.GetEntityRecordNameSQL(entityName, recordId);
+            const sql = this.GetEntityRecordNameSQL(entityName, primaryKeyValue);
             if (sql) {
                 const data = await this.ExecuteSQL(sql);
                 if (data && data.length === 1) {
@@ -1661,7 +1677,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     return data[0][fields[0]]; // return first field
                 }
                 else {
-                    LogError(`Entity ${entityName} record ${recordId} not found, returning null`)
+                    LogError(`Entity ${entityName} record ${primaryKeyValue} not found, returning null`)
                     return null;
                 }
             }
@@ -1672,7 +1688,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    protected GetEntityRecordNameSQL(entityName: string, recordId: number): string {
+    protected GetEntityRecordNameSQL(entityName: string, primaryKeyValue: any): string {
         const e = this.Entities.find(e => e.Name === entityName);
         if (!e)
             throw new Error(`Entity ${entityName} not found`);
@@ -1686,7 +1702,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             }
             else {
                 // got our field, create a SQL Query
-                return `SELECT ${f.Name} FROM [${e.SchemaName}].[${e.BaseView}] WHERE ID=${recordId}`;
+                const quotes = e.PrimaryKey.NeedsQuotes ? "'" : '';
+                return `SELECT ${f.Name} FROM [${e.SchemaName}].[${e.BaseView}] WHERE ${e.PrimaryKey.Name}=${quotes}${primaryKeyValue}${quotes}`;
             }
         }
     }

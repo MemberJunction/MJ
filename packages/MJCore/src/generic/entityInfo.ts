@@ -23,7 +23,7 @@ export type RecordChangeStatus = typeof RecordChangeStatus[keyof typeof RecordCh
  */
 export class RecordChange extends BaseInfo {
     EntityID: number = null
-    RecordID: number = null
+    RecordID: any = null
     ChangedAt: Date = null
     ChangesJSON: string = null
     ChangesDescription: string = null
@@ -178,6 +178,16 @@ export const EntityFieldTSType = {
 
 export type EntityFieldTSType = typeof EntityFieldTSType[keyof typeof EntityFieldTSType];
 
+export const EntityFieldGraphQLType = {
+    Int: 'Int',
+    Float: 'Float',
+    String: 'String',
+    Boolean: 'Boolean',
+    Timestamp: 'Timestamp',
+} as const;
+
+export type EntityFieldGraphQLType = typeof EntityFieldGraphQLType[keyof typeof EntityFieldGraphQLType];
+
 
 export const EntityFieldValueListType = {
     None: 'None',
@@ -232,6 +242,14 @@ export class EntityFieldInfo extends BaseInfo {
      */
     DisplayName: string = null 
     Description: string = null 
+    /**
+     * If true, the field is the primary key for the entity. There must be one primary key field per entity.
+     */
+    IsPrimaryKey: boolean = null
+    /**
+     * If true, the field is a unique key for the entity. There can be zero to many unique key fields per entity.
+     */
+    IsUnique: boolean = null
     Category: string = null
     Type: string = null
     Length: number = null 
@@ -324,6 +342,35 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
+    get NeedsQuotes(): boolean {
+        switch (this.TSType) {
+            case EntityFieldTSType.Number:
+            case EntityFieldTSType.Boolean:
+                return false;
+            default:
+                return true;
+        }
+    }
+
+    get GraphQLType(): EntityFieldGraphQLType {
+        switch (TypeScriptTypeFromSQLType(this.Type).toLowerCase()) {
+            case "number":
+                // either an int or float if not an int
+                switch (this.Type.toLowerCase().trim()) {
+                    case "int": case "smallint": case "tinyint": case "bigint":
+                        return EntityFieldGraphQLType.Int
+                    default:
+                        return EntityFieldGraphQLType.Float
+                }
+            case "boolean":
+                return EntityFieldGraphQLType.Boolean
+            case "date":
+                return EntityFieldGraphQLType.Timestamp
+            default:
+                return EntityFieldGraphQLType.String
+        }
+    }
+
     /**
      * Returns a string with the full SQL data type that combines, as appropriate, Type, Length, Precision and Scale where these attributes are relevant to the Type
      */
@@ -336,13 +383,14 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get ReadOnly(): boolean {
-        return this.IsVirtual || !this.AllowUpdateAPI || this.Name.toLowerCase() === 'id' || this.Type.toLowerCase() === 'uniqueidentifier';
+        return this.IsVirtual || !this.AllowUpdateAPI || this.IsPrimaryKey || this.Type.toLowerCase() === 'uniqueidentifier';
     }
 
     /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Special fields are: CreatedAt, UpdatedAt, ID
      * Also, we skip validation if we have a field that is:
+     *  - the primary key
      *  - a uniqueidentifier 
      *  - an autoincrement field
      *  - the field is virtual
@@ -353,7 +401,7 @@ export class EntityFieldInfo extends BaseInfo {
 
         return name === 'createdat' || 
                name === 'updatedat' || 
-               name === 'id' ||
+               this.IsPrimaryKey ||
                this.Type.trim().toLowerCase() === 'uniqueidentifier' ||
                this.AutoIncrement === true ||
                this.IsVirtual === true ||
@@ -473,6 +521,18 @@ export class EntityInfo extends BaseInfo {
     _manyToManyCount: number = 0 
     _oneToManyCount: number = 0
     _floatCount: number = 0
+
+    get PrimaryKey(): EntityFieldInfo {
+        return this.Fields.find((f) => f.IsPrimaryKey);
+    }
+
+    get UniqueKeys(): EntityFieldInfo[] {
+        return this.Fields.filter((f) => f.IsUnique);
+    }
+
+    get ForeignKeys(): EntityFieldInfo[] {
+        return this.Fields.filter((f) => f.RelatedEntityID > 0);
+    }
 
     get Fields(): EntityFieldInfo[] {
         return this._Fields;
@@ -781,18 +841,18 @@ export class RecordDependency {
     EntityName: string
     RelatedEntityName: string
     FieldName: string
-    RecordID: number
+    RecordID: any
 }
 
 export class RecordMergeRequest {
     EntityName: string
-    SurvivingRecordID: number
-    RecordsToMerge: number[]
+    SurvivingRecordPrimaryKeyValue: any
+    RecordsToMerge: any[]
     FieldMap?: {FieldName: string, Value: any}[]
 }
 
 export class RecordMergeDetailResult {
-    RecordID: number
+    PrimaryKeyValue: any
     Success: boolean
     RecordMergeDeletionLogID: number | null
     Message?: string

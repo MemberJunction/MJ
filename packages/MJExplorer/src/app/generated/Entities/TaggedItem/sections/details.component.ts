@@ -20,7 +20,7 @@ import { TaggedItemEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Record ID</label>
-            <kendo-numerictextbox [(value)]="record.RecordID" ></kendo-numerictextbox>   
+            <kendo-textarea [(ngModel)]="record.RecordID" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Tag</label>

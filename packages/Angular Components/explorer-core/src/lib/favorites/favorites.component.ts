@@ -28,12 +28,12 @@ export class FavoritesComponent {
       this.favorites = favorites.Results // set the result in the list and let the below happen after async and it will update via data binding when done
 
       const input: EntityRecordNameInput[] = favorites.Results.map((fav: any) => {
-        return { EntityName: fav.Entity, RecordID: fav.RecordID }
+        return { EntityName: fav.Entity, PrimaryKeyValue: fav.RecordID }
       })
       const results = await md.GetEntityRecordNames(input)
       if (results)
         results.forEach((result) => {
-          const fav = favorites.Results.find((f: any) => f.Entity == result.EntityName && f.RecordID == result.RecordID)
+          const fav = favorites.Results.find((f: any) => f.Entity == result.EntityName && f.RecordID == result.PrimaryKeyValue)
           if (fav) {
             fav.RecordName = result.Success ? result.RecordName : fav.Entity + ' ' + fav.RecordID
           }

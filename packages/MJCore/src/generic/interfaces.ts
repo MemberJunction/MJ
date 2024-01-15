@@ -51,13 +51,13 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, RecordID: number, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, PrimaryKeyValue: any, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 
     Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
 
-    GetRecordChanges(entityName: string, recordId: number): Promise<RecordChange[]>
+    GetRecordChanges(entityName: string, PrimaryKeyValue: any): Promise<RecordChange[]>
 }
 
 export class EntitySaveOptions {
@@ -67,13 +67,13 @@ export class EntitySaveOptions {
 
 export class EntityRecordNameInput  {
     EntityName: string;
-    RecordID: number;
+    PrimaryKeyValue: any;
 }
 
 export class EntityRecordNameResult  {
     Success: boolean
     Status: string
-    RecordID: number;
+    PrimaryKeyValue: any;
     EntityName: string;
     RecordName?: string;
  }
@@ -119,7 +119,7 @@ export interface IMetadataProvider {
      * @param entityName the name of the entity to check
      * @param recordId the recordId to check
      */
-    GetRecordDependencies(entityName: string, recordId: number): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.
@@ -149,10 +149,10 @@ export interface IMetadataProvider {
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param recordId 
+     * @param primaryKeyValue 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, recordId: number): Promise<string>
+    GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
@@ -161,9 +161,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string, recordId: number): Promise<boolean>
+    GetRecordFavoriteStatus(userId: number, entityName: string,primaryKeyValue: any): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, recordId: number, isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 

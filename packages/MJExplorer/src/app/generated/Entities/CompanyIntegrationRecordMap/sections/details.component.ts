@@ -24,7 +24,7 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Entity Record ID</label>
-            <kendo-numerictextbox [(value)]="record.EntityRecordID" ></kendo-numerictextbox>   
+            <kendo-textarea [(ngModel)]="record.EntityRecordID" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

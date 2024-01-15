@@ -1,6 +1,4 @@
-import { generateReactCode } from './react_client_codegen';
 import { generateGraphQLServerCode } from './graphql_server_codegen';
-import { generateGraphQLClientCode } from './graphql_client_codegen';
 import { manageSQLScriptsAndExecution, runCustomSQLScripts } from './sql_codegen';
 import { generateAllEntitySubClasses } from './entity_subclasses_codegen';
 import { setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
@@ -14,7 +12,6 @@ import { generateDBSchemaJSONOutput } from './dbSchema';
 import { generateAngularCode } from './angular_client_codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { createNewUser } from './createNewUser';
-import path from 'path';
 
 export async function runMemberJunctionCodeGeneration() {
     try {
@@ -140,33 +137,7 @@ export async function runMemberJunctionCodeGeneration() {
 
 
         /****************************************************************************************
-        // STEP 5 - GraphQL Client Code Gen
-        ****************************************************************************************/
-        const graphqlClientOutputDir = outputDir('GraphQLClient', false);
-        if (graphqlClientOutputDir) {
-            // generate the GraphQL client code
-            logStatus('Generating GraphQL Client Code...')
-            if (! generateGraphQLClientCode(md.Entities, graphqlClientOutputDir))
-                logError('Error generating GraphQL client code');
-        }
-        else
-            logStatus('GraphQL client output directory NOT found in config file, skipping...');
-
-        /****************************************************************************************
-        // STEP 6 - React Code Gen
-        ****************************************************************************************/
-        const reactOutputDir = outputDir('React', false);
-        if (reactOutputDir) {
-            // generate the React
-            logStatus('Generating React Code...')
-            if (! generateReactCode(md.Entities, reactOutputDir))
-                logError('Error generating React code');
-        }
-        else
-            logStatus('React output directory NOT found in config file, skipping...');
-
-        /****************************************************************************************
-        // STEP 7 - Angular Code Gen
+        // STEP 5 - Angular Code Gen
         ****************************************************************************************/
         const angularOutputDir = outputDir('Angular', false);
         if (angularOutputDir) {
@@ -180,7 +151,7 @@ export async function runMemberJunctionCodeGeneration() {
 
 
         /****************************************************************************************
-        // STEP 8 - Database Schema Output in JSON - for documentation and can be used by AI/etc.
+        // STEP 6 - Database Schema Output in JSON - for documentation and can be used by AI/etc.
         ****************************************************************************************/
         const dbSchemaOutputDir = outputDir('DBSchemaJSON', false);
         if (dbSchemaOutputDir) {
@@ -194,7 +165,7 @@ export async function runMemberJunctionCodeGeneration() {
 
 
         /****************************************************************************************
-        // STEP X --- Finalization Step - execute any AFTER commands specified in the config file
+        // STEP 7 --- Finalization Step - execute any AFTER commands specified in the config file
         ****************************************************************************************/
         const afterCommands = commands('AFTER')
         if (afterCommands && afterCommands.length > 0) {
@@ -204,7 +175,7 @@ export async function runMemberJunctionCodeGeneration() {
                 logError('ERROR running one or more AFTER commands');
         }
         /****************************************************************************************
-        // STEP X.1 --- Execute any AFTER SQL Scripts specified in the config file
+        // STEP 8 --- Execute any AFTER SQL Scripts specified in the config file
         ****************************************************************************************/
         if (! await runCustomSQLScripts(AppDataSource, 'after-all'))
             logError('ERROR running after-all SQL Scripts');

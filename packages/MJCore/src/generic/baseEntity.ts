@@ -24,6 +24,18 @@ export class EntityField {
         return this._entityFieldInfo.Type;
     }
 
+    get IsPrimaryKey(): boolean {
+        return this._entityFieldInfo.IsPrimaryKey;
+    }
+
+    get NeedsQuotes(): boolean {
+        return this._entityFieldInfo.NeedsQuotes;
+    }
+
+    get IsUnique(): boolean {
+        return this._entityFieldInfo.IsUnique;
+    }
+
     get Value(): any {
         return this._Value;
     }
@@ -250,8 +262,13 @@ export abstract class BaseEntity {
         return !this.ID || this.ID <=0 || this.Fields.some(f => f.Dirty);
     }
 
-    get ID(): number {
-        return this.Get('ID');
+    get PrimaryKey(): EntityField {
+        const fieldInfo = this.EntityInfo.PrimaryKey;
+        if (fieldInfo) {
+            return this.GetFieldByName(fieldInfo.Name);
+        }
+        else
+            return null;
     }
 
     get RecordLoaded(): boolean {
@@ -445,7 +462,7 @@ export abstract class BaseEntity {
         return true; 
     }
     
-    public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async Load(PrimaryKeyValue: any, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
         }
@@ -456,7 +473,7 @@ export abstract class BaseEntity {
             if (this.ID !== null) 
                 this.init(); // wipe out current data if we're loading on top of existing record
 
-            const data = await BaseEntity.Provider.Load(this, ID, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await BaseEntity.Provider.Load(this, PrimaryKeyValue, EntityRelationshipsToLoad, this.ActiveUser);
             this.loadFieldsFromData(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
@@ -474,7 +491,6 @@ export abstract class BaseEntity {
 
             return true;
         }
-        return false;
     }
 
     public LoadFromData(data: any) : boolean {

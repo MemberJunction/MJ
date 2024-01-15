@@ -8,8 +8,8 @@ import { UserResolver } from './UserResolver';
 @Resolver(UserView_)
 export class UserViewResolver extends UserViewResolverBase {
   @Query(() => [UserView_])
-  UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource }: AppContext) {
-    return dataSource.getRepository(UserView_).findBy({ UserID });
+  async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { dataSource }: AppContext) {
+    return await this.findBy(dataSource, 'User Views', { UserID });
   }
 
   @Query(() => [UserView_])
@@ -18,12 +18,12 @@ export class UserViewResolver extends UserViewResolverBase {
     @Arg('EntityID', () => Int) EntityID: number,
     @Ctx() { dataSource }: AppContext
   ) {
-    return dataSource.getRepository(UserView_).findBy({ UserID, EntityID, IsDefault: true });
+    return await this.findBy(dataSource, 'User Views', { UserID, EntityID, IsDefault: true });
   }
 
   @Query(() => [UserView_])
   async CurrentUserDefaultViewByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() { dataSource, userPayload }: AppContext) {
-    return dataSource.getRepository(UserView_).findBy({
+    return await this.findBy(dataSource, 'User Views', {
       UserID: await this.getCurrentUserID(dataSource, userPayload),
       EntityID,
       IsDefault: true,
@@ -38,7 +38,7 @@ export class UserViewResolver extends UserViewResolverBase {
 
   @Query(() => [UserView_])
   async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() { dataSource, userPayload }: AppContext) {
-    return dataSource.getRepository(UserView_).findBy({ UserID: await this.getCurrentUserID(dataSource, userPayload), EntityID });
+    return this.findBy(dataSource, 'User Views', { UserID: await this.getCurrentUserID(dataSource, userPayload), EntityID });
   }
 
   @Query(() => [UserView_])

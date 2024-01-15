@@ -95,8 +95,8 @@ export class RecordMergeRequest {
     @Field(() => String)
     EntityName: string;
 
-    @Field(() => Int)
-    SurvivingRecordID: number;
+    @Field(() => String)
+    SurvivingRecordPrimaryKeyValue: string;
 
     @Field(() => [Int])
     RecordsToMerge: number[];

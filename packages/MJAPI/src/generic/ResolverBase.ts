@@ -4,11 +4,34 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataSource } from 'typeorm';
 import { Entity_, UserView_ } from '../generated/generated';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
+import { AuditLogEntity } from '@memberjunction/core-entities';
 
 export class ResolverBase {
+  async findBy(dataSource: DataSource, entity: string, params: any) {
+    // build the SQL query based on the params passed in
+    const md = new Metadata();
+    const e = md.Entities.find((e) => e.Name === entity);
+    if (!e) throw new Error(`Entity ${entity} not found in metadata`);
+    // now build a SQL string using the entityInfo and using the properties in the params object
+    let sql = `SELECT * FROM ${e.SchemaName}.${e.BaseView} WHERE `;
+    const keys = Object.keys(params);
+    keys.forEach((k, i) => {
+      if (i > 0) sql += ' AND ';
+      // look up the field in the entityInfo to see if it needs quotes
+      const field = e.Fields.find((f) => f.Name === k);
+      if (!field) throw new Error(`Field ${k} not found in entity ${entity}`);
+      const quotes = field.NeedsQuotes ? "'" : '';
+      sql += `${k} = ${quotes}${params[k]}${quotes}`;
+    });
+
+    // ok, now we have a SQL string, run it and return the results
+    const result = await dataSource.query(sql);
+    return result;
+  }
+
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserView_ | null = await dataSource.getRepository(UserView_).findOneBy({ Name: viewInput.ViewName });
+      const viewInfo: UserView_ | null = await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName });
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -34,7 +57,7 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserView_ | null = await dataSource.getRepository(UserView_).findOneBy({ ID: viewInput.ViewID });
+      const viewInfo: UserView_ | null = await await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID });
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -60,14 +83,16 @@ export class ResolverBase {
 
   async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const entity = await dataSource.getRepository(Entity_).findOneBy({ Name: viewInput.EntityName });
+      const md = new Metadata();
+      const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
+      if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
       const viewInfo: UserView_ = {
         ID: -1,
         Entity: viewInput.EntityName,
-        EntityID: entity?.ID as number,
+        EntityID: entity.ID as number,
         // EntityBaseView: entity?.ID === 22 ? '' : (entity?.BaseView as string), // fake error
-        EntityBaseView: entity?.BaseView as string,
+        EntityBaseView: entity.BaseView as string,
       } as UserView_; // only providing a few bits of data here, but it's enough to get the view to run
 
       return this.RunViewGenericInternal(
@@ -163,7 +188,7 @@ export class ResolverBase {
     }
   }
 
-  protected async createRecordAccessAuditLogRecord(userPayload: UserPayload, entityName: string, recordId: number): Promise<any> {
+  protected async createRecordAccessAuditLogRecord(userPayload: UserPayload, entityName: string, recordId: any): Promise<any> {
     try {
       const md = new Metadata();
       const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
@@ -201,7 +226,7 @@ export class ResolverBase {
     status: string,
     details: string | null,
     entityId: number,
-    recordId: number | null
+    recordId: any | null
   ): Promise<any> {
     try {
       const md = new Metadata();
@@ -214,7 +239,7 @@ export class ResolverBase {
       if (!userInfo) throw new Error(`User ${userPayload?.email} not found in metadata`);
       if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
 
-      const auditLog = await md.GetEntityObject('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
+      const auditLog = <AuditLogEntity>await md.GetEntityObject('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = userInfo.ID;
       auditLog.AuditLogTypeName = auditLogType.Name;

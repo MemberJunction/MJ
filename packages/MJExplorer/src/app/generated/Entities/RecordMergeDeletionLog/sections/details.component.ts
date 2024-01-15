@@ -16,7 +16,7 @@ import { RecordMergeDeletionLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Deleted Record ID</label>
-            <kendo-numerictextbox [(value)]="record.DeletedRecordID" ></kendo-numerictextbox>   
+            <kendo-textarea [(ngModel)]="record.DeletedRecordID" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status</label>

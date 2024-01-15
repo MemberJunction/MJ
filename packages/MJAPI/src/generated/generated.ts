@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 1/10/2024, 5:22:09 PM
+* GENERATED: 1/14/2024, 8:16:25 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -14,17 +14,7 @@ import { AppContext } from '@memberjunction/server';
 import { MaxLength } from 'class-validator';
 import { ResolverBase } from '../generic/ResolverBase';
 import { RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '../generic/RunViewResolver';
-import {
-  BaseEntity,
-  PrimaryGeneratedColumn,
-  JoinTable,
-  ViewEntity,
-  ManyToMany,
-  OneToMany,
-  Column,
-  ViewColumn,
-  DataSource
-} from 'typeorm';
+import { DataSource } from 'typeorm';
 import * as MJGeneratedEntities from 'mj_generatedentities'
 import { Metadata, EntityPermissionType } from '@memberjunction/core'
 
@@ -32,62 +22,46 @@ import { Metadata, EntityPermissionType } from '@memberjunction/core'
 //****************************************************************************
 // ENTITY CLASS for Companies
 //****************************************************************************
-@ViewEntity({
-   name: 'vwCompanies',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'List of Companies/Organizations within the top-level business, used for subsidiaries' })
-export class Company_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Company_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field() 
     @MaxLength(400)
-    @Column()
     Description: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     Website?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1000)
-    @Column()
     LogoURL?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     Domain?: string;
     
     @Field(() => [Employee_])
-    @OneToMany(() => Employee_, () => null)
     EmployeesArray: Employee_[]; // Link to Employees
 
     @Field(() => [CompanyIntegration_])
-    @OneToMany(() => CompanyIntegration_, () => null)
     CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
 
     @Field(() => [Workflow_])
-    @OneToMany(() => Workflow_, () => null)
     WorkflowsArray: Workflow_[]; // Link to Workflows
 
 }
@@ -200,21 +174,21 @@ export class CompanyResolver extends ResolverBase {
     @FieldResolver(() => [Employee_])
     async EmployeesArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployees WHERE CompanyID=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE CompanyID=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrations WHERE CompanyName=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE CompanyName=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Workflow_])
     async WorkflowsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkflows WHERE CompanyName=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE CompanyName=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -282,7 +256,7 @@ export class CompanyResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCompany(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -298,11 +272,11 @@ export class CompanyResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -311,108 +285,82 @@ export class CompanyResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employees
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEmployees',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'Employees' })
-export class Employee_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Employee_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(16)
-    @Column()
     BCMID: string;
       
     @Field() 
     @MaxLength(60)
-    @Column()
     FirstName: string;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     LastName: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     Title?: string;
       
     @Field({description: '5'}) 
     @MaxLength(200)
-    @Column()
     Email: string;
       
     @Field({nullable: true}) 
     @MaxLength(40)
-    @Column()
     Phone?: string;
       
     @Field(() => Boolean) 
-    @Column()
     Active: boolean;
       
     @Field(() => Int) 
-    @Column()
     CompanyID: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     SupervisorID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(162)
-    @ViewColumn()
     FirstLast?: string;
       
     @Field({nullable: true}) 
     @MaxLength(162)
-    @ViewColumn()
     Supervisor?: string;
       
     @Field({nullable: true}) 
     @MaxLength(60)
-    @ViewColumn()
     SupervisorFirstName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @ViewColumn()
     SupervisorLastName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     SupervisorEmail?: string;
     
     @Field(() => [Employee_])
-    @OneToMany(() => Employee_, () => null)
     EmployeesArray: Employee_[]; // Link to Employees
 
     @Field(() => [EmployeeCompanyIntegration_])
-    @OneToMany(() => EmployeeCompanyIntegration_, () => null)
     EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
 
     @Field(() => [EmployeeRole_])
-    @OneToMany(() => EmployeeRole_, () => null)
     EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
 
     @Field(() => [EmployeeSkill_])
-    @OneToMany(() => EmployeeSkill_, () => null)
     EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
 
 }
@@ -543,28 +491,28 @@ export class EmployeeResolver extends ResolverBase {
     @FieldResolver(() => [Employee_])
     async EmployeesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployees WHERE SupervisorID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE SupervisorID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeCompanyIntegrations WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EmployeeRole_])
     async EmployeeRolesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeRoles WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EmployeeSkill_])
     async EmployeeSkillsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeSkills WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -632,7 +580,7 @@ export class EmployeeResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployee(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -648,11 +596,11 @@ export class EmployeeResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -661,52 +609,39 @@ export class EmployeeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Favorites
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserFavorites',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserFavorite_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserFavorite_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     EntityBaseTable: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     EntityBaseView: string;
     
 }
@@ -722,8 +657,8 @@ export class CreateUserFavoriteInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 }
 
         
@@ -741,8 +676,8 @@ export class UpdateUserFavoriteInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 }
 
 //****************************************************************************
@@ -861,7 +796,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserFavorite(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -877,11 +812,11 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -890,42 +825,30 @@ export class UserFavoriteResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employee Company Integrations
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEmployeeCompanyIntegrations',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EmployeeCompanyIntegration_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EmployeeCompanyIntegration_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EmployeeID: number;
       
     @Field(() => Int) 
-    @Column()
     CompanyIntegrationID: number;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     ExternalSystemRecordID: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
 }
@@ -1039,38 +962,27 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employee Roles
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEmployeeRoles',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EmployeeRole_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EmployeeRole_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EmployeeID: number;
       
     @Field(() => Int) 
-    @Column()
     RoleID: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     Role: string;
     
 }
@@ -1178,39 +1090,27 @@ export class EmployeeRoleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employee Skills
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEmployeeSkills',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EmployeeSkill_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EmployeeSkill_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EmployeeID: number;
       
-    @Field() 
-    @MaxLength(36)
-    @Column()
-    SkillID: string;
+    @Field(() => Int) 
+    SkillID: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     Skill: string;
     
 }
@@ -1226,8 +1126,8 @@ export class UpdateEmployeeSkillInput {
     @Field(() => Int, )
     EmployeeID: number;
 
-    @Field()
-    SkillID: string;
+    @Field(() => Int, )
+    SkillID: number;
 }
 
 //****************************************************************************
@@ -1318,61 +1218,45 @@ export class EmployeeSkillResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Roles
 //****************************************************************************
-@ViewEntity({
-   name: 'vwRoles',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Role_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Role_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(1000)
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     AzureID?: string;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     SQLName: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [EmployeeRole_])
-    @OneToMany(() => EmployeeRole_, () => null)
     EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
 
     @Field(() => [EntityPermission_])
-    @OneToMany(() => EntityPermission_, () => null)
     EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
 
     @Field(() => [UserRole_])
-    @OneToMany(() => UserRole_, () => null)
     UserRolesArray: UserRole_[]; // Link to UserRoles
 
     @Field(() => [AuthorizationRole_])
-    @OneToMany(() => AuthorizationRole_, () => null)
     AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
 
 }
@@ -1460,28 +1344,28 @@ export class RoleResolver extends ResolverBase {
     @FieldResolver(() => [EmployeeRole_])
     async EmployeeRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeRoles WHERE RoleID=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE RoleID=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityPermissions WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserRole_])
     async UserRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserRoles WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AuthorizationRole_])
     async AuthorizationRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuthorizationRoles WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -1521,40 +1405,35 @@ export class RoleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Skills
 //****************************************************************************
-@ViewEntity({
-   name: 'vwSkills',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Skill_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Skill_ {  
+    @Field(() => Int) 
     ID: number;
-  
-    @Field() 
-    @MaxLength(100)
-    @Column()
-    Name: string;
       
     @Field() 
     @MaxLength(100)
-    @Column()
-    ParentID: string;
+    Name: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Parent?: string;
     
     @Field(() => [EmployeeSkill_])
-    @OneToMany(() => EmployeeSkill_, () => null)
     EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+
+    @Field(() => [Skill_])
+    SkillsArray: Skill_[]; // Link to Skills
 
 }
 //****************************************************************************
@@ -1619,7 +1498,14 @@ export class SkillResolver extends ResolverBase {
     @FieldResolver(() => [EmployeeSkill_])
     async EmployeeSkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeSkills WHERE SkillID=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE SkillID=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
+        return dataSource.query(sSQL);
+    }
+      
+    @FieldResolver(() => [Skill_])
+    async SkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Skills', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwSkills] WHERE ParentID=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -1628,48 +1514,35 @@ export class SkillResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Integration URL Formats
 //****************************************************************************
-@ViewEntity({
-   name: 'vwIntegrationURLFormats',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class IntegrationURLFormat_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class IntegrationURLFormat_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     IntegrationName?: string;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
     @Field() 
     @MaxLength(1000)
-    @Column()
     URLFormat: string;
       
     @Field(() => Int) 
-    @ViewColumn()
     IntegrationID: number;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     Integration: string;
       
     @Field({nullable: true}) 
     @MaxLength(1000)
-    @ViewColumn()
     NavigationBaseURL?: string;
       
     @Field({nullable: true}) 
     @MaxLength(2000)
-    @ViewColumn()
     FullURLFormat?: string;
     
 }
@@ -1787,66 +1660,49 @@ export class IntegrationURLFormatResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Integrations
 //****************************************************************************
-@ViewEntity({
-   name: 'vwIntegrations',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'List of integrations that can be executed using the MemberJunction integration architecture.' })
-export class Integration_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Integration_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1000)
-    @Column()
     NavigationBaseURL?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ClassName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ImportPath?: string;
       
     @Field(() => Int) 
-    @Column()
     BatchMaxRequestCount: number;
       
     @Field(() => Int) 
-    @Column()
     BatchRequestWaitTime: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [IntegrationURLFormat_])
-    @OneToMany(() => IntegrationURLFormat_, () => null)
     IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
 
     @Field(() => [CompanyIntegration_])
-    @OneToMany(() => CompanyIntegration_, () => null)
     CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
 
 }
@@ -1943,14 +1799,14 @@ export class IntegrationResolver extends ResolverBase {
     @FieldResolver(() => [IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwIntegrationURLFormats WHERE IntegrationID=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE IntegrationID=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrations WHERE IntegrationName=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE IntegrationName=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -1990,141 +1846,108 @@ export class IntegrationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integrations
 //****************************************************************************
-@ViewEntity({
-   name: 'vwCompanyIntegrations',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class CompanyIntegration_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class CompanyIntegration_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     CompanyName: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     IntegrationName: string;
       
     @Field(() => Boolean, {nullable: true}) 
-    @Column()
     IsActive?: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     AccessToken?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     RefreshToken?: string;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     TokenExpirationDate?: Date;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     APIKey?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ExternalSystemID?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsExternalSystemReadOnly: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     ClientID?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     ClientSecret?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     CustomAttribute1?: string;
       
     @Field(() => Int) 
-    @ViewColumn()
     CompanyID: number;
       
     @Field(() => Int) 
-    @ViewColumn()
     IntegrationID: number;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     Company: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     Integration: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     DriverClassName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     DriverImportPath?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @ViewColumn()
     LastRunID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @ViewColumn()
     LastRunStartedAt?: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @ViewColumn()
     LastRunEndedAt?: Date;
     
     @Field(() => [List_])
-    @OneToMany(() => List_, () => null)
     ListsArray: List_[]; // Link to Lists
 
     @Field(() => [EmployeeCompanyIntegration_])
-    @OneToMany(() => EmployeeCompanyIntegration_, () => null)
     EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
 
     @Field(() => [CompanyIntegrationRun_])
-    @OneToMany(() => CompanyIntegrationRun_, () => null)
     CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
 
     @Field(() => [CompanyIntegrationRecordMap_])
-    @OneToMany(() => CompanyIntegrationRecordMap_, () => null)
     CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
 
 }
@@ -2229,28 +2052,28 @@ export class CompanyIntegrationResolver extends ResolverBase {
     @FieldResolver(() => [List_])
     async ListsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwLists WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeCompanyIntegrations WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRuns WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRecordMaps WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -2290,224 +2113,178 @@ export class CompanyIntegrationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Fields
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEntityFields',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EntityField_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EntityField_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     DisplayName?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
+      
+    @Field(() => Boolean) 
+    IsPrimaryKey: boolean;
+      
+    @Field(() => Boolean) 
+    IsUnique: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     Category?: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     Type: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     Length?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     Precision?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     Scale?: number;
       
     @Field(() => Boolean) 
-    @Column()
     AllowsNull: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     DefaultValue?: string;
       
     @Field(() => Boolean) 
-    @Column()
     AutoIncrement: boolean;
       
     @Field() 
     @MaxLength(40)
-    @Column()
     ValueListType: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     ExtendedType?: string;
       
     @Field(() => Boolean) 
-    @Column()
     DefaultInView: boolean;
       
     @Field({nullable: true}) 
-    @Column()
     ViewCellTemplate?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     DefaultColumnWidth?: number;
       
     @Field(() => Boolean) 
-    @Column()
     AllowUpdateAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     AllowUpdateInView: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     IncludeInUserSearchAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     FullTextSearchEnabled: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(1000)
-    @Column()
     UserSearchParamFormatAPI?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IncludeInGeneratedForm: boolean;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     GeneratedFormSection: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsVirtual: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     IsNameField: boolean;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     RelatedEntityID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     RelatedEntityFieldName?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IncludeRelatedEntityNameFieldInBaseView: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     RelatedEntityNameFieldMap?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     SchemaName: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     BaseTable: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     BaseView: string;
       
     @Field({nullable: true}) 
     @MaxLength(8000)
-    @ViewColumn()
     EntityCodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     EntityClassName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntity?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntitySchemaName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntityBaseTable?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntityBaseView?: string;
       
     @Field({nullable: true}) 
     @MaxLength(8000)
-    @ViewColumn()
     RelatedEntityCodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     RelatedEntityClassName?: string;
     
     @Field(() => [EntityFieldValue_])
-    @OneToMany(() => EntityFieldValue_, () => null)
     EntityFieldValuesArray: EntityFieldValue_[]; // Link to EntityFieldValues
 
 }
@@ -2522,6 +2299,12 @@ export class CreateEntityFieldInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Boolean, )
+    IsPrimaryKey: boolean;
+
+    @Field(() => Boolean, )
+    IsUnique: boolean;
 
     @Field({ nullable: true })
     Category: string;
@@ -2592,6 +2375,12 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Boolean, )
+    IsPrimaryKey: boolean;
+
+    @Field(() => Boolean, )
+    IsUnique: boolean;
 
     @Field({ nullable: true })
     Category: string;
@@ -2710,7 +2499,7 @@ export class EntityFieldResolver extends ResolverBase {
     @FieldResolver(() => [EntityFieldValue_])
     async EntityFieldValuesArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityFieldValues WHERE EntityFieldID=${entityfield_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityFieldValues] WHERE EntityFieldID=${entityfield_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -2778,7 +2567,7 @@ export class EntityFieldResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -2794,11 +2583,11 @@ export class EntityFieldResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -2807,296 +2596,225 @@ export class EntityFieldResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entities
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEntities',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'Metadata about all of the entities in the system. This information is managed by CodeGen, don\'t modify the parts that come from SQL Server' })
-export class Entity_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Entity_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field(() => Int, {nullable: true, description: 'Reserved for future use'}) 
-    @Column()
     ParentID?: number;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     NameSuffix?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     BaseTable: string;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     BaseView: string;
       
     @Field(() => Boolean) 
-    @Column()
     BaseViewGenerated: boolean;
       
     @Field({description: 'Database Schema Name'}) 
     @MaxLength(510)
-    @Column()
     SchemaName: string;
       
     @Field(() => Boolean) 
-    @Column()
     VirtualEntity: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     TrackRecordChanges: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     AuditRecordAccess: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     AuditViewRuns: boolean;
       
     @Field(() => Boolean, {description: 'Master switch to control if the field is included in the API or not'}) 
-    @Column()
     IncludeInAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     AllowAllRowsAPI: boolean;
       
     @Field(() => Boolean, {description: 'If set to 1, allows updates to occur via API. Role based permissions are required in addition to turning this bit on.'}) 
-    @Column()
     AllowUpdateAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     AllowCreateAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     AllowDeleteAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     CustomResolverAPI: boolean;
       
     @Field(() => Boolean, {description: 'If set to 1, allows an end user to add their own search string when running a user view or searching without saving a view'}) 
-    @Column()
     AllowUserSearchAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     FullTextSearchEnabled: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     FullTextCatalog?: string;
       
     @Field(() => Boolean) 
-    @Column()
     FullTextCatalogGenerated: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     FullTextIndex?: string;
       
     @Field(() => Boolean) 
-    @Column()
     FullTextIndexGenerated: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     FullTextSearchFunction?: string;
       
     @Field(() => Boolean) 
-    @Column()
     FullTextSearchFunctionGenerated: boolean;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     UserViewMaxRows?: number;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     spCreate?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     spUpdate?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     spDelete?: string;
       
     @Field(() => Boolean) 
-    @Column()
     spCreateGenerated: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     spUpdateGenerated: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     spDeleteGenerated: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     CascadeDeletes: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     UserFormGenerated: boolean;
       
     @Field({nullable: true, description: 'Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassImport, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassImport with the name of the module to import that contains an exported class of the name you provide in EntityObjectSubclassName.'}) 
     @MaxLength(510)
-    @Column()
     EntityObjectSubclassName?: string;
       
     @Field({nullable: true, description: 'Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassName, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassName with the name of the class itself. This field should have the name of the module  to import that contains an exported class of the name you provide in EntityObjectSubclassName.'}) 
     @MaxLength(510)
-    @Column()
     EntityObjectSubclassImport?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8000)
-    @ViewColumn()
     CodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     ClassName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     BaseTableCodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     ParentEntity?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     ParentBaseTable?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     ParentBaseView?: string;
     
     @Field(() => [EntityField_])
-    @OneToMany(() => EntityField_, () => null)
     EntityFieldsArray: EntityField_[]; // Link to EntityFields
 
     @Field(() => [EntityPermission_])
-    @OneToMany(() => EntityPermission_, () => null)
     EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
 
     @Field(() => [EntityRelationship_])
-    @OneToMany(() => EntityRelationship_, () => null)
     EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
 
     @Field(() => [EntityAIAction_])
-    @OneToMany(() => EntityAIAction_, () => null)
     EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
 
     @Field(() => [UserRecordLog_])
-    @OneToMany(() => UserRecordLog_, () => null)
     UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
 
     @Field(() => [IntegrationURLFormat_])
-    @OneToMany(() => IntegrationURLFormat_, () => null)
     IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
 
     @Field(() => [Entity_])
-    @OneToMany(() => Entity_, () => null)
     EntitiesArray: Entity_[]; // Link to Entities
 
     @Field(() => [UserFavorite_])
-    @OneToMany(() => UserFavorite_, () => null)
     UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
 
     @Field(() => [CompanyIntegrationRunDetail_])
-    @OneToMany(() => CompanyIntegrationRunDetail_, () => null)
     CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
 
     @Field(() => [ApplicationEntity_])
-    @OneToMany(() => ApplicationEntity_, () => null)
     ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
 
     @Field(() => [UserApplicationEntity_])
-    @OneToMany(() => UserApplicationEntity_, () => null)
     UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
 
     @Field(() => [List_])
-    @OneToMany(() => List_, () => null)
     ListsArray: List_[]; // Link to Lists
 
     @Field(() => [UserView_])
-    @OneToMany(() => UserView_, () => null)
     UserViewsArray: UserView_[]; // Link to UserViews
 
     @Field(() => [RecordChange_])
-    @OneToMany(() => RecordChange_, () => null)
     RecordChangesArray: RecordChange_[]; // Link to RecordChanges
 
     @Field(() => [AuditLog_])
-    @OneToMany(() => AuditLog_, () => null)
     AuditLogsArray: AuditLog_[]; // Link to AuditLogs
 
     @Field(() => [ResourceType_])
-    @OneToMany(() => ResourceType_, () => null)
     ResourceTypesArray: ResourceType_[]; // Link to ResourceTypes
 
     @Field(() => [TaggedItem_])
-    @OneToMany(() => TaggedItem_, () => null)
     TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
 
     @Field(() => [DatasetItem_])
-    @OneToMany(() => DatasetItem_, () => null)
     DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
 
     @Field(() => [CompanyIntegrationRecordMap_])
-    @OneToMany(() => CompanyIntegrationRecordMap_, () => null)
     CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
 
     @Field(() => [RecordMergeLog_])
-    @OneToMany(() => RecordMergeLog_, () => null)
     RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
 
 }
@@ -3389,140 +3107,140 @@ export class EntityResolverBase extends ResolverBase {
     @FieldResolver(() => [EntityField_])
     async EntityFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityFields WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityFields] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityPermissions WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityRelationships WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityAIActions WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserRecordLog_])
     async UserRecordLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserRecordLogs WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwIntegrationURLFormats WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Entity_])
     async EntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntities WHERE ParentID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntities] WHERE ParentID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserFavorite_])
     async UserFavoritesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserFavorites WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunDetails WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwApplicationEntities WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserApplicationEntities WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [List_])
     async ListsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwLists WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViews WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordChanges WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogs WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [ResourceType_])
     async ResourceTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwResourceTypes WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwResourceTypes] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [TaggedItem_])
     async TaggedItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwTaggedItems WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [DatasetItem_])
     async DatasetItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwDatasetItems WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRecordMaps WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [RecordMergeLog_])
     async RecordMergeLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordMergeLogs WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -3590,7 +3308,7 @@ export class EntityResolverBase extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -3606,11 +3324,11 @@ export class EntityResolverBase extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -3619,178 +3337,135 @@ export class EntityResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Users
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUsers',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class User_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class User_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     FirstName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     LastName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     Title?: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     Email: string;
       
     @Field() 
     @MaxLength(30)
-    @Column()
     Type: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     LinkedRecordType: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     EmployeeID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     LinkedEntityID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     LinkedEntityRecordID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(202)
-    @ViewColumn()
     FirstLast?: string;
       
     @Field({nullable: true}) 
     @MaxLength(162)
-    @ViewColumn()
     EmployeeFirstLast?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     EmployeeEmail?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @ViewColumn()
     EmployeeTitle?: string;
       
     @Field({nullable: true}) 
     @MaxLength(162)
-    @ViewColumn()
     EmployeeSupervisor?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     EmployeeSupervisorEmail?: string;
     
     @Field(() => [UserApplication_])
-    @OneToMany(() => UserApplication_, () => null)
     UserApplicationsArray: UserApplication_[]; // Link to UserApplications
 
     @Field(() => [UserRole_])
-    @OneToMany(() => UserRole_, () => null)
     UserRolesArray: UserRole_[]; // Link to UserRoles
 
     @Field(() => [Workspace_])
-    @OneToMany(() => Workspace_, () => null)
     WorkspacesArray: Workspace_[]; // Link to Workspaces
 
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
     @Field(() => [ReportSnapshot_])
-    @OneToMany(() => ReportSnapshot_, () => null)
     ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
 
     @Field(() => [RecordChange_])
-    @OneToMany(() => RecordChange_, () => null)
     RecordChangesArray: RecordChange_[]; // Link to RecordChanges
 
     @Field(() => [Dashboard_])
-    @OneToMany(() => Dashboard_, () => null)
     DashboardsArray: Dashboard_[]; // Link to Dashboards
 
     @Field(() => [UserViewRun_])
-    @OneToMany(() => UserViewRun_, () => null)
     UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
 
     @Field(() => [AuditLog_])
-    @OneToMany(() => AuditLog_, () => null)
     AuditLogsArray: AuditLog_[]; // Link to AuditLogs
 
     @Field(() => [List_])
-    @OneToMany(() => List_, () => null)
     ListsArray: List_[]; // Link to Lists
 
     @Field(() => [UserFavorite_])
-    @OneToMany(() => UserFavorite_, () => null)
     UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
 
     @Field(() => [UserRecordLog_])
-    @OneToMany(() => UserRecordLog_, () => null)
     UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
 
     @Field(() => [UserView_])
-    @OneToMany(() => UserView_, () => null)
     UserViewsArray: UserView_[]; // Link to UserViews
 
     @Field(() => [CompanyIntegrationRun_])
-    @OneToMany(() => CompanyIntegrationRun_, () => null)
     CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
 
     @Field(() => [UserNotification_])
-    @OneToMany(() => UserNotification_, () => null)
     UserNotificationsArray: UserNotification_[]; // Link to UserNotifications
 
     @Field(() => [Conversation_])
-    @OneToMany(() => Conversation_, () => null)
     ConversationsArray: Conversation_[]; // Link to Conversations
 
     @Field(() => [ResourceFolder_])
-    @OneToMany(() => ResourceFolder_, () => null)
     ResourceFoldersArray: ResourceFolder_[]; // Link to ResourceFolders
 
     @Field(() => [RecordMergeLog_])
-    @OneToMany(() => RecordMergeLog_, () => null)
     RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
 
 }
@@ -3939,126 +3614,126 @@ export class UserResolverBase extends ResolverBase {
     @FieldResolver(() => [UserApplication_])
     async UserApplicationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserApplications WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserRole_])
     async UserRolesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserRoles WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Workspace_])
     async WorkspacesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkspaces WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaces] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [ReportSnapshot_])
     async ReportSnapshotsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReportSnapshots WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordChanges WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Dashboard_])
     async DashboardsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwDashboards WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserViewRun_])
     async UserViewRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViewRuns WHERE RunByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE RunByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogs WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [List_])
     async ListsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwLists WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserFavorite_])
     async UserFavoritesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserFavorites WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserRecordLog_])
     async UserRecordLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserRecordLogs WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViews WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRuns WHERE RunByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE RunByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserNotification_])
     async UserNotificationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserNotifications WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserNotifications] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Conversation_])
     async ConversationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwConversations WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [ResourceFolder_])
     async ResourceFoldersArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwResourceFolders WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [RecordMergeLog_])
     async RecordMergeLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordMergeLogs WHERE InitiatedByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE InitiatedByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -4130,139 +3805,107 @@ export class UserResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Relationships
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEntityRelationships',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EntityRelationship_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EntityRelationship_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
     @Field(() => Int) 
-    @Column()
     RelatedEntityID: number;
       
     @Field(() => Boolean) 
-    @Column()
     BundleInAPI: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     IncludeInParentAllQuery: boolean;
       
     @Field() 
     @MaxLength(40)
-    @Column()
     Type: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     EntityKeyField?: string;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     RelatedEntityJoinField: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     JoinView?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     JoinEntityJoinField?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     JoinEntityInverseJoinField?: string;
       
     @Field(() => Boolean) 
-    @Column()
     DisplayInForm: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     DisplayName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(16)
-    @Column()
     DisplayUserViewGUID?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     EntityBaseTable: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     EntityBaseView: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntity: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntityBaseTable: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     RelatedEntityBaseView: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     RelatedEntityClassName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(8000)
-    @ViewColumn()
     RelatedEntityCodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     RelatedEntityBaseTableCodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     DisplayUserViewName?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @ViewColumn()
     DisplayUserViewID?: number;
     
 }
@@ -4478,7 +4121,7 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -4494,11 +4137,11 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -4507,71 +4150,54 @@ export class EntityRelationshipResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Record Logs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserRecordLogs',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'Tracks history of user access to records across the system, tracks reads and writes' })
-export class UserRecordLog_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserRecordLog_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     EarliestAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     LatestAt: Date;
       
     @Field(() => Int) 
-    @Column()
     TotalCount: number;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     UserName: string;
       
     @Field({nullable: true}) 
     @MaxLength(202)
-    @ViewColumn()
     UserFirstLast?: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     UserEmail: string;
       
     @Field({nullable: true}) 
     @MaxLength(162)
-    @ViewColumn()
     UserSupervisor?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     UserSupervisorEmail?: string;
     
 }
@@ -4590,8 +4216,8 @@ export class UpdateUserRecordLogInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 
     @Field()
     EarliestAt: Date;
@@ -4691,133 +4317,100 @@ export class UserRecordLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Views
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserViews',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'User Views contain the metadata for the user viewing system of entity data' })
-export class UserView_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserView_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field() 
     @MaxLength(16)
-    @Column()
     GUID: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsShared: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     IsDefault: boolean;
       
     @Field({nullable: true}) 
-    @Column()
     GridState?: string;
       
     @Field({nullable: true}) 
-    @Column()
     FilterState?: string;
       
     @Field(() => Boolean) 
-    @Column()
     CustomFilterState: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     SmartFilterEnabled: boolean;
       
     @Field({nullable: true}) 
-    @Column()
     SmartFilterPrompt?: string;
       
     @Field({nullable: true}) 
-    @Column()
     SmartFilterWhereClause?: string;
       
     @Field({nullable: true}) 
-    @Column()
     SmartFilterExplanation?: string;
       
     @Field({nullable: true}) 
-    @Column()
     WhereClause?: string;
       
     @Field(() => Boolean) 
-    @Column()
     CustomWhereClause: boolean;
       
     @Field({nullable: true}) 
-    @Column()
     SortState?: string;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     CreatedAt?: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     UpdatedAt?: Date;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     UserName: string;
       
     @Field({nullable: true}) 
     @MaxLength(202)
-    @ViewColumn()
     UserFirstLast?: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     UserEmail: string;
       
     @Field() 
     @MaxLength(30)
-    @ViewColumn()
     UserType: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     EntityBaseView: string;
     
     @Field(() => [EntityRelationship_])
-    @OneToMany(() => EntityRelationship_, () => null)
     EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
 
     @Field(() => [UserViewRun_])
-    @OneToMany(() => UserViewRun_, () => null)
     UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
 
 }
@@ -4996,14 +4589,14 @@ export class UserViewResolverBase extends ResolverBase {
     @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityRelationships WHERE DisplayUserViewGUID=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE DisplayUserViewGUID=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserViewRun_])
     async UserViewRunsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViewRuns WHERE UserViewID=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE UserViewID=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -5071,7 +4664,7 @@ export class UserViewResolverBase extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserView(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -5087,11 +4680,11 @@ export class UserViewResolverBase extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -5100,58 +4693,42 @@ export class UserViewResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integration Runs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwCompanyIntegrationRuns',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'Audit Trail for each run of a given company integration' })
-export class CompanyIntegrationRun_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class CompanyIntegrationRun_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     CompanyIntegrationID: number;
       
     @Field(() => Int) 
-    @Column()
     RunByUserID: number;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     StartedAt?: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     EndedAt?: Date;
       
     @Field(() => Int) 
-    @Column()
     TotalRecords: number;
       
     @Field({nullable: true}) 
-    @Column()
     Comments?: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     RunByUser: string;
     
     @Field(() => [CompanyIntegrationRunAPILog_])
-    @OneToMany(() => CompanyIntegrationRunAPILog_, () => null)
     CompanyIntegrationRunAPILogsArray: CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
 
     @Field(() => [ErrorLog_])
-    @OneToMany(() => ErrorLog_, () => null)
     ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
 
     @Field(() => [CompanyIntegrationRunDetail_])
-    @OneToMany(() => CompanyIntegrationRunDetail_, () => null)
     CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
 
 }
@@ -5238,21 +4815,21 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
     @FieldResolver(() => [CompanyIntegrationRunAPILog_])
     async CompanyIntegrationRunAPILogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunAPILogs WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwErrorLogs WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunDetails WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -5292,60 +4869,45 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integration Run Details
 //****************************************************************************
-@ViewEntity({
-   name: 'vwCompanyIntegrationRunDetails',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'Record-level details for the audit trail for each integration run' })
-export class CompanyIntegrationRunDetail_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class CompanyIntegrationRunDetail_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     CompanyIntegrationRunID: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
       
     @Field() 
     @MaxLength(40)
-    @Column()
     Action: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     ExecutedAt: Date;
       
     @Field(() => Boolean) 
-    @Column()
     IsSuccess: boolean;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @ViewColumn()
     RunStartedAt?: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @ViewColumn()
     RunEndedAt?: Date;
     
     @Field(() => [ErrorLog_])
-    @OneToMany(() => ErrorLog_, () => null)
     ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
 
 }
@@ -5364,8 +4926,8 @@ export class UpdateCompanyIntegrationRunDetailInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 
     @Field()
     Action: string;
@@ -5432,7 +4994,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
     @FieldResolver(() => [ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwErrorLogs WHERE CompanyIntegrationRunDetailID=${companyintegrationrundetail_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE CompanyIntegrationRunDetailID=${companyintegrationrundetail_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -5472,56 +5034,41 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Error Logs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwErrorLogs',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ErrorLog_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class ErrorLog_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field(() => Int, {nullable: true}) 
-    @Column()
     CompanyIntegrationRunID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     CompanyIntegrationRunDetailID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(40)
-    @Column()
     Code?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Message?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     CreatedBy?: string;
       
     @Field({nullable: true}) 
     @MaxLength(20)
-    @Column()
     Status?: string;
       
     @Field({nullable: true}) 
     @MaxLength(40)
-    @Column()
     Category?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Details?: string;
     
 }
@@ -5647,43 +5194,31 @@ export class ErrorLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Applications
 //****************************************************************************
-@ViewEntity({
-   name: 'vwApplications',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Application_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Application_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(1000)
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [ApplicationEntity_])
-    @OneToMany(() => ApplicationEntity_, () => null)
     ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
 
     @Field(() => [UserApplication_])
-    @OneToMany(() => UserApplication_, () => null)
     UserApplicationsArray: UserApplication_[]; // Link to UserApplications
 
 }
@@ -5765,14 +5300,14 @@ export class ApplicationResolver extends ResolverBase {
     @FieldResolver(() => [ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwApplicationEntities WHERE ApplicationID=${application_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE ApplicationID=${application_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [UserApplication_])
     async UserApplicationsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserApplications WHERE ApplicationID=${application_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE ApplicationID=${application_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -5812,72 +5347,54 @@ export class ApplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Application Entities
 //****************************************************************************
-@ViewEntity({
-   name: 'vwApplicationEntities',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ApplicationEntity_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class ApplicationEntity_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     ApplicationName?: string;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field(() => Boolean) 
-    @Column()
     DefaultForNewUser: boolean;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     Application: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     EntityBaseTable: string;
       
     @Field({nullable: true}) 
     @MaxLength(8000)
-    @ViewColumn()
     EntityCodeName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     EntityClassName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(1022)
-    @ViewColumn()
     EntityBaseTableCodeName?: string;
     
 }
@@ -6041,7 +5558,7 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -6057,11 +5574,11 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -6070,96 +5587,72 @@ export class ApplicationEntityResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Permissions
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEntityPermissions',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EntityPermission_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EntityPermission_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     RoleName?: string;
       
     @Field(() => Boolean) 
-    @Column()
     CanCreate: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     CanRead: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     CanUpdate: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     CanDelete: boolean;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ReadRLSFilterID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     CreateRLSFilterID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     UpdateRLSFilterID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     DeleteRLSFilterID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     RoleSQLName: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     CreateRLSFilter?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     ReadRLSFilter?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     UpdateRLSFilter?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     DeleteRLSFilter?: string;
     
 }
@@ -6366,7 +5859,7 @@ export class EntityPermissionResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -6382,11 +5875,11 @@ export class EntityPermissionResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -6395,42 +5888,30 @@ export class EntityPermissionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Application Entities
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserApplicationEntities',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserApplicationEntity_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserApplicationEntity_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserApplicationID: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     Application: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
     
 }
@@ -6588,7 +6069,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -6604,11 +6085,11 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -6617,45 +6098,32 @@ export class UserApplicationEntityResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Applications
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserApplications',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserApplication_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserApplication_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field(() => Int) 
-    @Column()
     ApplicationID: number;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     Application: string;
     
     @Field(() => [UserApplicationEntity_])
-    @OneToMany(() => UserApplicationEntity_, () => null)
     UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
 
 }
@@ -6736,7 +6204,7 @@ export class UserApplicationResolver extends ResolverBase {
     @FieldResolver(() => [UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserApplicationEntities WHERE UserApplicationID=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE UserApplicationID=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -6776,41 +6244,29 @@ export class UserApplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integration Run API Logs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwCompanyIntegrationRunAPILogs',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class CompanyIntegrationRunAPILog_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class CompanyIntegrationRunAPILog_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     CompanyIntegrationRunID: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     ExecutedAt: Date;
       
     @Field(() => Boolean) 
-    @Column()
     IsSuccess: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(24)
-    @Column()
     RequestMethod?: string;
       
     @Field({nullable: true}) 
-    @Column()
     URL?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Parameters?: string;
     
 }
@@ -6930,65 +6386,48 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Lists
 //****************************************************************************
-@ViewEntity({
-   name: 'vwLists',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class List_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class List_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     EntityID?: number;
       
     @Field(() => Int) 
-    @Column()
     UserID: number;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ExternalSystemRecordID?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     CompanyIntegrationID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     Entity?: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
     @Field(() => [ListDetail_])
-    @OneToMany(() => ListDetail_, () => null)
     ListDetailsArray: ListDetail_[]; // Link to ListDetails
 
 }
@@ -7103,7 +6542,7 @@ export class ListResolver extends ResolverBase {
     @FieldResolver(() => [ListDetail_])
     async ListDetailsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwListDetails WHERE ListID=${list_.ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwListDetails] WHERE ListID=${list_.ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -7171,7 +6610,7 @@ export class ListResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteList(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -7187,11 +6626,11 @@ export class ListResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -7200,27 +6639,19 @@ export class ListResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for List Details
 //****************************************************************************
-@ViewEntity({
-   name: 'vwListDetails',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ListDetail_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class ListDetail_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     ListID: number;
       
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
     
 }
@@ -7236,8 +6667,8 @@ export class CreateListDetailInput {
     @Field(() => Int, )
     ListID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 
     @Field(() => Int, )
     Sequence: number;
@@ -7255,8 +6686,8 @@ export class UpdateListDetailInput {
     @Field(() => Int, )
     ListID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 
     @Field(() => Int, )
     Sequence: number;
@@ -7378,7 +6809,7 @@ export class ListDetailResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteListDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -7394,11 +6825,11 @@ export class ListDetailResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -7407,42 +6838,30 @@ export class ListDetailResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User View Runs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserViewRuns',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserViewRun_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserViewRun_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserViewID: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     RunAt: Date;
       
     @Field(() => Int) 
-    @Column()
     RunByUserID: number;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     UserView: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     RunByUser: string;
     
     @Field(() => [UserViewRunDetail_])
-    @OneToMany(() => UserViewRunDetail_, () => null)
     UserViewRunDetailsArray: UserViewRunDetail_[]; // Link to UserViewRunDetails
 
 }
@@ -7539,7 +6958,7 @@ export class UserViewRunResolver extends ResolverBase {
     @FieldResolver(() => [UserViewRunDetail_])
     async UserViewRunDetailsArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViewRunDetails WHERE UserViewRunID=${userviewrun_.ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRunDetails] WHERE UserViewRunID=${userviewrun_.ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -7611,31 +7030,22 @@ export class UserViewRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User View Run Details
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserViewRunDetails',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserViewRunDetail_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserViewRunDetail_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserViewRunID: number;
       
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
       
     @Field(() => Int) 
-    @ViewColumn()
     UserViewID: number;
       
     @Field(() => Int) 
-    @ViewColumn()
     EntityID: number;
     
 }
@@ -7651,8 +7061,8 @@ export class CreateUserViewRunDetailInput {
     @Field(() => Int, )
     UserViewRunID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 }
 
         
@@ -7667,8 +7077,8 @@ export class UpdateUserViewRunDetailInput {
     @Field(() => Int, )
     UserViewRunID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 }
 
 //****************************************************************************
@@ -7791,54 +7201,40 @@ export class UserViewRunDetailResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workflow Runs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwWorkflowRuns',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class WorkflowRun_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class WorkflowRun_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     WorkflowName: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     ExternalSystemRecordID: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     StartedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     EndedAt?: Date;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     Status: string;
       
     @Field({nullable: true}) 
-    @Column()
     Results?: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     Workflow: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     WorkflowEngineName: string;
     
 }
@@ -7958,57 +7354,42 @@ export class WorkflowRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workflows
 //****************************************************************************
-@ViewEntity({
-   name: 'vwWorkflows',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Workflow_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Workflow_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     WorkflowEngineName: string;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     CompanyName: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     ExternalSystemRecordID: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
     @Field(() => [WorkflowRun_])
-    @OneToMany(() => WorkflowRun_, () => null)
     WorkflowRunsArray: WorkflowRun_[]; // Link to WorkflowRuns
 
 }
@@ -8092,14 +7473,14 @@ export class WorkflowResolver extends ResolverBase {
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE OutputWorkflowID=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputWorkflowID=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [WorkflowRun_])
     async WorkflowRunsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkflowRuns WHERE WorkflowName=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkflowRuns] WHERE WorkflowName=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -8139,48 +7520,35 @@ export class WorkflowResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workflow Engines
 //****************************************************************************
-@ViewEntity({
-   name: 'vwWorkflowEngines',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class WorkflowEngine_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class WorkflowEngine_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(1000)
-    @Column()
     DriverPath: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     DriverClass: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [Workflow_])
-    @OneToMany(() => Workflow_, () => null)
     WorkflowsArray: Workflow_[]; // Link to Workflows
 
 }
@@ -8261,7 +7629,7 @@ export class WorkflowEngineResolver extends ResolverBase {
     @FieldResolver(() => [Workflow_])
     async WorkflowsArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkflows WHERE WorkflowEngineName=${workflowengine_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE WorkflowEngineName=${workflowengine_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -8301,63 +7669,47 @@ export class WorkflowEngineResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Record Changes
 //****************************************************************************
-@ViewEntity({
-   name: 'vwRecordChanges',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType({ description: 'Tracks history of all pending and complete data changes to records' })
-export class RecordChange_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class RecordChange_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
       
     @Field(() => Int) 
-    @Column()
     UserID: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     ChangedAt: Date;
       
     @Field() 
-    @Column()
     ChangesJSON: string;
       
     @Field() 
-    @Column()
     ChangesDescription: string;
       
     @Field() 
-    @Column()
     FullRecordJSON: string;
       
     @Field() 
     @MaxLength(30)
-    @Column()
     Status: string;
       
     @Field({nullable: true}) 
-    @Column()
     Comments?: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
 }
@@ -8370,8 +7722,8 @@ export class CreateRecordChangeInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    RecordID: number;
+    @Field()
+    RecordID: string;
 
     @Field(() => Int, )
     UserID: number;
@@ -8484,39 +7836,28 @@ export class RecordChangeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Roles
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserRoles',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserRole_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserRole_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     RoleName: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
 }
@@ -8629,42 +7970,30 @@ export class UserRoleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Row Level Security Filters
 //****************************************************************************
-@ViewEntity({
-   name: 'vwRowLevelSecurityFilters',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class RowLevelSecurityFilter_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class RowLevelSecurityFilter_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
-    @Column()
     FilterText?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [EntityPermission_])
-    @OneToMany(() => EntityPermission_, () => null)
     EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
 
 }
@@ -8730,7 +8059,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
     @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityPermissions WHERE ReadRLSFilterID=${rowlevelsecurityfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE ReadRLSFilterID=${rowlevelsecurityfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -8739,70 +8068,53 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Audit Logs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAuditLogs',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AuditLog_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class AuditLog_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     AuditLogTypeName?: string;
       
     @Field(() => Int) 
-    @Column()
     UserID: number;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     AuthorizationName?: string;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     Status: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Details?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     EntityID?: number;
       
-    @Field(() => Int, {nullable: true}) 
-    @Column()
-    RecordID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    RecordID?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     Entity?: string;
     
 }
@@ -8833,8 +8145,8 @@ export class CreateAuditLogInput {
     @Field(() => Int, { nullable: true })
     EntityID: number;
 
-    @Field(() => Int, { nullable: true })
-    RecordID: number;
+    @Field({ nullable: true })
+    RecordID: string;
 }
 
         
@@ -8867,8 +8179,8 @@ export class UpdateAuditLogInput {
     @Field(() => Int, { nullable: true })
     EntityID: number;
 
-    @Field(() => Int, { nullable: true })
-    RecordID: number;
+    @Field({ nullable: true })
+    RecordID: string;
 }
 
 //****************************************************************************
@@ -8991,62 +8303,45 @@ export class AuditLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Authorizations
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAuthorizations',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Authorization_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Authorization_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ParentID?: number;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     Name: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field(() => Boolean) 
-    @Column()
     UseAuditLog: boolean;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [AuthorizationRole_])
-    @OneToMany(() => AuthorizationRole_, () => null)
     AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
 
     @Field(() => [Authorization_])
-    @OneToMany(() => Authorization_, () => null)
     AuthorizationsArray: Authorization_[]; // Link to Authorizations
 
     @Field(() => [AuditLogType_])
-    @OneToMany(() => AuditLogType_, () => null)
     AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
 
     @Field(() => [AuditLog_])
-    @OneToMany(() => AuditLog_, () => null)
     AuditLogsArray: AuditLog_[]; // Link to AuditLogs
 
 }
@@ -9112,28 +8407,28 @@ export class AuthorizationResolver extends ResolverBase {
     @FieldResolver(() => [AuthorizationRole_])
     async AuthorizationRolesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuthorizationRoles WHERE AuthorizationID=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE AuthorizationID=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Authorization_])
     async AuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuthorizations WHERE ParentID=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizations] WHERE ParentID=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AuditLogType_])
     async AuditLogTypesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogTypes WHERE AuthorizationName=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE AuthorizationName=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogs WHERE AuthorizationName=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE AuthorizationName=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -9142,40 +8437,29 @@ export class AuthorizationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Authorization Roles
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAuthorizationRoles',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AuthorizationRole_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class AuthorizationRole_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     AuthorizationName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     RoleName?: string;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     Type: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
 }
@@ -9243,56 +8527,41 @@ export class AuthorizationRoleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Audit Log Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAuditLogTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AuditLogType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class AuditLogType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ParentID?: number;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     AuthorizationName?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @ViewColumn()
     Parent?: string;
     
     @Field(() => [AuditLog_])
-    @OneToMany(() => AuditLog_, () => null)
     AuditLogsArray: AuditLog_[]; // Link to AuditLogs
 
     @Field(() => [AuditLogType_])
-    @OneToMany(() => AuditLogType_, () => null)
     AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
 
 }
@@ -9358,14 +8627,14 @@ export class AuditLogTypeResolver extends ResolverBase {
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogs WHERE AuditLogTypeName=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE AuditLogTypeName=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AuditLogType_])
     async AuditLogTypesArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogTypes WHERE ParentID=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE ParentID=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -9374,57 +8643,42 @@ export class AuditLogTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Field Values
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEntityFieldValues',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EntityFieldValue_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EntityFieldValue_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     EntityFieldName: string;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     Value: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     Code?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
     
 }
@@ -9492,69 +8746,51 @@ export class EntityFieldValueResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Models
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAIModels',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AIModel_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class AIModel_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     Vendor?: string;
       
     @Field(() => Int) 
-    @Column()
     AIModelTypeID: number;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     DriverClass?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     DriverImportPath?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [AIAction_])
-    @OneToMany(() => AIAction_, () => null)
     AIActionsArray: AIAction_[]; // Link to AIActions
 
     @Field(() => [AIModelAction_])
-    @OneToMany(() => AIModelAction_, () => null)
     AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
 
     @Field(() => [EntityAIAction_])
-    @OneToMany(() => EntityAIAction_, () => null)
     EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
 
 }
@@ -9651,21 +8887,21 @@ export class AIModelResolver extends ResolverBase {
     @FieldResolver(() => [AIAction_])
     async AIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIActions WHERE DefaultModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAIActions] WHERE DefaultModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIModelActions WHERE AIModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE AIModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityAIActions WHERE AIModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE AIModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -9705,59 +8941,43 @@ export class AIModelResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Actions
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAIActions',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AIAction_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class AIAction_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     DefaultModelID?: number;
       
     @Field({nullable: true}) 
-    @Column()
     DefaultPrompt?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @ViewColumn()
     DefaultModel?: string;
     
     @Field(() => [AIModelAction_])
-    @OneToMany(() => AIModelAction_, () => null)
     AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
 
     @Field(() => [EntityAIAction_])
-    @OneToMany(() => EntityAIAction_, () => null)
     EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
 
 }
@@ -9848,14 +9068,14 @@ export class AIActionResolver extends ResolverBase {
     @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIModelActions WHERE AIActionID=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE AIActionID=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityAIActions WHERE AIActionID=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE AIActionID=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -9895,47 +9115,34 @@ export class AIActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Model Actions
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAIModelActions',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AIModelAction_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class AIModelAction_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     AIModelID: number;
       
     @Field(() => Int) 
-    @Column()
     AIActionID: number;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     AIModel: string;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     AIAction: string;
     
 }
@@ -10053,87 +9260,65 @@ export class AIModelActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity AI Actions
 //****************************************************************************
-@ViewEntity({
-   name: 'vwEntityAIActions',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class EntityAIAction_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class EntityAIAction_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
     @Field(() => Int) 
-    @Column()
     AIActionID: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     AIModelID?: number;
       
     @Field() 
     @MaxLength(50)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Prompt?: string;
       
     @Field() 
     @MaxLength(30)
-    @Column()
     TriggerEvent: string;
       
     @Field() 
-    @Column()
     UserMessage: string;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     OutputType: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     OutputField?: string;
       
     @Field(() => Boolean) 
-    @Column()
     SkipIfOutputFieldNotEmpty: boolean;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     OutputEntityID?: number;
       
     @Field({nullable: true}) 
-    @Column()
     Comments?: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     AIAction: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @ViewColumn()
     AIModel?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     OutputEntity?: string;
     
 }
@@ -10278,28 +9463,19 @@ export class EntityAIActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Model Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwAIModelTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class AIModelType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class AIModelType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
     
     @Field(() => [AIModel_])
-    @OneToMany(() => AIModel_, () => null)
     AIModelsArray: AIModel_[]; // Link to AIModels
 
 }
@@ -10381,7 +9557,7 @@ export class AIModelTypeResolver extends ResolverBase {
     @FieldResolver(() => [AIModel_])
     async AIModelsArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIModels WHERE AIModelTypeID=${aimodeltype_.ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwAIModels] WHERE AIModelTypeID=${aimodeltype_.ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -10421,42 +9597,30 @@ export class AIModelTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queue Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwQueueTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class QueueType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class QueueType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     DriverClass: string;
       
     @Field({nullable: true}) 
     @MaxLength(400)
-    @Column()
     DriverImportPath?: string;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
     
     @Field(() => [Queue_])
-    @OneToMany(() => Queue_, () => null)
     QueuesArray: Queue_[]; // Link to Queues
 
 }
@@ -10515,7 +9679,7 @@ export class QueueTypeResolver extends ResolverBase {
     @FieldResolver(() => [Queue_])
     async QueuesArray(@Root() queuetype_: QueueType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queues', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwQueues WHERE QueueTypeID=${queuetype_.ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwQueues] WHERE QueueTypeID=${queuetype_.ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -10524,110 +9688,84 @@ export class QueueTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queues
 //****************************************************************************
-@ViewEntity({
-   name: 'vwQueues',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Queue_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Queue_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int) 
-    @Column()
     QueueTypeID: number;
       
     @Field(() => Boolean) 
-    @Column()
     IsActive: boolean;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ProcessPID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(60)
-    @Column()
     ProcessPlatform?: string;
       
     @Field({nullable: true}) 
     @MaxLength(30)
-    @Column()
     ProcessVersion?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ProcessCwd?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     ProcessIPAddress?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     ProcessMacAddress?: string;
       
     @Field({nullable: true}) 
     @MaxLength(50)
-    @Column()
     ProcessOSName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(20)
-    @Column()
     ProcessOSVersion?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     ProcessHostName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(50)
-    @Column()
     ProcessUserID?: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     ProcessUserName?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     LastHeartbeat: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(100)
-    @ViewColumn()
     QueueType: string;
     
     @Field(() => [QueueTask_])
-    @OneToMany(() => QueueTask_, () => null)
     QueueTasksArray: QueueTask_[]; // Link to QueueTasks
 
 }
@@ -10799,7 +9937,7 @@ export class QueueResolver extends ResolverBase {
     @FieldResolver(() => [QueueTask_])
     async QueueTasksArray(@Root() queue_: Queue_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwQueueTasks WHERE QueueID=${queue_.ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwQueueTasks] WHERE QueueID=${queue_.ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -10871,54 +10009,39 @@ export class QueueResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queue Tasks
 //****************************************************************************
-@ViewEntity({
-   name: 'vwQueueTasks',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class QueueTask_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class QueueTask_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     QueueID: number;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     Status: string;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     StartedAt?: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     EndedAt?: Date;
       
     @Field({nullable: true}) 
-    @Column()
     Data?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Options?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Output?: string;
       
     @Field({nullable: true}) 
-    @Column()
     ErrorMessage?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Comments?: string;
     
 }
@@ -11113,37 +10236,26 @@ export class QueueTaskResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Dashboards
 //****************************************************************************
-@ViewEntity({
-   name: 'vwDashboards',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Dashboard_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Dashboard_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
-    @Column()
     UIConfigDetails: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     UserID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     User?: string;
     
 }
@@ -11305,7 +10417,7 @@ export class DashboardResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboard(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -11321,11 +10433,11 @@ export class DashboardResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -11334,28 +10446,19 @@ export class DashboardResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Output Trigger Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwOutputTriggerTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class OutputTriggerType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class OutputTriggerType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
     
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
 }
@@ -11415,7 +10518,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE OutputTriggerTypeID=${outputtriggertype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputTriggerTypeID=${outputtriggertype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -11424,32 +10527,22 @@ export class OutputTriggerTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Output Format Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwOutputFormatTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class OutputFormatType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class OutputFormatType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
-    @Column()
     DisplayFormat?: string;
     
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
 }
@@ -11509,7 +10602,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE OutputFormatTypeID=${outputformattype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputFormatTypeID=${outputformattype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -11518,28 +10611,19 @@ export class OutputFormatTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Output Delivery Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwOutputDeliveryTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class OutputDeliveryType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class OutputDeliveryType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
     
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
 }
@@ -11599,7 +10683,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE OutputDeliveryTypeID=${outputdeliverytype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputDeliveryTypeID=${outputdeliverytype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -11608,123 +10692,93 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Reports
 //****************************************************************************
-@ViewEntity({
-   name: 'vwReports',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Report_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Report_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int) 
-    @Column()
     UserID: number;
       
     @Field() 
     @MaxLength(40)
-    @Column()
     SharingScope: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ConversationID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ConversationDetailID?: number;
       
     @Field({nullable: true}) 
-    @Column()
     ReportSQL?: string;
       
     @Field({nullable: true}) 
-    @Column()
     ReportConfiguration?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     OutputTriggerTypeID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     OutputFormatTypeID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     OutputDeliveryTypeID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     OutputEventID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     OutputFrequency?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     OutputTargetEmail?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     OutputWorkflowID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     Conversation?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     OutputTriggerType?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     OutputFormatType?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     OutputDeliveryType?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     OutputEvent?: string;
     
     @Field(() => [ReportSnapshot_])
-    @OneToMany(() => ReportSnapshot_, () => null)
     ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
 
 }
@@ -11890,7 +10944,7 @@ export class ReportResolver extends ResolverBase {
     @FieldResolver(() => [ReportSnapshot_])
     async ReportSnapshotsArray(@Root() report_: Report_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReportSnapshots WHERE ReportID=${report_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE ReportID=${report_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -11958,7 +11012,7 @@ export class ReportResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReport(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -11974,11 +11028,11 @@ export class ReportResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -11987,42 +11041,30 @@ export class ReportResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Report Snapshots
 //****************************************************************************
-@ViewEntity({
-   name: 'vwReportSnapshots',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ReportSnapshot_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class ReportSnapshot_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     ReportID: number;
       
     @Field() 
-    @Column()
     ResultSet: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     UserID?: number;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Report: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     User?: string;
     
 }
@@ -12177,7 +11219,7 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -12193,11 +11235,11 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -12206,61 +11248,45 @@ export class ReportSnapshotResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Resource Types
 //****************************************************************************
-@ViewEntity({
-   name: 'vwResourceTypes',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ResourceType_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class ResourceType_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     DisplayName: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     Icon?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     EntityID?: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     Entity?: string;
     
     @Field(() => [WorkspaceItem_])
-    @OneToMany(() => WorkspaceItem_, () => null)
     WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
 
     @Field(() => [ResourceFolder_])
-    @OneToMany(() => ResourceFolder_, () => null)
     ResourceFoldersArray: ResourceFolder_[]; // Link to ResourceFolders
 
 }
@@ -12320,14 +11346,14 @@ export class ResourceTypeResolver extends ResolverBase {
     @FieldResolver(() => [WorkspaceItem_])
     async WorkspaceItemsArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkspaceItems WHERE ResourceTypeID=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE ResourceTypeID=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [ResourceFolder_])
     async ResourceFoldersArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwResourceFolders WHERE ResourceTypeName=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE ResourceTypeName=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -12336,46 +11362,33 @@ export class ResourceTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Tags
 //****************************************************************************
-@ViewEntity({
-   name: 'vwTags',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Tag_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Tag_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     DisplayName: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ParentID?: number;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @ViewColumn()
     Parent?: string;
     
     @Field(() => [Tag_])
-    @OneToMany(() => Tag_, () => null)
     TagsArray: Tag_[]; // Link to Tags
 
     @Field(() => [TaggedItem_])
-    @OneToMany(() => TaggedItem_, () => null)
     TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
 
 }
@@ -12435,14 +11448,14 @@ export class TagResolver extends ResolverBase {
     @FieldResolver(() => [Tag_])
     async TagsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tags', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwTags WHERE ParentID=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwTags] WHERE ParentID=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [TaggedItem_])
     async TaggedItemsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwTaggedItems WHERE TagID=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE TagID=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -12451,37 +11464,27 @@ export class TagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Tagged Items
 //****************************************************************************
-@ViewEntity({
-   name: 'vwTaggedItems',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class TaggedItem_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class TaggedItem_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     TagID: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
-      
-    @Field(() => Int) 
-    @Column()
-    RecordID: number;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
+    RecordID: string;
+      
+    @Field() 
+    @MaxLength(510)
     Tag: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
     
 }
@@ -12543,37 +11546,26 @@ export class TaggedItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workspaces
 //****************************************************************************
-@ViewEntity({
-   name: 'vwWorkspaces',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Workspace_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Workspace_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int) 
-    @Column()
     UserID: number;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
     @Field(() => [WorkspaceItem_])
-    @OneToMany(() => WorkspaceItem_, () => null)
     WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
 
 }
@@ -12668,7 +11660,7 @@ export class WorkspaceResolver extends ResolverBase {
     @FieldResolver(() => [WorkspaceItem_])
     async WorkspaceItemsArray(@Root() workspace_: Workspace_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkspaceItems WHERE WorkSpaceID=${workspace_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE WorkSpaceID=${workspace_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -12736,7 +11728,7 @@ export class WorkspaceResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspace(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -12752,11 +11744,11 @@ export class WorkspaceResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -12765,54 +11757,39 @@ export class WorkspaceResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workspace Items
 //****************************************************************************
-@ViewEntity({
-   name: 'vwWorkspaceItems',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class WorkspaceItem_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class WorkspaceItem_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(510)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int) 
-    @Column()
     WorkSpaceID: number;
       
     @Field(() => Int) 
-    @Column()
     ResourceTypeID: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ResourceRecordID?: number;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field({nullable: true}) 
-    @Column()
     Configuration?: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     WorkSpace: string;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     ResourceType: string;
     
 }
@@ -12992,7 +11969,7 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -13008,11 +11985,11 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -13021,38 +11998,27 @@ export class WorkspaceItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Datasets
 //****************************************************************************
-@ViewEntity({
-   name: 'vwDatasets',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Dataset_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class Dataset_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
     @Field(() => [DatasetItem_])
-    @OneToMany(() => DatasetItem_, () => null)
     DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
 
 }
@@ -13111,7 +12077,7 @@ export class DatasetResolver extends ResolverBase {
     @FieldResolver(() => [DatasetItem_])
     async DatasetItemsArray(@Root() dataset_: Dataset_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwDatasetItems WHERE DatasetName=${dataset_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE DatasetName=${dataset_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -13120,61 +12086,45 @@ export class DatasetResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Dataset Items
 //****************************************************************************
-@ViewEntity({
-   name: 'vwDatasetItems',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class DatasetItem_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class DatasetItem_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     Code: string;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @Column()
     DatasetName?: string;
       
     @Field(() => Int) 
-    @Column()
     Sequence: number;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
     @Field({nullable: true}) 
-    @Column()
     WhereClause?: string;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     DateFieldToCheck: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
     
 }
@@ -13235,56 +12185,41 @@ export class DatasetItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Conversation Details
 //****************************************************************************
-@ViewEntity({
-   name: 'vwConversationDetails',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ConversationDetail_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class ConversationDetail_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     ConversationID: number;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ExternalID?: string;
       
     @Field() 
     @MaxLength(40)
-    @Column()
     Role: string;
       
     @Field() 
-    @Column()
     Message: string;
       
     @Field({nullable: true}) 
-    @Column()
     Error?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @ViewColumn()
     Conversation?: string;
     
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
 }
@@ -13390,7 +12325,7 @@ export class ConversationDetailResolver extends ResolverBase {
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE ConversationDetailID=${conversationdetail_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE ConversationDetailID=${conversationdetail_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -13458,7 +12393,7 @@ export class ConversationDetailResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversationDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -13474,11 +12409,11 @@ export class ConversationDetailResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -13487,52 +12422,38 @@ export class ConversationDetailResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Conversations
 //****************************************************************************
-@ViewEntity({
-   name: 'vwConversations',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class Conversation_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class Conversation_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     ExternalID?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
-    @Column()
     Name?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
     @Field(() => [ConversationDetail_])
-    @OneToMany(() => ConversationDetail_, () => null)
     ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
 
     @Field(() => [Report_])
-    @OneToMany(() => Report_, () => null)
     ReportsArray: Report_[]; // Link to Reports
 
 }
@@ -13626,14 +12547,14 @@ export class ConversationResolver extends ResolverBase {
     @FieldResolver(() => [ConversationDetail_])
     async ConversationDetailsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwConversationDetails WHERE ConversationID=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwConversationDetails] WHERE ConversationID=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
       
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE ConversationID=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE ConversationID=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -13701,7 +12622,7 @@ export class ConversationResolver extends ResolverBase {
     }
 
     @Mutation(() => Int)
-    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversation(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID)
@@ -13717,11 +12638,11 @@ export class ConversationResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
+    protected async AfterDelete(dataSource: DataSource, ID: Number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -13730,64 +12651,47 @@ export class ConversationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Notifications
 //****************************************************************************
-@ViewEntity({
-   name: 'vwUserNotifications',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class UserNotification_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class UserNotification_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     UserID: number;
       
     @Field({nullable: true}) 
     @MaxLength(510)
-    @Column()
     Title?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Message?: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ResourceTypeID?: number;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ResourceRecordID?: number;
       
     @Field({nullable: true}) 
-    @Column()
     ResourceConfiguration?: string;
       
     @Field(() => Boolean) 
-    @Column()
     Unread: boolean;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     ReadAt?: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
 }
@@ -13976,61 +12880,45 @@ export class UserNotificationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Resource Folders
 //****************************************************************************
-@ViewEntity({
-   name: 'vwResourceFolders',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class ResourceFolder_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class ResourceFolder_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ParentID?: number;
       
     @Field() 
     @MaxLength(100)
-    @Column()
     Name: string;
       
     @Field() 
     @MaxLength(510)
-    @Column()
     ResourceTypeName: string;
       
     @Field({nullable: true}) 
-    @Column()
     Description?: string;
       
     @Field(() => Int) 
-    @Column()
     UserID: number;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(100)
-    @ViewColumn()
     Parent?: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     User: string;
     
     @Field(() => [ResourceFolder_])
-    @OneToMany(() => ResourceFolder_, () => null)
     ResourceFoldersArray: ResourceFolder_[]; // Link to ResourceFolders
 
 }
@@ -14136,7 +13024,7 @@ export class ResourceFolderResolver extends ResolverBase {
     @FieldResolver(() => [ResourceFolder_])
     async ResourceFoldersArray(@Root() resourcefolder_: ResourceFolder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwResourceFolders WHERE ParentID=${resourcefolder_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE ParentID=${resourcefolder_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -14208,42 +13096,30 @@ export class ResourceFolderResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Schema Info
 //****************************************************************************
-@ViewEntity({
-   name: 'vwSchemaInfos',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class SchemaInfo_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
+export class SchemaInfo_ {  
+    @Field(() => Int) 
     ID: number;
-  
+      
     @Field() 
     @MaxLength(100)
-    @Column()
     SchemaName: string;
       
     @Field(() => Int) 
-    @Column()
     EntityIDMin: number;
       
     @Field(() => Int) 
-    @Column()
     EntityIDMax: number;
       
     @Field({nullable: true}) 
-    @Column()
     Comments?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
 }
@@ -14408,47 +13284,35 @@ export class SchemaInfoResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integration Record Maps
 //****************************************************************************
-@ViewEntity({
-   name: 'vwCompanyIntegrationRecordMaps',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class CompanyIntegrationRecordMap_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class CompanyIntegrationRecordMap_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     CompanyIntegrationID: number;
       
     @Field() 
     @MaxLength(200)
-    @Column()
     ExternalSystemRecordID: string;
       
     @Field(() => Int) 
-    @Column()
     EntityID: number;
       
-    @Field(() => Int) 
-    @Column()
-    EntityRecordID: number;
+    @Field() 
+    @MaxLength(510)
+    EntityRecordID: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
     
 }
@@ -14467,8 +13331,8 @@ export class CreateCompanyIntegrationRecordMapInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    EntityRecordID: number;
+    @Field()
+    EntityRecordID: string;
 }
 
         
@@ -14489,8 +13353,8 @@ export class UpdateCompanyIntegrationRecordMapInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    EntityRecordID: number;
+    @Field()
+    EntityRecordID: string;
 }
 
 //****************************************************************************
@@ -14613,83 +13477,63 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Record Merge Logs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwRecordMergeLogs',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class RecordMergeLog_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class RecordMergeLog_ {  
     @Field(() => Int) 
-    @Column()
+    ID: number;
+      
+    @Field(() => Int) 
     EntityID: number;
       
-    @Field(() => Int) 
-    @Column()
-    SurvivingRecordID: number;
+    @Field() 
+    @MaxLength(510)
+    SurvivingRecordID: string;
       
     @Field(() => Int) 
-    @Column()
     InitiatedByUserID: number;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     ApprovalStatus: string;
       
     @Field(() => Int, {nullable: true}) 
-    @Column()
     ApprovedByUserID?: number;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     ProcessingStatus: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     ProcessingStartedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     ProcessingEndedAt?: Date;
       
     @Field({nullable: true}) 
-    @Column()
     ProcessingLog?: string;
       
     @Field({nullable: true}) 
-    @Column()
     Comments?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field({nullable: true}) 
     @MaxLength(8)
-    @Column()
     UpdatedAt?: Date;
       
     @Field() 
     @MaxLength(510)
-    @ViewColumn()
     Entity: string;
       
     @Field() 
     @MaxLength(200)
-    @ViewColumn()
     InitiatedByUser: string;
     
     @Field(() => [RecordMergeDeletionLog_])
-    @OneToMany(() => RecordMergeDeletionLog_, () => null)
     RecordMergeDeletionLogsArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
 
 }
@@ -14702,8 +13546,8 @@ export class CreateRecordMergeLogInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    SurvivingRecordID: number;
+    @Field()
+    SurvivingRecordID: string;
 
     @Field(() => Int, )
     InitiatedByUserID: number;
@@ -14742,8 +13586,8 @@ export class UpdateRecordMergeLogInput {
     @Field(() => Int, )
     EntityID: number;
 
-    @Field(() => Int, )
-    SurvivingRecordID: number;
+    @Field()
+    SurvivingRecordID: string;
 
     @Field(() => Int, )
     InitiatedByUserID: number;
@@ -14825,7 +13669,7 @@ export class RecordMergeLogResolver extends ResolverBase {
     @FieldResolver(() => [RecordMergeDeletionLog_])
     async RecordMergeDeletionLogsArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordMergeDeletionLogs WHERE RecordMergeLogID=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE RecordMergeLogID=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     
@@ -14897,42 +13741,31 @@ export class RecordMergeLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Record Merge Deletion Logs
 //****************************************************************************
-@ViewEntity({
-   name: 'vwRecordMergeDeletionLogs',
-   schema: 'admin',
-   synchronize: false,
-})
 @ObjectType()
-export class RecordMergeDeletionLog_ extends BaseEntity {
-    @Field(() => Int)
-    @PrimaryGeneratedColumn()
-    ID: number;
-  
+export class RecordMergeDeletionLog_ {  
     @Field(() => Int) 
-    @Column()
-    RecordMergeLogID: number;
+    ID: number;
       
     @Field(() => Int) 
-    @Column()
-    DeletedRecordID: number;
+    RecordMergeLogID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    DeletedRecordID: string;
       
     @Field() 
     @MaxLength(20)
-    @Column()
     Status: string;
       
     @Field({nullable: true}) 
-    @Column()
     ProcessingLog?: string;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     CreatedAt: Date;
       
     @Field() 
     @MaxLength(8)
-    @Column()
     UpdatedAt: Date;
     
 }
@@ -14945,8 +13778,8 @@ export class CreateRecordMergeDeletionLogInput {
     @Field(() => Int, )
     RecordMergeLogID: number;
 
-    @Field(() => Int, )
-    DeletedRecordID: number;
+    @Field()
+    DeletedRecordID: string;
 
     @Field()
     Status: string;
@@ -14967,8 +13800,8 @@ export class UpdateRecordMergeDeletionLogInput {
     @Field(() => Int, )
     RecordMergeLogID: number;
 
-    @Field(() => Int, )
-    DeletedRecordID: number;
+    @Field()
+    DeletedRecordID: string;
 
     @Field()
     Status: string;

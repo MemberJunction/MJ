@@ -1,3 +1,81 @@
+DROP VIEW IF EXISTS [admin].[vwTablePrimaryKeys] 
+GO
+CREATE VIEW [admin].[vwTablePrimaryKeys] AS
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName
+FROM 
+    sys.tables t
+INNER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+WHERE 
+    i.is_primary_key = 1;
+GO
+
+DROP VIEW IF EXISTS [admin].[vwTableUniqueKeys]
+GO
+CREATE VIEW [admin].[vwTableUniqueKeys] AS
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName
+FROM 
+    sys.tables t
+INNER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+WHERE 
+    i.is_unique = 1
+    AND i.is_primary_key = 0;
+GO
+
+
+DROP PROC IF EXISTS admin.spGetPrimaryKeyForTable
+GO
+CREATE PROC admin.spGetPrimaryKeyForTable 
+  @TableName NVARCHAR(255),
+  @SchemaName NVARCHAR(255)
+AS
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName,
+    ty.name AS DataType,
+    c.max_length,
+    c.precision,
+    c.scale,
+    c.is_nullable
+FROM 
+    sys.tables t
+INNER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+INNER JOIN 
+    sys.types ty ON c.user_type_id = ty.user_type_id
+WHERE 
+    i.is_primary_key = 1
+    AND t.name = @TableName
+    AND s.name = @SchemaName;
+GO
+ 
+
 -- ALL THE VIEWS
 
 DROP VIEW IF EXISTS [admin].vwForeignKeys
@@ -426,7 +504,7 @@ DROP PROCEDURE IF EXISTS [admin].[spCreateRecordChange]
 GO
 CREATE PROCEDURE [admin].[spCreateRecordChange]
     @EntityName nvarchar(100),
-    @RecordID int,
+    @RecordID NVARCHAR(255),
 	@UserID int,
     @ChangesJSON nvarchar(MAX),
     @ChangesDescription nvarchar(MAX),
@@ -535,7 +613,7 @@ GO
 
 CREATE TYPE admin.IDListTableType AS TABLE
 (
-    ID INT
+    ID NVARCHAR(255) NOT NULL
 );
 GO
 
@@ -722,7 +800,7 @@ SELECT
 	c.precision Precision,
 	c.scale Scale,
 	c.is_nullable AllowsNull,
-	c.is_identity AutoIncrement,
+	IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity) AutoIncrement,
 	c.column_id,
 	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
 	basetable_columns.object_id,
@@ -829,43 +907,73 @@ DROP PROC IF EXISTS [admin].[spUpdateExistingEntityFieldsFromSchema]
 GO
 CREATE PROC [admin].[spUpdateExistingEntityFieldsFromSchema]
 AS
-UPDATE [admin].EntityField
-SET
-	Type = fromSQL.Type,
-	Length = fromSQL.Length,
-	Precision = fromSQL.Precision,
-	Scale = fromSQL.Scale,
-	AllowsNull = fromSQL.AllowsNull,
-	DefaultValue = fromSQL.DefaultValue,
-	AutoIncrement = fromSQL.AutoIncrement,
-	IsVirtual = fromSQL.IsVirtual,
-	Sequence = fromSQL.Sequence,
-	RelatedEntityID = re.ID,
-	RelatedEntityFieldName = fk.referenced_column,
-	UpdatedAt = GETDATE() -- this will reflect an update data even if no changes were made, not optimal but doesn't really matter that much either
-FROM
-	[admin].EntityField ef
-INNER JOIN
-	vwSQLColumnsAndEntityFields fromSQL
-ON
-	ef.EntityID = fromSQL.EntityID AND
-	ef.Name = fromSQL.FieldName
-INNER JOIN
-    [admin].Entity e 
-ON
-    ef.EntityID = e.ID
-LEFT OUTER JOIN
-	vwForeignKeys fk
-ON
-	ef.Name = fk.[column] AND
-	e.BaseTable = fk.[table]
-LEFT OUTER JOIN 
-    [admin].Entity re -- Related Entity
-ON
-	re.BaseTable = fk.referenced_table
-WHERE
-	EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
+BEGIN
+    -- Update Statement
+    UPDATE [admin].EntityField
+    SET
+        Type = fromSQL.Type,
+        Length = fromSQL.Length,
+        Precision = fromSQL.Precision,
+        Scale = fromSQL.Scale,
+        AllowsNull = fromSQL.AllowsNull,
+        DefaultValue = fromSQL.DefaultValue,
+        AutoIncrement = fromSQL.AutoIncrement,
+        IsVirtual = fromSQL.IsVirtual,
+        Sequence = fromSQL.Sequence,
+        RelatedEntityID = re.ID,
+        RelatedEntityFieldName = fk.referenced_column,
+        IsPrimaryKey =	CASE 
+							WHEN pk.ColumnName IS NOT NULL THEN 1 
+							ELSE 0 
+						END,
+        IsUnique =		CASE 
+							WHEN pk.ColumnName IS NOT NULL THEN 1 
+							ELSE 
+								CASE 
+									WHEN uk.ColumnName IS NOT NULL THEN 1 
+									ELSE 0 
+								END 
+						END,
+        UpdatedAt = GETDATE()
+    FROM
+        [admin].EntityField ef
+    INNER JOIN
+        vwSQLColumnsAndEntityFields fromSQL
+    ON
+        ef.EntityID = fromSQL.EntityID AND
+        ef.Name = fromSQL.FieldName
+    INNER JOIN
+        [admin].Entity e 
+    ON
+        ef.EntityID = e.ID
+    LEFT OUTER JOIN
+        vwForeignKeys fk
+    ON
+        ef.Name = fk.[column] AND
+        e.BaseTable = fk.[table]
+    LEFT OUTER JOIN 
+        [admin].Entity re -- Related Entity
+    ON
+        re.BaseTable = fk.referenced_table
+    LEFT OUTER JOIN 
+		[admin].vwTablePrimaryKeys pk
+    ON
+        e.BaseTable = pk.TableName AND
+        ef.Name = pk.ColumnName AND
+        e.SchemaName = pk.SchemaName
+    LEFT OUTER JOIN 
+		[admin].vwTableUniqueKeys uk
+    ON
+        e.BaseTable = uk.TableName AND
+        ef.Name = uk.ColumnName AND
+        e.SchemaName = uk.SchemaName
+	WHERE
+		fromSQL.EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
+END
 GO
+
+
+
 
 
 DROP PROC IF EXISTS [admin].[spSetDefaultColumnWidthWhereNeeded]

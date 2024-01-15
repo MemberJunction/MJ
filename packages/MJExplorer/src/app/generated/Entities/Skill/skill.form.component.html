@@ -22,6 +22,16 @@
                                                [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
                         </ng-template>
                     </kendo-tabstrip-tab>
+          
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Skills')">
+                        <ng-template kendoTabTitle>Skills</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Skills')"  
+                                               [AllowLoad]="this.IsCurrentTab('Skills')"  
+                                               [EditMode]="this.GridEditMode()"  
+                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
                             </kendo-tabstrip>
     </form>
   </div>

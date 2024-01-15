@@ -254,9 +254,10 @@ npm
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: UserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
+        const pkeyName = e.PrimaryKey.Name;
         if (params.Fields) {
-            if (params.Fields.find(f => f.trim().toLowerCase() === 'ID') === undefined)
-                fieldList.push('ID'); // always include ID field
+            if (params.Fields.find(f => f.trim().toLowerCase() === pkeyName.toLowerCase()) === undefined)
+                fieldList.push(pkeyName); // always include the primary key in view run time field list
 
             // now add any other fields that were passed in
             params.Fields.forEach(f => fieldList.push(f));
@@ -268,10 +269,7 @@ npm
             if (dynamicView) {
                 // include all fields since no fields were passed in                
                 e.Fields.forEach(f => {
-                    if (f.Name.trim().toLowerCase() !== 'ID')
-                        fieldList.push(f.Name)
-                    else
-                        fieldList.push('ID'); // always include ID field and include it as upper case in all instances
+                    fieldList.push(f.Name)
                 }); 
             }
             else {
@@ -279,13 +277,15 @@ npm
                 // and those fields are NO LONGER part of an entity, in that situation we should just remove them, rather than letting the whole view blow up which
                 // would happen if we dno't check for c.EntityField? in the below
 
-                // first make sure we have ID in the view column list, always should, but make sure
-                if (v.Columns.find(c => c.EntityField?.Name?.trim().toLowerCase() === 'ID' && c.hidden === false) === undefined)
-                    fieldList.push('ID'); // always include ID field in the result data, don't need to display the data, but we need to always provide record ID to the caller
+                // first make sure we have the primary key field in the view column list, always should, but make sure
+                if (v.Columns.find(c => c.EntityField?.Name?.trim().toLowerCase() === pkeyName.toLowerCase() && c.hidden === false) === undefined)
+                    fieldList.push(pkeyName); // always include the primary key field in the result data, don't need to display the data, but we need to always provide record pkey to the caller
                 
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
-                    if (c.hidden === false && c.EntityField && c.EntityField.Name.trim().toLowerCase() !== 'ID') // don't include hidden fields and don't include ID again
+                    if (c.hidden === false && 
+                        c.EntityField && 
+                        c.EntityField.Name.trim().toLowerCase() !== pkeyName.toLowerCase()) // don't include hidden fields and don't include the pkey field again
                         fieldList.push(c.EntityField.Name)
                 });
             }
@@ -304,11 +304,11 @@ npm
         return ProviderType.Network;
     }
 
-    public async GetRecordChanges(entityName: string, recordId: number): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, primaryKeyValue: any): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = ${recordId} AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${primaryKeyValue}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -336,7 +336,7 @@ npm
      * @param entityName the name of the entity to check
      * @param recordId the recordId to check
      */
-    public async GetRecordDependencies(entityName: string, recordId: number): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
             const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $recordId: Int!) {
@@ -349,7 +349,12 @@ npm
             }`
 
             // now we have our query built, execute it
-            const data = await GraphQLDataProvider.ExecuteGQL(query, {entityName: entityName, recordId: recordId});
+            const pkeyName = this.Entities.find(e => e.Name === entityName).PrimaryKey.Name;
+            const vars = {
+                entityName: entityName
+            };
+            vars[pkeyName] = primaryKeyValue
+            const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
             return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
         }
@@ -389,8 +394,9 @@ npm
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         try {
+            const pKeyValue: any = entity.PrimaryKey.Value;
             const vars = { input: {} };
-            const type: string = (entity.ID) ? "Update" : "Create";
+            const type: string = (pKeyValue) ? "Update" : "Create";
 
             // Create the query for the mutation first, we will provide the specific
             // input values later in the loop below. Here we are just setting up the mutation
@@ -400,8 +406,8 @@ npm
 
             const mutationName = `${type}${entity.EntityInfo.ClassName}`
 
-            // only pass along writable fields, AND the ID value if this is an update
-            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.Name == 'ID' && entity.ID) ));
+            // only pass along writable fields, AND the PKEY value if this is an update
+            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && pKeyValue) ));
 
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => f.Name).join("\n                    ")}
@@ -472,17 +478,21 @@ npm
             return null;
         }
     }
-    public async Load(entity: BaseEntity, RecordID: number, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+    public async Load(entity: BaseEntity, PrimaryKeyValue: any, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
+            const pkeyName: string = entity.PrimaryKey.Name;
+            const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
-            const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} ($ID: Int!) {
-                ${entity.EntityInfo.ClassName}(ID: $ID) {
+            const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} ($${pkeyName}: ${pkeyGraphQLType}!) {
+                ${entity.EntityInfo.ClassName}(${pkeyName}: $${pkeyName}) {
                     ${entity.Fields.map(f => f.Name).join("\n                    ")}
                     ${rel}
                 }
             }
             `
-            const d = await GraphQLDataProvider.ExecuteGQL(query, {ID: RecordID})
+            const vars = {};
+            vars[pkeyName] = PrimaryKeyValue;
+            const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
             if (d && d[entity.EntityInfo.ClassName]) {
                 return  d[entity.EntityInfo.ClassName];
             }
@@ -513,10 +523,14 @@ npm
 
     public async Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean> {
         try {
-            const vars = {ID: entity.ID}
+            const vars = {};
+            const pkeyName: string = entity.PrimaryKey.Name;
+            const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
+            vars[pkeyName] = entity.PrimaryKey.Value;
+
             const queryName: string = 'Delete' + entity.EntityInfo.ClassName;
-            const query = gql`mutation ${queryName} ($ID: Int!) {
-                ${queryName}(ID: $ID)
+            const query = gql`mutation ${queryName} ($${pkeyName}: ${pkeyGraphQLType}!) {
+                ${queryName}(${pkeyName}: $${pkeyName})
             }
             `
 
@@ -526,13 +540,13 @@ npm
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
                     entity.TransactionGroup.AddTransaction(new TransactionItem(query, vars, {mutationName: queryName, 
-                                                                                             mutationInputType: 'Int!'}, 
+                                                                                             mutationInputType: pkeyGraphQLType + '!'}, 
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query.  
                         if (success && results) { 
-                            // success indicated by the entity.ID matching the return value of the mutation
-                            resolve (entity.ID === results)
+                            // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
+                            resolve (entity.PrimaryKey.Value === results)
                         }
                         else {
                             // the transaction failed, nothing to update, but we need to call Reject so the 
@@ -546,7 +560,7 @@ npm
                 // no transaction just go for it
                 const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
                 if (d && d[queryName]) 
-                    return entity.ID === d[queryName]; // returns the ID of the deleted record if SP is successful
+                    return entity.PrimaryKey.Value === d[queryName]; // returns the value of the primary key of the deleted record if SP is successful
                 else
                     return false;    
             }
@@ -636,7 +650,7 @@ npm
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, recordId: number): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -647,12 +661,12 @@ npm
                 IsFavorite
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, RecordID: recordId} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, RecordID: primaryKeyValue} });
         if (data && data.GetRecordFavoriteStatus && data.GetRecordFavoriteStatus.Success)
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, recordId: number, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -662,23 +676,23 @@ npm
                 Success
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, RecordID: recordId, IsFavorite: isFavorite} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, RecordID: primaryKeyValue, IsFavorite: isFavorite} });
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;        
     }
 
-    public async GetEntityRecordName(entityName: string, recordId: number): Promise<string> {
-        if (!entityName || !recordId)
+    public async GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string> {
+        if (!entityName || !primaryKeyValue)
             return null;
 
-        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $RecordID: Int!) {
+        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $RecordID: String!) {
             GetEntityRecordName(EntityName: $EntityName, RecordID: $RecordID) {
                 Success
                 Status
                 RecordName
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {EntityName: entityName, RecordID: recordId});
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {EntityName: entityName, RecordID: primaryKeyValue});
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
     }

@@ -31,6 +31,14 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Description"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Is Primary Key</label>
+            <input type="checkbox" [(ngModel)]="record.IsPrimaryKey" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Is Unique</label>
+            <input type="checkbox" [(ngModel)]="record.IsUnique" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Category</label>
             <kendo-textarea [(ngModel)]="record.Category" ></kendo-textarea>   
         </div>               
@@ -212,6 +220,14 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Description</label>
             <span >{{FormatValue('Description', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Is Primary Key</label>
+            <span >{{FormatValue('IsPrimaryKey', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Is Unique</label>
+            <span >{{FormatValue('IsUnique', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Category</label>
