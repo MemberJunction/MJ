@@ -1,4 +1,6 @@
-// Angular stuff
+//***********************************************************
+// Angular 
+//***********************************************************
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
@@ -6,47 +8,24 @@ import { FormsModule } from '@angular/forms';
 import { ReactiveFormsModule } from "@angular/forms";
 import { HttpClientModule } from '@angular/common/http'
 
-// MJ Stuff
+//***********************************************************
+// MJ 
+//***********************************************************
 import { ExplorerCoreModule } from '@memberjunction/ng-explorer-core';
+import { CoreGeneratedFormsModule, LoadCoreGeneratedForms } from '@memberjunction/ng-core-entity-forms';
+LoadCoreGeneratedForms(); // prevent tree shaking
+
 import { MJAuthBase, MJAuth0Provider, MJMSALProvider } from '@memberjunction/ng-auth-services';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-//import { ViewPropertiesDialogComponent } from '@memberjunction/ng-explorer-core';
 
-import { SharedService, LoadResourceWrappers } from '@memberjunction/ng-explorer-core';
-// import { SkipDynamicReportComponent } from '@memberjunction/ng-explorer-core';
-// import { AskSkipComponent } from '@memberjunction/ng-explorer-core';
-// import { AuthButtonComponent } from '@memberjunction/ng-explorer-core';
-// import { UserProfileComponent } from '@memberjunction/ng-explorer-core';
-// import { SingleApplicationComponent } from '@memberjunction/ng-explorer-core';
-// import { SingleEntityComponent } from '@memberjunction/ng-explorer-core';
-// import { SingleViewComponent } from '@memberjunction/ng-explorer-core';
-// import { SingleRecordComponent } from '@memberjunction/ng-explorer-core';
-// import { HeaderComponent } from '@memberjunction/ng-explorer-core';
-// import { EntityRecordResource } from '@memberjunction/ng-explorer-core';
-// import { UserViewResource } from '@memberjunction/ng-explorer-core';
-// import { DashboardResource } from '@memberjunction/ng-explorer-core';
-// import { SingleReportComponent } from '@memberjunction/ng-explorer-core';
-// import { ReportResource } from '@memberjunction/ng-explorer-core';
-// import { LoadResourceWrappers } from '@memberjunction/ng-explorer-core';
-// import { SingleSearchResultComponent } from '@memberjunction/ng-explorer-core';
-// import { SearchResultsResource } from '@memberjunction/ng-explorer-core';
-// import { HomeComponent } from '@memberjunction/ng-explorer-core';
-// import { DataBrowserComponent } from '@memberjunction/ng-explorer-core';
-// import { ReportBrowserComponent } from '@memberjunction/ng-explorer-core';
-// import { DashboardBrowserComponent } from '@memberjunction/ng-explorer-core';
-// import { SettingsComponent } from '@memberjunction/ng-explorer-core';
-// import { FavoritesComponent } from '@memberjunction/ng-explorer-core';
-// import { GenericBrowseListComponent } from '@memberjunction/ng-explorer-core';
-// import { NavigationComponent } from '@memberjunction/ng-explorer-core'
-// import { JoinGridComponent } from '@memberjunction/ng-explorer-core';
-// import { SingleDashboardComponent } from '@memberjunction/ng-explorer-core';
-// import { AddItemComponent } from '@memberjunction/ng-explorer-core';
-// import { EditDashboardComponent } from '@memberjunction/ng-explorer-core';
+import { SharedService, LoadResourceWrappers } from '@memberjunction/ng-explorer-core'; 
 
 
+//***********************************************************
 // Kendo
+//***********************************************************
 import { GridModule } from '@progress/kendo-angular-grid';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
@@ -65,25 +44,36 @@ import { ListViewModule } from '@progress/kendo-angular-listview';
 import { ChartsModule } from '@progress/kendo-angular-charts';
 import { ListBoxModule } from '@progress/kendo-angular-listbox';
 
+//***********************************************************
 // Auth0
+//***********************************************************
 import { AuthModule, AuthService } from '@auth0/auth0-angular';
 
+//***********************************************************
 //MSAL
+//***********************************************************
 import { MsalBroadcastService, MsalGuard, MsalGuardConfiguration, MsalModule, MsalRedirectComponent, MsalService } from '@azure/msal-angular';
 import { InteractionType, PublicClientApplication } from '@azure/msal-browser';
 
  
 
+//***********************************************************
 // Routing
+//***********************************************************
 import { AppRoutingModule } from './app-routing.module';
 
+//***********************************************************
 // Project stuff
+//***********************************************************
 import { AppComponent } from './app.component';
-import { GeneratedFormsModule } from './generated/generated-forms.module';
+import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
 import { environment } from 'src/environments/environment';
 import 'hammerjs';
+LoadGeneratedForms(); // prevent tree shaking and component loss through this call
+LoadResourceWrappers(); // prevent tree shaking and component loss through this call
 
-LoadResourceWrappers();
+
+
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -123,6 +113,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     LinkDirectivesModule,
     ContainerDirectivesModule,
     ExplorerCoreModule,
+    CoreGeneratedFormsModule,
     GeneratedFormsModule,
     NotificationModule,
     HttpClientModule,
@@ -160,16 +151,6 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
         ])
       })
     ),
-    // Auth0 --- Import the module into the application, with configuration, IF YOU ARE USING Auth0
-    // AuthModule.forRoot({
-    //   domain: environment.AUTH0_DOMAIN,
-    //   clientId: environment.AUTH0_CLIENTID,
-    //   authorizationParams: {
-    //     redirect_uri: window.location.origin
-    //   },
-    //   cacheLocation: 'localstorage',
-    // }),
-    // MsalModule
     ChartsModule,
     ListBoxModule
   ],
