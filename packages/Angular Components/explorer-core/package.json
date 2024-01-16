@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.51",
+  "version": "0.9.57",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,11 +28,11 @@
   },
   "dependencies": {
     "@memberjunction/global": "^0.9.107",
-    "@memberjunction/core": "^0.9.108",
-    "@memberjunction/ng-compare-records": "^0.9.110",
-    "@memberjunction/ng-record-changes": "^0.9.46",
-    "@memberjunction/ng-container-directives": "^0.9.85",
-    "@memberjunction/ng-user-view-grid": "^0.9.91",
+    "@memberjunction/core": "^0.9.113",
+    "@memberjunction/ng-compare-records": "^0.9.115",
+    "@memberjunction/ng-record-changes": "^0.9.51",
+    "@memberjunction/ng-container-directives": "^0.9.90",
+    "@memberjunction/ng-user-view-grid": "^0.9.96",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

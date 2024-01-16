@@ -341,14 +341,14 @@ function generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormS
                 section.Fields.push(field) // add the field to the section fields array
 
                 // next, generate HTML for the field
-                const linkDirective = field.RelatedEntity && field.RelatedEntity.length > 0 ? `mjFieldLink [record]="record" fieldName="${field.Name}" ` : ''
-                const linkNoTextDirective = field.RelatedEntity && field.RelatedEntity.length > 0 ? `mjFieldLink [record]="record" fieldName="${field.Name}" [replaceText]="false" ` : ''
-                const webLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'url' ? `mjWebLink [field]="record.GetFieldByName('${field.Name}')" ` : '';
-                const emailLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'email' ? `mjEmailLink [field]="record.GetFieldByName('${field.Name}')" ` : '';
+                const linkDirective = field.RelatedEntity && field.RelatedEntity.length > 0 ? `mjFieldLink [record]="record" fieldName="${field.CodeName}" ` : ''
+                const linkNoTextDirective = field.RelatedEntity && field.RelatedEntity.length > 0 ? `mjFieldLink [record]="record" fieldName="${field.CodeName}" [replaceText]="false" ` : ''
+                const webLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'url' ? `mjWebLink [field]="record.GetFieldByName('${field.CodeName}')" ` : '';
+                const emailLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'email' ? `mjEmailLink [field]="record.GetFieldByName('${field.CodeName}')" ` : '';
                 readModeHTML += `              
         <div class="record-form-row">
             <label class="fieldLabel">${field.DisplayNameOrName}</label>
-            <span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.Name}', 0)}}</span>
+            <span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.CodeName}', 0)}}</span>
         </div>`
 
                 let editControl = '';
@@ -356,21 +356,21 @@ function generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormS
     
                 if (!field.ReadOnly) {
                     if (field.TSType === EntityFieldTSType.Boolean)
-                        editControl = `<input type="checkbox" [(ngModel)]="record.${field.Name}" kendoCheckBox />`
+                        editControl = `<input type="checkbox" [(ngModel)]="record.${field.CodeName}" kendoCheckBox />`
                     else if (field.TSType === EntityFieldTSType.Date)
-                        editControl = `<kendo-datepicker [(value)]="record.${field.Name}" ></kendo-datepicker>`
+                        editControl = `<kendo-datepicker [(value)]="record.${field.CodeName}" ></kendo-datepicker>`
                     else if (field.TSType === EntityFieldTSType.Number)
-                        editControl = `<kendo-numerictextbox [(value)]="record.${field.Name}" ></kendo-numerictextbox>`
+                        editControl = `<kendo-numerictextbox [(value)]="record.${field.CodeName}" ></kendo-numerictextbox>`
                     else if (field.TSType === EntityFieldTSType.String) {
                         if (field.MaxLength > 100)
-                            editControl = `<kendo-textarea [(ngModel)]="record.${field.Name}" ></kendo-textarea>`
+                            editControl = `<kendo-textarea [(ngModel)]="record.${field.CodeName}" ></kendo-textarea>`
                         else
-                            editControl = `<kendo-textbox [(ngModel)]="record.${field.Name}"  />`
+                            editControl = `<kendo-textbox [(ngModel)]="record.${field.CodeName}"  />`
                     }
                 }
                 else {
                     // read only field
-                    editControl = `<span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.Name}', 0)}}</span>`
+                    editControl = `<span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.CodeName}', 0)}}</span>`
                     bReadOnly = true;
                 }
 

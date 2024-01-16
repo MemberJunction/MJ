@@ -8,7 +8,40 @@ import { UserPayload } from '../types';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
 
 export class ResolverBase {
-  async findBy(dataSource: DataSource, entity: string, params: any) {
+
+  protected MapFieldNamesToCodeNames(entityName: string, dataObject: any) {
+    // for the given entity name provided, check to see if there are any fields
+    // where the code name is different from the field name, and for just those
+    // fields, iterate through the dataObject and REPLACE the property that has the field name
+    // with the CodeName, because we can't transfer those via GraphQL as they are not
+    // valid property names in GraphQL
+    if (dataObject) {
+      const md = new Metadata();
+      const entityInfo = md.Entities.find((e) => e.Name === entityName);
+      if (!entityInfo) 
+        throw new Error(`Entity ${entityName} not found in metadata`);
+      const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName);
+      fields.forEach((f) => {
+        if (dataObject.hasOwnProperty(f.Name)) {
+          dataObject[f.CodeName] = dataObject[f.Name];
+          delete dataObject[f.Name];
+        }
+      });  
+    }
+    return dataObject;
+  }
+
+  protected ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: []) {
+    // iterate through the array and call MapFieldNamesToCodeNames for each element
+    if (dataObjectArray && dataObjectArray.length > 0) {
+      dataObjectArray.forEach((element) => {
+        this.MapFieldNamesToCodeNames(entityName, element);
+      });  
+    }
+    return dataObjectArray;
+  }
+
+  protected async findBy(dataSource: DataSource, entity: string, params: any) {
     // build the SQL query based on the params passed in
     const md = new Metadata();
     const e = md.Entities.find((e) => e.Name === entity);
@@ -179,7 +212,6 @@ export class ResolverBase {
           },
           user
         );
-
         return result;
       } else return null;
     } catch (err) {

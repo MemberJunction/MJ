@@ -13,7 +13,7 @@ import { generateAngularCode } from './angular_client_codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { createNewUser } from './createNewUser';
 
-export async function runMemberJunctionCodeGeneration() {
+export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
     try {
         const startTime = new Date();
         logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString())
@@ -41,8 +41,8 @@ export async function runMemberJunctionCodeGeneration() {
         }
 
         // check to see if the user wants to skip database generation via the config settings
-        const skipDatabaseGeneration = getSettingValue('skip_database_generation', false);
-        if (!skipDatabaseGeneration) {
+        const skipDB = skipDatabaseGeneration || getSettingValue('skip_database_generation', false);
+        if (!skipDB) {
             logStatus("Handling SQL Script Execution, Metadata Maintenance, and SQL Object Generation... (to skip this, set skip_database_generation to true in the config file under settings)")
             /****************************************************************************************
             // STEP 0 --- Precursor Step execute any commands specified in the config file
