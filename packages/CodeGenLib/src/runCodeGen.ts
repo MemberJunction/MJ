@@ -40,9 +40,6 @@ export async function runMemberJunctionCodeGeneration() {
             process.exit(1);
         }
 
-        const coreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase());
-        const nonCoreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase());
-
         // check to see if the user wants to skip database generation via the config settings
         const skipDatabaseGeneration = getSettingValue('skip_database_generation', false);
         if (!skipDatabaseGeneration) {
@@ -96,6 +93,8 @@ export async function runMemberJunctionCodeGeneration() {
             logStatus("Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings")
         }
 
+        const coreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase());
+        const nonCoreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase());
 
         /****************************************************************************************
         // STEP 3(a) - GraphQL Server Code Gen
