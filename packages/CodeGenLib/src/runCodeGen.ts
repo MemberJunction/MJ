@@ -40,6 +40,9 @@ export async function runMemberJunctionCodeGeneration() {
             process.exit(1);
         }
 
+        const coreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase());
+        const nonCoreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase());
+
         // check to see if the user wants to skip database generation via the config settings
         const skipDatabaseGeneration = getSettingValue('skip_database_generation', false);
         if (!skipDatabaseGeneration) {
@@ -95,17 +98,26 @@ export async function runMemberJunctionCodeGeneration() {
 
 
         /****************************************************************************************
-        // STEP 3 - GraphQL Server Code Gen
+        // STEP 3(a) - GraphQL Server Code Gen
         ****************************************************************************************/
+        const graphQLCoreResolversOutputDir = outputDir('GraphQLCoreEntityResolvers', false);
+        if (graphQLCoreResolversOutputDir) {
+            // generate the GraphQL server code
+            logStatus('Generating CORE Entity GraphQL Resolver Code...')
+            if (! generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir))
+                logError('Error generating GraphQL server code');
+        }
+
         const graphqlOutputDir = outputDir('GraphQLServer', true);
         if (graphqlOutputDir) {
             // generate the GraphQL server code
-            logStatus('Generating GraphQL Server Code...')
-            if (! generateGraphQLServerCode(md.Entities, graphqlOutputDir))
-                logError('Error generating GraphQL server code');
+            logStatus('Generating GraphQL Resolver Code...')
+            if (! generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir))
+                logError('Error generating GraphQL Resolver code');
         }
         else
             logStatus('GraphQL server output directory NOT found in config file, skipping...');
+    
 
         /****************************************************************************************
         // STEP 4 - Core Entity Subclass Code Gen
@@ -114,12 +126,9 @@ export async function runMemberJunctionCodeGeneration() {
         if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0) {
             // generate the entity subclass code
             logStatus('Generating CORE Entity Subclass Code...')
-            const coreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase());
             if (! generateAllEntitySubClasses(coreEntities, coreEntitySubClassOutputDir))
                 logError('Error generating entity subclass code');
         }
-        else
-            logStatus('CORE Entity subclass output directory NOT found in config file, skipping...');
 
         /****************************************************************************************
         // STEP 4.1 - Entity Subclass Code Gen
@@ -128,7 +137,6 @@ export async function runMemberJunctionCodeGeneration() {
         if (entitySubClassOutputDir) {
             // generate the entity subclass code
             logStatus('Generating Entity Subclass Code...')
-            const nonCoreEntities = md.Entities.filter(e => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase());
             if (! generateAllEntitySubClasses(nonCoreEntities, entitySubClassOutputDir))
                 logError('Error generating entity subclass code');
         }
@@ -139,16 +147,25 @@ export async function runMemberJunctionCodeGeneration() {
         /****************************************************************************************
         // STEP 5 - Angular Code Gen
         ****************************************************************************************/
+        const angularCoreEntitiesOutputDir = outputDir('AngularCoreEntities', false);
+        if (angularCoreEntitiesOutputDir) {
+            // generate the Angular client code
+            logStatus('Generating Angular CORE Entities Code...')
+            if (! generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core'))  
+                logError('Error generating Angular CORE Entities code');
+        }
+
         const angularOutputDir = outputDir('Angular', false);
         if (angularOutputDir) {
             // generate the Angular client code
             logStatus('Generating Angular Code...')
-            if (! generateAngularCode(md.Entities, angularOutputDir))
+            if (! generateAngularCode(nonCoreEntities, angularOutputDir, ''))
                 logError('Error generating Angular code');
         }
         else
             logStatus('Angular output directory NOT found in config file, skipping...');
-
+    
+            //AngularCoreEntities
 
         /****************************************************************************************
         // STEP 6 - Database Schema Output in JSON - for documentation and can be used by AI/etc.

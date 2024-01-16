@@ -2,12 +2,12 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, RunView, EntityRecordNameInput } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 
 @Component({
   selector: 'app-single-application',
   templateUrl: './single-application.component.html',
-  styleUrls: ['./single-application.component.css', '../shared/first-tab-styles.css']
+  styleUrls: ['./single-application.component.css', '../../shared/first-tab-styles.css']
 })
 export class SingleApplicationComponent implements OnInit {
   constructor (private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {

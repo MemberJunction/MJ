@@ -544,12 +544,6 @@ input CreateResourceFolderInput {
   UserID: Int!
 }
 
-input CreateSampleInput {
-  SampleID: String!
-  ValueA: String!
-  ValueB: String
-}
-
 input CreateSchemaInfoInput {
   Comments: String
   EntityIDMax: Int!
@@ -1106,7 +1100,6 @@ type Mutation {
   CreateReport(input: CreateReportInput!): Report_!
   CreateReportSnapshot(input: CreateReportSnapshotInput!): ReportSnapshot_!
   CreateResourceFolder(input: CreateResourceFolderInput!): ResourceFolder_!
-  CreateSample(input: CreateSampleInput!): Sample_!
   CreateSchemaInfo(input: CreateSchemaInfoInput!): SchemaInfo_!
   CreateUser(input: CreateUserInput!): User_!
   CreateUserApplicationEntity(input: CreateUserApplicationEntityInput!): UserApplicationEntity_!
@@ -1177,7 +1170,6 @@ type Mutation {
   UpdateReportSnapshot(input: UpdateReportSnapshotInput!): ReportSnapshot_!
   UpdateResourceFolder(input: UpdateResourceFolderInput!): ResourceFolder_!
   UpdateRole(input: UpdateRoleInput!): Role_!
-  UpdateSample(input: UpdateSampleInput!): Sample_!
   UpdateSchemaInfo(input: UpdateSchemaInfoInput!): SchemaInfo_!
   UpdateUser(input: UpdateUserInput!): User_!
   UpdateUserApplication(input: UpdateUserApplicationInput!): UserApplication_!
@@ -1467,9 +1459,6 @@ type Query {
   RunRowLevelSecurityFilterDynamicView(input: RunDynamicViewInput!): RunRowLevelSecurityFilterViewResult!
   RunRowLevelSecurityFilterViewByID(input: RunViewByIDInput!): RunRowLevelSecurityFilterViewResult!
   RunRowLevelSecurityFilterViewByName(input: RunViewByNameInput!): RunRowLevelSecurityFilterViewResult!
-  RunSampleDynamicView(input: RunDynamicViewInput!): RunSampleViewResult!
-  RunSampleViewByID(input: RunViewByIDInput!): RunSampleViewResult!
-  RunSampleViewByName(input: RunViewByNameInput!): RunSampleViewResult!
   RunSchemaInfoDynamicView(input: RunDynamicViewInput!): RunSchemaInfoViewResult!
   RunSchemaInfoViewByID(input: RunViewByIDInput!): RunSchemaInfoViewResult!
   RunSchemaInfoViewByName(input: RunViewByNameInput!): RunSchemaInfoViewResult!
@@ -1529,7 +1518,6 @@ type Query {
   RunWorkspaceItemViewByName(input: RunViewByNameInput!): RunWorkspaceItemViewResult!
   RunWorkspaceViewByID(input: RunViewByIDInput!): RunWorkspaceViewResult!
   RunWorkspaceViewByName(input: RunViewByNameInput!): RunWorkspaceViewResult!
-  Sample(SampleID: String!): Sample_
   SchemaInfo(ID: Int!): SchemaInfo_
   Skill(ID: Int!): Skill_
   Tag(ID: Int!): Tag_
@@ -2340,16 +2328,6 @@ type RunRowLevelSecurityFilterViewResult {
   UserViewRunID: Int
 }
 
-type RunSampleViewResult {
-  ErrorMessage: String
-  ExecutionTime: Int
-  Results: [Sample_!]!
-  RowCount: Int
-  Success: Boolean!
-  TotalRowCount: Int
-  UserViewRunID: Int
-}
-
 type RunSchemaInfoViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -2662,14 +2640,6 @@ type RunWorkspaceViewResult {
   Success: Boolean!
   TotalRowCount: Int
   UserViewRunID: Int
-}
-
-type Sample_ {
-  CreatedAt: Timestamp!
-  SampleID: String!
-  UpdatedAt: Timestamp!
-  ValueA: String!
-  ValueB: String
 }
 
 type SchemaInfo_ {
@@ -3155,12 +3125,6 @@ input UpdateRoleInput {
   ID: Int!
   Name: String!
   SQLName: String!
-}
-
-input UpdateSampleInput {
-  SampleID: String!
-  ValueA: String!
-  ValueB: String
 }
 
 input UpdateSchemaInfoInput {

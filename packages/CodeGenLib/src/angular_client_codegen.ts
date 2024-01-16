@@ -16,7 +16,7 @@ class AngularFormSectionInfo {
     EntityClassName: string
 }
 
-export function generateAngularCode(entities: EntityInfo[], directory: string): boolean {
+export function generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string): boolean {
   try {
     const entityPath = path.join(directory, 'Entities');
     //const classMapEntries: string[] = [];
@@ -64,7 +64,7 @@ export function generateAngularCode(entities: EntityInfo[], directory: string): 
 
     const maxComponentsPerModule = outputOptionValue('Angular', 'maxComponentsPerModule', 25);
 
-    const moduleCode = generateAngularModule(componentImports, componentNames, sections, maxComponentsPerModule);
+    const moduleCode = generateAngularModule(componentImports, componentNames, sections, modulePrefix, maxComponentsPerModule);
     fs.writeFileSync(path.join(directory, 'generated-forms.module.ts'), moduleCode);
 
     return true;
@@ -76,7 +76,7 @@ export function generateAngularCode(entities: EntityInfo[], directory: string): 
 }
  
 
-function generateAngularModule(componentImports: string[], componentNames: string[], sections: AngularFormSectionInfo[], maxComponentsPerModule: number = 25): string {
+function generateAngularModule(componentImports: string[], componentNames: string[], sections: AngularFormSectionInfo[], modulePrefix: string, maxComponentsPerModule: number = 25): string {
     // this function will generate the overall code for the module file.
     // there is one master angular module called GeneratedFormsModule, and this module will include all of the sub-modules
     // the reason we do this is because of limits in the size of the types you can create in TypeScript and if we have a very large 
@@ -84,7 +84,7 @@ function generateAngularModule(componentImports: string[], componentNames: strin
     // smaller modules and then import those modules into the master module, which is what this function does
 
     // first, generate the sub-modules
-    const moduleCode: string = generateAngularModuleCode(componentNames, sections, maxComponentsPerModule);
+    const moduleCode: string = generateAngularModuleCode(componentNames, sections, maxComponentsPerModule, modulePrefix);
 
     return `/**********************************************************************************
 * GENERATED FILE - This file is automatically managed by the MJ CodeGen tool, 
@@ -110,7 +110,7 @@ ${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entit
 
 ${moduleCode}
 
-export function LoadGeneratedForms() {
+export function Load${modulePrefix}GeneratedForms() {
     // This function doesn't do much, but it calls each generated form's loader function
     // which in turn calls the sections for that generated form. Ultimately, those bits of 
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
@@ -122,7 +122,7 @@ export function LoadGeneratedForms() {
 `
 }
 
-function generateAngularModuleCode(componentNames: string[], sections: AngularFormSectionInfo[], maxComponentsPerModule: number): string {
+function generateAngularModuleCode(componentNames: string[], sections: AngularFormSectionInfo[], maxComponentsPerModule: number, modulePrefix: string): string {
     // this function breaks up the componentNames and sections up, we only want to have a max of maxComponentsPerModule components per module (of components and/or sections, doesn't matter)
     // so, we break up the list of components into sub-modules, and then generate the code for each sub-module
     
@@ -163,7 +163,7 @@ imports: [
     ${subModuleNames.join(',\n    ')}
 ]
 })
-export class GeneratedFormsModule { }`;
+export class ${modulePrefix}GeneratedFormsModule { }`;
 
     // now we have the sub-modules generated into the subModules array, and we have the master module code generated into the masterModuleCode variable
     // so we need to combine the two into a single return value and send back to the caller
@@ -414,7 +414,7 @@ function stripWhiteSpace(s: string): string {
 
 function generateSingleEntityHTMLForAngular(entity: EntityInfo): {htmlCode: string, sections: AngularFormSectionInfo[]} {
     const topArea = generateTopAreaHTMLForAngular(entity);
-    const additionalSections = generateAngularAdditionalSections(entity,0);
+    const additionalSections = generateAngularAdditionalSections(entity, 0);
     // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
     const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
     const relatedEntitySections = generateRelatedEntityTabs(entity, endingIndex);

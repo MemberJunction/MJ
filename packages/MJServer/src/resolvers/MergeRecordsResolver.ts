@@ -1,6 +1,6 @@
 import { LogError, Metadata } from '@memberjunction/core';
-import { AppContext, Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from '@memberjunction/server';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { AppContext } from '../types';
 
 @ObjectType()
 export class EntityDependencyResult {

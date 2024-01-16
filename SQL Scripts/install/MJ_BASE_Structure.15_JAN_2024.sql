@@ -1,15 +1,7 @@
 /*
-Run this script on:
-
-        mj-mj-prodsql.database.windows.net.MJ_EMPTY    -  This database will be modified
-
-to synchronize it with:
-
-        mj-mj-prodsql.database.windows.net.MJ_BASE
-
 You are recommended to back up your database before running this script
 
-Script created by SQL Compare version 15.2.1.24235 from Red Gate Software Ltd at 12/20/2023 2:00:28 PM
+Script created by SQL Compare version 15.2.1.24235 from Red Gate Software Ltd at 1/15/2024 11:48:09 AM
 
 */
 SET NUMERIC_ROUNDABORT OFF
@@ -131,19 +123,14 @@ ALTER ROLE [cdp_UI] ADD MEMBER [MJ_Connect_Dev]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Altering members of role db_owner'
-GO
-ALTER ROLE [db_owner] ADD MEMBER [MJ_CodeGen]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-ALTER ROLE [db_owner] ADD MEMBER [MJ_CodeGen_Dev]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating schemas'
 GO
 CREATE SCHEMA [admin]
+AUTHORIZATION [dbo]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+CREATE SCHEMA [test]
 AUTHORIZATION [dbo]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -152,7 +139,7 @@ PRINT N'Creating types'
 GO
 CREATE TYPE [admin].[IDListTableType] AS TABLE
 (
-[ID] [int] NULL
+[ID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -330,7 +317,7 @@ CREATE TABLE [admin].[EmployeeSkill]
 (
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [EmployeeID] [int] NOT NULL,
-[SkillID] [char] (36) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[SkillID] [int] NOT NULL,
 [CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_EmployeeSkill_CreatedAt] DEFAULT (getdate()),
 [UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_EmployeeSkill_UpdatedAt] DEFAULT (getdate())
 )
@@ -340,25 +327,6 @@ GO
 PRINT N'Creating primary key [PK__Employee__172A46EF36387801] on [admin].[EmployeeSkill]'
 GO
 ALTER TABLE [admin].[EmployeeSkill] ADD CONSTRAINT [PK__Employee__172A46EF36387801] PRIMARY KEY CLUSTERED ([ID])
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[Skill]'
-GO
-CREATE TABLE [admin].[Skill]
-(
-[ID] [char] (36) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ParentID] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_Skill_CreatedAt] DEFAULT (getdate()),
-[UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_Skill_UpdatedAt] DEFAULT (getdate())
-)
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating primary key [PK__Skill__3214EC2714679AE5] on [admin].[Skill]'
-GO
-ALTER TABLE [admin].[Skill] ADD CONSTRAINT [PK__Skill__3214EC2714679AE5] PRIMARY KEY CLUSTERED ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -607,7 +575,7 @@ CREATE TABLE [admin].[TaggedItem]
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [TagID] [int] NOT NULL,
 [EntityID] [int] NOT NULL,
-[RecordID] [int] NOT NULL
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -646,7 +614,7 @@ CREATE TABLE [admin].[WorkspaceItem]
 [Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [WorkSpaceID] [int] NOT NULL,
 [ResourceTypeID] [int] NOT NULL,
-[ResourceRecordID] [int] NULL,
+[ResourceRecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Sequence] [int] NOT NULL,
 [Configuration] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
 )
@@ -845,7 +813,7 @@ CREATE TABLE [admin].[AuditLog]
 [Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Details] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [EntityID] [int] NULL,
-[RecordID] [int] NULL,
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_AuditLog_CreatedAt] DEFAULT (getdate()),
 [UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_AuditLog_UpdatedAt] DEFAULT (getdate())
 )
@@ -1001,7 +969,7 @@ CREATE TABLE [admin].[CompanyIntegrationRecordMap]
 [CompanyIntegrationID] [int] NOT NULL,
 [ExternalSystemRecordID] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [EntityID] [int] NOT NULL,
-[EntityRecordID] [int] NOT NULL,
+[EntityRecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRecordMap_CreatedAt] DEFAULT (getdate()),
 [UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRecordMap_UpdatedAt] DEFAULT (getdate())
 )
@@ -1063,7 +1031,7 @@ CREATE TABLE [admin].[CompanyIntegrationRunDetail]
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [CompanyIntegrationRunID] [int] NOT NULL,
 [EntityID] [int] NOT NULL,
-[RecordID] [int] NOT NULL,
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [Action] [nchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [ExecutedAt] [datetime] NOT NULL CONSTRAINT [DF_CompanyIntegrationRunDetail_ExecutedAt] DEFAULT (getdate()),
 [IsSuccess] [bit] NOT NULL CONSTRAINT [DF__CompanyIn__IsSuc__2AA05119] DEFAULT ((0))
@@ -1147,6 +1115,25 @@ ALTER TABLE [admin].[EmployeeCompanyIntegration] ADD CONSTRAINT [PK_EmployeeComp
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [admin].[Skill]'
+GO
+CREATE TABLE [admin].[Skill]
+(
+[ID] [int] NOT NULL IDENTITY(1, 1),
+[Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ParentID] [int] NULL,
+[CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_Skill_CreatedAt] DEFAULT (getdate()),
+[UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_Skill_UpdatedAt] DEFAULT (getdate())
+)
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating primary key [PK_Skill] on [admin].[Skill]'
+GO
+ALTER TABLE [admin].[Skill] ADD CONSTRAINT [PK_Skill] PRIMARY KEY CLUSTERED ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [admin].[EntityAIAction]'
 GO
 CREATE TABLE [admin].[EntityAIAction]
@@ -1184,6 +1171,8 @@ CREATE TABLE [admin].[EntityField]
 [Name] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [DisplayName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Description] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[IsPrimaryKey] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsPrimaryKey] DEFAULT ((0)),
+[IsUnique] [bit] NOT NULL CONSTRAINT [DF_EntityField_IsUnique] DEFAULT ((0)),
 [Category] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Type] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [Length] [int] NULL,
@@ -1445,7 +1434,7 @@ CREATE TABLE [admin].[ListDetail]
 (
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [ListID] [int] NOT NULL,
-[RecordID] [int] NOT NULL,
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [Sequence] [int] NOT NULL CONSTRAINT [DF_ListDetail_Sequence] DEFAULT ((0))
 )
 GO
@@ -1540,7 +1529,7 @@ CREATE TABLE [admin].[RecordChange]
 (
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [EntityID] [int] NOT NULL,
-[RecordID] [int] NOT NULL,
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [UserID] [int] NOT NULL,
 [ChangedAt] [datetime] NOT NULL CONSTRAINT [DF_RecordChange_ChangedAt] DEFAULT (getdate()),
 [ChangesJSON] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -1564,7 +1553,7 @@ CREATE TABLE [admin].[RecordMergeLog]
 (
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [EntityID] [int] NOT NULL,
-[SurvivingRecordID] [int] NOT NULL,
+[SurvivingRecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [InitiatedByUserID] [int] NOT NULL,
 [ApprovalStatus] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeLog_ApprovalStatus] DEFAULT (N'Pending'),
 [ApprovedByUserID] [int] NULL,
@@ -1591,7 +1580,7 @@ CREATE TABLE [admin].[RecordMergeDeletionLog]
 (
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [RecordMergeLogID] [int] NOT NULL,
-[DeletedRecordID] [int] NOT NULL,
+[DeletedRecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RecordMergeDeletionLog_Status] DEFAULT (N'Pending'),
 [ProcessingLog] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_RecordMergeDeletionLog_CreatedAt] DEFAULT (getdate()),
@@ -1610,7 +1599,7 @@ PRINT N'Creating [admin].[ResourceFolder]'
 GO
 CREATE TABLE [admin].[ResourceFolder]
 (
-[ID] [int] NOT NULL,
+[ID] [int] NOT NULL IDENTITY(1, 1),
 [ParentID] [int] NULL,
 [Name] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [ResourceTypeName] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -1672,7 +1661,7 @@ CREATE TABLE [admin].[UserFavorite]
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [UserID] [int] NOT NULL,
 [EntityID] [int] NOT NULL,
-[RecordID] [int] NOT NULL,
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_UserFavorite_CreatedAt] DEFAULT (getdate()),
 [UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_UserFavorite_UpdatedAt] DEFAULT (getdate())
 )
@@ -1717,7 +1706,7 @@ CREATE TABLE [admin].[UserRecordLog]
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [UserID] [int] NOT NULL,
 [EntityID] [int] NOT NULL,
-[RecordID] [int] NOT NULL,
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [EarliestAt] [datetime] NOT NULL CONSTRAINT [DF_UserRecordLog_EarliestAt] DEFAULT (getdate()),
 [LatestAt] [datetime] NOT NULL CONSTRAINT [DF_UserRecordLog_LatestAt] DEFAULT (getdate()),
 [TotalCount] [int] NOT NULL CONSTRAINT [DF_UserRecordLog_TotalCount] DEFAULT ((0))
@@ -1774,7 +1763,7 @@ CREATE TABLE [admin].[UserViewRunDetail]
 (
 [ID] [int] NOT NULL IDENTITY(1, 1),
 [UserViewRunID] [int] NOT NULL,
-[RecordID] [int] NOT NULL
+[RecordID] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
 )
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -1833,52 +1822,269 @@ ALTER TABLE [admin].[WorkflowRun] ADD CONSTRAINT [PK_WorkflowRun] PRIMARY KEY CL
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteEntity]'
+PRINT N'Creating [admin].[vwEntities]'
+GO
+
+CREATE VIEW [admin].[vwEntities]
+AS
+SELECT 
+	e.*,
+	IIF(1 = ISNUMERIC(LEFT(e.Name, 1)),'_','') + REPLACE(e.Name, ' ', '') CodeName,
+	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) ClassName,
+	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) BaseTableCodeName,
+	par.Name ParentEntity,
+	par.BaseTable ParentBaseTable,
+	par.BaseView ParentBaseView
+FROM 
+	[admin].Entity e
+LEFT OUTER JOIN 
+	[admin].Entity par
+ON
+	e.ParentID = par.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateEntity]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteEntity]
-    @ID INT
-AS  
+CREATE PROCEDURE [admin].[spCreateEntity]
+    @ID int,
+    @ParentID int,
+    @Name nvarchar(255),
+    @NameSuffix nvarchar(255),
+    @Description nvarchar(MAX),
+    @BaseView nvarchar(255),
+    @BaseViewGenerated bit,
+    @VirtualEntity bit,
+    @TrackRecordChanges bit,
+    @AuditRecordAccess bit,
+    @AuditViewRuns bit,
+    @IncludeInAPI bit,
+    @AllowAllRowsAPI bit,
+    @AllowUpdateAPI bit,
+    @AllowCreateAPI bit,
+    @AllowDeleteAPI bit,
+    @CustomResolverAPI bit,
+    @AllowUserSearchAPI bit,
+    @FullTextSearchEnabled bit,
+    @FullTextCatalog nvarchar(255),
+    @FullTextCatalogGenerated bit,
+    @FullTextIndex nvarchar(255),
+    @FullTextIndexGenerated bit,
+    @FullTextSearchFunction nvarchar(255),
+    @FullTextSearchFunctionGenerated bit,
+    @UserViewMaxRows int,
+    @spCreate nvarchar(255),
+    @spUpdate nvarchar(255),
+    @spDelete nvarchar(255),
+    @spCreateGenerated bit,
+    @spUpdateGenerated bit,
+    @spDeleteGenerated bit,
+    @CascadeDeletes bit,
+    @UserFormGenerated bit,
+    @EntityObjectSubclassName nvarchar(255),
+    @EntityObjectSubclassImport nvarchar(255)
+AS
 BEGIN
     SET NOCOUNT ON;
-    DELETE FROM 
-        [admin].[Entity]
-    WHERE 
-        [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    
+    INSERT INTO 
+    [admin].[Entity]
+        (
+            [ParentID],
+            [Name],
+            [NameSuffix],
+            [Description],
+            [BaseView],
+            [BaseViewGenerated],
+            [VirtualEntity],
+            [TrackRecordChanges],
+            [AuditRecordAccess],
+            [AuditViewRuns],
+            [IncludeInAPI],
+            [AllowAllRowsAPI],
+            [AllowUpdateAPI],
+            [AllowCreateAPI],
+            [AllowDeleteAPI],
+            [CustomResolverAPI],
+            [AllowUserSearchAPI],
+            [FullTextSearchEnabled],
+            [FullTextCatalog],
+            [FullTextCatalogGenerated],
+            [FullTextIndex],
+            [FullTextIndexGenerated],
+            [FullTextSearchFunction],
+            [FullTextSearchFunctionGenerated],
+            [UserViewMaxRows],
+            [spCreate],
+            [spUpdate],
+            [spDelete],
+            [spCreateGenerated],
+            [spUpdateGenerated],
+            [spDeleteGenerated],
+            [CascadeDeletes],
+            [UserFormGenerated],
+            [EntityObjectSubclassName],
+            [EntityObjectSubclassImport]
+        )
+    VALUES
+        (
+            @ParentID,
+            @Name,
+            @NameSuffix,
+            @Description,
+            @BaseView,
+            @BaseViewGenerated,
+            @VirtualEntity,
+            @TrackRecordChanges,
+            @AuditRecordAccess,
+            @AuditViewRuns,
+            @IncludeInAPI,
+            @AllowAllRowsAPI,
+            @AllowUpdateAPI,
+            @AllowCreateAPI,
+            @AllowDeleteAPI,
+            @CustomResolverAPI,
+            @AllowUserSearchAPI,
+            @FullTextSearchEnabled,
+            @FullTextCatalog,
+            @FullTextCatalogGenerated,
+            @FullTextIndex,
+            @FullTextIndexGenerated,
+            @FullTextSearchFunction,
+            @FullTextSearchFunctionGenerated,
+            @UserViewMaxRows,
+            @spCreate,
+            @spUpdate,
+            @spDelete,
+            @spCreateGenerated,
+            @spUpdateGenerated,
+            @spDeleteGenerated,
+            @CascadeDeletes,
+            @UserFormGenerated,
+            @EntityObjectSubclassName,
+            @EntityObjectSubclassImport
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwEntities] WHERE ID = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwCompanyIntegrationRuns]'
+PRINT N'Creating [admin].[vwEntityFields]'
 GO
 
-
-CREATE VIEW [admin].[vwCompanyIntegrationRuns]
+CREATE VIEW [admin].[vwEntityFields]
 AS
-SELECT 
-    c.*,
-    User_RunByUserID.[Name] AS [RunByUser]
+SELECT
+	ef.*,
+	e.Name Entity,
+	e.SchemaName,
+	e.BaseTable,
+	e.BaseView,
+	e.CodeName EntityCodeName,
+	e.ClassName EntityClassName,
+	re.Name RelatedEntity,
+	re.SchemaName RelatedEntitySchemaName,
+	re.BaseTable RelatedEntityBaseTable,
+	re.BaseView RelatedEntityBaseView,
+	re.CodeName RelatedEntityCodeName,
+	re.ClassName RelatedEntityClassName
 FROM
-    [admin].[CompanyIntegrationRun] AS c
+	[admin].EntityField ef
 INNER JOIN
-    [admin].[User] AS User_RunByUserID
-  ON
-    [c].[RunByUserID] = User_RunByUserID.[ID]
+	[admin].vwEntities e ON ef.EntityID = e.ID
+LEFT OUTER JOIN
+	[admin].vwEntities re ON ef.RelatedEntityID = re.ID
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwErrorLogs]'
+PRINT N'Creating [admin].[spCreateEntityField]'
 GO
 
 
-CREATE VIEW [admin].[vwErrorLogs]
+CREATE PROCEDURE [admin].[spCreateEntityField]
+    @DisplayName nvarchar(255),
+    @Description nvarchar(MAX),
+    @IsPrimaryKey bit,
+    @IsUnique bit,
+    @Category nvarchar(255),
+    @ValueListType nvarchar(20),
+    @ExtendedType nvarchar(50),
+    @DefaultInView bit,
+    @ViewCellTemplate nvarchar(MAX),
+    @DefaultColumnWidth int,
+    @AllowUpdateAPI bit,
+    @AllowUpdateInView bit,
+    @IncludeInUserSearchAPI bit,
+    @FullTextSearchEnabled bit,
+    @UserSearchParamFormatAPI nvarchar(500),
+    @IncludeInGeneratedForm bit,
+    @GeneratedFormSection nvarchar(10),
+    @IsNameField bit,
+    @RelatedEntityID int,
+    @RelatedEntityFieldName nvarchar(255),
+    @IncludeRelatedEntityNameFieldInBaseView bit,
+    @RelatedEntityNameFieldMap nvarchar(255)
 AS
-SELECT 
-    e.*
-FROM
-    [admin].[ErrorLog] AS e
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[EntityField]
+        (
+            [DisplayName],
+            [Description],
+            [IsPrimaryKey],
+            [IsUnique],
+            [Category],
+            [ValueListType],
+            [ExtendedType],
+            [DefaultInView],
+            [ViewCellTemplate],
+            [DefaultColumnWidth],
+            [AllowUpdateAPI],
+            [AllowUpdateInView],
+            [IncludeInUserSearchAPI],
+            [FullTextSearchEnabled],
+            [UserSearchParamFormatAPI],
+            [IncludeInGeneratedForm],
+            [GeneratedFormSection],
+            [IsNameField],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [RelatedEntityNameFieldMap]
+        )
+    VALUES
+        (
+            @DisplayName,
+            @Description,
+            @IsPrimaryKey,
+            @IsUnique,
+            @Category,
+            @ValueListType,
+            @ExtendedType,
+            @DefaultInView,
+            @ViewCellTemplate,
+            @DefaultColumnWidth,
+            @AllowUpdateAPI,
+            @AllowUpdateInView,
+            @IncludeInUserSearchAPI,
+            @FullTextSearchEnabled,
+            @UserSearchParamFormatAPI,
+            @IncludeInGeneratedForm,
+            @GeneratedFormSection,
+            @IsNameField,
+            @RelatedEntityID,
+            @RelatedEntityFieldName,
+            @IncludeRelatedEntityNameFieldInBaseView,
+            @RelatedEntityNameFieldMap
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwEntityFields] WHERE ID = SCOPE_IDENTITY()
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -1927,64 +2133,371 @@ ON
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwUserRecordLogs]'
-GO
-
-CREATE VIEW [admin].[vwUserRecordLogs] 
-AS
-SELECT 
-	ur.*,
-	e.Name Entity,
-	u.Name UserName,
-	u.FirstLast UserFirstLast,
-	u.Email UserEmail,
-	u.EmployeeSupervisor UserSupervisor,
-	u.EmployeeSupervisorEmail UserSupervisorEmail
-FROM
-	admin.UserRecordLog ur
-INNER JOIN
-	admin.Entity e 
-ON
-	ur.EntityID = e.ID
-INNER JOIN
-	vwUsers u
-ON
-	ur.UserID = u.ID
-
-
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateUserRecordLog]'
+PRINT N'Creating [admin].[spUpdateUser]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateUserRecordLog]
+CREATE PROCEDURE [admin].[spUpdateUser]
     @ID int,
-    @UserID int,
-    @EntityID int,
-    @RecordID int,
-    @EarliestAt datetime,
-    @LatestAt datetime,
-    @TotalCount int
+    @Name nvarchar(100),
+    @FirstName nvarchar(50),
+    @LastName nvarchar(50),
+    @Title nvarchar(50),
+    @Email nvarchar(100),
+    @Type nchar(15),
+    @IsActive bit,
+    @LinkedRecordType nchar(10),
+    @EmployeeID int,
+    @LinkedEntityID int,
+    @LinkedEntityRecordID int
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [admin].[UserRecordLog]
+        [admin].[User]
     SET 
-        [UserID] = @UserID,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID,
-        [EarliestAt] = @EarliestAt,
-        [LatestAt] = @LatestAt,
-        [TotalCount] = @TotalCount
+        [Name] = @Name,
+        [FirstName] = @FirstName,
+        [LastName] = @LastName,
+        [Title] = @Title,
+        [Email] = @Email,
+        [Type] = @Type,
+        [IsActive] = @IsActive,
+        [LinkedRecordType] = @LinkedRecordType,
+        [EmployeeID] = @EmployeeID,
+        [LinkedEntityID] = @LinkedEntityID,
+        [LinkedEntityRecordID] = @LinkedEntityRecordID,
+        UpdatedAt = GETDATE()
     WHERE 
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserRecordLogs WHERE ID = @ID
+    SELECT * FROM [admin].[vwUsers] WHERE [ID] = @ID
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwEntityRelationships]'
+GO
+
+CREATE VIEW [admin].[vwEntityRelationships]
+AS
+SELECT
+	er.*,
+	e.Name Entity,
+	e.BaseTable EntityBaseTable,
+	e.BaseView EntityBaseView,
+	relatedEntity.Name RelatedEntity,
+	relatedEntity.BaseTable RelatedEntityBaseTable,
+	relatedEntity.BaseView RelatedEntityBaseView,
+	relatedEntity.ClassName RelatedEntityClassName,
+	relatedEntity.CodeName RelatedEntityCodeName,
+	relatedEntity.BaseTableCodeName RelatedEntityBaseTableCodeName,
+	uv.Name DisplayUserViewName,
+	uv.ID DisplayUserViewID
+FROM
+	[admin].EntityRelationship er
+INNER JOIN
+	[admin].Entity e
+ON
+	er.EntityID = e.ID
+INNER JOIN
+	[admin].vwEntities relatedEntity
+ON
+	er.RelatedEntityID = relatedEntity.ID
+LEFT OUTER JOIN
+	[admin].UserView uv
+ON	
+	er.DisplayUserViewGUID = uv.GUID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateEntityRelationship]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateEntityRelationship]
+    @ID int,
+    @EntityID int,
+    @RelatedEntityID int,
+    @BundleInAPI bit,
+    @IncludeInParentAllQuery bit,
+    @Type nchar(20),
+    @EntityKeyField nvarchar(255),
+    @RelatedEntityJoinField nvarchar(255),
+    @JoinView nvarchar(255),
+    @JoinEntityJoinField nvarchar(255),
+    @JoinEntityInverseJoinField nvarchar(255),
+    @DisplayInForm bit,
+    @DisplayName nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[EntityRelationship]
+    SET 
+        [EntityID] = @EntityID,
+        [RelatedEntityID] = @RelatedEntityID,
+        [BundleInAPI] = @BundleInAPI,
+        [IncludeInParentAllQuery] = @IncludeInParentAllQuery,
+        [Type] = @Type,
+        [EntityKeyField] = @EntityKeyField,
+        [RelatedEntityJoinField] = @RelatedEntityJoinField,
+        [JoinView] = @JoinView,
+        [JoinEntityJoinField] = @JoinEntityJoinField,
+        [JoinEntityInverseJoinField] = @JoinEntityInverseJoinField,
+        [DisplayInForm] = @DisplayInForm,
+        [DisplayName] = @DisplayName,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwEntityRelationships] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateEntity]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateEntity]
+    @ID int,
+    @ParentID int,
+    @Name nvarchar(255),
+    @NameSuffix nvarchar(255),
+    @Description nvarchar(MAX),
+    @BaseView nvarchar(255),
+    @BaseViewGenerated bit,
+    @VirtualEntity bit,
+    @TrackRecordChanges bit,
+    @AuditRecordAccess bit,
+    @AuditViewRuns bit,
+    @IncludeInAPI bit,
+    @AllowAllRowsAPI bit,
+    @AllowUpdateAPI bit,
+    @AllowCreateAPI bit,
+    @AllowDeleteAPI bit,
+    @CustomResolverAPI bit,
+    @AllowUserSearchAPI bit,
+    @FullTextSearchEnabled bit,
+    @FullTextCatalog nvarchar(255),
+    @FullTextCatalogGenerated bit,
+    @FullTextIndex nvarchar(255),
+    @FullTextIndexGenerated bit,
+    @FullTextSearchFunction nvarchar(255),
+    @FullTextSearchFunctionGenerated bit,
+    @UserViewMaxRows int,
+    @spCreate nvarchar(255),
+    @spUpdate nvarchar(255),
+    @spDelete nvarchar(255),
+    @spCreateGenerated bit,
+    @spUpdateGenerated bit,
+    @spDeleteGenerated bit,
+    @CascadeDeletes bit,
+    @UserFormGenerated bit,
+    @EntityObjectSubclassName nvarchar(255),
+    @EntityObjectSubclassImport nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[Entity]
+    SET 
+        [ParentID] = @ParentID,
+        [Name] = @Name,
+        [NameSuffix] = @NameSuffix,
+        [Description] = @Description,
+        [BaseView] = @BaseView,
+        [BaseViewGenerated] = @BaseViewGenerated,
+        [VirtualEntity] = @VirtualEntity,
+        [TrackRecordChanges] = @TrackRecordChanges,
+        [AuditRecordAccess] = @AuditRecordAccess,
+        [AuditViewRuns] = @AuditViewRuns,
+        [IncludeInAPI] = @IncludeInAPI,
+        [AllowAllRowsAPI] = @AllowAllRowsAPI,
+        [AllowUpdateAPI] = @AllowUpdateAPI,
+        [AllowCreateAPI] = @AllowCreateAPI,
+        [AllowDeleteAPI] = @AllowDeleteAPI,
+        [CustomResolverAPI] = @CustomResolverAPI,
+        [AllowUserSearchAPI] = @AllowUserSearchAPI,
+        [FullTextSearchEnabled] = @FullTextSearchEnabled,
+        [FullTextCatalog] = @FullTextCatalog,
+        [FullTextCatalogGenerated] = @FullTextCatalogGenerated,
+        [FullTextIndex] = @FullTextIndex,
+        [FullTextIndexGenerated] = @FullTextIndexGenerated,
+        [FullTextSearchFunction] = @FullTextSearchFunction,
+        [FullTextSearchFunctionGenerated] = @FullTextSearchFunctionGenerated,
+        [UserViewMaxRows] = @UserViewMaxRows,
+        [spCreate] = @spCreate,
+        [spUpdate] = @spUpdate,
+        [spDelete] = @spDelete,
+        [spCreateGenerated] = @spCreateGenerated,
+        [spUpdateGenerated] = @spUpdateGenerated,
+        [spDeleteGenerated] = @spDeleteGenerated,
+        [CascadeDeletes] = @CascadeDeletes,
+        [UserFormGenerated] = @UserFormGenerated,
+        [EntityObjectSubclassName] = @EntityObjectSubclassName,
+        [EntityObjectSubclassImport] = @EntityObjectSubclassImport,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwEntities] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateEntityField]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateEntityField]
+    @ID int,
+    @DisplayName nvarchar(255),
+    @Description nvarchar(MAX),
+    @IsPrimaryKey bit,
+    @IsUnique bit,
+    @Category nvarchar(255),
+    @ValueListType nvarchar(20),
+    @ExtendedType nvarchar(50),
+    @DefaultInView bit,
+    @ViewCellTemplate nvarchar(MAX),
+    @DefaultColumnWidth int,
+    @AllowUpdateAPI bit,
+    @AllowUpdateInView bit,
+    @IncludeInUserSearchAPI bit,
+    @FullTextSearchEnabled bit,
+    @UserSearchParamFormatAPI nvarchar(500),
+    @IncludeInGeneratedForm bit,
+    @GeneratedFormSection nvarchar(10),
+    @IsNameField bit,
+    @RelatedEntityID int,
+    @RelatedEntityFieldName nvarchar(255),
+    @IncludeRelatedEntityNameFieldInBaseView bit,
+    @RelatedEntityNameFieldMap nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[EntityField]
+    SET 
+        [DisplayName] = @DisplayName,
+        [Description] = @Description,
+        [IsPrimaryKey] = @IsPrimaryKey,
+        [IsUnique] = @IsUnique,
+        [Category] = @Category,
+        [ValueListType] = @ValueListType,
+        [ExtendedType] = @ExtendedType,
+        [DefaultInView] = @DefaultInView,
+        [ViewCellTemplate] = @ViewCellTemplate,
+        [DefaultColumnWidth] = @DefaultColumnWidth,
+        [AllowUpdateAPI] = @AllowUpdateAPI,
+        [AllowUpdateInView] = @AllowUpdateInView,
+        [IncludeInUserSearchAPI] = @IncludeInUserSearchAPI,
+        [FullTextSearchEnabled] = @FullTextSearchEnabled,
+        [UserSearchParamFormatAPI] = @UserSearchParamFormatAPI,
+        [IncludeInGeneratedForm] = @IncludeInGeneratedForm,
+        [GeneratedFormSection] = @GeneratedFormSection,
+        [IsNameField] = @IsNameField,
+        [RelatedEntityID] = @RelatedEntityID,
+        [RelatedEntityFieldName] = @RelatedEntityFieldName,
+        [IncludeRelatedEntityNameFieldInBaseView] = @IncludeRelatedEntityNameFieldInBaseView,
+        [RelatedEntityNameFieldMap] = @RelatedEntityNameFieldMap,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwEntityFields] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spDeleteEntityRelationship]'
+GO
+
+
+CREATE PROCEDURE [admin].[spDeleteEntityRelationship]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[EntityRelationship]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spDeleteEntity]'
+GO
+
+
+CREATE PROCEDURE [admin].[spDeleteEntity]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[Entity]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spDeleteEntityField]'
+GO
+
+
+CREATE PROCEDURE [admin].[spDeleteEntityField]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[EntityField]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwErrorLogs]'
+GO
+
+
+CREATE VIEW [admin].[vwErrorLogs]
+AS
+SELECT 
+    e.*
+FROM
+    [admin].[ErrorLog] AS e
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwCompanyIntegrationRuns]'
+GO
+
+
+CREATE VIEW [admin].[vwCompanyIntegrationRuns]
+AS
+SELECT 
+    c.*,
+    User_RunByUserID.[Name] AS [RunByUser]
+FROM
+    [admin].[CompanyIntegrationRun] AS c
+INNER JOIN
+    [admin].[User] AS User_RunByUserID
+  ON
+    [c].[RunByUserID] = User_RunByUserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2019,7 +2532,7 @@ CREATE PROCEDURE [admin].[spUpdateCompanyIntegrationRunDetail]
     @ID int,
     @CompanyIntegrationRunID int,
     @EntityID int,
-    @RecordID int,
+    @RecordID nvarchar(255),
     @Action nchar(20),
     @ExecutedAt datetime,
     @IsSuccess bit
@@ -2039,7 +2552,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwCompanyIntegrationRunDetails WHERE ID = @ID
+    SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2096,6 +2609,7 @@ CREATE PROCEDURE [admin].[spCreateUserView]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[UserView]
         (
@@ -2135,42 +2649,69 @@ BEGIN
             @CustomWhereClause,
             @SortState
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwUserViews] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateCompanyIntegrationRun]'
+PRINT N'Creating [admin].[vwUserRecordLogs]'
+GO
+
+CREATE VIEW [admin].[vwUserRecordLogs] 
+AS
+SELECT 
+	ur.*,
+	e.Name Entity,
+	u.Name UserName,
+	u.FirstLast UserFirstLast,
+	u.Email UserEmail,
+	u.EmployeeSupervisor UserSupervisor,
+	u.EmployeeSupervisorEmail UserSupervisorEmail
+FROM
+	admin.UserRecordLog ur
+INNER JOIN
+	admin.Entity e 
+ON
+	ur.EntityID = e.ID
+INNER JOIN
+	vwUsers u
+ON
+	ur.UserID = u.ID
+
+
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateUserRecordLog]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateCompanyIntegrationRun]
+CREATE PROCEDURE [admin].[spUpdateUserRecordLog]
     @ID int,
-    @CompanyIntegrationID int,
-    @RunByUserID int,
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @TotalRecords int,
-    @Comments nvarchar(MAX)
+    @UserID int,
+    @EntityID int,
+    @RecordID nvarchar(255),
+    @EarliestAt datetime,
+    @LatestAt datetime,
+    @TotalCount int
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [admin].[CompanyIntegrationRun]
+        [admin].[UserRecordLog]
     SET 
-        [CompanyIntegrationID] = @CompanyIntegrationID,
-        [RunByUserID] = @RunByUserID,
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [TotalRecords] = @TotalRecords,
-        [Comments] = @Comments
+        [UserID] = @UserID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
+        [EarliestAt] = @EarliestAt,
+        [LatestAt] = @LatestAt,
+        [TotalCount] = @TotalCount
     WHERE 
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwCompanyIntegrationRuns WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserRecordLogs] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2207,7 +2748,40 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwErrorLogs WHERE ID = @ID
+    SELECT * FROM [admin].[vwErrorLogs] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateCompanyIntegrationRun]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateCompanyIntegrationRun]
+    @ID int,
+    @CompanyIntegrationID int,
+    @RunByUserID int,
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @TotalRecords int,
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[CompanyIntegrationRun]
+    SET 
+        [CompanyIntegrationID] = @CompanyIntegrationID,
+        [RunByUserID] = @RunByUserID,
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [TotalRecords] = @TotalRecords,
+        [Comments] = @Comments
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2261,7 +2835,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserViews WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserViews] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2271,7 +2845,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteUserView]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -2279,53 +2853,8 @@ BEGIN
         [admin].[UserView]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwUserApplications]'
-GO
-
-
-CREATE VIEW [admin].[vwUserApplications]
-AS
-SELECT 
-    u.*,
-    User_UserID.[Name] AS [User],
-    Application_ApplicationID.[Name] AS [Application]
-FROM
-    [admin].[UserApplication] AS u
-INNER JOIN
-    [admin].[User] AS User_UserID
-  ON
-    [u].[UserID] = User_UserID.[ID]
-INNER JOIN
-    [admin].[Application] AS Application_ApplicationID
-  ON
-    [u].[ApplicationID] = Application_ApplicationID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwEntities]'
-GO
-
-CREATE VIEW [admin].[vwEntities]
-AS
-SELECT 
-	e.*,
-	IIF(1 = ISNUMERIC(LEFT(e.Name, 1)),'_','') + REPLACE(e.Name, ' ', '') CodeName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + e.BaseTable + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) ClassName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + e.BaseTable + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) BaseTableCodeName,
-	par.Name ParentEntity,
-	par.BaseTable ParentBaseTable,
-	par.BaseView ParentBaseView
-FROM 
-	[admin].Entity e
-LEFT OUTER JOIN 
-	[admin].Entity par
-ON
-	e.ParentID = par.ID
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2339,34 +2868,6 @@ SELECT
     a.*
 FROM
     [admin].[Application] AS a
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwEntityFields]'
-GO
-
-CREATE VIEW [admin].[vwEntityFields]
-AS
-SELECT
-	ef.*,
-	e.Name Entity,
-	e.SchemaName,
-	e.BaseTable,
-	e.BaseView,
-	e.CodeName EntityCodeName,
-	e.ClassName EntityClassName,
-	re.Name RelatedEntity,
-	re.SchemaName RelatedEntitySchemaName,
-	re.BaseTable RelatedEntityBaseTable,
-	re.BaseView RelatedEntityBaseView,
-	re.CodeName RelatedEntityCodeName,
-	re.ClassName RelatedEntityClassName
-FROM
-	[admin].EntityField ef
-INNER JOIN
-	[admin].vwEntities e ON ef.EntityID = e.ID
-LEFT OUTER JOIN
-	[admin].vwEntities re ON ef.RelatedEntityID = re.ID
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2431,6 +2932,7 @@ CREATE PROCEDURE [admin].[spCreateEntityPermission]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[EntityPermission]
         (
@@ -2458,99 +2960,32 @@ BEGIN
             @UpdateRLSFilterID,
             @DeleteRLSFilterID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwEntityPermissions] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwEntityRelationships]'
+PRINT N'Creating [admin].[vwUserApplications]'
 GO
 
-CREATE VIEW [admin].[vwEntityRelationships]
-AS
-SELECT
-	er.*,
-	e.Name Entity,
-	e.BaseTable EntityBaseTable,
-	e.BaseView EntityBaseView,
-	relatedEntity.Name RelatedEntity,
-	relatedEntity.BaseTable RelatedEntityBaseTable,
-	relatedEntity.BaseView RelatedEntityBaseView,
-	relatedEntity.ClassName RelatedEntityClassName,
-	relatedEntity.CodeName RelatedEntityCodeName,
-	relatedEntity.BaseTableCodeName RelatedEntityBaseTableCodeName,
-	uv.Name DisplayUserViewName,
-	uv.ID DisplayUserViewID
-FROM
-	[admin].EntityRelationship er
-INNER JOIN
-	[admin].Entity e
-ON
-	er.EntityID = e.ID
-INNER JOIN
-	[admin].vwEntities relatedEntity
-ON
-	er.RelatedEntityID = relatedEntity.ID
-LEFT OUTER JOIN
-	[admin].UserView uv
-ON	
-	er.DisplayUserViewGUID = uv.GUID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwUserApplicationEntities]'
-GO
 
-CREATE VIEW [admin].[vwUserApplicationEntities]
+CREATE VIEW [admin].[vwUserApplications]
 AS
 SELECT 
-   uae.*,
-   ua.Application Application,
-   ua.[User] [User],
-   e.Name Entity
+    u.*,
+    User_UserID.[Name] AS [User],
+    Application_ApplicationID.[Name] AS [Application]
 FROM
-   admin.UserApplicationEntity uae
+    [admin].[UserApplication] AS u
 INNER JOIN
-   [admin].vwUserApplications ua
-ON
-   uae.UserApplicationID = ua.ID
+    [admin].[User] AS User_UserID
+  ON
+    [u].[UserID] = User_UserID.[ID]
 INNER JOIN
-   admin.Entity e
-ON
-   uae.EntityID = e.ID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateUserApplicationEntity]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateUserApplicationEntity]
-    @UserApplicationID int,
-    @EntityID int,
-    @Sequence int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[UserApplicationEntity]
-        (
-            [UserApplicationID],
-            [EntityID],
-            [Sequence]
-        )
-    VALUES
-        (
-            @UserApplicationID,
-            @EntityID,
-            @Sequence
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwUserApplicationEntities] WHERE ID = SCOPE_IDENTITY()
-END
+    [admin].[Application] AS Application_ApplicationID
+  ON
+    [u].[ApplicationID] = Application_ApplicationID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2581,6 +3016,60 @@ LEFT OUTER JOIN
 ON 
   ci.ID = cir.CompanyIntegrationID AND
   cir.ID = (SELECT TOP 1 cirInner.ID FROM admin.CompanyIntegrationRun cirInner WHERE cirInner.CompanyIntegrationID = ci.ID ORDER BY StartedAt DESC)  
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwUserApplicationEntities]'
+GO
+
+CREATE VIEW [admin].[vwUserApplicationEntities]
+AS
+SELECT 
+   uae.*,
+   ua.[Application] Application,
+   ua.[User] [User],
+   e.Name Entity
+FROM
+   admin.UserApplicationEntity uae
+INNER JOIN
+   [admin].vwUserApplications ua
+ON
+   uae.UserApplicationID = ua.ID
+INNER JOIN
+   admin.Entity e
+ON
+   uae.EntityID = e.ID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateUserApplicationEntity]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateUserApplicationEntity]
+    @UserApplicationID int,
+    @EntityID int,
+    @Sequence int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[UserApplicationEntity]
+        (
+            [UserApplicationID],
+            [EntityID],
+            [Sequence]
+        )
+    VALUES
+        (
+            @UserApplicationID,
+            @EntityID,
+            @Sequence
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwUserApplicationEntities] WHERE ID = SCOPE_IDENTITY()
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2622,6 +3111,7 @@ CREATE PROCEDURE [admin].[spCreateApplicationEntity]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[ApplicationEntity]
         (
@@ -2637,9 +3127,34 @@ BEGIN
             @Sequence,
             @DefaultForNewUser
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwApplicationEntities] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateApplication]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateApplication]
+    @ID int,
+    @Name nvarchar(50),
+    @Description nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[Application]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwApplications] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2668,33 +3183,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserApplications WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateApplication]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateApplication]
-    @ID int,
-    @Name nvarchar(50),
-    @Description nvarchar(500)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[Application]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwApplications WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserApplications] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2736,34 +3225,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEntityPermissions WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateUserApplicationEntity]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateUserApplicationEntity]
-    @ID int,
-    @UserApplicationID int,
-    @EntityID int,
-    @Sequence int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[UserApplicationEntity]
-    SET 
-        [UserApplicationID] = @UserApplicationID,
-        [EntityID] = @EntityID,
-        [Sequence] = @Sequence
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserApplicationEntities WHERE ID = @ID
+    SELECT * FROM [admin].[vwEntityPermissions] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2793,7 +3255,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwApplicationEntities WHERE ID = @ID
+    SELECT * FROM [admin].[vwApplicationEntities] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2818,20 +3280,29 @@ ON
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteUserApplicationEntity]'
+PRINT N'Creating [admin].[spUpdateUserApplicationEntity]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteUserApplicationEntity]
-    @ID INT
-AS  
+CREATE PROCEDURE [admin].[spUpdateUserApplicationEntity]
+    @ID int,
+    @UserApplicationID int,
+    @EntityID int,
+    @Sequence int
+AS
 BEGIN
     SET NOCOUNT ON;
-    DELETE FROM 
+    UPDATE 
         [admin].[UserApplicationEntity]
+    SET 
+        [UserApplicationID] = @UserApplicationID,
+        [EntityID] = @EntityID,
+        [Sequence] = @Sequence
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2841,7 +3312,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteEntityPermission]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -2849,7 +3320,7 @@ BEGIN
         [admin].[EntityPermission]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -2878,7 +3349,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteApplicationEntity]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -2886,31 +3357,26 @@ BEGIN
         [admin].[ApplicationEntity]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwLists]'
+PRINT N'Creating [admin].[spDeleteUserApplicationEntity]'
 GO
 
 
-CREATE VIEW [admin].[vwLists]
-AS
-SELECT 
-    l.*,
-    Entity_EntityID.[Name] AS [Entity],
-    User_UserID.[Name] AS [User]
-FROM
-    [admin].[List] AS l
-LEFT OUTER JOIN
-    [admin].[Entity] AS Entity_EntityID
-  ON
-    [l].[EntityID] = Entity_EntityID.[ID]
-INNER JOIN
-    [admin].[User] AS User_UserID
-  ON
-    [l].[UserID] = User_UserID.[ID]
+CREATE PROCEDURE [admin].[spDeleteUserApplicationEntity]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[UserApplicationEntity]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2950,16 +3416,26 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwListDetails]'
+PRINT N'Creating [admin].[vwLists]'
 GO
 
 
-CREATE VIEW [admin].[vwListDetails]
+CREATE VIEW [admin].[vwLists]
 AS
 SELECT 
-    l.*
+    l.*,
+    Entity_EntityID.[Name] AS [Entity],
+    User_UserID.[Name] AS [User]
 FROM
-    [admin].[ListDetail] AS l
+    [admin].[List] AS l
+LEFT OUTER JOIN
+    [admin].[Entity] AS Entity_EntityID
+  ON
+    [l].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [admin].[User] AS User_UserID
+  ON
+    [l].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -2994,6 +3470,19 @@ ON
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [admin].[vwListDetails]'
+GO
+
+
+CREATE VIEW [admin].[vwListDetails]
+AS
+SELECT 
+    l.*
+FROM
+    [admin].[ListDetail] AS l
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [admin].[vwUserViewRunDetails]'
 GO
 
@@ -3022,10 +3511,11 @@ GO
 
 CREATE PROCEDURE [admin].[spCreateUserViewRunDetail]
     @UserViewRunID int,
-    @RecordID int
+    @RecordID nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[UserViewRunDetail]
         (
@@ -3037,49 +3527,8 @@ BEGIN
             @UserViewRunID,
             @RecordID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwUserViewRunDetails] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateList]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateList]
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @EntityID int,
-    @UserID int,
-    @ExternalSystemRecordID nvarchar(100),
-    @CompanyIntegrationID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[List]
-        (
-            [Name],
-            [Description],
-            [EntityID],
-            [UserID],
-            [ExternalSystemRecordID],
-            [CompanyIntegrationID]
-        )
-    VALUES
-        (
-            @Name,
-            @Description,
-            @EntityID,
-            @UserID,
-            @ExternalSystemRecordID,
-            @CompanyIntegrationID
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwLists] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -3112,7 +3561,7 @@ GO
 
 CREATE PROCEDURE [admin].[spCreateRecordChange]
     @EntityName nvarchar(100),
-    @RecordID int,
+    @RecordID NVARCHAR(255),
 	@UserID int,
     @ChangesJSON nvarchar(MAX),
     @ChangesDescription nvarchar(MAX),
@@ -3158,37 +3607,6 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spCreateUserViewRun]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateUserViewRun]
-    @UserViewID int,
-    @RunAt datetime,
-    @RunByUserID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[UserViewRun]
-        (
-            [UserViewID],
-            [RunAt],
-            [RunByUserID]
-        )
-    VALUES
-        (
-            @UserViewID,
-            @RunAt,
-            @RunByUserID
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwUserViewRuns] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [admin].[spUpdateCompanyIntegrationRunAPILog]'
 GO
 
@@ -3217,38 +3635,78 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwCompanyIntegrationRunAPILogs WHERE ID = @ID
+    SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spCreateListDetail]'
+PRINT N'Creating [admin].[spCreateUserViewRun]'
 GO
 
 
-CREATE PROCEDURE [admin].[spCreateListDetail]
-    @ListID int,
-    @RecordID int,
-    @Sequence int
+CREATE PROCEDURE [admin].[spCreateUserViewRun]
+    @UserViewID int,
+    @RunAt datetime,
+    @RunByUserID int
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
-    [admin].[ListDetail]
+    [admin].[UserViewRun]
         (
-            [ListID],
-            [RecordID],
-            [Sequence]
+            [UserViewID],
+            [RunAt],
+            [RunByUserID]
         )
     VALUES
         (
-            @ListID,
-            @RecordID,
-            @Sequence
+            @UserViewID,
+            @RunAt,
+            @RunByUserID
         )
-
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwListDetails] WHERE ID = SCOPE_IDENTITY()
+    SELECT * FROM [admin].[vwUserViewRuns] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateList]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateList]
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @EntityID int,
+    @UserID int,
+    @ExternalSystemRecordID nvarchar(100),
+    @CompanyIntegrationID int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[List]
+        (
+            [Name],
+            [Description],
+            [EntityID],
+            [UserID],
+            [ExternalSystemRecordID],
+            [CompanyIntegrationID]
+        )
+    VALUES
+        (
+            @Name,
+            @Description,
+            @EntityID,
+            @UserID,
+            @ExternalSystemRecordID,
+            @CompanyIntegrationID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwLists] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -3287,7 +3745,7 @@ GO
 CREATE PROCEDURE [admin].[spUpdateUserViewRunDetail]
     @ID int,
     @UserViewRunID int,
-    @RecordID int
+    @RecordID nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3300,41 +3758,38 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserViewRunDetails WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserViewRunDetails] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateList]'
+PRINT N'Creating [admin].[spCreateListDetail]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateList]
-    @ID int,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @EntityID int,
-    @UserID int,
-    @ExternalSystemRecordID nvarchar(100),
-    @CompanyIntegrationID int
+CREATE PROCEDURE [admin].[spCreateListDetail]
+    @ListID int,
+    @RecordID nvarchar(255),
+    @Sequence int
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
-        [admin].[List]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [EntityID] = @EntityID,
-        [UserID] = @UserID,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [CompanyIntegrationID] = @CompanyIntegrationID,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwLists WHERE ID = @ID
+    
+    INSERT INTO 
+    [admin].[ListDetail]
+        (
+            [ListID],
+            [RecordID],
+            [Sequence]
+        )
+    VALUES
+        (
+            @ListID,
+            @RecordID,
+            @Sequence
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwListDetails] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -3455,7 +3910,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserViewRuns WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserViewRuns] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -3488,35 +3943,48 @@ ON
 LEFT OUTER JOIN
 	sys.all_objects v
 ON
-	e.BaseView = v.name AND v.type = 'V'
+	e.BaseView = v.name AND 
+	v.type = 'V' 
+LEFT OUTER JOIN
+    sys.schemas s_v
+ON   
+    v.schema_id = s_v.schema_id
 WHERE   
-	t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1) -- TABLE - non-virtual entities
+    (s_v.name = e.SchemaName OR s_v.name IS NULL) AND
+	( t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1)) -- TABLE - non-virtual entities 
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateListDetail]'
+PRINT N'Creating [admin].[spUpdateList]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateListDetail]
+CREATE PROCEDURE [admin].[spUpdateList]
     @ID int,
-    @ListID int,
-    @RecordID int,
-    @Sequence int
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @EntityID int,
+    @UserID int,
+    @ExternalSystemRecordID nvarchar(100),
+    @CompanyIntegrationID int
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [admin].[ListDetail]
+        [admin].[List]
     SET 
-        [ListID] = @ListID,
-        [RecordID] = @RecordID,
-        [Sequence] = @Sequence
+        [Name] = @Name,
+        [Description] = @Description,
+        [EntityID] = @EntityID,
+        [UserID] = @UserID,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [CompanyIntegrationID] = @CompanyIntegrationID,
+        UpdatedAt = GETDATE()
     WHERE 
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwListDetails WHERE ID = @ID
+    SELECT * FROM [admin].[vwLists] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -3541,7 +4009,7 @@ SELECT
 	c.precision Precision,
 	c.scale Scale,
 	c.is_nullable AllowsNull,
-	c.is_identity AutoIncrement,
+	IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity) AutoIncrement,
 	c.column_id,
 	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
 	basetable_columns.object_id,
@@ -3587,20 +4055,29 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteList]'
+PRINT N'Creating [admin].[spUpdateListDetail]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteList]
-    @ID INT
-AS  
+CREATE PROCEDURE [admin].[spUpdateListDetail]
+    @ID int,
+    @ListID int,
+    @RecordID nvarchar(255),
+    @Sequence int
+AS
 BEGIN
     SET NOCOUNT ON;
-    DELETE FROM 
-        [admin].[List]
+    UPDATE 
+        [admin].[ListDetail]
+    SET 
+        [ListID] = @ListID,
+        [RecordID] = @RecordID,
+        [Sequence] = @Sequence
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwListDetails] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -3661,21 +4138,68 @@ DROP TABLE #actual_spDeleteUnneededEntityFields
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteListDetail]'
+PRINT N'Creating [admin].[spDeleteList]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteListDetail]
-    @ID INT
+CREATE PROCEDURE [admin].[spDeleteList]
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
     DELETE FROM 
-        [admin].[ListDetail]
+        [admin].[List]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwTableUniqueKeys]'
+GO
+
+CREATE VIEW [admin].[vwTableUniqueKeys] AS
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName
+FROM 
+    sys.tables t
+INNER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+WHERE 
+    i.is_unique = 1
+    AND i.is_primary_key = 0;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwTablePrimaryKeys]'
+GO
+ 
+CREATE VIEW [admin].[vwTablePrimaryKeys] AS
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName
+FROM 
+    sys.tables t
+INNER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+WHERE 
+    i.is_primary_key = 1;
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -3711,42 +4235,87 @@ GO
 
 CREATE PROC [admin].[spUpdateExistingEntityFieldsFromSchema]
 AS
-UPDATE [admin].EntityField
-SET
-	Type = fromSQL.Type,
-	Length = fromSQL.Length,
-	Precision = fromSQL.Precision,
-	Scale = fromSQL.Scale,
-	AllowsNull = fromSQL.AllowsNull,
-	DefaultValue = fromSQL.DefaultValue,
-	AutoIncrement = fromSQL.AutoIncrement,
-	IsVirtual = fromSQL.IsVirtual,
-	Sequence = fromSQL.Sequence,
-	RelatedEntityID = re.ID,
-	RelatedEntityFieldName = fk.referenced_column,
-	UpdatedAt = GETDATE() -- this will reflect an update data even if no changes were made, not optimal but doesn't really matter that much either
-FROM
-	[admin].EntityField ef
-INNER JOIN
-	vwSQLColumnsAndEntityFields fromSQL
-ON
-	ef.EntityID = fromSQL.EntityID AND
-	ef.Name = fromSQL.FieldName
-INNER JOIN
-    [admin].Entity e 
-ON
-    ef.EntityID = e.ID
-LEFT OUTER JOIN
-	vwForeignKeys fk
-ON
-	ef.Name = fk.[column] AND
-	e.BaseTable = fk.[table]
-LEFT OUTER JOIN 
-    [admin].Entity re -- Related Entity
-ON
-	re.BaseTable = fk.referenced_table
-WHERE
-	EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
+BEGIN
+    -- Update Statement
+    UPDATE [admin].EntityField
+    SET
+        Type = fromSQL.Type,
+        Length = fromSQL.Length,
+        Precision = fromSQL.Precision,
+        Scale = fromSQL.Scale,
+        AllowsNull = fromSQL.AllowsNull,
+        DefaultValue = fromSQL.DefaultValue,
+        AutoIncrement = fromSQL.AutoIncrement,
+        IsVirtual = fromSQL.IsVirtual,
+        Sequence = fromSQL.Sequence,
+        RelatedEntityID = re.ID,
+        RelatedEntityFieldName = fk.referenced_column,
+        IsPrimaryKey =	CASE 
+							WHEN pk.ColumnName IS NOT NULL THEN 1 
+							ELSE 0 
+						END,
+        IsUnique =		CASE 
+							WHEN pk.ColumnName IS NOT NULL THEN 1 
+							ELSE 
+								CASE 
+									WHEN uk.ColumnName IS NOT NULL THEN 1 
+									ELSE 0 
+								END 
+						END,
+        UpdatedAt = GETDATE()
+    FROM
+        [admin].EntityField ef
+    INNER JOIN
+        vwSQLColumnsAndEntityFields fromSQL
+    ON
+        ef.EntityID = fromSQL.EntityID AND
+        ef.Name = fromSQL.FieldName
+    INNER JOIN
+        [admin].Entity e 
+    ON
+        ef.EntityID = e.ID
+    LEFT OUTER JOIN
+        vwForeignKeys fk
+    ON
+        ef.Name = fk.[column] AND
+        e.BaseTable = fk.[table]
+    LEFT OUTER JOIN 
+        [admin].Entity re -- Related Entity
+    ON
+        re.BaseTable = fk.referenced_table
+    LEFT OUTER JOIN 
+		[admin].vwTablePrimaryKeys pk
+    ON
+        e.BaseTable = pk.TableName AND
+        ef.Name = pk.ColumnName AND
+        e.SchemaName = pk.SchemaName
+    LEFT OUTER JOIN 
+		[admin].vwTableUniqueKeys uk
+    ON
+        e.BaseTable = uk.TableName AND
+        ef.Name = uk.ColumnName AND
+        e.SchemaName = uk.SchemaName
+	WHERE
+		fromSQL.EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spDeleteListDetail]'
+GO
+
+
+CREATE PROCEDURE [admin].[spDeleteListDetail]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[ListDetail]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -3777,16 +4346,21 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwWorkflowEngines]'
+PRINT N'Creating [admin].[vwUserRoles]'
 GO
 
 
-CREATE VIEW [admin].[vwWorkflowEngines]
+CREATE VIEW [admin].[vwUserRoles]
 AS
 SELECT 
-    w.*
+    u.*,
+    User_UserID.[Name] AS [User]
 FROM
-    [admin].[WorkflowEngine] AS w
+    [admin].[UserRole] AS u
+INNER JOIN
+    [admin].[User] AS User_UserID
+  ON
+    [u].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -3861,24 +4435,6 @@ SELECT @NewID = SCOPE_IDENTITY()
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwUserRoles]'
-GO
-
-
-CREATE VIEW [admin].[vwUserRoles]
-AS
-SELECT 
-    u.*,
-    User_UserID.[Name] AS [User]
-FROM
-    [admin].[UserRole] AS u
-INNER JOIN
-    [admin].[User] AS User_UserID
-  ON
-    [u].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [admin].[spCreateCompanyIntegrationRunAPILog]'
 GO
 
@@ -3900,36 +4456,16 @@ INSERT INTO [admin].[CompanyIntegrationRunAPILog]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateWorkflowRun]'
+PRINT N'Creating [admin].[vwWorkflowEngines]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateWorkflowRun]
-    @ID int,
-    @WorkflowName nvarchar(100),
-    @ExternalSystemRecordID nvarchar(100),
-    @StartedAt datetime,
-    @EndedAt datetime,
-    @Status nchar(10),
-    @Results nvarchar(MAX)
+CREATE VIEW [admin].[vwWorkflowEngines]
 AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[WorkflowRun]
-    SET 
-        [WorkflowName] = @WorkflowName,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [StartedAt] = @StartedAt,
-        [EndedAt] = @EndedAt,
-        [Status] = @Status,
-        [Results] = @Results
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwWorkflowRuns WHERE ID = @ID
-END
+SELECT 
+    w.*
+FROM
+    [admin].[WorkflowEngine] AS w
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -3969,32 +4505,35 @@ SELECT @NewID = SCOPE_IDENTITY()
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateWorkflowEngine]'
+PRINT N'Creating [admin].[spUpdateWorkflowRun]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateWorkflowEngine]
+CREATE PROCEDURE [admin].[spUpdateWorkflowRun]
     @ID int,
-    @Name nvarchar(100),
-    @Description nvarchar(MAX),
-    @DriverPath nvarchar(500),
-    @DriverClass nvarchar(100)
+    @WorkflowName nvarchar(100),
+    @ExternalSystemRecordID nvarchar(100),
+    @StartedAt datetime,
+    @EndedAt datetime,
+    @Status nchar(10),
+    @Results nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [admin].[WorkflowEngine]
+        [admin].[WorkflowRun]
     SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [DriverPath] = @DriverPath,
-        [DriverClass] = @DriverClass,
-        UpdatedAt = GETDATE()
+        [WorkflowName] = @WorkflowName,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [StartedAt] = @StartedAt,
+        [EndedAt] = @EndedAt,
+        [Status] = @Status,
+        [Results] = @Results
     WHERE 
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwWorkflowEngines WHERE ID = @ID
+    SELECT * FROM [admin].[vwWorkflowRuns] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4038,6 +4577,52 @@ INSERT INTO [admin].[ErrorLog]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [admin].[spCreateUserRole]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateUserRole]
+    @UserID int,
+    @RoleName nvarchar(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[UserRole]
+        (
+            [UserID],
+            [RoleName]
+        )
+    VALUES
+        (
+            @UserID,
+            @RoleName
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwUserRoles] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateEntityFieldRelatedEntityNameFieldMap]'
+GO
+
+CREATE PROC [admin].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
+(
+	@EntityFieldID INT, 
+	@RelatedEntityNameFieldMap NVARCHAR(50)
+)
+AS
+UPDATE 
+	admin.EntityField 
+SET 
+	RelatedEntityNameFieldMap = @RelatedEntityNameFieldMap
+WHERE
+	ID = @EntityFieldID
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [admin].[spUpdateWorkflow]'
 GO
 
@@ -4065,53 +4650,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwWorkflows WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateEntityFieldRelatedEntityNameFieldMap]'
-GO
-
-CREATE PROC [admin].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
-(
-	@EntityFieldID INT, 
-	@RelatedEntityNameFieldMap NVARCHAR(50)
-)
-AS
-UPDATE 
-	admin.EntityField 
-SET 
-	RelatedEntityNameFieldMap = @RelatedEntityNameFieldMap
-WHERE
-	ID = @EntityFieldID
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateUserRole]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateUserRole]
-    @UserID int,
-    @RoleName nvarchar(50)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[UserRole]
-        (
-            [UserID],
-            [RoleName]
-        )
-    VALUES
-        (
-            @UserID,
-            @RoleName
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwUserRoles] WHERE ID = SCOPE_IDENTITY()
+    SELECT * FROM [admin].[vwWorkflows] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4134,16 +4673,33 @@ SELECT
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwAuthorizationRoles]'
+PRINT N'Creating [admin].[spUpdateWorkflowEngine]'
 GO
 
 
-CREATE VIEW [admin].[vwAuthorizationRoles]
+CREATE PROCEDURE [admin].[spUpdateWorkflowEngine]
+    @ID int,
+    @Name nvarchar(100),
+    @Description nvarchar(MAX),
+    @DriverPath nvarchar(500),
+    @DriverClass nvarchar(100)
 AS
-SELECT 
-    a.*
-FROM
-    [admin].[AuthorizationRole] AS a
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[WorkflowEngine]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [DriverPath] = @DriverPath,
+        [DriverClass] = @DriverClass,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwWorkflowEngines] WHERE [ID] = @ID
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4178,34 +4734,16 @@ WHERE
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwRowLevelSecurityFilters]'
+PRINT N'Creating [admin].[vwAuthorizations]'
 GO
 
 
-CREATE VIEW [admin].[vwRowLevelSecurityFilters]
+CREATE VIEW [admin].[vwAuthorizations]
 AS
 SELECT 
-    r.*
+    a.*
 FROM
-    [admin].[RowLevelSecurityFilter] AS r
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwAuditLogTypes]'
-GO
-
-
-CREATE VIEW [admin].[vwAuditLogTypes]
-AS
-SELECT 
-    a.*,
-    AuditLogType_ParentID.[Name] AS [Parent]
-FROM
-    [admin].[AuditLogType] AS a
-LEFT OUTER JOIN
-    [admin].[AuditLogType] AS AuditLogType_ParentID
-  ON
-    [a].[ParentID] = AuditLogType_ParentID.[ID]
+    [admin].[Authorization] AS a
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4232,16 +4770,47 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwAuthorizations]'
+PRINT N'Creating [admin].[vwRowLevelSecurityFilters]'
 GO
 
 
-CREATE VIEW [admin].[vwAuthorizations]
+CREATE VIEW [admin].[vwRowLevelSecurityFilters]
+AS
+SELECT 
+    r.*
+FROM
+    [admin].[RowLevelSecurityFilter] AS r
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwAuthorizationRoles]'
+GO
+
+
+CREATE VIEW [admin].[vwAuthorizationRoles]
 AS
 SELECT 
     a.*
 FROM
-    [admin].[Authorization] AS a
+    [admin].[AuthorizationRole] AS a
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwAuditLogTypes]'
+GO
+
+
+CREATE VIEW [admin].[vwAuditLogTypes]
+AS
+SELECT 
+    a.*,
+    AuditLogType_ParentID.[Name] AS [Parent]
+FROM
+    [admin].[AuditLogType] AS a
+LEFT OUTER JOIN
+    [admin].[AuditLogType] AS AuditLogType_ParentID
+  ON
+    [a].[ParentID] = AuditLogType_ParentID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4257,10 +4826,11 @@ CREATE PROCEDURE [admin].[spCreateAuditLog]
     @Description nvarchar(MAX),
     @Details nvarchar(MAX),
     @EntityID int,
-    @RecordID int
+    @RecordID nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[AuditLog]
         (
@@ -4284,7 +4854,6 @@ BEGIN
             @EntityID,
             @RecordID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwAuditLogs] WHERE ID = SCOPE_IDENTITY()
 END
@@ -4304,7 +4873,7 @@ CREATE PROCEDURE [admin].[spUpdateAuditLog]
     @Description nvarchar(MAX),
     @Details nvarchar(MAX),
     @EntityID int,
-    @RecordID int
+    @RecordID nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -4324,8 +4893,31 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwAuditLogs WHERE ID = @ID
+    SELECT * FROM [admin].[vwAuditLogs] WHERE [ID] = @ID
 END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwAIModelActions]'
+GO
+
+
+CREATE VIEW [admin].[vwAIModelActions]
+AS
+SELECT 
+    a.*,
+    AIModel_AIModelID.[Name] AS [AIModel],
+    AIAction_AIActionID.[Name] AS [AIAction]
+FROM
+    [admin].[AIModelAction] AS a
+INNER JOIN
+    [admin].[AIModel] AS AIModel_AIModelID
+  ON
+    [a].[AIModelID] = AIModel_AIModelID.[ID]
+INNER JOIN
+    [admin].[AIAction] AS AIAction_AIActionID
+  ON
+    [a].[AIActionID] = AIAction_AIActionID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4380,29 +4972,6 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwAIModelActions]'
-GO
-
-
-CREATE VIEW [admin].[vwAIModelActions]
-AS
-SELECT 
-    a.*,
-    AIModel_AIModelID.[Name] AS [AIModel],
-    AIAction_AIActionID.[Name] AS [AIAction]
-FROM
-    [admin].[AIModelAction] AS a
-INNER JOIN
-    [admin].[AIModel] AS AIModel_AIModelID
-  ON
-    [a].[AIModelID] = AIModel_AIModelID.[ID]
-INNER JOIN
-    [admin].[AIAction] AS AIAction_AIActionID
-  ON
-    [a].[AIActionID] = AIAction_AIActionID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [admin].[vwAIActions]'
 GO
 
@@ -4431,6 +5000,34 @@ SELECT
     a.*
 FROM
     [admin].[AIModel] AS a
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateAIModelAction]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateAIModelAction]
+    @ID int,
+    @AIModelID int,
+    @AIActionID int,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[AIModelAction]
+    SET 
+        [AIModelID] = @AIModelID,
+        [AIActionID] = @AIActionID,
+        [IsActive] = @IsActive,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwAIModelActions] WHERE [ID] = @ID
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4474,7 +5071,39 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEntityAIActions WHERE ID = @ID
+    SELECT * FROM [admin].[vwEntityAIActions] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateAIAction]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateAIAction]
+    @ID int,
+    @Name nvarchar(50),
+    @Description nvarchar(MAX),
+    @DefaultModelID int,
+    @DefaultPrompt nvarchar(MAX),
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[AIAction]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [DefaultModelID] = @DefaultModelID,
+        [DefaultPrompt] = @DefaultPrompt,
+        [IsActive] = @IsActive,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwAIActions] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4510,81 +5139,8 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwAIModels WHERE ID = @ID
+    SELECT * FROM [admin].[vwAIModels] WHERE [ID] = @ID
 END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateAIAction]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateAIAction]
-    @ID int,
-    @Name nvarchar(50),
-    @Description nvarchar(MAX),
-    @DefaultModelID int,
-    @DefaultPrompt nvarchar(MAX),
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[AIAction]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [DefaultModelID] = @DefaultModelID,
-        [DefaultPrompt] = @DefaultPrompt,
-        [IsActive] = @IsActive,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwAIActions WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateAIModelAction]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateAIModelAction]
-    @ID int,
-    @AIModelID int,
-    @AIActionID int,
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[AIModelAction]
-    SET 
-        [AIModelID] = @AIModelID,
-        [AIActionID] = @AIActionID,
-        [IsActive] = @IsActive,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwAIModelActions WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwAIModelTypes]'
-GO
-
-
-CREATE VIEW [admin].[vwAIModelTypes]
-AS
-SELECT 
-    a.*
-FROM
-    [admin].[AIModelType] AS a
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4598,6 +5154,19 @@ SELECT
     q.*
 FROM
     [admin].[QueueType] AS q
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwAIModelTypes]'
+GO
+
+
+CREATE VIEW [admin].[vwAIModelTypes]
+AS
+SELECT 
+    a.*
+FROM
+    [admin].[AIModelType] AS a
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -4670,7 +5239,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwAIModelTypes WHERE ID = @ID
+    SELECT * FROM [admin].[vwAIModelTypes] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4699,6 +5268,7 @@ CREATE PROCEDURE [admin].[spCreateQueue]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[Queue]
         (
@@ -4738,7 +5308,6 @@ BEGIN
             @ProcessUserName,
             @LastHeartbeat
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwQueues] WHERE ID = SCOPE_IDENTITY()
 END
@@ -4757,6 +5326,7 @@ CREATE PROCEDURE [admin].[spCreateDashboard]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[Dashboard]
         (
@@ -4772,7 +5342,6 @@ BEGIN
             @UIConfigDetails,
             @UserID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwDashboards] WHERE ID = SCOPE_IDENTITY()
 END
@@ -4796,6 +5365,7 @@ CREATE PROCEDURE [admin].[spCreateQueueTask]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[QueueTask]
         (
@@ -4821,38 +5391,8 @@ BEGIN
             @ErrorMessage,
             @Comments
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwQueueTasks] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateDashboard]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateDashboard]
-    @ID int,
-    @Name nvarchar(255),
-    @Description nvarchar(MAX),
-    @UIConfigDetails nvarchar(MAX),
-    @UserID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[Dashboard]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [UIConfigDetails] = @UIConfigDetails,
-        [UserID] = @UserID
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwDashboards WHERE ID = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4906,7 +5446,36 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwQueues WHERE ID = @ID
+    SELECT * FROM [admin].[vwQueues] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateDashboard]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateDashboard]
+    @ID int,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @UIConfigDetails nvarchar(MAX),
+    @UserID int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[Dashboard]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [UIConfigDetails] = @UIConfigDetails,
+        [UserID] = @UserID
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwDashboards] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4945,7 +5514,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwQueueTasks WHERE ID = @ID
+    SELECT * FROM [admin].[vwQueueTasks] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4955,7 +5524,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteDashboard]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -4963,7 +5532,7 @@ BEGIN
         [admin].[Dashboard]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -4991,19 +5560,6 @@ SELECT
     o.*
 FROM
     [admin].[OutputTriggerType] AS o
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwOutputDeliveryTypes]'
-GO
-
-
-CREATE VIEW [admin].[vwOutputDeliveryTypes]
-AS
-SELECT 
-    o.*
-FROM
-    [admin].[OutputDeliveryType] AS o
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -5073,34 +5629,16 @@ LEFT OUTER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spCreateReportSnapshot]'
+PRINT N'Creating [admin].[vwOutputDeliveryTypes]'
 GO
 
 
-CREATE PROCEDURE [admin].[spCreateReportSnapshot]
-    @ReportID int,
-    @ResultSet nvarchar(MAX),
-    @UserID int
+CREATE VIEW [admin].[vwOutputDeliveryTypes]
 AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[ReportSnapshot]
-        (
-            [ReportID],
-            [ResultSet],
-            [UserID]
-        )
-    VALUES
-        (
-            @ReportID,
-            @ResultSet,
-            @UserID
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwReportSnapshots] WHERE ID = SCOPE_IDENTITY()
-END
+SELECT 
+    o.*
+FROM
+    [admin].[OutputDeliveryType] AS o
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -5127,6 +5665,7 @@ CREATE PROCEDURE [admin].[spCreateReport]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[Report]
         (
@@ -5164,36 +5703,39 @@ BEGIN
             @OutputTargetEmail,
             @OutputWorkflowID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwReports] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateReportSnapshot]'
+PRINT N'Creating [admin].[spCreateReportSnapshot]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateReportSnapshot]
-    @ID int,
+CREATE PROCEDURE [admin].[spCreateReportSnapshot]
     @ReportID int,
     @ResultSet nvarchar(MAX),
     @UserID int
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE 
-        [admin].[ReportSnapshot]
-    SET 
-        [ReportID] = @ReportID,
-        [ResultSet] = @ResultSet,
-        [UserID] = @UserID
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwReportSnapshots WHERE ID = @ID
+    
+    INSERT INTO 
+    [admin].[ReportSnapshot]
+        (
+            [ReportID],
+            [ResultSet],
+            [UserID]
+        )
+    VALUES
+        (
+            @ReportID,
+            @ResultSet,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwReportSnapshots] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5245,25 +5787,34 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwReports WHERE ID = @ID
+    SELECT * FROM [admin].[vwReports] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteReportSnapshot]'
+PRINT N'Creating [admin].[spUpdateReportSnapshot]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteReportSnapshot]
-    @ID INT
-AS  
+CREATE PROCEDURE [admin].[spUpdateReportSnapshot]
+    @ID int,
+    @ReportID int,
+    @ResultSet nvarchar(MAX),
+    @UserID int
+AS
 BEGIN
     SET NOCOUNT ON;
-    DELETE FROM 
+    UPDATE 
         [admin].[ReportSnapshot]
+    SET 
+        [ReportID] = @ReportID,
+        [ResultSet] = @ResultSet,
+        [UserID] = @UserID
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwReportSnapshots] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5273,7 +5824,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteReport]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -5281,7 +5832,25 @@ BEGIN
         [admin].[Report]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spDeleteReportSnapshot]'
+GO
+
+
+CREATE PROCEDURE [admin].[spDeleteReportSnapshot]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[ReportSnapshot]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5301,24 +5870,6 @@ INNER JOIN
     [admin].[User] AS User_UserID
   ON
     [w].[UserID] = User_UserID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwTags]'
-GO
-
-
-CREATE VIEW [admin].[vwTags]
-AS
-SELECT 
-    t.*,
-    Tag_ParentID.[Name] AS [Parent]
-FROM
-    [admin].[Tag] AS t
-LEFT OUTER JOIN
-    [admin].[Tag] AS Tag_ParentID
-  ON
-    [t].[ParentID] = Tag_ParentID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -5345,21 +5896,21 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwResourceTypes]'
+PRINT N'Creating [admin].[vwTags]'
 GO
 
 
-CREATE VIEW [admin].[vwResourceTypes]
+CREATE VIEW [admin].[vwTags]
 AS
 SELECT 
-    r.*,
-    Entity_EntityID.[Name] AS [Entity]
+    t.*,
+    Tag_ParentID.[Name] AS [Parent]
 FROM
-    [admin].[ResourceType] AS r
+    [admin].[Tag] AS t
 LEFT OUTER JOIN
-    [admin].[Entity] AS Entity_EntityID
+    [admin].[Tag] AS Tag_ParentID
   ON
-    [r].[EntityID] = Entity_EntityID.[ID]
+    [t].[ParentID] = Tag_ParentID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -5386,6 +5937,24 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [admin].[vwResourceTypes]'
+GO
+
+
+CREATE VIEW [admin].[vwResourceTypes]
+AS
+SELECT 
+    r.*,
+    Entity_EntityID.[Name] AS [Entity]
+FROM
+    [admin].[ResourceType] AS r
+LEFT OUTER JOIN
+    [admin].[Entity] AS Entity_EntityID
+  ON
+    [r].[EntityID] = Entity_EntityID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [admin].[spCreateWorkspace]'
 GO
 
@@ -5397,6 +5966,7 @@ CREATE PROCEDURE [admin].[spCreateWorkspace]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[Workspace]
         (
@@ -5410,7 +5980,6 @@ BEGIN
             @Description,
             @UserID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwWorkspaces] WHERE ID = SCOPE_IDENTITY()
 END
@@ -5426,12 +5995,13 @@ CREATE PROCEDURE [admin].[spCreateWorkspaceItem]
     @Description nvarchar(MAX),
     @WorkSpaceID int,
     @ResourceTypeID int,
-    @ResourceRecordID int,
+    @ResourceRecordID nvarchar(255),
     @Sequence int,
     @Configuration nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[WorkspaceItem]
         (
@@ -5453,7 +6023,6 @@ BEGIN
             @Sequence,
             @Configuration
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwWorkspaceItems] WHERE ID = SCOPE_IDENTITY()
 END
@@ -5482,7 +6051,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwWorkspaces WHERE ID = @ID
+    SELECT * FROM [admin].[vwWorkspaces] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5497,7 +6066,7 @@ CREATE PROCEDURE [admin].[spUpdateWorkspaceItem]
     @Description nvarchar(MAX),
     @WorkSpaceID int,
     @ResourceTypeID int,
-    @ResourceRecordID int,
+    @ResourceRecordID nvarchar(255),
     @Sequence int,
     @Configuration nvarchar(MAX)
 AS
@@ -5517,25 +6086,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwWorkspaceItems WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spDeleteWorkspaceItem]'
-GO
-
-
-CREATE PROCEDURE [admin].[spDeleteWorkspaceItem]
-    @ID INT
-AS  
-BEGIN
-    SET NOCOUNT ON;
-    DELETE FROM 
-        [admin].[WorkspaceItem]
-    WHERE 
-        [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT * FROM [admin].[vwWorkspaceItems] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5545,7 +6096,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteWorkspace]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -5553,21 +6104,26 @@ BEGIN
         [admin].[Workspace]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwDatasets]'
+PRINT N'Creating [admin].[spDeleteWorkspaceItem]'
 GO
 
 
-CREATE VIEW [admin].[vwDatasets]
-AS
-SELECT 
-    d.*
-FROM
-    [admin].[Dataset] AS d
+CREATE PROCEDURE [admin].[spDeleteWorkspaceItem]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[WorkspaceItem]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -5586,6 +6142,19 @@ INNER JOIN
     [admin].[Conversation] AS Conversation_ConversationID
   ON
     [c].[ConversationID] = Conversation_ConversationID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwDatasets]'
+GO
+
+
+CREATE VIEW [admin].[vwDatasets]
+AS
+SELECT 
+    d.*
+FROM
+    [admin].[Dataset] AS d
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -5656,50 +6225,6 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spCreateConversation]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateConversation]
-    @UserID int,
-    @ExternalID nvarchar(100),
-    @Name nvarchar(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[Conversation]
-        (
-            [UserID],
-            [ExternalID],
-            [Name]
-        )
-    VALUES
-        (
-            @UserID,
-            @ExternalID,
-            @Name
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwConversations] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwEmployeeCompanyIntegrations]'
-GO
-
-
-CREATE VIEW [admin].[vwEmployeeCompanyIntegrations]
-AS
-SELECT 
-    e.*
-FROM
-    [admin].[EmployeeCompanyIntegration] AS e
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
 PRINT N'Creating [admin].[spCreateConversationDetail]'
 GO
 
@@ -5713,6 +6238,7 @@ CREATE PROCEDURE [admin].[spCreateConversationDetail]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[ConversationDetail]
         (
@@ -5730,73 +6256,8 @@ BEGIN
             @Message,
             @Error
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwConversationDetails] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwEmployeeRoles]'
-GO
-
-
-CREATE VIEW [admin].[vwEmployeeRoles]
-AS
-SELECT 
-    e.*,
-    Role_RoleID.[Name] AS [Role]
-FROM
-    [admin].[EmployeeRole] AS e
-INNER JOIN
-    [admin].[Role] AS Role_RoleID
-  ON
-    [e].[RoleID] = Role_RoleID.[ID]
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateUserNotification]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateUserNotification]
-    @UserID int,
-    @Title nvarchar(255),
-    @Message nvarchar(MAX),
-    @ResourceTypeID int,
-    @ResourceRecordID int,
-    @ResourceConfiguration nvarchar(MAX),
-    @Unread bit,
-    @ReadAt datetime
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[UserNotification]
-        (
-            [UserID],
-            [Title],
-            [Message],
-            [ResourceTypeID],
-            [ResourceRecordID],
-            [ResourceConfiguration],
-            [Unread],
-            [ReadAt]
-        )
-    VALUES
-        (
-            @UserID,
-            @Title,
-            @Message,
-            @ResourceTypeID,
-            @ResourceRecordID,
-            @ResourceConfiguration,
-            @Unread,
-            @ReadAt
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwUserNotifications] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5817,6 +6278,7 @@ CREATE PROCEDURE [admin].[spCreateEmployee]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[Employee]
         (
@@ -5840,9 +6302,129 @@ BEGIN
             @CompanyID,
             @SupervisorID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwEmployees] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateUserNotification]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateUserNotification]
+    @UserID int,
+    @Title nvarchar(255),
+    @Message nvarchar(MAX),
+    @ResourceTypeID int,
+    @ResourceRecordID int,
+    @ResourceConfiguration nvarchar(MAX),
+    @Unread bit,
+    @ReadAt datetime
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[UserNotification]
+        (
+            [UserID],
+            [Title],
+            [Message],
+            [ResourceTypeID],
+            [ResourceRecordID],
+            [ResourceConfiguration],
+            [Unread],
+            [ReadAt]
+        )
+    VALUES
+        (
+            @UserID,
+            @Title,
+            @Message,
+            @ResourceTypeID,
+            @ResourceRecordID,
+            @ResourceConfiguration,
+            @Unread,
+            @ReadAt
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwUserNotifications] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwEmployeeCompanyIntegrations]'
+GO
+
+
+CREATE VIEW [admin].[vwEmployeeCompanyIntegrations]
+AS
+SELECT 
+    e.*
+FROM
+    [admin].[EmployeeCompanyIntegration] AS e
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateConversation]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateConversation]
+    @UserID int,
+    @ExternalID nvarchar(100),
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[Conversation]
+        (
+            [UserID],
+            [ExternalID],
+            [Name]
+        )
+    VALUES
+        (
+            @UserID,
+            @ExternalID,
+            @Name
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwConversations] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateUserFavorite]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateUserFavorite]
+    @UserID int,
+    @EntityID int,
+    @RecordID nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[UserFavorite]
+        (
+            [UserID],
+            [EntityID],
+            [RecordID]
+        )
+    VALUES
+        (
+            @UserID,
+            @EntityID,
+            @RecordID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwUserFavorites] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -5874,97 +6456,26 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwConversationDetails WHERE ID = @ID
+    SELECT * FROM [admin].[vwConversationDetails] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spCreateUserFavorite]'
+PRINT N'Creating [admin].[vwEmployeeRoles]'
 GO
 
 
-CREATE PROCEDURE [admin].[spCreateUserFavorite]
-    @UserID int,
-    @EntityID int,
-    @RecordID int
+CREATE VIEW [admin].[vwEmployeeRoles]
 AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[UserFavorite]
-        (
-            [UserID],
-            [EntityID],
-            [RecordID]
-        )
-    VALUES
-        (
-            @UserID,
-            @EntityID,
-            @RecordID
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwUserFavorites] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateConversation]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateConversation]
-    @ID int,
-    @UserID int,
-    @ExternalID nvarchar(100),
-    @Name nvarchar(100)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[Conversation]
-    SET 
-        [UserID] = @UserID,
-        [ExternalID] = @ExternalID,
-        [Name] = @Name,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwConversations WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateEmployeeCompanyIntegration]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateEmployeeCompanyIntegration]
-    @ID int,
-    @EmployeeID int,
-    @CompanyIntegrationID int,
-    @ExternalSystemRecordID nvarchar(100),
-    @IsActive bit
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[EmployeeCompanyIntegration]
-    SET 
-        [EmployeeID] = @EmployeeID,
-        [CompanyIntegrationID] = @CompanyIntegrationID,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [IsActive] = @IsActive,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEmployeeCompanyIntegrations WHERE ID = @ID
-END
+SELECT 
+    e.*,
+    Role_RoleID.[Name] AS [Role]
+FROM
+    [admin].[EmployeeRole] AS e
+INNER JOIN
+    [admin].[Role] AS Role_RoleID
+  ON
+    [e].[RoleID] = Role_RoleID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6001,7 +6512,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserNotifications WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserNotifications] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6019,6 +6530,7 @@ CREATE PROCEDURE [admin].[spCreateCompany]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[Company]
         (
@@ -6036,9 +6548,66 @@ BEGIN
             @LogoURL,
             @Domain
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwCompanies] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateConversation]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateConversation]
+    @ID int,
+    @UserID int,
+    @ExternalID nvarchar(100),
+    @Name nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[Conversation]
+    SET 
+        [UserID] = @UserID,
+        [ExternalID] = @ExternalID,
+        [Name] = @Name,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwConversations] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateEmployeeCompanyIntegration]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateEmployeeCompanyIntegration]
+    @ID int,
+    @EmployeeID int,
+    @CompanyIntegrationID int,
+    @ExternalSystemRecordID nvarchar(100),
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[EmployeeCompanyIntegration]
+    SET 
+        [EmployeeID] = @EmployeeID,
+        [CompanyIntegrationID] = @CompanyIntegrationID,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [IsActive] = @IsActive,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6048,7 +6617,7 @@ GO
 
 
 CREATE PROCEDURE [admin].[spDeleteConversationDetail]
-    @ID INT
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
@@ -6056,57 +6625,54 @@ BEGIN
         [admin].[ConversationDetail]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateEmployeeRole]'
+PRINT N'Creating [admin].[spUpdateUserFavorite]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateEmployeeRole]
+CREATE PROCEDURE [admin].[spUpdateUserFavorite]
     @ID int,
-    @EmployeeID int,
-    @RoleID int
+    @UserID int,
+    @EntityID int,
+    @RecordID nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [admin].[EmployeeRole]
+        [admin].[UserFavorite]
     SET 
-        [EmployeeID] = @EmployeeID,
-        [RoleID] = @RoleID,
+        [UserID] = @UserID,
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
         UpdatedAt = GETDATE()
     WHERE 
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEmployeeRoles WHERE ID = @ID
+    SELECT * FROM [admin].[vwUserFavorites] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwResourceFolders]'
+PRINT N'Creating [admin].[vwCompanyIntegrationRecordMaps]'
 GO
 
 
-CREATE VIEW [admin].[vwResourceFolders]
+CREATE VIEW [admin].[vwCompanyIntegrationRecordMaps]
 AS
 SELECT 
-    r.*,
-    ResourceFolder_ParentID.[Name] AS [Parent],
-    User_UserID.[Name] AS [User]
+    c.*,
+    Entity_EntityID.[Name] AS [Entity]
 FROM
-    [admin].[ResourceFolder] AS r
-LEFT OUTER JOIN
-    [admin].[ResourceFolder] AS ResourceFolder_ParentID
-  ON
-    [r].[ParentID] = ResourceFolder_ParentID.[ID]
+    [admin].[CompanyIntegrationRecordMap] AS c
 INNER JOIN
-    [admin].[User] AS User_UserID
+    [admin].[Entity] AS Entity_EntityID
   ON
-    [r].[UserID] = User_UserID.[ID]
+    [c].[EntityID] = Entity_EntityID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6143,7 +6709,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEmployees WHERE ID = @ID
+    SELECT * FROM [admin].[vwEmployees] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6161,49 +6727,52 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spUpdateUserFavorite]'
+PRINT N'Creating [admin].[spUpdateEmployeeRole]'
 GO
 
 
-CREATE PROCEDURE [admin].[spUpdateUserFavorite]
+CREATE PROCEDURE [admin].[spUpdateEmployeeRole]
     @ID int,
-    @UserID int,
-    @EntityID int,
-    @RecordID int
+    @EmployeeID int,
+    @RoleID int
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE 
-        [admin].[UserFavorite]
+        [admin].[EmployeeRole]
     SET 
-        [UserID] = @UserID,
-        [EntityID] = @EntityID,
-        [RecordID] = @RecordID,
+        [EmployeeID] = @EmployeeID,
+        [RoleID] = @RoleID,
         UpdatedAt = GETDATE()
     WHERE 
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUserFavorites WHERE ID = @ID
+    SELECT * FROM [admin].[vwEmployeeRoles] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwCompanyIntegrationRecordMaps]'
+PRINT N'Creating [admin].[vwResourceFolders]'
 GO
 
 
-CREATE VIEW [admin].[vwCompanyIntegrationRecordMaps]
+CREATE VIEW [admin].[vwResourceFolders]
 AS
 SELECT 
-    c.*,
-    Entity_EntityID.[Name] AS [Entity]
+    r.*,
+    ResourceFolder_ParentID.[Name] AS [Parent],
+    User_UserID.[Name] AS [User]
 FROM
-    [admin].[CompanyIntegrationRecordMap] AS c
-INNER JOIN
-    [admin].[Entity] AS Entity_EntityID
+    [admin].[ResourceFolder] AS r
+LEFT OUTER JOIN
+    [admin].[ResourceFolder] AS ResourceFolder_ParentID
   ON
-    [c].[EntityID] = Entity_EntityID.[ID]
+    [r].[ParentID] = ResourceFolder_ParentID.[ID]
+INNER JOIN
+    [admin].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6234,7 +6803,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwCompanies WHERE ID = @ID
+    SELECT * FROM [admin].[vwCompanies] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6252,20 +6821,20 @@ FROM
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteEmployee]'
+PRINT N'Creating [admin].[spDeleteUserFavorite]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteEmployee]
-    @ID INT
+CREATE PROCEDURE [admin].[spDeleteUserFavorite]
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
     DELETE FROM 
-        [admin].[Employee]
+        [admin].[UserFavorite]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6293,75 +6862,20 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[spDeleteUserFavorite]'
+PRINT N'Creating [admin].[spDeleteEmployee]'
 GO
 
 
-CREATE PROCEDURE [admin].[spDeleteUserFavorite]
-    @ID INT
+CREATE PROCEDURE [admin].[spDeleteEmployee]
+    @ID int
 AS  
 BEGIN
     SET NOCOUNT ON;
     DELETE FROM 
-        [admin].[UserFavorite]
+        [admin].[Employee]
     WHERE 
         [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateResourceFolder]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateResourceFolder]
-    @ParentID int,
-    @Name nvarchar(50),
-    @ResourceTypeName nvarchar(255),
-    @Description nvarchar(MAX),
-    @UserID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[ResourceFolder]
-        (
-            [ParentID],
-            [Name],
-            [ResourceTypeName],
-            [Description],
-            [UserID]
-        )
-    VALUES
-        (
-            @ParentID,
-            @Name,
-            @ResourceTypeName,
-            @Description,
-            @UserID
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwResourceFolders] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spDeleteCompany]'
-GO
-
-
-CREATE PROCEDURE [admin].[spDeleteCompany]
-    @ID INT
-AS  
-BEGIN
-    SET NOCOUNT ON;
-    DELETE FROM 
-        [admin].[Company]
-    WHERE 
-        [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6372,12 +6886,13 @@ GO
 
 CREATE PROCEDURE [admin].[spCreateRecordMergeDeletionLog]
     @RecordMergeLogID int,
-    @DeletedRecordID int,
+    @DeletedRecordID nvarchar(255),
     @Status nvarchar(10),
     @ProcessingLog nvarchar(MAX)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[RecordMergeDeletionLog]
         (
@@ -6393,9 +6908,60 @@ BEGIN
             @Status,
             @ProcessingLog
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spDeleteCompany]'
+GO
+
+
+CREATE PROCEDURE [admin].[spDeleteCompany]
+    @ID int
+AS  
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM 
+        [admin].[Company]
+    WHERE 
+        [ID] = @ID
+    SELECT @ID AS ID -- Return the primary key value to indicate we successfully deleted the record
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spCreateCompanyIntegrationRecordMap]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateCompanyIntegrationRecordMap]
+    @CompanyIntegrationID int,
+    @ExternalSystemRecordID nvarchar(100),
+    @EntityID int,
+    @EntityRecordID nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[CompanyIntegrationRecordMap]
+        (
+            [CompanyIntegrationID],
+            [ExternalSystemRecordID],
+            [EntityID],
+            [EntityRecordID]
+        )
+    VALUES
+        (
+            @CompanyIntegrationID,
+            @ExternalSystemRecordID,
+            @EntityID,
+            @EntityRecordID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6418,6 +6984,61 @@ INNER JOIN
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [admin].[spCreateResourceFolder]'
+GO
+
+
+CREATE PROCEDURE [admin].[spCreateResourceFolder]
+    @ParentID int,
+    @Name nvarchar(50),
+    @ResourceTypeName nvarchar(255),
+    @Description nvarchar(MAX),
+    @UserID int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    INSERT INTO 
+    [admin].[ResourceFolder]
+        (
+            [ParentID],
+            [Name],
+            [ResourceTypeName],
+            [Description],
+            [UserID]
+        )
+    VALUES
+        (
+            @ParentID,
+            @Name,
+            @ResourceTypeName,
+            @Description,
+            @UserID
+        )
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [admin].[vwResourceFolders] WHERE ID = SCOPE_IDENTITY()
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[vwSkills]'
+GO
+
+
+CREATE VIEW [admin].[vwSkills]
+AS
+SELECT 
+    s.*,
+    Skill_ParentID.[Name] AS [Parent]
+FROM
+    [admin].[Skill] AS s
+LEFT OUTER JOIN
+    [admin].[Skill] AS Skill_ParentID
+  ON
+    [s].[ParentID] = Skill_ParentID.[ID]
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Creating [admin].[spCreateSchemaInfo]'
 GO
 
@@ -6430,6 +7051,7 @@ CREATE PROCEDURE [admin].[spCreateSchemaInfo]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[SchemaInfo]
         (
@@ -6445,56 +7067,8 @@ BEGIN
             @EntityIDMax,
             @Comments
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwSchemaInfos] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[vwRoles]'
-GO
-
-
-CREATE VIEW [admin].[vwRoles]
-AS
-SELECT 
-    r.*
-FROM
-    [admin].[Role] AS r
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateCompanyIntegrationRecordMap]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateCompanyIntegrationRecordMap]
-    @CompanyIntegrationID int,
-    @ExternalSystemRecordID nvarchar(100),
-    @EntityID int,
-    @EntityRecordID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[CompanyIntegrationRecordMap]
-        (
-            [CompanyIntegrationID],
-            [ExternalSystemRecordID],
-            [EntityID],
-            [EntityRecordID]
-        )
-    VALUES
-        (
-            @CompanyIntegrationID,
-            @ExternalSystemRecordID,
-            @EntityID,
-            @EntityRecordID
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6518,7 +7092,7 @@ GO
 
 CREATE PROCEDURE [admin].[spCreateRecordMergeLog]
     @EntityID int,
-    @SurvivingRecordID int,
+    @SurvivingRecordID nvarchar(255),
     @InitiatedByUserID int,
     @ApprovalStatus nvarchar(10),
     @ApprovedByUserID int,
@@ -6530,6 +7104,7 @@ CREATE PROCEDURE [admin].[spCreateRecordMergeLog]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[RecordMergeLog]
         (
@@ -6557,23 +7132,135 @@ BEGIN
             @ProcessingLog,
             @Comments
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwRecordMergeLogs] WHERE ID = SCOPE_IDENTITY()
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
-PRINT N'Creating [admin].[vwSkills]'
+PRINT N'Creating [admin].[vwRoles]'
 GO
 
 
-CREATE VIEW [admin].[vwSkills]
+CREATE VIEW [admin].[vwRoles]
 AS
 SELECT 
-    s.*
+    r.*
 FROM
-    [admin].[Skill] AS s
+    [admin].[Role] AS r
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateRecordMergeDeletionLog]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateRecordMergeDeletionLog]
+    @ID int,
+    @RecordMergeLogID int,
+    @DeletedRecordID nvarchar(255),
+    @Status nvarchar(10),
+    @ProcessingLog nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[RecordMergeDeletionLog]
+    SET 
+        [RecordMergeLogID] = @RecordMergeLogID,
+        [DeletedRecordID] = @DeletedRecordID,
+        [Status] = @Status,
+        [ProcessingLog] = @ProcessingLog,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateIntegrationURLFormat]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateIntegrationURLFormat]
+    @ID int,
+    @IntegrationName nvarchar(100),
+    @EntityID int,
+    @URLFormat nvarchar(500)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[IntegrationURLFormat]
+    SET 
+        [IntegrationName] = @IntegrationName,
+        [EntityID] = @EntityID,
+        [URLFormat] = @URLFormat
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateCompanyIntegrationRecordMap]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateCompanyIntegrationRecordMap]
+    @ID int,
+    @CompanyIntegrationID int,
+    @ExternalSystemRecordID nvarchar(100),
+    @EntityID int,
+    @EntityRecordID nvarchar(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[CompanyIntegrationRecordMap]
+    SET 
+        [CompanyIntegrationID] = @CompanyIntegrationID,
+        [ExternalSystemRecordID] = @ExternalSystemRecordID,
+        [EntityID] = @EntityID,
+        [EntityRecordID] = @EntityRecordID,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateEmployeeSkill]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateEmployeeSkill]
+    @ID int,
+    @EmployeeID int,
+    @SkillID int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[EmployeeSkill]
+    SET 
+        [EmployeeID] = @EmployeeID,
+        [SkillID] = @SkillID,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwEmployeeSkills] WHERE [ID] = @ID
+END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -6604,180 +7291,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwResourceFolders WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateIntegrationURLFormat]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateIntegrationURLFormat]
-    @ID int,
-    @IntegrationName nvarchar(100),
-    @EntityID int,
-    @URLFormat nvarchar(500)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[IntegrationURLFormat]
-    SET 
-        [IntegrationName] = @IntegrationName,
-        [EntityID] = @EntityID,
-        [URLFormat] = @URLFormat
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwIntegrationURLFormats WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateRecordMergeDeletionLog]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateRecordMergeDeletionLog]
-    @ID int,
-    @RecordMergeLogID int,
-    @DeletedRecordID int,
-    @Status nvarchar(10),
-    @ProcessingLog nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[RecordMergeDeletionLog]
-    SET 
-        [RecordMergeLogID] = @RecordMergeLogID,
-        [DeletedRecordID] = @DeletedRecordID,
-        [Status] = @Status,
-        [ProcessingLog] = @ProcessingLog,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwRecordMergeDeletionLogs WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateEmployeeSkill]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateEmployeeSkill]
-    @ID int,
-    @EmployeeID int,
-    @SkillID char(36)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[EmployeeSkill]
-    SET 
-        [EmployeeID] = @EmployeeID,
-        [SkillID] = @SkillID,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEmployeeSkills WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateSchemaInfo]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateSchemaInfo]
-    @ID int,
-    @SchemaName nvarchar(50),
-    @EntityIDMin int,
-    @EntityIDMax int,
-    @Comments nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[SchemaInfo]
-    SET 
-        [SchemaName] = @SchemaName,
-        [EntityIDMin] = @EntityIDMin,
-        [EntityIDMax] = @EntityIDMax,
-        [Comments] = @Comments,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwSchemaInfos WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateRole]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateRole]
-    @ID int,
-    @Name nvarchar(50),
-    @Description nvarchar(500),
-    @AzureID nvarchar(50),
-    @SQLName nvarchar(50)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[Role]
-    SET 
-        [Name] = @Name,
-        [Description] = @Description,
-        [AzureID] = @AzureID,
-        [SQLName] = @SQLName,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwRoles WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateCompanyIntegrationRecordMap]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateCompanyIntegrationRecordMap]
-    @ID int,
-    @CompanyIntegrationID int,
-    @ExternalSystemRecordID nvarchar(100),
-    @EntityID int,
-    @EntityRecordID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[CompanyIntegrationRecordMap]
-    SET 
-        [CompanyIntegrationID] = @CompanyIntegrationID,
-        [ExternalSystemRecordID] = @ExternalSystemRecordID,
-        [EntityID] = @EntityID,
-        [EntityRecordID] = @EntityRecordID,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwCompanyIntegrationRecordMaps WHERE ID = @ID
+    SELECT * FROM [admin].[vwResourceFolders] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6813,7 +7327,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwIntegrations WHERE ID = @ID
+    SELECT * FROM [admin].[vwIntegrations] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6825,7 +7339,7 @@ GO
 CREATE PROCEDURE [admin].[spUpdateRecordMergeLog]
     @ID int,
     @EntityID int,
-    @SurvivingRecordID int,
+    @SurvivingRecordID nvarchar(255),
     @InitiatedByUserID int,
     @ApprovalStatus nvarchar(10),
     @ApprovedByUserID int,
@@ -6855,7 +7369,67 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwRecordMergeLogs WHERE ID = @ID
+    SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateRole]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateRole]
+    @ID int,
+    @Name nvarchar(50),
+    @Description nvarchar(500),
+    @AzureID nvarchar(50),
+    @SQLName nvarchar(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[Role]
+    SET 
+        [Name] = @Name,
+        [Description] = @Description,
+        [AzureID] = @AzureID,
+        [SQLName] = @SQLName,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwRoles] WHERE [ID] = @ID
+END
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Creating [admin].[spUpdateSchemaInfo]'
+GO
+
+
+CREATE PROCEDURE [admin].[spUpdateSchemaInfo]
+    @ID int,
+    @SchemaName nvarchar(50),
+    @EntityIDMin int,
+    @EntityIDMax int,
+    @Comments nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE 
+        [admin].[SchemaInfo]
+    SET 
+        [SchemaName] = @SchemaName,
+        [EntityIDMin] = @EntityIDMin,
+        [EntityIDMax] = @EntityIDMax,
+        [Comments] = @Comments,
+        UpdatedAt = GETDATE()
+    WHERE 
+        [ID] = @ID
+
+    -- return the updated record so the caller can see the updated values and any calculated fields
+    SELECT * FROM [admin].[vwSchemaInfos] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6901,7 +7475,7 @@ BEGIN
         [ID] = @ID
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwCompanyIntegrations WHERE ID = @ID
+    SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [ID] = @ID
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -6925,6 +7499,7 @@ CREATE PROCEDURE [admin].[spCreateUser]
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[User]
         (
@@ -6954,7 +7529,6 @@ BEGIN
             @LinkedEntityID,
             @LinkedEntityRecordID
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwUsers] WHERE ID = SCOPE_IDENTITY()
 END
@@ -6971,16 +7545,17 @@ CREATE PROCEDURE [admin].[spCreateEntityRelationship]
     @BundleInAPI bit,
     @IncludeInParentAllQuery bit,
     @Type nchar(20),
-    @EntityKeyField nvarchar(50),
-    @RelatedEntityJoinField nvarchar(50),
-    @JoinView nvarchar(50),
-    @JoinEntityJoinField nvarchar(50),
-    @JoinEntityInverseJoinField nvarchar(50),
+    @EntityKeyField nvarchar(255),
+    @RelatedEntityJoinField nvarchar(255),
+    @JoinView nvarchar(255),
+    @JoinEntityJoinField nvarchar(255),
+    @JoinEntityInverseJoinField nvarchar(255),
     @DisplayInForm bit,
-    @DisplayName nvarchar(50)
+    @DisplayName nvarchar(255)
 AS
 BEGIN
     SET NOCOUNT ON;
+    
     INSERT INTO 
     [admin].[EntityRelationship]
         (
@@ -7012,498 +7587,8 @@ BEGIN
             @DisplayInForm,
             @DisplayName
         )
-
     -- return the new record from the base view, which might have some calculated fields
     SELECT * FROM [admin].[vwEntityRelationships] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateEntityField]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateEntityField]
-    @DisplayName nvarchar(255),
-    @Description nvarchar(MAX),
-    @Category nvarchar(255),
-    @ValueListType nvarchar(20),
-    @ExtendedType nvarchar(50),
-    @DefaultInView bit,
-    @ViewCellTemplate nvarchar(MAX),
-    @DefaultColumnWidth int,
-    @AllowUpdateAPI bit,
-    @AllowUpdateInView bit,
-    @IncludeInUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @UserSearchParamFormatAPI nvarchar(500),
-    @IncludeInGeneratedForm bit,
-    @GeneratedFormSection nvarchar(10),
-    @IsNameField bit,
-    @RelatedEntityID int,
-    @RelatedEntityFieldName nvarchar(255),
-    @IncludeRelatedEntityNameFieldInBaseView bit,
-    @RelatedEntityNameFieldMap nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[EntityField]
-        (
-            [DisplayName],
-            [Description],
-            [Category],
-            [ValueListType],
-            [ExtendedType],
-            [DefaultInView],
-            [ViewCellTemplate],
-            [DefaultColumnWidth],
-            [AllowUpdateAPI],
-            [AllowUpdateInView],
-            [IncludeInUserSearchAPI],
-            [FullTextSearchEnabled],
-            [UserSearchParamFormatAPI],
-            [IncludeInGeneratedForm],
-            [GeneratedFormSection],
-            [IsNameField],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [RelatedEntityNameFieldMap]
-        )
-    VALUES
-        (
-            @DisplayName,
-            @Description,
-            @Category,
-            @ValueListType,
-            @ExtendedType,
-            @DefaultInView,
-            @ViewCellTemplate,
-            @DefaultColumnWidth,
-            @AllowUpdateAPI,
-            @AllowUpdateInView,
-            @IncludeInUserSearchAPI,
-            @FullTextSearchEnabled,
-            @UserSearchParamFormatAPI,
-            @IncludeInGeneratedForm,
-            @GeneratedFormSection,
-            @IsNameField,
-            @RelatedEntityID,
-            @RelatedEntityFieldName,
-            @IncludeRelatedEntityNameFieldInBaseView,
-            @RelatedEntityNameFieldMap
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwEntityFields] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spCreateEntity]'
-GO
-
-
-CREATE PROCEDURE [admin].[spCreateEntity]
-    @ParentID int,
-    @Name nvarchar(255),
-    @NameSuffix nvarchar(255),
-    @Description nvarchar(MAX),
-    @BaseView nvarchar(255),
-    @BaseViewGenerated bit,
-    @VirtualEntity bit,
-    @TrackRecordChanges bit,
-    @AuditRecordAccess bit,
-    @AuditViewRuns bit,
-    @IncludeInAPI bit,
-    @AllowAllRowsAPI bit,
-    @AllowUpdateAPI bit,
-    @AllowCreateAPI bit,
-    @AllowDeleteAPI bit,
-    @CustomResolverAPI bit,
-    @AllowUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @FullTextCatalog nvarchar(255),
-    @FullTextCatalogGenerated bit,
-    @FullTextIndex nvarchar(255),
-    @FullTextIndexGenerated bit,
-    @FullTextSearchFunction nvarchar(255),
-    @FullTextSearchFunctionGenerated bit,
-    @UserViewMaxRows int,
-    @spCreate nvarchar(255),
-    @spUpdate nvarchar(255),
-    @spDelete nvarchar(255),
-    @spCreateGenerated bit,
-    @spUpdateGenerated bit,
-    @spDeleteGenerated bit,
-    @CascadeDeletes bit,
-    @UserFormGenerated bit,
-    @EntityObjectSubclassName nvarchar(255),
-    @EntityObjectSubclassImport nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    INSERT INTO 
-    [admin].[Entity]
-        (
-            [ParentID],
-            [Name],
-            [NameSuffix],
-            [Description],
-            [BaseView],
-            [BaseViewGenerated],
-            [VirtualEntity],
-            [TrackRecordChanges],
-            [AuditRecordAccess],
-            [AuditViewRuns],
-            [IncludeInAPI],
-            [AllowAllRowsAPI],
-            [AllowUpdateAPI],
-            [AllowCreateAPI],
-            [AllowDeleteAPI],
-            [CustomResolverAPI],
-            [AllowUserSearchAPI],
-            [FullTextSearchEnabled],
-            [FullTextCatalog],
-            [FullTextCatalogGenerated],
-            [FullTextIndex],
-            [FullTextIndexGenerated],
-            [FullTextSearchFunction],
-            [FullTextSearchFunctionGenerated],
-            [UserViewMaxRows],
-            [spCreate],
-            [spUpdate],
-            [spDelete],
-            [spCreateGenerated],
-            [spUpdateGenerated],
-            [spDeleteGenerated],
-            [CascadeDeletes],
-            [UserFormGenerated],
-            [EntityObjectSubclassName],
-            [EntityObjectSubclassImport]
-        )
-    VALUES
-        (
-            @ParentID,
-            @Name,
-            @NameSuffix,
-            @Description,
-            @BaseView,
-            @BaseViewGenerated,
-            @VirtualEntity,
-            @TrackRecordChanges,
-            @AuditRecordAccess,
-            @AuditViewRuns,
-            @IncludeInAPI,
-            @AllowAllRowsAPI,
-            @AllowUpdateAPI,
-            @AllowCreateAPI,
-            @AllowDeleteAPI,
-            @CustomResolverAPI,
-            @AllowUserSearchAPI,
-            @FullTextSearchEnabled,
-            @FullTextCatalog,
-            @FullTextCatalogGenerated,
-            @FullTextIndex,
-            @FullTextIndexGenerated,
-            @FullTextSearchFunction,
-            @FullTextSearchFunctionGenerated,
-            @UserViewMaxRows,
-            @spCreate,
-            @spUpdate,
-            @spDelete,
-            @spCreateGenerated,
-            @spUpdateGenerated,
-            @spDeleteGenerated,
-            @CascadeDeletes,
-            @UserFormGenerated,
-            @EntityObjectSubclassName,
-            @EntityObjectSubclassImport
-        )
-
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].[vwEntities] WHERE ID = SCOPE_IDENTITY()
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateUser]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateUser]
-    @ID int,
-    @Name nvarchar(100),
-    @FirstName nvarchar(50),
-    @LastName nvarchar(50),
-    @Title nvarchar(50),
-    @Email nvarchar(100),
-    @Type nchar(15),
-    @IsActive bit,
-    @LinkedRecordType nchar(10),
-    @EmployeeID int,
-    @LinkedEntityID int,
-    @LinkedEntityRecordID int
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[User]
-    SET 
-        [Name] = @Name,
-        [FirstName] = @FirstName,
-        [LastName] = @LastName,
-        [Title] = @Title,
-        [Email] = @Email,
-        [Type] = @Type,
-        [IsActive] = @IsActive,
-        [LinkedRecordType] = @LinkedRecordType,
-        [EmployeeID] = @EmployeeID,
-        [LinkedEntityID] = @LinkedEntityID,
-        [LinkedEntityRecordID] = @LinkedEntityRecordID,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwUsers WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateEntityRelationship]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateEntityRelationship]
-    @ID int,
-    @EntityID int,
-    @RelatedEntityID int,
-    @BundleInAPI bit,
-    @IncludeInParentAllQuery bit,
-    @Type nchar(20),
-    @EntityKeyField nvarchar(50),
-    @RelatedEntityJoinField nvarchar(50),
-    @JoinView nvarchar(50),
-    @JoinEntityJoinField nvarchar(50),
-    @JoinEntityInverseJoinField nvarchar(50),
-    @DisplayInForm bit,
-    @DisplayName nvarchar(50)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[EntityRelationship]
-    SET 
-        [EntityID] = @EntityID,
-        [RelatedEntityID] = @RelatedEntityID,
-        [BundleInAPI] = @BundleInAPI,
-        [IncludeInParentAllQuery] = @IncludeInParentAllQuery,
-        [Type] = @Type,
-        [EntityKeyField] = @EntityKeyField,
-        [RelatedEntityJoinField] = @RelatedEntityJoinField,
-        [JoinView] = @JoinView,
-        [JoinEntityJoinField] = @JoinEntityJoinField,
-        [JoinEntityInverseJoinField] = @JoinEntityInverseJoinField,
-        [DisplayInForm] = @DisplayInForm,
-        [DisplayName] = @DisplayName,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEntityRelationships WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateEntityField]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateEntityField]
-    @ID int,
-    @DisplayName nvarchar(255),
-    @Description nvarchar(MAX),
-    @Category nvarchar(255),
-    @ValueListType nvarchar(20),
-    @ExtendedType nvarchar(50),
-    @DefaultInView bit,
-    @ViewCellTemplate nvarchar(MAX),
-    @DefaultColumnWidth int,
-    @AllowUpdateAPI bit,
-    @AllowUpdateInView bit,
-    @IncludeInUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @UserSearchParamFormatAPI nvarchar(500),
-    @IncludeInGeneratedForm bit,
-    @GeneratedFormSection nvarchar(10),
-    @IsNameField bit,
-    @RelatedEntityID int,
-    @RelatedEntityFieldName nvarchar(255),
-    @IncludeRelatedEntityNameFieldInBaseView bit,
-    @RelatedEntityNameFieldMap nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[EntityField]
-    SET 
-        [DisplayName] = @DisplayName,
-        [Description] = @Description,
-        [Category] = @Category,
-        [ValueListType] = @ValueListType,
-        [ExtendedType] = @ExtendedType,
-        [DefaultInView] = @DefaultInView,
-        [ViewCellTemplate] = @ViewCellTemplate,
-        [DefaultColumnWidth] = @DefaultColumnWidth,
-        [AllowUpdateAPI] = @AllowUpdateAPI,
-        [AllowUpdateInView] = @AllowUpdateInView,
-        [IncludeInUserSearchAPI] = @IncludeInUserSearchAPI,
-        [FullTextSearchEnabled] = @FullTextSearchEnabled,
-        [UserSearchParamFormatAPI] = @UserSearchParamFormatAPI,
-        [IncludeInGeneratedForm] = @IncludeInGeneratedForm,
-        [GeneratedFormSection] = @GeneratedFormSection,
-        [IsNameField] = @IsNameField,
-        [RelatedEntityID] = @RelatedEntityID,
-        [RelatedEntityFieldName] = @RelatedEntityFieldName,
-        [IncludeRelatedEntityNameFieldInBaseView] = @IncludeRelatedEntityNameFieldInBaseView,
-        [RelatedEntityNameFieldMap] = @RelatedEntityNameFieldMap,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEntityFields WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spUpdateEntity]'
-GO
-
-
-CREATE PROCEDURE [admin].[spUpdateEntity]
-    @ID int,
-    @ParentID int,
-    @Name nvarchar(255),
-    @NameSuffix nvarchar(255),
-    @Description nvarchar(MAX),
-    @BaseView nvarchar(255),
-    @BaseViewGenerated bit,
-    @VirtualEntity bit,
-    @TrackRecordChanges bit,
-    @AuditRecordAccess bit,
-    @AuditViewRuns bit,
-    @IncludeInAPI bit,
-    @AllowAllRowsAPI bit,
-    @AllowUpdateAPI bit,
-    @AllowCreateAPI bit,
-    @AllowDeleteAPI bit,
-    @CustomResolverAPI bit,
-    @AllowUserSearchAPI bit,
-    @FullTextSearchEnabled bit,
-    @FullTextCatalog nvarchar(255),
-    @FullTextCatalogGenerated bit,
-    @FullTextIndex nvarchar(255),
-    @FullTextIndexGenerated bit,
-    @FullTextSearchFunction nvarchar(255),
-    @FullTextSearchFunctionGenerated bit,
-    @UserViewMaxRows int,
-    @spCreate nvarchar(255),
-    @spUpdate nvarchar(255),
-    @spDelete nvarchar(255),
-    @spCreateGenerated bit,
-    @spUpdateGenerated bit,
-    @spDeleteGenerated bit,
-    @CascadeDeletes bit,
-    @UserFormGenerated bit,
-    @EntityObjectSubclassName nvarchar(255),
-    @EntityObjectSubclassImport nvarchar(255)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE 
-        [admin].[Entity]
-    SET 
-        [ParentID] = @ParentID,
-        [Name] = @Name,
-        [NameSuffix] = @NameSuffix,
-        [Description] = @Description,
-        [BaseView] = @BaseView,
-        [BaseViewGenerated] = @BaseViewGenerated,
-        [VirtualEntity] = @VirtualEntity,
-        [TrackRecordChanges] = @TrackRecordChanges,
-        [AuditRecordAccess] = @AuditRecordAccess,
-        [AuditViewRuns] = @AuditViewRuns,
-        [IncludeInAPI] = @IncludeInAPI,
-        [AllowAllRowsAPI] = @AllowAllRowsAPI,
-        [AllowUpdateAPI] = @AllowUpdateAPI,
-        [AllowCreateAPI] = @AllowCreateAPI,
-        [AllowDeleteAPI] = @AllowDeleteAPI,
-        [CustomResolverAPI] = @CustomResolverAPI,
-        [AllowUserSearchAPI] = @AllowUserSearchAPI,
-        [FullTextSearchEnabled] = @FullTextSearchEnabled,
-        [FullTextCatalog] = @FullTextCatalog,
-        [FullTextCatalogGenerated] = @FullTextCatalogGenerated,
-        [FullTextIndex] = @FullTextIndex,
-        [FullTextIndexGenerated] = @FullTextIndexGenerated,
-        [FullTextSearchFunction] = @FullTextSearchFunction,
-        [FullTextSearchFunctionGenerated] = @FullTextSearchFunctionGenerated,
-        [UserViewMaxRows] = @UserViewMaxRows,
-        [spCreate] = @spCreate,
-        [spUpdate] = @spUpdate,
-        [spDelete] = @spDelete,
-        [spCreateGenerated] = @spCreateGenerated,
-        [spUpdateGenerated] = @spUpdateGenerated,
-        [spDeleteGenerated] = @spDeleteGenerated,
-        [CascadeDeletes] = @CascadeDeletes,
-        [UserFormGenerated] = @UserFormGenerated,
-        [EntityObjectSubclassName] = @EntityObjectSubclassName,
-        [EntityObjectSubclassImport] = @EntityObjectSubclassImport,
-        UpdatedAt = GETDATE()
-    WHERE 
-        [ID] = @ID
-
-    -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [admin].vwEntities WHERE ID = @ID
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spDeleteEntityRelationship]'
-GO
-
-
-CREATE PROCEDURE [admin].[spDeleteEntityRelationship]
-    @ID INT
-AS  
-BEGIN
-    SET NOCOUNT ON;
-    DELETE FROM 
-        [admin].[EntityRelationship]
-    WHERE 
-        [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
-END
-GO
-IF @@ERROR <> 0 SET NOEXEC ON
-GO
-PRINT N'Creating [admin].[spDeleteEntityField]'
-GO
-
-
-CREATE PROCEDURE [admin].[spDeleteEntityField]
-    @ID INT
-AS  
-BEGIN
-    SET NOCOUNT ON;
-    DELETE FROM 
-        [admin].[EntityField]
-    WHERE 
-        [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
 END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
@@ -7705,6 +7790,41 @@ END
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
+PRINT N'Creating [admin].[spGetPrimaryKeyForTable]'
+GO
+
+CREATE PROC [admin].[spGetPrimaryKeyForTable] 
+  @TableName NVARCHAR(255),
+  @SchemaName NVARCHAR(255)
+AS
+SELECT
+    s.name AS SchemaName,
+    t.name AS TableName,
+    c.name AS ColumnName,
+    ty.name AS DataType,
+    c.max_length,
+    c.precision,
+    c.scale,
+    c.is_nullable
+FROM 
+    sys.tables t
+INNER JOIN 
+    sys.schemas s ON t.schema_id = s.schema_id
+INNER JOIN 
+    sys.indexes i ON t.object_id = i.object_id
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
+INNER JOIN 
+    sys.types ty ON c.user_type_id = ty.user_type_id
+WHERE 
+    i.is_primary_key = 1
+    AND t.name = @TableName
+    AND s.name = @SchemaName;
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
 PRINT N'Adding foreign keys to [admin].[AIAction]'
 GO
 ALTER TABLE [admin].[AIAction] ADD CONSTRAINT [FK_AIAction_AIModel] FOREIGN KEY ([DefaultModelID]) REFERENCES [admin].[AIModel] ([ID])
@@ -7851,7 +7971,7 @@ PRINT N'Adding foreign keys to [admin].[EmployeeSkill]'
 GO
 ALTER TABLE [admin].[EmployeeSkill] ADD CONSTRAINT [FK__EmployeeS__Emplo__756D6ECB] FOREIGN KEY ([EmployeeID]) REFERENCES [admin].[Employee] ([ID]) ON DELETE CASCADE
 GO
-ALTER TABLE [admin].[EmployeeSkill] ADD CONSTRAINT [FK__EmployeeS__Skill__76619304] FOREIGN KEY ([SkillID]) REFERENCES [admin].[Skill] ([ID]) ON DELETE CASCADE
+ALTER TABLE [admin].[EmployeeSkill] ADD CONSTRAINT [FK_EmployeeSkill_Skill] FOREIGN KEY ([SkillID]) REFERENCES [admin].[Skill] ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
@@ -8028,6 +8148,12 @@ GO
 PRINT N'Adding foreign keys to [admin].[ResourceType]'
 GO
 ALTER TABLE [admin].[ResourceType] ADD CONSTRAINT [FK__ResourceT__Entit__6D777912] FOREIGN KEY ([EntityID]) REFERENCES [admin].[Entity] ([ID])
+GO
+IF @@ERROR <> 0 SET NOEXEC ON
+GO
+PRINT N'Adding foreign keys to [admin].[Skill]'
+GO
+ALTER TABLE [admin].[Skill] ADD CONSTRAINT [FK_Skill_Skill] FOREIGN KEY ([ParentID]) REFERENCES [admin].[Skill] ([ID])
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO

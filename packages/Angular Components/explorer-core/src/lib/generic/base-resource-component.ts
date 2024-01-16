@@ -1,5 +1,5 @@
 import { BaseEntity } from "@memberjunction/core";
-import { SharedService } from "../shared/shared.service";
+import { SharedService } from "../../shared/shared.service";
 
 export abstract class BaseResourceComponent {
     public Data: ResourceData = new ResourceData();

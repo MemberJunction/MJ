@@ -32,7 +32,10 @@ async function createMJDistribution() {
   
       
       if (configJson.output) {
-        configJson.output = configJson.output.filter(item => item.type && item.type.trim().toLowerCase() !== 'coreentitysubclasses'); // remove this as we don't want people using MJ to ever generated this stuff.
+        configJson.output = configJson.output.filter(item =>  item.type && 
+                                                              item.type.trim().toLowerCase() !== 'coreentitysubclasses' &&
+                                                              item.type.trim().toLowerCase() !== 'graphqlcoreentityresolvers' &&
+                                                              item.type.trim().toLowerCase() !== 'angularcoreentities' ); // remove these as we don't want people using MJ to ever generated this stuff.
   
         // next up, we add "admin" to the list of exclude schemas as we don't want people using MJ to ever generate stuff in the admin schema.
         // Add "admin" to the "excludeSchemas" array

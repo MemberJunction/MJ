@@ -110,8 +110,8 @@ AS
 SELECT 
 	e.*,
 	IIF(1 = ISNUMERIC(LEFT(e.Name, 1)),'_','') + REPLACE(e.Name, ' ', '') CodeName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + e.BaseTable + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) ClassName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + e.BaseTable + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) BaseTableCodeName,
+	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) ClassName,
+	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) BaseTableCodeName,
 	par.Name ParentEntity,
 	par.BaseTable ParentBaseTable,
 	par.BaseView ParentBaseView

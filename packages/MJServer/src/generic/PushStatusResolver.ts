@@ -1,4 +1,4 @@
-import { Arg, Field, ID, ObjectType, Resolver, ResolverFilterData, Root, Subscription } from '@memberjunction/server';
+import { Arg, Field, ID, ObjectType, Resolver, ResolverFilterData, Root, Subscription } from 'type-graphql';
 
 export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 

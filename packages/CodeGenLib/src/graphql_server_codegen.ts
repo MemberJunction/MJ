@@ -54,7 +54,7 @@ export function generateServerEntityString(entity: EntityInfo, includeFileHeader
 
 export function generateAllEntitiesServerFileHeader(): string {
     let sRet: string = `/********************************************************************************
-* ALL ENTITIES - TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
+* ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
 * GENERATED: ${new Date().toLocaleString()}
@@ -64,14 +64,13 @@ export function generateAllEntitiesServerFileHeader(): string {
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 * 
 **********************************************************************************/
-import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, PubSub, PubSubEngine } from '@memberjunction/server';
-import { AppContext } from '@memberjunction/server';
-import { MaxLength } from 'class-validator';
-import { ResolverBase } from '../generic/ResolverBase';
-import { RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '../generic/RunViewResolver';
-import { DataSource } from 'typeorm';
-import * as MJGeneratedEntities from 'mj_generatedentities'
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
+         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType } from '@memberjunction/core'
+import { AppContext } from '@memberjunction/server';
+
+import { MaxLength } from 'class-validator';
+import { DataSource } from 'typeorm';
 `
     return sRet;    
 }
@@ -485,7 +484,7 @@ function generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshi
     @FieldResolver(() => [${r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + _graphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE ${r.RelatedEntityJoinField}=\${${instanceName}.${!r.EntityKeyField ? re.PrimaryKey.Name : r.EntityKeyField}} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE ${r.RelatedEntityJoinField}=\${${instanceName}.${!r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField}} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     `    
@@ -499,7 +498,7 @@ function generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationsh
     @FieldResolver(() => [${r.RelatedEntityBaseTableCodeName  + _graphQLTypeSuffix}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + _graphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE ${re.PrimaryKey.Name} IN (SELECT ${r.JoinEntityInverseJoinField} FROM [${re.SchemaName}].${r.JoinView} WHERE ${r.JoinEntityJoinField}=\${${instanceName}.${!r.EntityKeyField ? re.PrimaryKey.Name : r.EntityKeyField}}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE ${re.PrimaryKey.Name} IN (SELECT ${r.JoinEntityInverseJoinField} FROM [${re.SchemaName}].${r.JoinView} WHERE ${r.JoinEntityJoinField}=\${${instanceName}.${!r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField}}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         return dataSource.query(sSQL);
     }
     `;

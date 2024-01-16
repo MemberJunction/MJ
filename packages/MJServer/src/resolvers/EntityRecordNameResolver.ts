@@ -1,5 +1,6 @@
 import { Metadata } from '@memberjunction/core';
-import { AppContext, Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from '@memberjunction/server';
+import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
+import { AppContext } from '../types';
 
 @InputType()
 export class EntityRecordNameInput {

@@ -6,7 +6,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
 @Component({
   selector: 'app-report-browser',
   templateUrl: './report-browser.component.html',
-  styleUrls: ['./report-browser.component.css', '../shared/first-tab-styles.css']
+  styleUrls: ['./report-browser.component.css', '../../shared/first-tab-styles.css']
 })
 export class ReportBrowserComponent {
   public reports: ReportEntity[] = [];

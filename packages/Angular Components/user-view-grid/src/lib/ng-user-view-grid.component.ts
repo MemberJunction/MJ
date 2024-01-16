@@ -339,10 +339,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(this.compareMode || this.mergeMode) return;
     
     if (this._entityInfo) {
+      const pkeyVal = this.viewData[args.rowIndex][this._entityInfo.PrimaryKey.Name]
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        primaryKeyValue: args.dataItem[this._entityInfo.PrimaryKey.Name]
+        primaryKeyValue: pkeyVal
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -356,7 +357,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (!this.InEditMode && this.AutoNavigate) {
         // tell app router to go to this record
-        this.router.navigate(['resource', 'record', args.dataItem[this._entityInfo.PrimaryKey.Name]], { queryParams: { Entity: this._entityInfo.Name } })
+        this.router.navigate(['resource', 'record', pkeyVal], { queryParams: { Entity: this._entityInfo.Name } })
     }
     } 
   } 

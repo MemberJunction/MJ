@@ -4,12 +4,12 @@ import { Metadata } from '@memberjunction/core';
 import { ViewInfo, UserViewEntity } from '@memberjunction/core-entities';
 import { ViewPropertiesDialogComponent } from '../user-view-properties/view-properties-dialog.component';
 import { NotificationService } from "@progress/kendo-angular-notification";
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 
 @Component({
   selector: 'app-single-entity',
   templateUrl: './single-entity.component.html',
-  styleUrls: ['./single-entity.component.css', '../shared/first-tab-styles.css']
+  styleUrls: ['./single-entity.component.css', '../../shared/first-tab-styles.css']
 })
 export class SingleEntityComponent implements OnInit {
   constructor(private router: Router, private route: ActivatedRoute, private notificationService: NotificationService, private sharedService: SharedService) {

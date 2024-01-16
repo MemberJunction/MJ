@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, OnChanges,  Output,  SimpleChanges, ViewChild, ViewContainerRef } from '@angular/core';
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';

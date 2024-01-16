@@ -6,7 +6,7 @@ import { UserFavoriteEntity } from '@memberjunction/core-entities';
 @Component({
   selector: 'app-favorites',
   templateUrl: './favorites.component.html',
-  styleUrls: ['./favorites.component.css', './../shared/first-tab-styles.css']
+  styleUrls: ['./favorites.component.css', '../../shared/first-tab-styles.css']
 })
 export class FavoritesComponent {
   public favorites: UserFavoriteEntity[] = [];

@@ -5,7 +5,7 @@ import { ApplicationInfo, Metadata } from '@memberjunction/core';
 @Component({
   selector: 'app-data-browser',
   templateUrl: './data-browser.component.html',
-  styleUrls: ['./data-browser.component.css', '../shared/first-tab-styles.css']
+  styleUrls: ['./data-browser.component.css', '../../shared/first-tab-styles.css']
 })
 export class DataBrowserComponent {
   public showLoader: boolean = true;

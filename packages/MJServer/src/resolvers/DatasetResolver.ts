@@ -1,5 +1,6 @@
+import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
+import { AppContext } from '../types';
 import { LogError, Metadata } from '@memberjunction/core';
-import { AppContext, Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from '@memberjunction/server';
 
 @ObjectType()
 export class DatasetResultType {

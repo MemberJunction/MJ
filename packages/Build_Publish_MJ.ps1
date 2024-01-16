@@ -275,6 +275,7 @@ $angularLibraries = @(
     @{Name='record-changes'; PackageName='ng-record-changes'; Dependencies=@('global', 'core')},
     @{Name='user-view-grid'; PackageName='ng-user-view-grid'; Dependencies=@('global', 'core', 'core-entities', 'ng-compare-records', 'ng-container-directives')},
     @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
+    @{Name='core-entity-forms'; PackageName='ng-core-entity-forms'; Dependencies=@('core', 'core-entities', 'ng-explorer-core')}
 )
 
 Write-Host ""

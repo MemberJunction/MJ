@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
 import { UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 
 @Component({
   selector: 'app-single-view',

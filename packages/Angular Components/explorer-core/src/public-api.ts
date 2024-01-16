@@ -13,7 +13,7 @@ export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 export * from './lib/generic/section-loader-component';
 
-export * from './lib/shared/shared.service';
+export * from './shared/shared.service';
 export * from './lib/ask-skip/ask-skip.component';
 export * from './lib/ask-skip/skip-dynamic-report-wrapper';
 
@@ -46,7 +46,7 @@ export * from './lib/single-dashboard/Components/add-item/add-item.component'
 export * from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component'
 export * from './lib/user-profile/user-profile.component'
 export * from './lib/user-view-properties/view-properties-dialog.component'
-export * from './lib/shared/urlPipe'
+export * from './shared/urlPipe'
 export * from './lib/user-notifications/user-notifications.component';
 export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/entities.guard';

@@ -1,5 +1,6 @@
 import { RunReport } from '@memberjunction/core';
-import { AppContext, Arg, Ctx, Field, Int, ObjectType, Query, Resolver } from '@memberjunction/server';
+import { Arg, Ctx, Field, Int, ObjectType, Query, Resolver } from 'type-graphql';
+import { AppContext } from '../types';
 
 @ObjectType()
 export class RunReportResultType {

@@ -21,13 +21,6 @@ import { SortableModule } from "@progress/kendo-angular-sortable";
 import { FilterModule } from "@progress/kendo-angular-filter";
 
 
-// probably don't need these kenod imports
-import { IconsModule } from '@progress/kendo-angular-icons';
-import { NavigationModule } from '@progress/kendo-angular-navigation';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { NotificationModule } from "@progress/kendo-angular-notification";
-import { ListBoxModule } from '@progress/kendo-angular-listbox';
-
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
@@ -70,7 +63,7 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
 import { SingleDashboardComponent } from './lib/single-dashboard/single-dashboard.component';
 import { AddItemComponent } from './lib/single-dashboard/Components/add-item/add-item.component';
 import { EditDashboardComponent } from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component';
-import { URLPipe } from './lib/shared/urlPipe';
+import { URLPipe } from './shared/urlPipe';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 
 @NgModule({

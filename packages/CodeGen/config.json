@@ -122,8 +122,22 @@
             ]
         },
         {
+            "type": "AngularCoreEntities",
+            "directory": "../Angular Components/core-entity-forms/src/lib/generated",
+            "options": [
+                {
+                    "name": "maxComponentsPerModule",
+                    "value": 100
+                }
+            ]
+        },
+        {
             "type": "GraphQLServer",
             "directory": "../MJAPI/src/generated"
+        },
+        {
+            "type": "GraphQLCoreEntityResolvers",
+            "directory": "../MJServer/src/generated"
         },
         {
             "type": "CoreEntitySubclasses",

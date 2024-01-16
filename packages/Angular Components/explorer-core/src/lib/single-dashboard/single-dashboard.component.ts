@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { ResourceData } from '../generic/base-resource-component';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
 

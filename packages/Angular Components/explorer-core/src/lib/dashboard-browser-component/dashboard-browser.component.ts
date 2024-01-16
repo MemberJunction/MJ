@@ -6,7 +6,7 @@ import { DashboardEntity } from '@memberjunction/core-entities';
 @Component({
   selector: 'app-dashboard-browser',
   templateUrl: './dashboard-browser.component.html',
-  styleUrls: ['./dashboard-browser.component.css', '../shared/first-tab-styles.css']
+  styleUrls: ['./dashboard-browser.component.css', '../../shared/first-tab-styles.css']
 })
 export class DashboardBrowserComponent {
   public dashboards: DashboardEntity[] = [];

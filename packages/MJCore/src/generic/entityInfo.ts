@@ -342,6 +342,17 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
+    get IsBinaryFieldType(): boolean {
+        switch (this.Type.trim().toLowerCase()) {
+            case 'binary':
+            case 'varbinary':
+            case 'image':
+                return true;
+            default:
+                return false;
+        }
+    }
+
     get NeedsQuotes(): boolean {
         switch (this.TSType) {
             case EntityFieldTSType.Number:
@@ -701,14 +712,23 @@ export class EntityInfo extends BaseInfo {
      */
     public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string): RunViewParams {
         const params: RunViewParams = {}
-        const keyValue = (relationship.EntityKeyField && relationship.EntityKeyField.length > 0 ? record.Get(relationship.EntityKeyField) : record.ID)
+        let quotes: string = '';
+        let keyValue: string = '';
+        if (relationship.EntityKeyField && relationship.EntityKeyField.length > 0) {
+            keyValue = record.Get(relationship.EntityKeyField);
+            quotes = record.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === relationship.EntityKeyField.trim().toLowerCase()).NeedsQuotes ? "'" : '';
+        }
+        else {
+            keyValue = record.PrimaryKey.Value;
+            quotes = record.PrimaryKey.NeedsQuotes ? "'" : '';
+        }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many
-            params.ExtraFilter = relationship.RelatedEntityJoinField + ' = ' + keyValue;
+            params.ExtraFilter = relationship.RelatedEntityJoinField + ' = ' + quotes + keyValue + quotes;
         }
         else {
             // many to many
-            params.ExtraFilter = `${relationship.RelatedEntityJoinField} IN (SELECT ${relationship.JoinEntityInverseJoinField} FROM ${relationship.JoinView} WHERE ${relationship.JoinEntityJoinField} = ${keyValue})`;
+            params.ExtraFilter = `${relationship.RelatedEntityJoinField} IN (SELECT ${relationship.JoinEntityInverseJoinField} FROM ${relationship.JoinView} WHERE ${relationship.JoinEntityJoinField} = ${quotes}${keyValue}${quotes})`;
         }
 
         if (filter && filter.length > 0) 

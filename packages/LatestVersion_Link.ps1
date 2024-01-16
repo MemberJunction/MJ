@@ -15,7 +15,7 @@ $remainingProjects = @(
     @{Name='CodeGen'; Dependencies=@('codegen-lib')},
     @{Name='GeneratedEntities'; Dependencies=@('global', 'core')},
     @{Name='MJAPI'; Dependencies=@('global', 'core', 'ai', 'sqlserver-dataprovider', 'server')},
-    @{Name='MJExplorer'; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider'); AngularDeps=@('ng-container-directives', 'ng-link-directives', 'ng-compare-records', 'ng-record-changes', 'ng-user-view-grid', 'ng-explorer-core', 'ng-auth-services')}
+    @{Name='MJExplorer'; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider'); AngularDeps=@('ng-container-directives', 'ng-link-directives', 'ng-compare-records', 'ng-record-changes', 'ng-user-view-grid', 'ng-explorer-core', 'ng-auth-services', 'ng-core-entity-forms')}
 )
 # Iterate over the custom objects
 foreach ($projObject in $remainingProjects) {

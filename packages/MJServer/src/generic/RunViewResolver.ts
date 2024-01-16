@@ -1,4 +1,5 @@
-import { AppContext, Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from '@memberjunction/server';
+import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { AppContext } from '../types';
 import { ResolverBase } from './ResolverBase';
 
 /********************************************************************************

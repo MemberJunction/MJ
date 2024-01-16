@@ -5,7 +5,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 import { SkipDynamicReportComponent } from './skip-dynamic-report-wrapper';
 import { Subscription } from 'rxjs';
 import { ListViewComponent } from '@progress/kendo-angular-listview';

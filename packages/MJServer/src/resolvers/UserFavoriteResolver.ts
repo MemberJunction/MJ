@@ -1,8 +1,9 @@
 import { Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver } from '@memberjunction/server';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
+
+import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries

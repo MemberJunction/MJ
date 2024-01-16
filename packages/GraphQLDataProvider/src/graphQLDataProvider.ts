@@ -269,7 +269,8 @@ npm
             if (dynamicView) {
                 // include all fields since no fields were passed in                
                 e.Fields.forEach(f => {
-                    fieldList.push(f.Name)
+                    if (!f.IsBinaryFieldType)
+                        fieldList.push(f.Name)
                 }); 
             }
             else {
@@ -482,7 +483,7 @@ npm
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
             const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} ($${pkeyName}: ${pkeyGraphQLType}!) {
                 ${entity.EntityInfo.ClassName}(${pkeyName}: $${pkeyName}) {
-                    ${entity.Fields.map(f => f.Name).join("\n                    ")}
+                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => f.Name).join("\n                    ")}
                     ${rel}
                 }
             }

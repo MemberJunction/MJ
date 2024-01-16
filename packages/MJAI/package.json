@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai",
-  "version": "0.9.92",
+  "version": "0.9.98",
   "description": "MemberJunction: AI Module - LLMs and other AI services wrapped and abstracted for use in MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,8 +16,8 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.6.8",
-    "@memberjunction/core": "^0.9.102",
-    "@memberjunction/global": "^0.9.103",
+    "@memberjunction/core": "^0.9.108",
+    "@memberjunction/global": "^0.9.107",
     "dotenv": "^16.0.3",
     "openai": "^3.2.1",
     "rxjs": "^7.8.1",

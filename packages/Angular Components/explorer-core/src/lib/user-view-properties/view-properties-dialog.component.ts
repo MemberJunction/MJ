@@ -10,7 +10,7 @@ import { TabComponent } from '@progress/kendo-angular-layout';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
 import { TextBoxComponent } from '@progress/kendo-angular-inputs';
-import { EventCodes, SharedService } from '../shared/shared.service';
+import { EventCodes, SharedService } from '../../shared/shared.service';
 import { FormGroup, FormControl, Validators, FormBuilder } from "@angular/forms";
 import { AddEvent, CancelEvent, CellClickEvent, CellCloseEvent, RemoveEvent, SaveEvent } from '@progress/kendo-angular-grid';
 import { Keys } from '@progress/kendo-angular-common';
@@ -232,7 +232,7 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
   }
 
   public async saveProperties() {
-    const bNewRecord = !(this.record.ID && this.record.ID > 0)
+    const bNewRecord = !(this.record.PrimaryKey.Value)
     this.showloader = true;
     const lfs = JSON.stringify(this.localFilterState);
     this.record.FilterState = JSON.stringify(this.localFilterState); // pass this along as as string, not directly bound since Kendo Filter is bound to a local object we need to translate to a string
@@ -264,7 +264,7 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
           eventCode: EventCodes.ViewUpdated,
           args: new ResourceData({ 
                                   ResourceTypeID: this.sharedService.ViewResourceType.ID,
-                                  ResourceRecordID: this.record.ID, 
+                                  ResourceRecordID: this.record.PrimaryKey.Value, 
                                   Configuration: {
                                     ViewEntity: this.record
                                   }
@@ -273,7 +273,7 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
         });
       else  
         // we route to the new view using the router
-        this.router.navigate(['resource', 'view', this.record.ID])
+        this.router.navigate(['resource', 'view', this.record.PrimaryKey.Value])
     }
     else {
       // it failed, so don't close the dialog

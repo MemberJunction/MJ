@@ -31,7 +31,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   ngOnInit(): void {
     if(this.record){
       this.showloader = true;
-      this.LoadRecordChanges(this.record.ID, '', this.record.EntityInfo.Name);
+      this.LoadRecordChanges(this.record.PrimaryKey.Value, '', this.record.EntityInfo.Name);
       this.prepareColumns();
     }
   }
@@ -48,11 +48,11 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       this.renderer.removeChild(document.body, this.wrapper.nativeElement);
   }
 
-  async LoadRecordChanges(recordId: number, appName: string, entityName: string) {
+  async LoadRecordChanges(primaryKeyValue: any, appName: string, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (recordId && entityName) {
+    if (primaryKeyValue && entityName) {
       const rv = new RunView();
-      const response = await rv.RunView({ EntityName: "Record Changes", ExtraFilter: `Entity='${entityName}' AND RecordID=${recordId}`});
+      const response = await rv.RunView({ EntityName: "Record Changes", ExtraFilter: `Entity='${entityName}' AND RecordID='${primaryKeyValue}'`});
       if(response.Success){
         this.viewData = response.Results;
         this.showloader = false;

@@ -5,7 +5,7 @@ import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
          EntityRelationshipInfo, Metadata, RunViewParams, LogError } from '@memberjunction/core';
 import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
 import { BaseRecordComponent } from './base-record-component';
-import { SharedService } from '../shared/shared.service';
+import { SharedService } from '../../shared/shared.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TabStripComponent } from '@progress/kendo-angular-layout';
 

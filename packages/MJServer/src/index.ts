@@ -34,12 +34,40 @@ export * from './directives';
 export * from './entitySubclasses/userViewEntity.server';
 export * from './types';
 
+export * from './generic/PushStatusResolver';
+export * from './generic/ResolverBase';
+export * from './generic/RunViewResolver';
+
+export * from './resolvers/AskSkipResolver';
+export * from './resolvers/ColorResolver';
+export * from './resolvers/DatasetResolver';
+export * from './resolvers/EntityRecordNameResolver';
+//export * from '../../MJAPI/src/resolvers/EntityResolver';
+export * from './resolvers/MergeRecordsResolver';
+export * from './resolvers/ReportResolver';
+
+
+//export * from '../../MJAPI/src/resolvers/UserFavoriteResolver';
+//export * from '../../MJAPI/src/resolvers/UserViewResolver';
+
+import { resolve } from 'node:path';
+
+const localPath = (p: string) => resolve(__dirname, p);
+
 export const serve = async (resolverPaths: Array<string>) => {
+  const localResolverPaths = [
+    'resolvers/**/*Resolver.{js,ts}',
+    'generic/*Resolver.{js,ts}',
+    'generated/generated.{js,ts}'
+  ].map(localPath);
+
+  const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
+
   const replaceBackslashes = sep === '\\';
-  const paths = resolverPaths.flatMap((path) => globSync(replaceBackslashes ? path.replace(/\\/g, '/') : path));
+  const paths = combinedResolverPaths.flatMap((path) => globSync(replaceBackslashes ? path.replace(/\\/g, '/') : path));
   if (paths.length === 0) {
-    console.warn(`No resolvers found in ${resolverPaths.join(', ')}`);
-    console.log({ resolverPaths, paths, cwd: process.cwd() });
+    console.warn(`No resolvers found in ${combinedResolverPaths.join(', ')}`);
+    console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
 
   const dataSource = new DataSource(orm(paths));

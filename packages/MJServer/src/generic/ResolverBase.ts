@@ -1,10 +1,11 @@
 import { EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { PubSubEngine, UserPayload } from '@memberjunction/server';
+import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { PubSubEngine } from 'type-graphql';
 import { DataSource } from 'typeorm';
-import { Entity_, UserView_ } from '../generated/generated';
+
+import { UserPayload } from '../types';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
-import { AuditLogEntity } from '@memberjunction/core-entities';
 
 export class ResolverBase {
   async findBy(dataSource: DataSource, entity: string, params: any) {
@@ -31,7 +32,7 @@ export class ResolverBase {
 
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserView_ | null = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }));
+      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { Name: viewInput.ViewName }));;
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -57,7 +58,7 @@ export class ResolverBase {
 
   async RunViewByIDGeneric(viewInput: RunViewByIDInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
-      const viewInfo: UserView_ | null = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
+      const viewInfo: UserViewEntity = this.safeFirstArrayElement(await this.findBy(dataSource, 'User Views', { ID: viewInput.ViewID }));
       return this.RunViewGenericInternal(
         viewInfo,
         dataSource,
@@ -87,13 +88,12 @@ export class ResolverBase {
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
       if (!entity) throw new Error(`Entity ${viewInput.EntityName} not found in metadata`);
 
-      const viewInfo: UserView_ = {
+      const viewInfo: UserViewEntity = {
         ID: -1,
         Entity: viewInput.EntityName,
         EntityID: entity.ID as number,
-        // EntityBaseView: entity?.ID === 22 ? '' : (entity?.BaseView as string), // fake error
         EntityBaseView: entity.BaseView as string,
-      } as UserView_; // only providing a few bits of data here, but it's enough to get the view to run
+      } as UserViewEntity; // only providing a few bits of data here, but it's enough to get the view to run
 
       return this.RunViewGenericInternal(
         viewInfo,
@@ -134,7 +134,7 @@ export class ResolverBase {
   }
 
   protected async RunViewGenericInternal(
-    viewInfo: UserView_ | null,
+    viewInfo: UserViewEntity,
     dataSource: DataSource,
     extraFilter: string,
     orderBy: string,

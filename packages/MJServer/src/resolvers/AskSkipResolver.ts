@@ -1,8 +1,10 @@
+import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { SkipAnalyzeData, SkipExplainQuery } from '@memberjunction/ai';
 import { Metadata } from '@memberjunction/core';
-import { AppContext, Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from '@memberjunction/server';
+import { AppContext } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import axios from 'axios';
+
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 
 @ObjectType()
