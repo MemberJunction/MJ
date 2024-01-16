@@ -363,7 +363,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
                     WHERE object_id = OBJECT_ID('${entity.SchemaName}.${entity.BaseTable}')
                 )
                 BEGIN
-                    DROP FULLTEXT INDEX ON ${entity.SchemaName}.${entity.BaseTable};
+                    DROP FULLTEXT INDEX ON [${entity.SchemaName}].[${entity.BaseTable}];
                 END
                 GO
                 
@@ -373,7 +373,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
                     WHERE object_id = OBJECT_ID('${entity.SchemaName}.${entity.BaseTable}')
                 )
                 BEGIN
-                    CREATE FULLTEXT INDEX ON ${entity.SchemaName}.${entity.BaseTable}
+                    CREATE FULLTEXT INDEX ON [${entity.SchemaName}].[${entity.BaseTable}]
                     (
                         ${fullTextFields}
                     )
@@ -386,7 +386,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
 
     const functionName: string = entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0 ? entity.FullTextSearchFunction : `fnSearch${entity.CodeName}`;
     if (entity.FullTextSearchFunctionGenerated) {
-        const fullTextFieldsSimple = entity.Fields.filter(f => f.FullTextSearchEnabled).map(f => f.Name).join(',');
+        const fullTextFieldsSimple = entity.Fields.filter(f => f.FullTextSearchEnabled).map(f => '[' + f.Name + ']').join(',');
         if (fullTextFieldsSimple.length === 0)
             throw new Error(`FullTextSearchFunctionGenerated is true for entity ${entity.Name}, but no fields are marked as FullTextSearchEnabled`);
         if (!entity.FullTextSearchFunction || entity.FullTextSearchFunction.length === 0) {
@@ -414,7 +414,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
                 AS
                 RETURN (
                     SELECT ID
-                    FROM ${entity.SchemaName}.${entity.BaseTable}
+                    FROM [${entity.SchemaName}].[${entity.BaseTable}]
                     WHERE CONTAINS((${fullTextFieldsSimple}), @searchTerm)
                 )
                 GO
@@ -631,15 +631,15 @@ function generateSPCreate(entity: EntityInfo): string {
     let additionalFieldList = '';
     let additionalValueList = '';
     if (entity.PrimaryKey.AutoIncrement) {
-        selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE ${entity.PrimaryKey.Name} = SCOPE_IDENTITY()`;
+        selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.PrimaryKey.Name}] = SCOPE_IDENTITY()`;
     } else if (entity.PrimaryKey.Type.toLowerCase().trim() === 'uniqueidentifier') {
         primaryKeyInsertValue = `DECLARE @newId UNIQUEIDENTIFIER = NEWID();\n    SET @${entity.PrimaryKey.Name} = @newId;\n`;
-        additionalFieldList = ',\n            ' + entity.PrimaryKey.Name;
+        additionalFieldList = ',\n            [' + entity.PrimaryKey.CodeName + ']';
         additionalValueList = ',\n            @newId';
 
-        selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE ${entity.PrimaryKey.Name} = @newId`;
+        selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.PrimaryKey.Name}] = @newId`;
     } else {
-        selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE ${entity.PrimaryKey.Name} = @${entity.PrimaryKey.Name}`;
+        selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.Name}`;
     }
 
     return `
@@ -695,7 +695,7 @@ BEGIN
         [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.Name}
 
     -- return the updated record so the caller can see the updated values and any calculated fields
-    SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.Name}
+    SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.CodeName}
 END
 GO${permissions}
     `
@@ -716,7 +716,7 @@ function createEntityFieldsParamString(entityFields: EntityFieldInfo[], includeP
             else
                 isFirst = false;
 
-            sOutput += `@${ef.Name} ${ef.SQLFullType}`;
+            sOutput += `@${ef.CodeName} ${ef.SQLFullType}`;
         }
     }
     return sOutput;
@@ -742,7 +742,7 @@ function createEntityFieldsInsertString(entity: EntityInfo, entityFields: Entity
                )
                 sOutput += `GETDATE()`;
             else {
-                let sVal = prefix + ef.Name;
+                let sVal = prefix + (prefix !== '' ? ef.CodeName : ef.Name); // if we have a prefix, then we need to use the CodeName, otherwise we use the actual field name
                 if (!prefix || prefix.length === 0)
                     sVal = '[' + sVal + ']'; // always put field names in brackets so that if reserved words are being used for field names in a table like "USER" and so on, they still work
 
@@ -770,14 +770,14 @@ function createEntityFieldsUpdateString(entityFields: EntityFieldInfo[]): string
             else
                 isFirst = false;
 
-            sOutput += `[${ef.Name}] = @${ef.Name}`;
+            sOutput += `[${ef.Name}] = @${ef.CodeName}`; // always put field names in brackets for field names that have spaces or use reserved words. Also, we use CodeName for the param name, which is the field name unless it has spaces
         }
         else if (ef.Name.trim().toLowerCase() === 'updatedat') {
             if (!isFirst) 
                 sOutput += ',\n        '
             else
                 isFirst = false;
-            sOutput += `${ef.Name} = GETDATE()`;
+            sOutput += `[${ef.Name}] = GETDATE()`;
         }
     }
     return sOutput;
@@ -796,15 +796,15 @@ DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
-    @${entity.PrimaryKey.Name} ${entity.PrimaryKey.SQLFullType}
+    @${entity.PrimaryKey.CodeName} ${entity.PrimaryKey.SQLFullType}
 AS  
 BEGIN
     SET NOCOUNT ON;${sCascadeDeletes}
     DELETE FROM 
         [${entity.SchemaName}].[${entity.BaseTable}]
     WHERE 
-        [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.Name}
-    SELECT @${entity.PrimaryKey.Name} AS ${entity.PrimaryKey.Name} -- Return the primary key value to indicate we successfully deleted the record
+        [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.CodeName}
+    SELECT @${entity.PrimaryKey.CodeName} AS [${entity.PrimaryKey.Name}] -- Return the primary key value to indicate we successfully deleted the record
 END
 GO${permissions}
 `
@@ -832,7 +832,7 @@ function generateCascadeDeletes(entity: EntityInfo): string {
     DELETE FROM 
         [${e.SchemaName}].[${e.BaseTable}] 
     WHERE 
-        [${ef.Name}] = @${entity.PrimaryKey.Name}`;
+        [${ef.Name}] = @${entity.PrimaryKey.CodeName}`;
                     }
                     else {
                         // we have a non-virtual field that is a foreign key to this entity
@@ -845,7 +845,7 @@ function generateCascadeDeletes(entity: EntityInfo): string {
     SET 
         [${ef.Name}] = NULL 
     WHERE 
-        [${ef.Name}] = @${entity.PrimaryKey.Name}`;
+        [${ef.Name}] = @${entity.PrimaryKey.CodeName}`;
                     }
                     if (sOutput !== '')
                         sOutput += '\n    ';

@@ -128,7 +128,7 @@ function generateServerField(fieldInfo: EntityFieldInfo): string {
 
     return `  
     @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ?  '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
-    ${fieldInfo.Name}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
+    ${fieldInfo.CodeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
     `         
 }
     
@@ -236,8 +236,9 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
     async ${entity.BaseTableCodeName}(@Arg('${entity.PrimaryKey.Name}', () => ${entity.PrimaryKey.GraphQLType}) ${entity.PrimaryKey.Name}: ${entity.PrimaryKey.TSType}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
-        const sSQL = \`SELECT * FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${idQuotes}\${${entity.PrimaryKey.Name}}${idQuotes} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = \`SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${entity.PrimaryKey.Name}]=${idQuotes}\${${entity.PrimaryKey.Name}}${idQuotes} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
+        const result = this.MapFieldNamesToCodeNames('${entity.Name}', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 `
         if (entity.AllowAllRowsAPI) {
@@ -246,8 +247,9 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
     @Query(() => [${serverGraphQLTypeName}])
     All${entity.CodeName}(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
-        const sSQL = 'SELECT * FROM [${entity.SchemaName}].${entity.BaseView}' + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}]' + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('${entity.Name}', await dataSource.query(sSQL));
+        return result;
     }
 `;
         }
@@ -300,7 +302,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.IsVirtual && f.AllowUpdateAPI && f.Type.trim().toLowerCase() !== 'uniqueidentifier') ) {
             sRet += `
     @Field(${sFullTypeGraphQLString})
-    ${f.Name}: ${TypeScriptTypeFromSQLType(f.Type)};
+    ${f.CodeName}: ${TypeScriptTypeFromSQLType(f.Type)};
 `
         }
     }
@@ -484,8 +486,9 @@ function generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshi
     @FieldResolver(() => [${r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + _graphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE ${r.RelatedEntityJoinField}=\${${instanceName}.${!r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField}} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=[\${${instanceName}.${!r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField}}] \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
+        return result;
     }
     `    
 }
@@ -498,8 +501,9 @@ function generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationsh
     @FieldResolver(() => [${r.RelatedEntityBaseTableCodeName  + _graphQLTypeSuffix}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + _graphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE ${re.PrimaryKey.Name} IN (SELECT ${r.JoinEntityInverseJoinField} FROM [${re.SchemaName}].${r.JoinView} WHERE ${r.JoinEntityJoinField}=\${${instanceName}.${!r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField}}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE [${re.PrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${re.SchemaName}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=[\${${instanceName}.${!r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField}}]) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
+        return result;
     }
     `;
 }

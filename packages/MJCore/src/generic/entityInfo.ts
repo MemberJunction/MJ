@@ -353,6 +353,9 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
+    /**
+     * Returns true if the field type requires quotes around the value when used in a SQL statement
+     */
     get NeedsQuotes(): boolean {
         switch (this.TSType) {
             case EntityFieldTSType.Number:
@@ -361,6 +364,14 @@ export class EntityFieldInfo extends BaseInfo {
             default:
                 return true;
         }
+    }
+
+    /**
+     * For fields in the database that have spaces in them, we need to replace the spaces with _ in order to create variables for stored procedures. This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
+     */
+    get CodeName(): string {
+        // the code below replaces spaces with _
+        return this.Name.replace(/\s/g, "_");
     }
 
     get GraphQLType(): EntityFieldGraphQLType {

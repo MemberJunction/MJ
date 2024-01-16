@@ -12,7 +12,8 @@ export abstract class BaseRecordComponent {
             throw new Error('this.record not set');
 
         const r = <BaseEntity>this.record;      
-        const f = r.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+        const f = r.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase() || 
+                                     f.CodeName.trim().toLowerCase() === fieldName.trim().toLowerCase());
         if (!f) 
             throw new Error(`Field ${fieldName} not found in entity ${r.EntityInfo.Name}`);
 

@@ -356,31 +356,37 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     
     protected getRunTimeViewFieldString(params: RunViewParams, viewEntity: UserViewEntityExtended): string {
         const fieldList = this.getRunTimeViewFieldArray(params, viewEntity);
-        // pass this back as a comma separated list
-        return fieldList.join(',');
+        // pass this back as a comma separated list, put square brackets around field names to make sure if they are reserved words or have spaces, that they'll still work.
+        if (fieldList.length === 0)
+            return '*';
+        else
+            return fieldList.map(f => {
+                const asString: string = f.CodeName === f.Name ? '' : ` AS [${f.CodeName}]`;
+                return `[${f.Name}]${asString}`;
+            }).join(',');
     }
 
-    protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): string[] {
-        const fieldList: string[] = []
-        let pKeyName: string = null;
+    protected getRunTimeViewFieldArray(params: RunViewParams, viewEntity: UserViewEntityExtended): EntityFieldInfo[] {
+        const fieldList: EntityFieldInfo[] = []
+
+        let entityInfo: EntityInfo = null;
         if (viewEntity) {
-            pKeyName = viewEntity.ViewEntityInfo.PrimaryKey.Name;
+            entityInfo = viewEntity.ViewEntityInfo;
         }
         else {
-            if (params.EntityName) {
-                const entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
-                if (entityInfo)
-                    pKeyName = entityInfo.PrimaryKey.Name;
-            }
+            entityInfo = this.Entities.find((e) => e.Name === params.EntityName);
         }
+        const pKeyField = entityInfo.PrimaryKey;
+
         if (params.Fields) {
             // fields provided, if primary key isn't included, add it first
-            if (params.Fields.find((f) => f.trim().toLowerCase() === pKeyName.toLowerCase()) === undefined)
-                fieldList.push(pKeyName)
+            if (params.Fields.find((f) => f.trim().toLowerCase() === pKeyField.Name.toLowerCase()) === undefined)
+                fieldList.push(pKeyField)
             
             // now add the rest of the param.Fields to fields
             params.Fields.forEach((f) => {
-                fieldList.push(f);
+                const field = entityInfo.Fields.find((field) => field.Name.trim().toLowerCase() === f.trim().toLowerCase());
+                fieldList.push(field);
             });
         }
         else {
@@ -391,15 +397,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // saved view, figure out it's field list
                 viewEntity.Columns.forEach((c) => {
                     if (!c.hidden) // only return the non-hidden fields
-                        fieldList.push(c.EntityField.Name);
+                        fieldList.push(c.EntityField);
                 });
-                if (fieldList.find((f) => f.trim().toLowerCase() === pKeyName.toLowerCase()) === undefined)
-                    fieldList.push(pKeyName) // this should never happen, all views should always have primary key in them, but just in case we do this here to ensure it
+                if (fieldList.find((f) => f.Name.trim().toLowerCase() === pKeyField.Name.toLowerCase()) === undefined)
+                    fieldList.push(pKeyField) // this should never happen, all views should always have primary key in them, but just in case we do this here to ensure it
             }
-            else // dynamic view
-                fieldList.push('*'); // no fields provided, include everything 
         }
-        return fieldList;
+        return fieldList; // sometimes nothing is in the list and the caller will just use *
     }
 
     protected async executeSQLForUserViewRunLogging(viewId: number, entityBaseView: string, whereSQL: string, orderBySQL: string, user: UserInfo): Promise<{ executeViewSQL: string, runID: number }> {
@@ -866,7 +870,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     END
 
                     SELECT * FROM @ResultTable`
-        } 
+        }  
         else {
             // not doing track changes for this entity, keep it simple
             sSQL = sSimpleSQL;
@@ -1012,6 +1016,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     private generateSPParams(entity: BaseEntity, isUpdate: boolean): string {
         let sRet: string = '', bFirst: boolean = true;
+        const pkeyQuotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
         for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
             const f = entity.EntityInfo.Fields[i];
             if (f.AllowUpdateAPI) {
@@ -1028,7 +1033,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             }
         }
         if (isUpdate && bFirst === false) {
-            sRet += `, @${entity.PrimaryKey.Name} = ` + entity.PrimaryKey.Value  // add pkey to update SP at end, but only if other fields included
+            sRet += `, @${entity.PrimaryKey.CodeName} = ` + pkeyQuotes + entity.PrimaryKey.Value + pkeyQuotes  // add pkey to update SP at end, but only if other fields included
             bFirst = false;
         }
 
@@ -1040,11 +1045,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         let quotes: string = '';
         let val: any = value;
 
-        switch  ( TypeScriptTypeFromSQLType(f.Type).toLowerCase() ) {
-            case 'string':
+        switch  ( f.TSType ) {
+            case EntityFieldTSType.String:
                 quotes = "'";
                 break;
-            case 'date':
+            case EntityFieldTSType.Date:
                 quotes = "'";
                 if (val !== null && val !== undefined) {
                     if (typeof val === 'number' ) {
@@ -1065,7 +1070,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         if (!isFirst) 
             sRet += ',\n                ';
     
-        sRet += `@${f.Name}=${this.packageSPParam(val, quotes)}`
+        sRet += `@${f.CodeName}=${this.packageSPParam(val, quotes)}`
     
         return sRet;
     }
@@ -1205,7 +1210,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async Load(entity: BaseEntity, RecordID: number, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
 
-        const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${RecordID}${quotes}`
+        const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE [${entity.PrimaryKey.Name}]=${quotes}${RecordID}${quotes}`
         const d = await this.ExecuteSQL(sql);
         if (d && d.length > 0) {
             // got the record, now process the relationships if there are any
@@ -1222,17 +1227,17 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                             relSql = `  SELECT 
                                             * 
                                         FROM 
-                                            [${relEntitySchemaName}].${relInfo.RelatedEntityBaseView} 
+                                            [${relEntitySchemaName}].[${relInfo.RelatedEntityBaseView}] 
                                         WHERE 
-                                            ${relInfo.RelatedEntityJoinField} = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
+                                            [${relInfo.RelatedEntityJoinField}] = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
                         else 
                             // many to many - need to use join view
                             relSql = `  SELECT 
                                             _theview.* 
                                         FROM 
-                                            [${relEntitySchemaName}].${relInfo.RelatedEntityBaseView} _theview 
+                                            [${relEntitySchemaName}].[${relInfo.RelatedEntityBaseView}] _theview 
                                         INNER JOIN 
-                                            [${relEntitySchemaName}].${relInfo.JoinView} _jv ON _theview.${relInfo.RelatedEntityJoinField} = _jv.${relInfo.JoinEntityInverseJoinField} 
+                                            [${relEntitySchemaName}].[${relInfo.JoinView}] _jv ON _theview.[${relInfo.RelatedEntityJoinField}] = _jv.[${relInfo.JoinEntityInverseJoinField}] 
                                         WHERE 
                                             _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
                         
@@ -1253,7 +1258,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         let sSQL: string = '';
         const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
         const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.ClassName}`;
-        const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] @${entity.PrimaryKey.Name}=${quotes}${entity.PrimaryKey.Value}${quotes}`;
+        const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] @${entity.PrimaryKey.CodeName}=${quotes}${entity.PrimaryKey.Value}${quotes}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
 
         if (entity.EntityInfo.TrackRecordChanges) {

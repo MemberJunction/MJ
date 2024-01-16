@@ -32,6 +32,13 @@ export class EntityField {
         return this._entityFieldInfo.NeedsQuotes;
     }
 
+    /**
+     * Removes spaces from the field name and returns the result.
+     */
+    get CodeName(): string {
+        return this._entityFieldInfo.CodeName;
+    }
+
     get IsUnique(): boolean {
         return this._entityFieldInfo.IsUnique;
     }
@@ -275,15 +282,25 @@ export abstract class BaseEntity {
         return this._recordLoaded;
     }
 
+    /**
+     * Sets the value of a given field. If the field doesn't exist, nothing happens.
+     * @param FieldName 
+     * @param Value 
+     */
     public Set(FieldName: string, Value: any) {
-        let field = this.Fields.find(f => f.Name == FieldName);
+        let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
         if (field != null) {
             field.Value = Value;
         }
     }
 
+    /**
+     * Returns the value of the field with the given name. If the field is a date, and the value is a string, it will be converted to a date object.
+     * @param FieldName 
+     * @returns 
+     */
     public Get(FieldName: string): any {
-        let field = this.Fields.find(f => f.Name == FieldName);
+        let field = this.Fields.find(f => f.Name.trim().toLowerCase() === FieldName.trim().toLowerCase());
         if (field != null) {
             // if the field is a date and the value is a string, convert it to a date
             if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
@@ -294,9 +311,35 @@ export abstract class BaseEntity {
         return null;
     }
 
-    public SetMany(object) {
+    /**
+     * Sets any number of values on the entity object from the object passed in. The properties of the object being passed in must either match the field name (in most cases) or the CodeName (which is only different from field name if field name has spaces in it)
+     * @param object  
+     * @param ignoreNonExistentFields 
+     */
+    public SetMany(object: any, ignoreNonExistentFields: boolean = false) {
+        if (!object)
+            throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
+
         for (let key in object) {
-            this.Set(key, object[key]);
+            if (this.Fields.some(f => f.Name.trim().toLowerCase() == key.trim().toLowerCase())) {
+                // check to see if key matches a field name, if so, set it
+                this.Set(key, object[key]);
+            }
+            else {
+                // if we don't find a match for the field name, check to see if we have a match for the code name
+                // because some objects passed in will use the code name
+                const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
+                if (field) {
+                    this.Set(field.Name, object[key]);
+                }
+                else {
+                    // if we get here, we have a field that doesn't match either the field name or the code name, so throw an error
+                    if (!ignoreNonExistentFields) 
+                        throw new Error(`Field ${key} does not exist on ${this.EntityInfo.Name}`);
+                    else
+                        console.warn(`Field ${key} does not exist on ${this.EntityInfo.Name}, ignoring because ignoreNonExistentFields was set to true`);
+                }
+            }
         }
     }
 
@@ -311,6 +354,12 @@ export abstract class BaseEntity {
         return obj;
     }
 
+    /**
+     * This utility method calls GetDataObject() internally and formats the result as a JSON string. If you want to get the data as an object instead of a string, call GetDataObject() directly.
+     * @param params 
+     * @param minifyJSON 
+     * @returns 
+     */
     public async GetDataObjectJSON(params: DataObjectParams, minifyJSON: boolean = true): Promise<string> {
         const obj = await this.GetDataObject(params);
         if (minifyJSON)
@@ -318,6 +367,13 @@ export abstract class BaseEntity {
         else
             return JSON.stringify(obj, null, 2);
     }
+
+    /**
+     * This utility method generates a completely new object that has properties that map to the fields and values in the entity at the time it is called. It is a copy, NOT a link, so any changes
+     * made to the object after calling this method will NOT be reflected in the object that is returned. This is useful for things like sending data to a client, or for use in a view model.
+     * @param params 
+     * @returns 
+     */
     public async GetDataObject(params: DataObjectParams): Promise<any> {
         // first, get the object from GetAll
         const obj = this.GetAll(params.oldValues);
@@ -378,11 +434,20 @@ export abstract class BaseEntity {
         return this._contextCurrentUser;
     }
 
+    /**
+     * This method will create a new state for the object that is equivalent to a new record including default values.
+     * @returns 
+     */
     public NewRecord() : boolean {
         this.init();
         return true;
     }
 
+    /**
+     * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record. If the record is new, it will be created, if it already exists, it will be updated.
+     * @param options 
+     * @returns 
+     */
     public async Save(options?: EntitySaveOptions) : Promise<boolean> {
         const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
         const type: EntityPermissionType = this.ID && this.ID > 0 ? EntityPermissionType.Update : EntityPermissionType.Create;
@@ -398,7 +463,7 @@ export abstract class BaseEntity {
                     const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
                     if (data) {
                         this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-                        this.loadFieldsFromData(data);
+                        this.SetMany(data);
                         return true;
                     }
                     else
@@ -418,6 +483,12 @@ export abstract class BaseEntity {
         return this.ContextCurrentUser || Metadata.Provider.CurrentUser; // use the context user ahead of the Provider.Current User - this is for SERVER side ops where the user changes per request
     }
 
+    /**
+     * Utility method that returns true if the given permission being checked is enabled for the current user, and false if not. 
+     * @param type 
+     * @param throwError 
+     * @returns 
+     */
     public CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         const u: UserInfo = this.ActiveUser;
         if (!u)
@@ -453,6 +524,10 @@ export abstract class BaseEntity {
                          If you believe this is an error, please contact your system administrator.${additionalInfoMessage ? '\nAdditional Information: ' + additionalInfoMessage : ''}}`);
     }
 
+    /**
+     * This method will revert the internal state of the object back to what it was when it was last saved, or if never saved, from when it was intially loaded from the database. This is useful if you want to offer a user an "undo" type of feature in a UI.
+     * @returns 
+     */
     public Revert(): boolean {
         if (this.Dirty) {
             for (let field of this.Fields) {
@@ -462,6 +537,13 @@ export abstract class BaseEntity {
         return true; 
     }
     
+    /**
+     * This method loads a single record from the database. Make sure you first get the correct BaseEntity sub-class for your entity by calling Metadata.GetEntityObject() first. From there, you can
+     * call this method to load your records.
+     * @param PrimaryKeyValue The primary key value for the record to load
+     * @param EntityRelationshipsToLoad Optional, you can specify the names of the relationships to load up. This is an expensive operation as it loads up an array of the related entity objects for the main record, so use it sparingly.
+     * @returns 
+     */
     public async Load(PrimaryKeyValue: any, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
@@ -474,7 +556,7 @@ export abstract class BaseEntity {
                 this.init(); // wipe out current data if we're loading on top of existing record
 
             const data = await BaseEntity.Provider.Load(this, PrimaryKeyValue, EntityRelationshipsToLoad, this.ActiveUser);
-            this.loadFieldsFromData(data);
+            this.SetMany(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -493,22 +575,23 @@ export abstract class BaseEntity {
         }
     }
 
+    /**
+     * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. The Dirty flags and other internal state will assume what is loading from
+     * the object is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method.
+     * @param data 
+     * @returns 
+     */
     public LoadFromData(data: any) : boolean {
         console.warn('LoadFromData should ONLY be used when you are sure that the data you are loading is current in the database, if you are not sure if your data is current, use Load() instead');
-        this.loadFieldsFromData(data); // just use the internal method, but the point of this wrapper is to emit the above warning to the console for devs to see.
+        this.SetMany(data, true);
         return true; 
     }
 
-    private loadFieldsFromData(data: any) {
-        if (data) {
-            const keys = Object.keys(data);
-            for (let key of keys) {
-                this.Set(key, data[key]);
-            }
-            return true;
-        }
-    }
-
+    /**
+     * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
+     * override or wrap this base class method to add other logic for validation.
+     * @returns 
+     */
     public Validate(): ValidationResult  {
         const result = new ValidationResult();
         result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
@@ -524,6 +607,10 @@ export abstract class BaseEntity {
         return result;
     }
 
+    /**
+     * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting. 
+     * @returns 
+     */
     public async Delete() : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
@@ -543,18 +630,17 @@ export abstract class BaseEntity {
     }
 
 
-    /*
-        Called before an Action is executed by the AI Engine
-        This is intended to be overriden by subclass as needed, these methods called at the right time by the execution context
-
-    **/
+    /**
+     * Called before an Action is executed by the AI Engine
+     * This is intended to be overriden by subclass as needed, these methods called at the right time by the execution context
+     */
     public async BeforeEntityAIAction(params: BaseEntityAIActionParams): Promise<boolean> {
         return true; // default implementation does nothing
 
     }
-    /*
-        Called after an Action is executed by the AI Engine
-    **/
+    /**
+     * Called after an Action is executed by the AI Engine
+     */
     public async AfterEntityAIAction(params: BaseEntityAIActionParams): Promise<boolean> {
         return true;// default implementation does nothing
     }
@@ -576,19 +662,28 @@ export abstract class BaseEntity {
             throw new Error('No global object store, so we cant set the static provider');
     }
 
+    /**
+     * Returns a list of changes made to this record, over time. Keep in mind this is only going to return valid data if you have the TrackRecordChanges bit set to 1 on the entity you're working with.
+     */
     public get RecordChanges(): Promise<RecordChange[]> {
-        if (this.ID && this.ID > 0) 
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.ID)
+        if (this.PrimaryKey.Value) 
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey.Value)
         else
             throw new Error('Cannot get record changes for a record that has not been saved yet');
     }
 
-    public static async GetRecordChanges(entityName: string, recordId: number): Promise<RecordChange[]> {
+    /**
+     * Static Utility method to get RecordChanges for a given entityName/PrimaryKeyValue combination
+     * @param entityName 
+     * @param PrimaryKeyValue 
+     * @returns 
+     */
+    public static async GetRecordChanges(entityName: string, PrimaryKeyValue: any): Promise<RecordChange[]> {
         if (BaseEntity.Provider === null) {    
             throw new Error('No provider set');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, recordId);
+            const results = await BaseEntity.Provider.GetRecordChanges(entityName, PrimaryKeyValue);
             if (results) {
                 const changes: RecordChange[] = [];
                 for (let result of results) 

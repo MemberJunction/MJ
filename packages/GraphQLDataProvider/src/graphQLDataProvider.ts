@@ -216,8 +216,25 @@ npm
                 }`
 
                 const viewData = await GraphQLDataProvider.ExecuteGQL(query, {input: innerParams} );
-                if (viewData && viewData[qName])
+                if (viewData && viewData[qName]) {
+                    // now, if we have any results in viewData that are for the CodeName, we need to convert them to the Name
+                    // so that the caller gets back what they expect
+                    const results = viewData[qName].Results;
+                    if (results && results.length > 0) {
+                        const fields = e.Fields.filter(f => f.CodeName !== f.Name);
+                        if (fields.length > 0) {
+                            results.forEach(r => {
+                                fields.forEach(f => {
+                                    if (r[f.CodeName] !== undefined) {
+                                        r[f.Name] = r[f.CodeName];
+                                        // delete r[f.CodeName];  // Leave the CodeName in the results, it is useful to have both
+                                    }
+                                })
+                            })
+                        }
+                    }
                     return viewData[qName];
+                }
             }
             else 
                 throw ("No parameters passed to RunView");
@@ -254,7 +271,7 @@ npm
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: UserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
-        const pkeyName = e.PrimaryKey.Name;
+        const pkeyName = e.PrimaryKey.CodeName;
         if (params.Fields) {
             if (params.Fields.find(f => f.trim().toLowerCase() === pkeyName.toLowerCase()) === undefined)
                 fieldList.push(pkeyName); // always include the primary key in view run time field list
@@ -270,7 +287,7 @@ npm
                 // include all fields since no fields were passed in                
                 e.Fields.forEach(f => {
                     if (!f.IsBinaryFieldType)
-                        fieldList.push(f.Name)
+                        fieldList.push(f.CodeName)
                 }); 
             }
             else {
@@ -284,7 +301,7 @@ npm
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
                     if (c.hidden === false && c.EntityField?.Name.trim().toLowerCase() !== pkeyName.toLowerCase()) // don't include hidden fields and don't include the pkey field again
-                        fieldList.push(c.EntityField.Name)
+                        fieldList.push(c.EntityField.CodeName)
                 });
             }
         }
@@ -408,7 +425,7 @@ npm
             const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && pKeyValue) ));
 
             const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => f.Name).join("\n                    ")}
+                ${entity.Fields.map(f => f.CodeName).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${entity.EntityInfo.ClassName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -435,7 +452,7 @@ npm
                             val = '';
                     }
                 }
-                vars.input[f.Name] = val;
+                vars.input[f.CodeName] = val;
             }
             
             if (entity.TransactionGroup) {
@@ -483,7 +500,7 @@ npm
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
             const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} ($${pkeyName}: ${pkeyGraphQLType}!) {
                 ${entity.EntityInfo.ClassName}(${pkeyName}: $${pkeyName}) {
-                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => f.Name).join("\n                    ")}
+                    ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => f.CodeName).join("\n                    ")}
                     ${rel}
                 }
             }
@@ -680,7 +697,7 @@ npm
                 Success
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, PrimaryKeyValue: primaryKeyValue, IsFavorite: isFavorite} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, PrimaryKeyValue: primaryKeyValue.toString(), IsFavorite: isFavorite} });
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;        
     }

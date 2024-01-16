@@ -701,11 +701,13 @@ function stripTrailingChars(s:string, charsToStrip: string, skipIfExactMatch: bo
    else 
       return s;
 }
+
 function convertCamelCaseToHaveSpaces(s: string): string {
    let result = '';
    for (let i = 0; i < s.length; ++i) {
       if ( s[i] === s[i].toUpperCase() && // current character is upper case
            i > 0 && // not first character
+           s[i - 1] !== ' ' && // previous character is not a space - needed for strings like "Database Version" that already have spaces
            (s[i - 1] !== s[i - 1].toUpperCase()) // previous character is not upper case handles not putting space between I and D in ID as an example of consecutive upper case
          ) {
          result += ' ';
