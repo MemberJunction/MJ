@@ -795,7 +795,8 @@ SELECT
 	ef.Name EntityFieldName,
 	c.column_id Sequence,
 	c.name FieldName,
-	t.name Type,
+	COALESCE(bt.name, t.name) Type, -- get the type from the base type (bt) if it exists, this is in the case of a user-defined type being used, t.name would be the UDT name.
+	IIF(t.is_user_defined = 1, t.name, NULL) UserDefinedType, -- we have a user defined type, so pass that to the view caller too
 	c.max_length Length,
 	c.precision Precision,
 	c.scale Scale,
@@ -817,6 +818,10 @@ INNER JOIN
 	sys.types t 
 ON
 	c.user_type_id = t.user_type_id
+LEFT OUTER JOIN
+    sys.types bt
+ON
+    t.system_type_id = bt.user_type_id AND t.is_user_defined = 1 -- Join to fetch base type for UDTs
 INNER JOIN
 	sys.all_objects basetable 
 ON
