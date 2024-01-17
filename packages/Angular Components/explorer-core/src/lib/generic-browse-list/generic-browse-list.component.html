@@ -3,6 +3,9 @@
         <div class="title-wrap">
             <h1>{{title}}</h1>
         </div>
+        <div class="add-item">
+            <button kendoButton (click)="addButtonClicked()" icon="addIcon" [primary]="true">{{addText}}</button>
+        </div>
     </div>
     <div class="main-area"> 
         <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>

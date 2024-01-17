@@ -12,6 +12,9 @@ export class GenericBrowseListComponent {
   @Input() public title: string = '';
   @Input() public items: any[] = [];
   @Input() public iconName: string = 'view-icon';
+  @Input() public showAddButton: boolean = false;
+  @Input() public addText: string = 'Add';
+  @Output() public addButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
 
   constructor(private router: Router) {}
@@ -20,5 +23,8 @@ export class GenericBrowseListComponent {
     if (item) {
       this.itemClickEvent.emit(item);
     }
+  }
+  public addButtonClicked() {
+    this.addButtonClickEvent.emit();
   }
 }
