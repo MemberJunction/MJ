@@ -10,7 +10,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          ApplicationInfo, ApplicationEntityInfo, RunViewParams, ProviderBase, ProviderType, RoleInfo, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, RowLevelSecurityFilterInfo, AuditLogTypeInfo, AuthorizationInfo, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue  } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -457,10 +457,11 @@ npm
             
             if (entity.TransactionGroup) {
                 return new Promise((resolve, reject) => {
+                    const mutationInputTypes = [{varName: 'input', inputType: mutationName + 'Input!'}]
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
                     entity.TransactionGroup.AddTransaction(new TransactionItem(inner, vars, {mutationName, 
-                                                                                             mutationInputType: mutationName + 'Input!'}, 
+                                                                                             mutationInputTypes: mutationInputTypes}, 
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query. We need to update our entity with the values that were returned
@@ -493,26 +494,47 @@ npm
             return null;
         }
     }
-    public async Load(entity: BaseEntity, PrimaryKeyValue: any, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+    public async Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
-            const pkeyName: string = entity.PrimaryKey.Name;
-            const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
+            const vars = {};
+            let pkeyInnerParamString: string = '';
+            let pkeyOuterParamString: string = '';
+
+            for (let i = 0; i < PrimaryKeyValues.length; i++) {
+                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === PrimaryKeyValues[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const val = PrimaryKeyValues[i].Value;
+                const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
+
+                // build up the param string for the outer query definition
+                if (pkeyOuterParamString.length > 0)
+                    pkeyOuterParamString += ', ';
+                pkeyOuterParamString += `$${field.CodeName}: ${pkeyGraphQLType}!`;
+
+                // build up the param string for the inner query call
+                if (pkeyInnerParamString.length > 0)
+                    pkeyInnerParamString += ', ';
+                pkeyInnerParamString += `${field.CodeName}: $${field.CodeName}`;
+
+                // build up the variables we are passing along to the query
+                if (field.TSType === EntityFieldTSType.Number) {
+                    if (isNaN(PrimaryKeyValues[i].Value))
+                        throw new Error(`Primary Key value ${val} (${field.Name}) is not a valid number`);
+                    vars[field.CodeName] =  parseInt(val); // converting to number here for graphql type to work properly
+                }
+                else
+                    vars[field.CodeName] = val;    
+            }
+
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
-            const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} ($${pkeyName}: ${pkeyGraphQLType}!) {
-                ${entity.EntityInfo.ClassName}(${pkeyName}: $${pkeyName}) {
+
+            const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
+                ${entity.EntityInfo.ClassName}(${pkeyInnerParamString}) {
                     ${entity.Fields.filter(f => !f.EntityFieldInfo.IsBinaryFieldType).map(f => f.CodeName).join("\n                    ")}
                     ${rel}
                 }
             }
             `
-            const vars = {};
-            if (entity.PrimaryKey.EntityFieldInfo.TSType === EntityFieldTSType.Number) {
-                if (isNaN(PrimaryKeyValue))
-                    throw new Error(`Primary Key value ${PrimaryKeyValue} is not a valid number`);
-                vars[pkeyName] =  parseInt(PrimaryKeyValue); // converting to number here for graphql type to work properly
-            }
-            else
-                vars[pkeyName] = PrimaryKeyValue;
+
             const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
             if (d && d[entity.EntityInfo.ClassName]) {
                 return  d[entity.EntityInfo.ClassName];
@@ -534,7 +556,7 @@ npm
                 const re = this.Entities.find(e => e.ID === r.RelatedEntityID);
                 rel += `
                 ${re.CodeName} {
-                    ${re.Fields.map(f => f.Name).join("\n                    ")}
+                    ${re.Fields.map(f => f.CodeName).join("\n                    ")}
                 }
                 `;
             }
@@ -545,23 +567,42 @@ npm
     public async Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean> {
         try {
             const vars = {};
-            const pkeyName: string = entity.PrimaryKey.Name;
-            const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
-            vars[pkeyName] = entity.PrimaryKey.Value;
+            const mutationInputTypes = [];
+            let pkeyInnerParamString: string = '';
+            let pkeyOuterParamString: string = '';
+            let returnValues: string = '';
+            for (let pk of entity.PrimaryKeys) {
+                vars[pk.CodeName] = pk.Value;
+                mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
+                if (pkeyInnerParamString.length > 0)
+                    pkeyInnerParamString += ', ';
+                pkeyInnerParamString += `${pk.CodeName}: $${pk.CodeName}`;
+
+                if (pkeyOuterParamString.length > 0)
+                    pkeyOuterParamString += ', ';
+                pkeyOuterParamString += `$${pk.CodeName}: ${pk.EntityFieldInfo.GraphQLType}!`;
+
+                if (returnValues.length > 0)
+                    returnValues += '\n                    ';
+                returnValues += `${pk.CodeName}`;
+            }
 
             const queryName: string = 'Delete' + entity.EntityInfo.ClassName;
-            const query = gql`mutation ${queryName} ($${pkeyName}: ${pkeyGraphQLType}!) {
-                ${queryName}(${pkeyName}: $${pkeyName})
+            const query = gql`mutation ${queryName} (${pkeyOuterParamString}) {
+                ${queryName}(${pkeyInnerParamString}) {
+                    ${returnValues}
+                }
             }
             `
 
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
                 return new Promise((resolve, reject) => {
+
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
                     entity.TransactionGroup.AddTransaction(new TransactionItem(query, vars, {mutationName: queryName, 
-                                                                                             mutationInputType: pkeyGraphQLType + '!'}, 
+                                                                                             mutationInputTypes: mutationInputTypes}, 
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query.  
@@ -580,8 +621,13 @@ npm
             else {
                 // no transaction just go for it
                 const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
-                if (d && d[queryName]) 
-                    return entity.PrimaryKey.Value === d[queryName]; // returns the value of the primary key of the deleted record if SP is successful
+                if (d && d[queryName]) {
+                    for (let key of entity.PrimaryKeys) {
+                        if (key.Value !== d[queryName][key.Name]) 
+                            return false;
+                    }
+                    return true; // all of the return values match the primary key values, so we are good and delete worked
+                }
                 else
                     return false;    
             }

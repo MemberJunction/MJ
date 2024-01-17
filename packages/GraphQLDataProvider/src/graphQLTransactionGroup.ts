@@ -23,7 +23,9 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
 
                     const keyRegEx = new RegExp('\\$' + key, 'g'); // Create the RegExp dynamically with the global flag.
                     itemMutation = itemMutation.replace(keyRegEx, '$' + newKey);
-                    mutationParams += `$${newKey}: ${item.ExtraData.mutationInputType} \n`;
+                    const mutationInputType = item.ExtraData.mutationInputTypes.find((t: any) => t.varName === key)?.inputType;
+                    //{varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}
+                    mutationParams += `$${newKey}: ${mutationInputType} \n`;
                 }
             }
             // add in the specific mutation and give it an alias so we can easily figure out the results

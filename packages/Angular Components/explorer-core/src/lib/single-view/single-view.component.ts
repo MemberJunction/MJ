@@ -76,7 +76,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async handleRowClick(args: GridRowClickedEvent) {
       // tell the router to navigate instead of raising an event directly. router will in turn handle raising the event as required
-      this.router.navigate(['resource', 'record', args.primaryKeyValue], { queryParams: { Entity: args.entityName } })
+      this.router.navigate(['resource', 'record', SharedService.GeneratePrimaryKeyValueString(args.primaryKeyValues)], { queryParams: { Entity: args.entityName } })
   }
 
   public async LoadView(viewInfo: UserViewEntity) {

@@ -9,7 +9,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue} from "@memberjunction/core";
 
 import { RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/ai";
@@ -1016,7 +1016,6 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     private generateSPParams(entity: BaseEntity, isUpdate: boolean): string {
         let sRet: string = '', bFirst: boolean = true;
-        const pkeyQuotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
         for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
             const f = entity.EntityInfo.Fields[i];
             if (f.AllowUpdateAPI) {
@@ -1033,7 +1032,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             }
         }
         if (isUpdate && bFirst === false) {
-            sRet += `, @${entity.PrimaryKey.CodeName} = ` + pkeyQuotes + entity.PrimaryKey.Value + pkeyQuotes  // add pkey to update SP at end, but only if other fields included
+            // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call
+            for (let pkey of entity.PrimaryKeys) {
+                const pkeyQuotes = pkey.NeedsQuotes ? "'" : '';
+                sRet += `, @${pkey.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes  // add pkey to update SP at end, but only if other fields included
+            }
             bFirst = false;
         }
 
@@ -1207,10 +1210,16 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
     
 
-    public async Load(entity: BaseEntity, RecordID: number, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
-        const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
-
-        const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE [${entity.PrimaryKey.Name}]=${quotes}${RecordID}${quotes}`
+    public async Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+        const where = PrimaryKeyValues.map((val) => {
+            const pk = entity.EntityInfo.PrimaryKeys.find((pk) => pk.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+            if (!pk)
+                throw new Error(`Primary key ${val.FieldName} not found in entity ${entity.EntityInfo.Name}`);
+            const quotes = pk.NeedsQuotes ? "'" : '';
+            return `[${pk.CodeName}]=${quotes}${val.Value}${quotes}`
+        }).join(' AND ');
+ 
+        const sql = `SELECT * FROM [${entity.EntityInfo.SchemaName}].${entity.EntityInfo.BaseView} WHERE ${where}`
         const d = await this.ExecuteSQL(sql);
         if (d && d.length > 0) {
             // got the record, now process the relationships if there are any
@@ -1222,6 +1231,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (relInfo) {
                         let relSql: string = '';
                         const relEntitySchemaName = this.Entities.find(e => e.Name.trim().toLowerCase() === relInfo.RelatedEntity.trim().toLowerCase())?.SchemaName;
+                        const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
                         if (relInfo.Type.trim().toLowerCase() === 'one to many') 
                             // one to many - simple query
                             relSql = `  SELECT 
@@ -1229,7 +1239,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                         FROM 
                                             [${relEntitySchemaName}].[${relInfo.RelatedEntityBaseView}] 
                                         WHERE 
-                                            [${relInfo.RelatedEntityJoinField}] = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
+                                            [${relInfo.RelatedEntityJoinField}] = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}` // don't yet support composite foreign keys
                         else 
                             // many to many - need to use join view
                             relSql = `  SELECT 
@@ -1239,7 +1249,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                         INNER JOIN 
                                             [${relEntitySchemaName}].[${relInfo.JoinView}] _jv ON _theview.[${relInfo.RelatedEntityJoinField}] = _jv.[${relInfo.JoinEntityInverseJoinField}] 
                                         WHERE 
-                                            _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}`
+                                            _jv.${relInfo.JoinEntityJoinField} = ${quotes}${ret[entity.PrimaryKey.Name]}${quotes}` // don't yet support composite foreign keys
                         
                         const relData = await this.ExecuteSQL(relSql);
                         if (relData && relData.length > 0) {
@@ -1256,38 +1266,56 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     protected GetDeleteSQL(entity: BaseEntity, user: UserInfo) : string {
         let sSQL: string = '';
-        const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
         const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.ClassName}`;
-        const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] @${entity.PrimaryKey.CodeName}=${quotes}${entity.PrimaryKey.Value}${quotes}`;
+        const sParams = entity.PrimaryKeys.map((pk) => {
+            const quotes = pk.NeedsQuotes ? "'" : '';
+            return `@${pk.CodeName}=${quotes}${pk.Value}${quotes}`
+        }).join(', ');
+        const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
         const recordChangesEntityInfo = this.Entities.find(e => e.Name === 'Record Changes');
 
         if (entity.EntityInfo.TrackRecordChanges) {
             const oldData = entity.GetAll(true); // get all the OLD values
-            
+            const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
+                return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`
+            }).join(', ');
+            const sVariableDeclare: string = entity.PrimaryKeys.map((pk) => {
+                return `@${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`
+            }).join(', ');
+            const sSelectDeclare: string = entity.PrimaryKeys.map((pk) => {
+                return `@${pk.CodeName}=${pk.CodeName}` 
+            }).join(', ');
+            const sIF: string = entity.PrimaryKeys.map((pk) => {
+                return `@${pk.CodeName} IS NOT NULL` 
+            }).join(' AND ');
+            const sCombinedPrimaryKey: string = entity.PrimaryKeys.map((pk) => pk.Value).join(',');
+            const sReturnList: string = entity.PrimaryKeys.map((pk) => {
+                return `@${pk.CodeName} AS [${pk.Name}]` 
+            }).join(', ');
             sSQL = `
                     IF OBJECT_ID('tempdb..#ResultTable') IS NOT NULL
                         DROP TABLE #ResultTable
 
                     DECLARE @ResultTable TABLE (
-                        ID NVARCHAR(255)
+                        ${sTableDeclare}
                     )
 
                     INSERT INTO @ResultTable
                     ${sSimpleSQL}
 
-                    DECLARE @ID INT
-                    SELECT @ID = ${entity.PrimaryKey.Name} FROM @ResultTable
-                    IF @ID IS NOT NULL 
+                    DECLARE ${sVariableDeclare}
+                    SELECT ${sSelectDeclare} FROM @ResultTable
+                    IF ${sIF} 
                     BEGIN
                         DECLARE @ResultChangesTable TABLE (
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}                            
                         )                              
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, entity.PrimaryKey.Value, entity.EntityInfo, user, true)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, user, true)}
                     END
 
-                    SELECT @ID AS ${entity.PrimaryKey.Name}`;
+                    SELECT ${sReturnList}`;
         }
         else {
             // no record change tracking
@@ -1332,8 +1360,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 return this._dataSource.transaction(async () => {
                     const d = await this.ExecuteSQL(sSQL);
     
-                    if (d && d[0] && d[0][entity.PrimaryKey.Name]) 
-                        return entity.PrimaryKey.Value === d[0][entity.PrimaryKey.Name]; // returns the pkey of the deleted record if SP is successful
+                    if (d && d[0]) {
+                        // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
+                        for (let key of entity.PrimaryKeys) {
+                            if (key.Value !== d[0][key.Name]) 
+                                return false;
+                        }
+                        return true
+                    }
                     else
                         return false;
                 });

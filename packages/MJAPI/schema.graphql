@@ -387,6 +387,7 @@ input CreateEntityInput {
   FullTextSearchEnabled: Boolean!
   FullTextSearchFunction: String
   FullTextSearchFunctionGenerated: Boolean!
+  ID: Int!
   IncludeInAPI: Boolean!
   Name: String!
   NameSuffix: String
@@ -1111,25 +1112,25 @@ type Mutation {
   CreateUserViewRunDetail(input: CreateUserViewRunDetailInput!): UserViewRunDetail_!
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
-  DeleteApplicationEntity(ID: Int!): Int!
-  DeleteCompany(ID: Int!): Int!
-  DeleteConversation(ID: Int!): Int!
-  DeleteConversationDetail(ID: Int!): Int!
-  DeleteDashboard(ID: Int!): Int!
-  DeleteEmployee(ID: Int!): Int!
-  DeleteEntity(ID: Int!): Int!
-  DeleteEntityField(ID: Int!): Int!
-  DeleteEntityPermission(ID: Int!): Int!
-  DeleteEntityRelationship(ID: Int!): Int!
-  DeleteList(ID: Int!): Int!
-  DeleteListDetail(ID: Int!): Int!
-  DeleteReport(ID: Int!): Int!
-  DeleteReportSnapshot(ID: Int!): Int!
-  DeleteUserApplicationEntity(ID: Int!): Int!
-  DeleteUserFavorite(ID: Int!): Int!
-  DeleteUserView(ID: Int!): Int!
-  DeleteWorkspace(ID: Int!): Int!
-  DeleteWorkspaceItem(ID: Int!): Int!
+  DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
+  DeleteCompany(ID: Int!): Company_!
+  DeleteConversation(ID: Int!): Conversation_!
+  DeleteConversationDetail(ID: Int!): ConversationDetail_!
+  DeleteDashboard(ID: Int!): Dashboard_!
+  DeleteEmployee(ID: Int!): Employee_!
+  DeleteEntity(ID: Int!): Entity_!
+  DeleteEntityField(ID: Int!): EntityField_!
+  DeleteEntityPermission(ID: Int!): EntityPermission_!
+  DeleteEntityRelationship(ID: Int!): EntityRelationship_!
+  DeleteList(ID: Int!): List_!
+  DeleteListDetail(ID: Int!): ListDetail_!
+  DeleteReport(ID: Int!): Report_!
+  DeleteReportSnapshot(ID: Int!): ReportSnapshot_!
+  DeleteUserApplicationEntity(ID: Int!): UserApplicationEntity_!
+  DeleteUserFavorite(ID: Int!): UserFavorite_!
+  DeleteUserView(ID: Int!): UserView_!
+  DeleteWorkspace(ID: Int!): Workspace_!
+  DeleteWorkspaceItem(ID: Int!): WorkspaceItem_!
   MergeRecords(request: RecordMergeRequest!): RecordMergeResult!
   SetRecordFavoriteStatus(params: UserFavoriteSetParams!): UserFavoriteResult!
   UpdateAIAction(input: UpdateAIActionInput!): AIAction_!

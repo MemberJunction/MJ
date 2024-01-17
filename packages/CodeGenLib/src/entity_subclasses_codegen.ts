@@ -16,11 +16,16 @@ export function generateAllEntitySubClasses(entities: EntityInfo[], directory: s
     }
 }
 export function generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity } from "@memberjunction/core";
+    return `import { BaseEntity, PrimaryKeyValue } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 `
 }
 
+/**
+ * 
+ * @param entity 
+ * @param includeFileHeader 
+ */
 export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false ) : string { 
     const fields: string = entity.Fields.map(e => {
         let values: string = '';
@@ -52,20 +57,39 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
     const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
     const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
     const subClassImportStatement: string = subClass.length > 0 && subClassImport.length > 0 ? `import { ${subClass} } from '${subClassImport}';\n` : '';
+    const loadFieldString: string = entity.PrimaryKeys.map(f => `${f.CodeName}: ${f.TSType}`).join(', ');
+    const loadFunction: string = `    /**
+    * Loads the ${entity.Name} record from the database
+    ${entity.PrimaryKeys.map(f => `* @param ${f.CodeName}: ${f.TSType} - primary key value to load the ${entity.Name} record.`).join('\n    ')}
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ${sClassName}
+    * @method
+    * @override
+    */      
+    public async Load(${loadFieldString}, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        const pkeyValues: PrimaryKeyValue[] = [];
+        ${entity.PrimaryKeys.map(f => `pkeyValues.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
+        return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+    }
+`    
+
     let sRet: string = `
 /**
  * ${entity.Name} - strongly typed entity sub-class
  * * Schema: ${entity.SchemaName}
  * * Base Table: ${entity.BaseTable}
- * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * @description ' + entity.Description : ''}
- * * Primary Key: ${entity.PrimaryKey.Name}
- * * Description: ${entity.Description}
+ * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + entity.Description : ''}
+ * * Primary Key${entity.PrimaryKeys.length > 1 ? 's' : ''}: ${entity.PrimaryKeys.map(f => f.Name).join(', ')}
  * @extends {BaseEntity}
  * @class
  * @public
  */
 ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
 export class ${sClassName} extends ${sBaseClass} {
+${loadFunction}
 ${fields}
 }
 `

@@ -1,5 +1,5 @@
 import { MJGlobal } from '@memberjunction/global';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo, PrimaryKeyValue } from './entityInfo';
 import { EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -278,6 +278,10 @@ export abstract class BaseEntity {
             return null;
     }
 
+    get PrimaryKeys(): EntityField[] {
+        return this.EntityInfo.PrimaryKeys.map(pk => this.GetFieldByName(pk.Name));
+    }
+
     get RecordLoaded(): boolean {
         return this._recordLoaded;
     }
@@ -538,24 +542,28 @@ export abstract class BaseEntity {
     }
     
     /**
-     * This method loads a single record from the database. Make sure you first get the correct BaseEntity sub-class for your entity by calling Metadata.GetEntityObject() first. From there, you can
+     * * This method loads a single record from the database. Make sure you first get the correct BaseEntity sub-class for your entity by calling Metadata.GetEntityObject() first. From there, you can
      * call this method to load your records.
-     * @param PrimaryKeyValue The primary key value for the record to load
+     * * NOTE: You should not be calling this method directly from outside of a sub-class in most cases. You will use the auto-generated sub-classes that have overriden versions of this method that blow out the primary keys into individual parameters. This is much easier to program against.
+     * @param PrimaryKeyValues An array of objects that contain the field name and value for the primary key of the record you want to load. For example, if you have a table called "Customers" with a primary key of "ID", you would pass in an array with a single object like this: {FieldName: "ID", Value: 1234}. 
+     * *If you had a composite primary key, you would pass in an array with multiple objects, one for each field in the primary key. You may ONLY pass in the primary key fields, no other fields are allowed.
      * @param EntityRelationshipsToLoad Optional, you can specify the names of the relationships to load up. This is an expensive operation as it loads up an array of the related entity objects for the main record, so use it sparingly.
-     * @returns 
+     * @returns true if success, false otherwise
      */
-    public async Load(PrimaryKeyValue: any, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async InnerLoad(PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
         }
         else{
             const start = new Date().getTime();
+            this.ValidatePrimaryKeyArray(PrimaryKeyValues);
+
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
             if (this.ID !== null) 
                 this.init(); // wipe out current data if we're loading on top of existing record
 
-            const data = await BaseEntity.Provider.Load(this, PrimaryKeyValue, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await BaseEntity.Provider.Load(this, PrimaryKeyValues, EntityRelationshipsToLoad, this.ActiveUser);
             this.SetMany(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
@@ -572,6 +580,28 @@ export abstract class BaseEntity {
             // LogStatus(`BaseEntity.Load(${this.EntityInfo.Name}, ID: ${ID}, EntityRelationshipsToLoad.length: ${EntityRelationshipsToLoad ? EntityRelationshipsToLoad.length : 0 }), took ${time}ms`);
 
             return true;
+        }
+    }
+
+    protected ValidatePrimaryKeyArray(PrimaryKeyValues: PrimaryKeyValue[]) {
+        // make sure that PrimaryKeyValues is an array of 1+ objects, and that each object has a FieldName and Value property and that the FieldName is a valid field on the entity that has IsPrimaryKey set to true
+        if (!PrimaryKeyValues || PrimaryKeyValues.length === 0)
+            throw new Error('PrimaryKeyValues cannot be null or empty');
+        else {
+            // now loop through the array and make sure each object has a FieldName and Value property
+            // and that the field name is a valid field on the entity that has IsPrimaryKey set to true
+            for (let i = 0; i < PrimaryKeyValues.length; i++) {
+                const pk = PrimaryKeyValues[i];
+                if (!pk.FieldName || pk.FieldName.trim().length === 0)
+                    throw new Error(`PrimaryKeyValues[${i}].FieldName cannot be null, empty, or whitespace`);
+                if (pk.Value === null || pk.Value === undefined)
+                    throw new Error(`PrimaryKeyValues[${i}].Value cannot be null or undefined`);
+                const field = this.Fields.find(f => f.Name.trim().toLowerCase() === pk.FieldName.trim().toLowerCase());
+                if (!field)
+                    throw new Error(`PrimaryKeyValues[${i}].FieldName of ${pk.FieldName} does not exist on ${this.EntityInfo.Name}`);
+                if (!field.IsPrimaryKey)
+                    throw new Error(`PrimaryKeyValues[${i}].FieldName of ${pk.FieldName} is not a primary key field on ${this.EntityInfo.Name}`);
+            }
         }
     }
 

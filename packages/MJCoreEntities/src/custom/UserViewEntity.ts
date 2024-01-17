@@ -110,7 +110,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
         return super.LoadFromData(data)
     }
 
-    override async Load(ID: number, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
+    async Load(ID: number, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         // first load up the view info, use the superclass to do this
         const result = await super.Load(ID, EntityRelationshipsToLoad)
         if (result) {

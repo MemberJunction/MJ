@@ -529,10 +529,6 @@ async function shouldCreateNewEntity(ds: DataSource, newEntity: any): Promise<{s
        if (result.length === 0) {
            return { shouldCreate: false, validationMessage: "No primary key found" };
        }
-       else if (result.length > 1) {
-         const pkeys = result.map(r => r.ColumnName).join(', ');
-         return { shouldCreate: false, validationMessage: `Primary key consists of more than one field(${pkeys}), not supported by MemberJunction, you must have a single-field primary key to qualify for entity creation in MemberJunction.` };
-      }
 
        return { shouldCreate: true, validationMessage: '' };
    } 

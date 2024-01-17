@@ -475,6 +475,14 @@ export class EntityFieldInfo extends BaseInfo {
 }
 
 /**
+ * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
+ */
+export class PrimaryKeyValue {
+    FieldName: string
+    Value: any
+}
+
+/**
  * Metadata about an entity
  */
 export class EntityInfo extends BaseInfo {
@@ -544,8 +552,19 @@ export class EntityInfo extends BaseInfo {
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
+    /**
+     * Returns the primary key for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
+     */
     get PrimaryKey(): EntityFieldInfo {
         return this.Fields.find((f) => f.IsPrimaryKey);
+    }
+
+    /**
+     * Returns an array of all fields that are part of the primary key for the entity. If the entity has a single primary key, the array will have a single element.
+     */
+    get PrimaryKeys(): EntityFieldInfo[] {
+        return this.Fields.filter((f) => f.IsPrimaryKey);
     }
 
     get UniqueKeys(): EntityFieldInfo[] {

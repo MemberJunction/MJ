@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -51,7 +51,7 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, PrimaryKeyValue: any, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 

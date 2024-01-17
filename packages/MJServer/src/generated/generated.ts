@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 1/15/2024, 6:11:00 PM
+* GENERATED: 1/16/2024, 8:55:25 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -16,6 +16,8 @@ import { AppContext } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
+
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -155,40 +157,44 @@ export class CompanyResolver extends ResolverBase {
         input.EntityName = 'Companies';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Company_, { nullable: true })
     async Company(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
         this.CheckUserReadPermissions('Companies', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanies WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwCompanies] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Company_])
-    AllCompanies(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllCompanies(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Companies', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwCompanies' + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwCompanies]' + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [Employee_])
     async EmployeesArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE CompanyID=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE [CompanyID]=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE CompanyName=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [CompanyName]=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Workflow_])
     async WorkflowsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE CompanyName=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE [CompanyName]=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Company_)
@@ -198,7 +204,7 @@ export class CompanyResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -216,11 +222,9 @@ export class CompanyResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateCompanyInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateCompanyInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Company_)
@@ -230,7 +234,7 @@ export class CompanyResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
             await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -254,14 +258,15 @@ export class CompanyResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Company_)
     async DeleteCompany(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -472,47 +477,52 @@ export class EmployeeResolver extends ResolverBase {
         input.EntityName = 'Employees';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Employee_, { nullable: true })
     async Employee(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
         this.CheckUserReadPermissions('Employees', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployees WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Employee_])
-    AllEmployees(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEmployees(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEmployees' + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEmployees]' + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [Employee_])
     async EmployeesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE SupervisorID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE [SupervisorID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EmployeeRole_])
     async EmployeeRolesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EmployeeSkill_])
     async EmployeeSkillsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE EmployeeID=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Employee_)
@@ -522,7 +532,7 @@ export class EmployeeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
+            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -540,11 +550,9 @@ export class EmployeeResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateEmployeeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEmployeeInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Employee_)
@@ -554,7 +562,7 @@ export class EmployeeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
+            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
             await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -578,14 +586,15 @@ export class EmployeeResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Employee_)
     async DeleteEmployee(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -723,12 +732,12 @@ export class UserFavoriteResolverBase extends ResolverBase {
         input.EntityName = 'User Favorites';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserFavorite_, { nullable: true })
     async UserFavorite(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
         this.CheckUserReadPermissions('User Favorites', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserFavorites WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => UserFavorite_)
@@ -738,7 +747,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -756,11 +765,9 @@ export class UserFavoriteResolverBase extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserFavoriteInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserFavoriteInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => UserFavorite_)
@@ -770,7 +777,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Favorites
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -794,14 +801,15 @@ export class UserFavoriteResolverBase extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => UserFavorite_)
     async DeleteUserFavorite(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -917,12 +925,12 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         input.EntityName = 'Employee Company Integrations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EmployeeCompanyIntegration_, { nullable: true })
     async EmployeeCompanyIntegration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeCompanyIntegrations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => EmployeeCompanyIntegration_)
@@ -932,7 +940,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Employee Company Integrations', this.GetUserFromPayload(userPayload));
+            const entityObject = <EmployeeCompanyIntegrationEntity>await new Metadata().GetEntityObject('Employee Company Integrations', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Employee Company Integrations
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -1045,12 +1053,12 @@ export class EmployeeRoleResolver extends ResolverBase {
         input.EntityName = 'Employee Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EmployeeRole_, { nullable: true })
     async EmployeeRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => EmployeeRole_)
@@ -1060,7 +1068,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Employee Roles', this.GetUserFromPayload(userPayload));
+            const entityObject = <EmployeeRoleEntity>await new Metadata().GetEntityObject('Employee Roles', this.GetUserFromPayload(userPayload));
             await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -1173,12 +1181,12 @@ export class EmployeeSkillResolver extends ResolverBase {
         input.EntityName = 'Employee Skills';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EmployeeSkill_, { nullable: true })
     async EmployeeSkill(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEmployeeSkills WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => EmployeeSkill_)
@@ -1188,7 +1196,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Employee Skills', this.GetUserFromPayload(userPayload));
+            const entityObject = <EmployeeSkillEntity>await new Metadata().GetEntityObject('Employee Skills', this.GetUserFromPayload(userPayload));
             await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -1325,47 +1333,52 @@ export class RoleResolver extends ResolverBase {
         input.EntityName = 'Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Role_, { nullable: true })
     async Role(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
         this.CheckUserReadPermissions('Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Role_])
-    AllRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Roles', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwRoles' + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwRoles]' + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [EmployeeRole_])
     async EmployeeRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE RoleID=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE [RoleID]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserRole_])
     async UserRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AuthorizationRole_])
     async AuthorizationRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE RoleName=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Role_)
@@ -1375,7 +1388,7 @@ export class RoleResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
+            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Roles
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -1479,33 +1492,36 @@ export class SkillResolver extends ResolverBase {
         input.EntityName = 'Skills';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Skill_, { nullable: true })
     async Skill(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
         this.CheckUserReadPermissions('Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwSkills WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwSkills] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Skill_])
-    AllSkills(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllSkills(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwSkills' + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwSkills]' + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [EmployeeSkill_])
     async EmployeeSkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE SkillID=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [SkillID]=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Skill_])
     async SkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwSkills] WHERE ParentID=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwSkills] WHERE [ParentID]=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -1608,19 +1624,20 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         input.EntityName = 'Integration URL Formats';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => IntegrationURLFormat_, { nullable: true })
     async IntegrationURLFormat(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwIntegrationURLFormats WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [IntegrationURLFormat_])
-    AllIntegrationURLFormats(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllIntegrationURLFormats(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwIntegrationURLFormats' + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwIntegrationURLFormats]' + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
+        return result;
     }
 
     @Mutation(() => IntegrationURLFormat_)
@@ -1630,7 +1647,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Integration URL Formats', this.GetUserFromPayload(userPayload));
+            const entityObject = <IntegrationURLFormatEntity>await new Metadata().GetEntityObject('Integration URL Formats', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Integration URL Formats
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -1780,33 +1797,36 @@ export class IntegrationResolver extends ResolverBase {
         input.EntityName = 'Integrations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Integration_, { nullable: true })
     async Integration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
         this.CheckUserReadPermissions('Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwIntegrations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwIntegrations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Integration_])
-    AllIntegrations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllIntegrations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integrations', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwIntegrations' + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwIntegrations]' + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE IntegrationID=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [IntegrationID]=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE IntegrationName=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [IntegrationName]=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Integration_)
@@ -1816,7 +1836,7 @@ export class IntegrationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Integrations', this.GetUserFromPayload(userPayload));
+            const entityObject = <IntegrationEntity>await new Metadata().GetEntityObject('Integrations', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Integrations
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -2040,40 +2060,44 @@ export class CompanyIntegrationResolver extends ResolverBase {
         input.EntityName = 'Company Integrations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => CompanyIntegration_, { nullable: true })
     async CompanyIntegration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [List_])
     async ListsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE CompanyIntegrationID=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => CompanyIntegration_)
@@ -2083,7 +2107,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Company Integrations', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyIntegrationEntity>await new Metadata().GetEntityObject('Company Integrations', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integrations
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -2256,7 +2280,7 @@ export class EntityField_ {
     EntityCodeName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     EntityClassName?: string;
       
     @Field({nullable: true}) 
@@ -2280,7 +2304,7 @@ export class EntityField_ {
     RelatedEntityCodeName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     RelatedEntityClassName?: string;
     
     @Field(() => [EntityFieldValue_])
@@ -2480,26 +2504,28 @@ export class EntityFieldResolver extends ResolverBase {
         input.EntityName = 'Entity Fields';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EntityField_, { nullable: true })
     async EntityField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityFields WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEntityFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [EntityField_])
-    AllEntityFields(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityFields(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEntityFields' + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEntityFields]' + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [EntityFieldValue_])
     async EntityFieldValuesArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityFieldValues] WHERE EntityFieldID=${entityfield_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityFieldValues] WHERE [EntityFieldID]=${entityfield_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => EntityField_)
@@ -2509,7 +2535,7 @@ export class EntityFieldResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -2527,11 +2553,9 @@ export class EntityFieldResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateEntityFieldInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityFieldInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => EntityField_)
@@ -2541,7 +2565,7 @@ export class EntityFieldResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Fields
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -2565,14 +2589,15 @@ export class EntityFieldResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => EntityField_)
     async DeleteEntityField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -2737,11 +2762,11 @@ export class Entity_ {
     CodeName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     ClassName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     BaseTableCodeName?: string;
       
     @Field({nullable: true}) 
@@ -2823,6 +2848,9 @@ export class Entity_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityInput {
+    @Field(() => Int, )
+    ID: number;
+
     @Field(() => Int, { nullable: true })
     ParentID: number;
 
@@ -3088,159 +3116,180 @@ export class EntityResolverBase extends ResolverBase {
         input.EntityName = 'Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Entity_, { nullable: true })
     async Entity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
         this.CheckUserReadPermissions('Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntities WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEntities] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Entity_])
-    AllEntities(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntities(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEntities' + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEntities]' + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [EntityField_])
     async EntityFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityFields] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityFields] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserRecordLog_])
     async UserRecordLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Entity_])
     async EntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntities] WHERE ParentID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntities] WHERE [ParentID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserFavorite_])
     async UserFavoritesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [List_])
     async ListsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [ResourceType_])
     async ResourceTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceTypes] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwResourceTypes] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [TaggedItem_])
     async TaggedItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [DatasetItem_])
     async DatasetItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [RecordMergeLog_])
     async RecordMergeLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE EntityID=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Entity_)
@@ -3250,7 +3299,7 @@ export class EntityResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -3268,11 +3317,9 @@ export class EntityResolverBase extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Entity_)
@@ -3282,7 +3329,7 @@ export class EntityResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entities
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -3306,14 +3353,15 @@ export class EntityResolverBase extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Entity_)
     async DeleteEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -3595,145 +3643,164 @@ export class UserResolverBase extends ResolverBase {
         input.EntityName = 'Users';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => User_, { nullable: true })
     async User(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
         this.CheckUserReadPermissions('Users', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUsers WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUsers] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Users', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [User_])
-    AllUsers(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllUsers(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwUsers' + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwUsers]' + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [UserApplication_])
     async UserApplicationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserRole_])
     async UserRolesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Workspace_])
     async WorkspacesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwWorkspaces] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaces] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [ReportSnapshot_])
     async ReportSnapshotsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [RecordChange_])
     async RecordChangesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Dashboard_])
     async DashboardsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserViewRun_])
     async UserViewRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE RunByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [List_])
     async ListsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserFavorite_])
     async UserFavoritesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserRecordLog_])
     async UserRecordLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserView_])
     async UserViewsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE RunByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserNotification_])
     async UserNotificationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserNotifications] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserNotifications] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Conversation_])
     async ConversationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [ResourceFolder_])
     async ResourceFoldersArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE UserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [RecordMergeLog_])
     async RecordMergeLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE InitiatedByUserID=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [InitiatedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => User_)
@@ -3743,7 +3810,7 @@ export class UserResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -3761,11 +3828,9 @@ export class UserResolverBase extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => User_)
@@ -3775,7 +3840,7 @@ export class UserResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
             await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -3889,7 +3954,7 @@ export class EntityRelationship_ {
     RelatedEntityBaseView: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     RelatedEntityClassName?: string;
       
     @Field({nullable: true}) 
@@ -3897,7 +3962,7 @@ export class EntityRelationship_ {
     RelatedEntityCodeName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     RelatedEntityBaseTableCodeName?: string;
       
     @Field({nullable: true}) 
@@ -4041,19 +4106,20 @@ export class EntityRelationshipResolver extends ResolverBase {
         input.EntityName = 'Entity Relationships';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EntityRelationship_, { nullable: true })
     async EntityRelationship(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityRelationships WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [EntityRelationship_])
-    AllEntityRelationships(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityRelationships(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEntityRelationships' + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEntityRelationships]' + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
+        return result;
     }
 
     @Mutation(() => EntityRelationship_)
@@ -4063,7 +4129,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -4081,11 +4147,9 @@ export class EntityRelationshipResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateEntityRelationshipInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityRelationshipInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => EntityRelationship_)
@@ -4095,7 +4159,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Relationships
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -4119,14 +4183,15 @@ export class EntityRelationshipResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => EntityRelationship_)
     async DeleteEntityRelationship(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -4272,12 +4337,12 @@ export class UserRecordLogResolver extends ResolverBase {
         input.EntityName = 'User Record Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserRecordLog_, { nullable: true })
     async UserRecordLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserRecordLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => UserRecordLog_)
@@ -4287,7 +4352,7 @@ export class UserRecordLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Record Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserRecordLogEntity>await new Metadata().GetEntityObject('User Record Logs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Record Logs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -4570,33 +4635,36 @@ export class UserViewResolverBase extends ResolverBase {
         input.EntityName = 'User Views';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserView_, { nullable: true })
     async UserView(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViews WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [UserView_])
-    AllUserViews(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllUserViews(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwUserViews' + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwUserViews]' + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [EntityRelationship_])
     async EntityRelationshipsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE DisplayUserViewGUID=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE [DisplayUserViewGUID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserViewRun_])
     async UserViewRunsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE UserViewID=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [UserViewID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => UserView_)
@@ -4606,7 +4674,7 @@ export class UserViewResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -4624,11 +4692,9 @@ export class UserViewResolverBase extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => UserView_)
@@ -4638,7 +4704,7 @@ export class UserViewResolverBase extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
             await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -4662,14 +4728,15 @@ export class UserViewResolverBase extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => UserView_)
     async DeleteUserView(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -4803,33 +4870,36 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         input.EntityName = 'Company Integration Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => CompanyIntegrationRun_, { nullable: true })
     async CompanyIntegrationRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRuns WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [CompanyIntegrationRunAPILog_])
     async CompanyIntegrationRunAPILogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE [CompanyIntegrationRunID]=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE [CompanyIntegrationRunID]=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE CompanyIntegrationRunID=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [CompanyIntegrationRunID]=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => CompanyIntegrationRun_)
@@ -4839,7 +4909,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Company Integration Runs', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyIntegrationRunEntity>await new Metadata().GetEntityObject('Company Integration Runs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Runs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -4982,19 +5052,20 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         input.EntityName = 'Company Integration Run Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => CompanyIntegrationRunDetail_, { nullable: true })
     async CompanyIntegrationRunDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE CompanyIntegrationRunDetailID=${companyintegrationrundetail_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE [CompanyIntegrationRunDetailID]=${companyintegrationrundetail_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => CompanyIntegrationRunDetail_)
@@ -5004,7 +5075,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Company Integration Run Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyIntegrationRunDetailEntity>await new Metadata().GetEntityObject('Company Integration Run Details', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Run Details
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -5149,12 +5220,12 @@ export class ErrorLogResolver extends ResolverBase {
         input.EntityName = 'Error Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ErrorLog_, { nullable: true })
     async ErrorLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
         this.CheckUserReadPermissions('Error Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwErrorLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => ErrorLog_)
@@ -5164,7 +5235,7 @@ export class ErrorLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Error Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <ErrorLogEntity>await new Metadata().GetEntityObject('Error Logs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Error Logs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -5281,33 +5352,36 @@ export class ApplicationResolver extends ResolverBase {
         input.EntityName = 'Applications';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Application_, { nullable: true })
     async Application(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
         this.CheckUserReadPermissions('Applications', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwApplications WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwApplications] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Application_])
-    AllApplications(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllApplications(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Applications', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwApplications' + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwApplications]' + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE ApplicationID=${application_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE [ApplicationID]=${application_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [UserApplication_])
     async UserApplicationsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE ApplicationID=${application_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE [ApplicationID]=${application_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Application_)
@@ -5317,7 +5391,7 @@ export class ApplicationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
+            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Applications
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -5389,11 +5463,11 @@ export class ApplicationEntity_ {
     EntityCodeName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     EntityClassName?: string;
       
     @Field({nullable: true}) 
-    @MaxLength(1022)
+    @MaxLength(8000)
     EntityBaseTableCodeName?: string;
     
 }
@@ -5485,12 +5559,12 @@ export class ApplicationEntityResolver extends ResolverBase {
         input.EntityName = 'Application Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ApplicationEntity_, { nullable: true })
     async ApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
         this.CheckUserReadPermissions('Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwApplicationEntities WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => ApplicationEntity_)
@@ -5500,7 +5574,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
+            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -5518,11 +5592,9 @@ export class ApplicationEntityResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateApplicationEntityInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => ApplicationEntity_)
@@ -5532,7 +5604,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
+            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Application Entities
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -5556,14 +5628,15 @@ export class ApplicationEntityResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => ApplicationEntity_)
     async DeleteApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -5779,19 +5852,20 @@ export class EntityPermissionResolver extends ResolverBase {
         input.EntityName = 'Entity Permissions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EntityPermission_, { nullable: true })
     async EntityPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityPermissions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [EntityPermission_])
-    AllEntityPermissions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityPermissions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEntityPermissions' + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEntityPermissions]' + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
+        return result;
     }
 
     @Mutation(() => EntityPermission_)
@@ -5801,7 +5875,7 @@ export class EntityPermissionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -5819,11 +5893,9 @@ export class EntityPermissionResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateEntityPermissionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityPermissionInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => EntityPermission_)
@@ -5833,7 +5905,7 @@ export class EntityPermissionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Permissions
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -5857,14 +5929,15 @@ export class EntityPermissionResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => EntityPermission_)
     async DeleteEntityPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -5996,12 +6069,12 @@ export class UserApplicationEntityResolver extends ResolverBase {
         input.EntityName = 'User Application Entities';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserApplicationEntity_, { nullable: true })
     async UserApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserApplicationEntities WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => UserApplicationEntity_)
@@ -6011,7 +6084,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -6029,11 +6102,9 @@ export class UserApplicationEntityResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => UserApplicationEntity_)
@@ -6043,7 +6114,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Application Entities
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -6067,14 +6138,15 @@ export class UserApplicationEntityResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => UserApplicationEntity_)
     async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -6192,19 +6264,20 @@ export class UserApplicationResolver extends ResolverBase {
         input.EntityName = 'User Applications';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserApplication_, { nullable: true })
     async UserApplication(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
         this.CheckUserReadPermissions('User Applications', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserApplications WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE UserApplicationID=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [UserApplicationID]=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => UserApplication_)
@@ -6214,7 +6287,7 @@ export class UserApplicationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Applications', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserApplicationEntity>await new Metadata().GetEntityObject('User Applications', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Applications
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -6341,12 +6414,12 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         input.EntityName = 'Company Integration Run API Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => CompanyIntegrationRunAPILog_, { nullable: true })
     async CompanyIntegrationRunAPILog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRunAPILogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => CompanyIntegrationRunAPILog_)
@@ -6356,7 +6429,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Company Integration Run API Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyIntegrationRunAPILogEntity>await new Metadata().GetEntityObject('Company Integration Run API Logs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Run API Logs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -6530,19 +6603,20 @@ export class ListResolver extends ResolverBase {
         input.EntityName = 'Lists';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => List_, { nullable: true })
     async List(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
         this.CheckUserReadPermissions('Lists', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwLists WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [ListDetail_])
     async ListDetailsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwListDetails] WHERE ListID=${list_.ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwListDetails] WHERE [ListID]=${list_.ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => List_)
@@ -6552,7 +6626,7 @@ export class ListResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
+            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -6570,11 +6644,9 @@ export class ListResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateListInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateListInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => List_)
@@ -6584,7 +6656,7 @@ export class ListResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
+            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Lists
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -6608,14 +6680,15 @@ export class ListResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => List_)
     async DeleteList(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -6736,12 +6809,12 @@ export class ListDetailResolver extends ResolverBase {
         input.EntityName = 'List Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ListDetail_, { nullable: true })
     async ListDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
         this.CheckUserReadPermissions('List Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwListDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwListDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => ListDetail_)
@@ -6751,7 +6824,7 @@ export class ListDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -6769,11 +6842,9 @@ export class ListDetailResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateListDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateListDetailInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => ListDetail_)
@@ -6783,7 +6854,7 @@ export class ListDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for List Details
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -6807,14 +6878,15 @@ export class ListDetailResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => ListDetail_)
     async DeleteListDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -6946,19 +7018,20 @@ export class UserViewRunResolver extends ResolverBase {
         input.EntityName = 'User View Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserViewRun_, { nullable: true })
     async UserViewRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
         this.CheckUserReadPermissions('User View Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViewRuns WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [UserViewRunDetail_])
     async UserViewRunDetailsArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwUserViewRunDetails] WHERE UserViewRunID=${userviewrun_.ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRunDetails] WHERE [UserViewRunID]=${userviewrun_.ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => UserViewRun_)
@@ -6968,7 +7041,7 @@ export class UserViewRunResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserViewRunEntity>await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -6986,11 +7059,9 @@ export class UserViewRunResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => UserViewRun_)
@@ -7000,7 +7071,7 @@ export class UserViewRunResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserViewRunEntity>await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Runs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -7124,12 +7195,12 @@ export class UserViewRunDetailResolver extends ResolverBase {
         input.EntityName = 'User View Run Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserViewRunDetail_, { nullable: true })
     async UserViewRunDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserViewRunDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserViewRunDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => UserViewRunDetail_)
@@ -7139,7 +7210,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserViewRunDetailEntity>await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -7157,11 +7228,9 @@ export class UserViewRunDetailResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => UserViewRunDetail_)
@@ -7171,7 +7240,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserViewRunDetailEntity>await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Run Details
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -7309,12 +7378,12 @@ export class WorkflowRunResolver extends ResolverBase {
         input.EntityName = 'Workflow Runs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => WorkflowRun_, { nullable: true })
     async WorkflowRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkflowRuns WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwWorkflowRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => WorkflowRun_)
@@ -7324,7 +7393,7 @@ export class WorkflowRunResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workflow Runs', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkflowRunEntity>await new Metadata().GetEntityObject('Workflow Runs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflow Runs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -7461,26 +7530,28 @@ export class WorkflowResolver extends ResolverBase {
         input.EntityName = 'Workflows';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Workflow_, { nullable: true })
     async Workflow(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
         this.CheckUserReadPermissions('Workflows', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkflows WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputWorkflowID=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputWorkflowID]=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [WorkflowRun_])
     async WorkflowRunsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwWorkflowRuns] WHERE WorkflowName=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwWorkflowRuns] WHERE [WorkflowName]=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Workflow_)
@@ -7490,7 +7561,7 @@ export class WorkflowResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workflows', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkflowEntity>await new Metadata().GetEntityObject('Workflows', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflows
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -7617,19 +7688,20 @@ export class WorkflowEngineResolver extends ResolverBase {
         input.EntityName = 'Workflow Engines';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => WorkflowEngine_, { nullable: true })
     async WorkflowEngine(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
         this.CheckUserReadPermissions('Workflow Engines', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkflowEngines WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Engines', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwWorkflowEngines] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Engines', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Workflow Engines', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Workflow_])
     async WorkflowsArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE WorkflowEngineName=${workflowengine_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE [WorkflowEngineName]=${workflowengine_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => WorkflowEngine_)
@@ -7639,7 +7711,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workflow Engines', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkflowEngineEntity>await new Metadata().GetEntityObject('Workflow Engines', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflow Engines
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -7790,12 +7862,12 @@ export class RecordChangeResolver extends ResolverBase {
         input.EntityName = 'Record Changes';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => RecordChange_, { nullable: true })
     async RecordChange(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
         this.CheckUserReadPermissions('Record Changes', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordChanges WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => RecordChange_)
@@ -7805,7 +7877,7 @@ export class RecordChangeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Record Changes', this.GetUserFromPayload(userPayload));
+            const entityObject = <RecordChangeEntity>await new Metadata().GetEntityObject('Record Changes', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -7823,11 +7895,9 @@ export class RecordChangeResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateRecordChangeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRecordChangeInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
 }
@@ -7917,19 +7987,20 @@ export class UserRoleResolver extends ResolverBase {
         input.EntityName = 'User Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserRole_, { nullable: true })
     async UserRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [UserRole_])
-    AllUserRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllUserRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwUserRoles' + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwUserRoles]' + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
+        return result;
     }
 
     @Mutation(() => UserRole_)
@@ -7939,7 +8010,7 @@ export class UserRoleResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Roles', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserRoleEntity>await new Metadata().GetEntityObject('User Roles', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -7957,11 +8028,9 @@ export class UserRoleResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserRoleInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserRoleInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
 }
@@ -8040,26 +8109,28 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         input.EntityName = 'Row Level Security Filters';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => RowLevelSecurityFilter_, { nullable: true })
     async RowLevelSecurityFilter(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRowLevelSecurityFilters WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwRowLevelSecurityFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [RowLevelSecurityFilter_])
-    AllRowLevelSecurityFilters(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllRowLevelSecurityFilters(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwRowLevelSecurityFilters' + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwRowLevelSecurityFilters]' + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [EntityPermission_])
     async EntityPermissionsArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE ReadRLSFilterID=${rowlevelsecurityfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [ReadRLSFilterID]=${rowlevelsecurityfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -8226,12 +8297,12 @@ export class AuditLogResolver extends ResolverBase {
         input.EntityName = 'Audit Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AuditLog_, { nullable: true })
     async AuditLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => AuditLog_)
@@ -8241,7 +8312,7 @@ export class AuditLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <AuditLogEntity>await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -8259,11 +8330,9 @@ export class AuditLogResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateAuditLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateAuditLogInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => AuditLog_)
@@ -8273,7 +8342,7 @@ export class AuditLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <AuditLogEntity>await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Audit Logs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -8388,47 +8457,52 @@ export class AuthorizationResolver extends ResolverBase {
         input.EntityName = 'Authorizations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Authorization_, { nullable: true })
     async Authorization(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
         this.CheckUserReadPermissions('Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuthorizations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [Authorization_])
-    AllAuthorizations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAuthorizations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAuthorizations' + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAuthorizations]' + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [AuthorizationRole_])
     async AuthorizationRolesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE AuthorizationID=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [AuthorizationID]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Authorization_])
     async AuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuthorizations] WHERE ParentID=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizations] WHERE [ParentID]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AuditLogType_])
     async AuditLogTypesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE AuthorizationName=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE [AuthorizationName]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE AuthorizationName=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [AuthorizationName]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -8506,19 +8580,20 @@ export class AuthorizationRoleResolver extends ResolverBase {
         input.EntityName = 'Authorization Roles';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AuthorizationRole_, { nullable: true })
     async AuthorizationRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuthorizationRoles WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [AuthorizationRole_])
-    AllAuthorizationRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAuthorizationRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAuthorizationRoles' + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAuthorizationRoles]' + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
+        return result;
     }
 
 }
@@ -8608,33 +8683,36 @@ export class AuditLogTypeResolver extends ResolverBase {
         input.EntityName = 'Audit Log Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AuditLogType_, { nullable: true })
     async AuditLogType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAuditLogTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [AuditLogType_])
-    AllAuditLogTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAuditLogTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAuditLogTypes' + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAuditLogTypes]' + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [AuditLog_])
     async AuditLogsArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE AuditLogTypeName=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [AuditLogTypeName]=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AuditLogType_])
     async AuditLogTypesArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE ParentID=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE [ParentID]=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -8725,19 +8803,20 @@ export class EntityFieldValueResolver extends ResolverBase {
         input.EntityName = 'Entity Field Values';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EntityFieldValue_, { nullable: true })
     async EntityFieldValue(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityFieldValues WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEntityFieldValues] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [EntityFieldValue_])
-    AllEntityFieldValues(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityFieldValues(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEntityFieldValues' + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEntityFieldValues]' + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
+        return result;
     }
 
 }
@@ -8868,40 +8947,44 @@ export class AIModelResolver extends ResolverBase {
         input.EntityName = 'AI Models';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AIModel_, { nullable: true })
     async AIModel(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
         this.CheckUserReadPermissions('AI Models', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIModels WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAIModels] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [AIModel_])
-    AllAIModels(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIModels(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAIModels' + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAIModels]' + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [AIAction_])
     async AIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAIActions] WHERE DefaultModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAIActions] WHERE [DefaultModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE AIModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE [AIModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE AIModelID=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [AIModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => AIModel_)
@@ -8911,7 +8994,7 @@ export class AIModelResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('AI Models', this.GetUserFromPayload(userPayload));
+            const entityObject = <AIModelEntity>await new Metadata().GetEntityObject('AI Models', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Models
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -9049,33 +9132,36 @@ export class AIActionResolver extends ResolverBase {
         input.EntityName = 'AI Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AIAction_, { nullable: true })
     async AIAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
         this.CheckUserReadPermissions('AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIActions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAIActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [AIAction_])
-    AllAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAIActions' + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAIActions]' + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [AIModelAction_])
     async AIModelActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE AIActionID=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE [AIActionID]=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [EntityAIAction_])
     async EntityAIActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE AIActionID=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [AIActionID]=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => AIAction_)
@@ -9085,7 +9171,7 @@ export class AIActionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('AI Actions', this.GetUserFromPayload(userPayload));
+            const entityObject = <AIActionEntity>await new Metadata().GetEntityObject('AI Actions', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Actions
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -9208,19 +9294,20 @@ export class AIModelActionResolver extends ResolverBase {
         input.EntityName = 'AI Model Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AIModelAction_, { nullable: true })
     async AIModelAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIModelActions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [AIModelAction_])
-    AllAIModelActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIModelActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAIModelActions' + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAIModelActions]' + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
+        return result;
     }
 
     @Mutation(() => AIModelAction_)
@@ -9230,7 +9317,7 @@ export class AIModelActionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('AI Model Actions', this.GetUserFromPayload(userPayload));
+            const entityObject = <AIModelActionEntity>await new Metadata().GetEntityObject('AI Model Actions', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Model Actions
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -9411,19 +9498,20 @@ export class EntityAIActionResolver extends ResolverBase {
         input.EntityName = 'Entity AI Actions';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => EntityAIAction_, { nullable: true })
     async EntityAIAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwEntityAIActions WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [EntityAIAction_])
-    AllEntityAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllEntityAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwEntityAIActions' + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwEntityAIActions]' + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
     }
 
     @Mutation(() => EntityAIAction_)
@@ -9433,7 +9521,7 @@ export class EntityAIActionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Entity AI Actions', this.GetUserFromPayload(userPayload));
+            const entityObject = <EntityAIActionEntity>await new Metadata().GetEntityObject('Entity AI Actions', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity AI Actions
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -9538,26 +9626,28 @@ export class AIModelTypeResolver extends ResolverBase {
         input.EntityName = 'AI Model Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => AIModelType_, { nullable: true })
     async AIModelType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwAIModelTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwAIModelTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Query(() => [AIModelType_])
-    AllAIModelTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async AllAIModelTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
-        const sSQL = 'SELECT * FROM [admin].vwAIModelTypes' + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, ' WHERE');
-        return dataSource.query(sSQL);
+        const sSQL = 'SELECT * FROM [admin].[vwAIModelTypes]' + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL));
+        return result;
     }
   
     @FieldResolver(() => [AIModel_])
     async AIModelsArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwAIModels] WHERE AIModelTypeID=${aimodeltype_.ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwAIModels] WHERE [AIModelTypeID]=${aimodeltype_.ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => AIModelType_)
@@ -9567,7 +9657,7 @@ export class AIModelTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('AI Model Types', this.GetUserFromPayload(userPayload));
+            const entityObject = <AIModelTypeEntity>await new Metadata().GetEntityObject('AI Model Types', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Model Types
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -9667,19 +9757,20 @@ export class QueueTypeResolver extends ResolverBase {
         input.EntityName = 'Queue Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => QueueType_, { nullable: true })
     async QueueType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
         this.CheckUserReadPermissions('Queue Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwQueueTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Types', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwQueueTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Queue Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Queue_])
     async QueuesArray(@Root() queuetype_: QueueType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queues', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwQueues] WHERE QueueTypeID=${queuetype_.ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwQueues] WHERE [QueueTypeID]=${queuetype_.ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -9925,19 +10016,20 @@ export class QueueResolver extends ResolverBase {
         input.EntityName = 'Queues';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Queue_, { nullable: true })
     async Queue(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
         this.CheckUserReadPermissions('Queues', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwQueues WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwQueues] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [QueueTask_])
     async QueueTasksArray(@Root() queue_: Queue_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwQueueTasks] WHERE QueueID=${queue_.ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwQueueTasks] WHERE [QueueID]=${queue_.ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Queue_)
@@ -9947,7 +10039,7 @@ export class QueueResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
+            const entityObject = <QueueEntity>await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -9965,11 +10057,9 @@ export class QueueResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateQueueInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueueInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Queue_)
@@ -9979,7 +10069,7 @@ export class QueueResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
+            const entityObject = <QueueEntity>await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queues
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -10159,12 +10249,12 @@ export class QueueTaskResolver extends ResolverBase {
         input.EntityName = 'Queue Tasks';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => QueueTask_, { nullable: true })
     async QueueTask(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwQueueTasks WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwQueueTasks] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => QueueTask_)
@@ -10174,7 +10264,7 @@ export class QueueTaskResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
+            const entityObject = <QueueTaskEntity>await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -10192,11 +10282,9 @@ export class QueueTaskResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateQueueTaskInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueueTaskInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => QueueTask_)
@@ -10206,7 +10294,7 @@ export class QueueTaskResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
+            const entityObject = <QueueTaskEntity>await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queue Tasks
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -10343,13 +10431,13 @@ export class DashboardResolver extends ResolverBase {
         input.EntityName = 'Dashboards';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Dashboard_, { nullable: true })
     async Dashboard(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
         this.CheckUserReadPermissions('Dashboards', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwDashboards WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Dashboards', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => Dashboard_)
@@ -10359,7 +10447,7 @@ export class DashboardResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
+            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -10377,11 +10465,9 @@ export class DashboardResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateDashboardInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDashboardInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Dashboard_)
@@ -10391,7 +10477,7 @@ export class DashboardResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
+            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Dashboards
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -10415,14 +10501,15 @@ export class DashboardResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Dashboard_)
     async DeleteDashboard(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -10505,20 +10592,21 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         input.EntityName = 'Output Trigger Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => OutputTriggerType_, { nullable: true })
     async OutputTriggerType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
         this.CheckUserReadPermissions('Output Trigger Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwOutputTriggerTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwOutputTriggerTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Trigger Types', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Output Trigger Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputTriggerTypeID=${outputtriggertype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputTriggerTypeID]=${outputtriggertype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -10589,20 +10677,21 @@ export class OutputFormatTypeResolver extends ResolverBase {
         input.EntityName = 'Output Format Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => OutputFormatType_, { nullable: true })
     async OutputFormatType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
         this.CheckUserReadPermissions('Output Format Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwOutputFormatTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwOutputFormatTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Format Types', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Output Format Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputFormatTypeID=${outputformattype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputFormatTypeID]=${outputformattype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -10670,20 +10759,21 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         input.EntityName = 'Output Delivery Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => OutputDeliveryType_, { nullable: true })
     async OutputDeliveryType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
         this.CheckUserReadPermissions('Output Delivery Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwOutputDeliveryTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwOutputDeliveryTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Delivery Types', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Output Delivery Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE OutputDeliveryTypeID=${outputdeliverytype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputDeliveryTypeID]=${outputdeliverytype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -10932,19 +11022,20 @@ export class ReportResolver extends ResolverBase {
         input.EntityName = 'Reports';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Report_, { nullable: true })
     async Report(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReports WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [ReportSnapshot_])
     async ReportSnapshotsArray(@Root() report_: Report_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE ReportID=${report_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE [ReportID]=${report_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Report_)
@@ -10954,7 +11045,7 @@ export class ReportResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
+            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -10972,11 +11063,9 @@ export class ReportResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateReportInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateReportInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Report_)
@@ -10986,7 +11075,7 @@ export class ReportResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
+            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Reports
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -11010,14 +11099,15 @@ export class ReportResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Report_)
     async DeleteReport(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -11146,12 +11236,12 @@ export class ReportSnapshotResolver extends ResolverBase {
         input.EntityName = 'Report Snapshots';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ReportSnapshot_, { nullable: true })
     async ReportSnapshot(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwReportSnapshots WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => ReportSnapshot_)
@@ -11161,7 +11251,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
+            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -11179,11 +11269,9 @@ export class ReportSnapshotResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateReportSnapshotInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateReportSnapshotInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => ReportSnapshot_)
@@ -11193,7 +11281,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
+            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Report Snapshots
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -11217,14 +11305,15 @@ export class ReportSnapshotResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => ReportSnapshot_)
     async DeleteReportSnapshot(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -11333,27 +11422,29 @@ export class ResourceTypeResolver extends ResolverBase {
         input.EntityName = 'Resource Types';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ResourceType_, { nullable: true })
     async ResourceType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
         this.CheckUserReadPermissions('Resource Types', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwResourceTypes WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwResourceTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Resource Types', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [WorkspaceItem_])
     async WorkspaceItemsArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE ResourceTypeID=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [ResourceTypeID]=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [ResourceFolder_])
     async ResourceFoldersArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE ResourceTypeName=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [ResourceTypeName]=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -11435,27 +11526,29 @@ export class TagResolver extends ResolverBase {
         input.EntityName = 'Tags';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Tag_, { nullable: true })
     async Tag(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
         this.CheckUserReadPermissions('Tags', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwTags WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwTags] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Tags', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Tag_])
     async TagsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tags', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwTags] WHERE ParentID=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwTags] WHERE [ParentID]=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [TaggedItem_])
     async TaggedItemsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE TagID=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE [TagID]=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -11531,13 +11624,13 @@ export class TaggedItemResolver extends ResolverBase {
         input.EntityName = 'Tagged Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => TaggedItem_, { nullable: true })
     async TaggedItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwTaggedItems WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Tagged Items', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
 }
@@ -11647,20 +11740,21 @@ export class WorkspaceResolver extends ResolverBase {
         input.EntityName = 'Workspaces';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Workspace_, { nullable: true })
     async Workspace(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
         this.CheckUserReadPermissions('Workspaces', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkspaces WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaces] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Workspaces', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [WorkspaceItem_])
     async WorkspaceItemsArray(@Root() workspace_: Workspace_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE WorkSpaceID=${workspace_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [WorkSpaceID]=${workspace_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Workspace_)
@@ -11670,7 +11764,7 @@ export class WorkspaceResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -11688,11 +11782,9 @@ export class WorkspaceResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateWorkspaceInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Workspace_)
@@ -11702,7 +11794,7 @@ export class WorkspaceResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workspaces
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -11726,14 +11818,15 @@ export class WorkspaceResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Workspace_)
     async DeleteWorkspace(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -11896,13 +11989,13 @@ export class WorkspaceItemResolver extends ResolverBase {
         input.EntityName = 'Workspace Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => WorkspaceItem_, { nullable: true })
     async WorkspaceItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwWorkspaceItems WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Workspace Items', ID)
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const result = this.MapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => WorkspaceItem_)
@@ -11912,7 +12005,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -11930,11 +12023,9 @@ export class WorkspaceItemResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateWorkspaceItemInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceItemInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => WorkspaceItem_)
@@ -11944,7 +12035,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
+            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workspace Items
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -11968,14 +12059,15 @@ export class WorkspaceItemResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => WorkspaceItem_)
     async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -12066,19 +12158,20 @@ export class DatasetResolver extends ResolverBase {
         input.EntityName = 'Datasets';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Dataset_, { nullable: true })
     async Dataset(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
         this.CheckUserReadPermissions('Datasets', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwDatasets WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Datasets', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwDatasets] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Datasets', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Datasets', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [DatasetItem_])
     async DatasetItemsArray(@Root() dataset_: Dataset_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE DatasetName=${dataset_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE [DatasetName]=${dataset_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
+        return result;
     }
     
 }
@@ -12172,12 +12265,12 @@ export class DatasetItemResolver extends ResolverBase {
         input.EntityName = 'Dataset Items';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => DatasetItem_, { nullable: true })
     async DatasetItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwDatasetItems WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
 }
@@ -12314,19 +12407,20 @@ export class ConversationDetailResolver extends ResolverBase {
         input.EntityName = 'Conversation Details';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ConversationDetail_, { nullable: true })
     async ConversationDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwConversationDetails WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwConversationDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE ConversationDetailID=${conversationdetail_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [ConversationDetailID]=${conversationdetail_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => ConversationDetail_)
@@ -12336,7 +12430,7 @@ export class ConversationDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -12354,11 +12448,9 @@ export class ConversationDetailResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateConversationDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateConversationDetailInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => ConversationDetail_)
@@ -12368,7 +12460,7 @@ export class ConversationDetailResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
+            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Conversation Details
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -12392,14 +12484,15 @@ export class ConversationDetailResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => ConversationDetail_)
     async DeleteConversationDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -12536,26 +12629,28 @@ export class ConversationResolver extends ResolverBase {
         input.EntityName = 'Conversations';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => Conversation_, { nullable: true })
     async Conversation(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
         this.CheckUserReadPermissions('Conversations', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwConversations WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [ConversationDetail_])
     async ConversationDetailsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwConversationDetails] WHERE ConversationID=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwConversationDetails] WHERE [ConversationID]=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL));
+        return result;
     }
       
     @FieldResolver(() => [Report_])
     async ReportsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE ConversationID=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [ConversationID]=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => Conversation_)
@@ -12565,7 +12660,7 @@ export class ConversationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
+            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -12583,11 +12678,9 @@ export class ConversationResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateConversationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateConversationInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => Conversation_)
@@ -12597,7 +12690,7 @@ export class ConversationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
+            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Conversations
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -12621,14 +12714,15 @@ export class ConversationResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
 
-    @Mutation(() => Int)
+    @Mutation(() => Conversation_)
     async DeleteConversation(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID)
+            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
             if (await entityObject.Delete()) {
                 await this.AfterDelete(dataSource, ID); // fire event
-                return ID;
+                return returnValue;
             }
             else 
                 return null; // delete failed, this will cause an exception
@@ -12804,12 +12898,12 @@ export class UserNotificationResolver extends ResolverBase {
         input.EntityName = 'User Notifications';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => UserNotification_, { nullable: true })
     async UserNotification(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
         this.CheckUserReadPermissions('User Notifications', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwUserNotifications WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwUserNotifications] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => UserNotification_)
@@ -12819,7 +12913,7 @@ export class UserNotificationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -12837,11 +12931,9 @@ export class UserNotificationResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateUserNotificationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserNotificationInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => UserNotification_)
@@ -12851,7 +12943,7 @@ export class UserNotificationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
+            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Notifications
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -13013,19 +13105,20 @@ export class ResourceFolderResolver extends ResolverBase {
         input.EntityName = 'Resource Folders';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => ResourceFolder_, { nullable: true })
     async ResourceFolder(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceFolder_ | null> {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwResourceFolders WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [ResourceFolder_])
     async ResourceFoldersArray(@Root() resourcefolder_: ResourceFolder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE ParentID=${resourcefolder_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [ParentID]=${resourcefolder_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => ResourceFolder_)
@@ -13035,7 +13128,7 @@ export class ResourceFolderResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Resource Folders', this.GetUserFromPayload(userPayload));
+            const entityObject = <ResourceFolderEntity>await new Metadata().GetEntityObject('Resource Folders', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -13053,11 +13146,9 @@ export class ResourceFolderResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateResourceFolderInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateResourceFolderInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => ResourceFolder_)
@@ -13067,7 +13158,7 @@ export class ResourceFolderResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Resource Folders', this.GetUserFromPayload(userPayload));
+            const entityObject = <ResourceFolderEntity>await new Metadata().GetEntityObject('Resource Folders', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Resource Folders
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -13208,12 +13299,12 @@ export class SchemaInfoResolver extends ResolverBase {
         input.EntityName = 'Schema Info';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => SchemaInfo_, { nullable: true })
     async SchemaInfo(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
         this.CheckUserReadPermissions('Schema Info', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwSchemaInfos WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Schema Info', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwSchemaInfos] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Schema Info', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Schema Info', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => SchemaInfo_)
@@ -13223,7 +13314,7 @@ export class SchemaInfoResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
+            const entityObject = <SchemaInfoEntity>await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -13241,11 +13332,9 @@ export class SchemaInfoResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateSchemaInfoInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateSchemaInfoInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => SchemaInfo_)
@@ -13255,7 +13344,7 @@ export class SchemaInfoResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
+            const entityObject = <SchemaInfoEntity>await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Schema Info
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -13401,12 +13490,12 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         input.EntityName = 'Company Integration Record Maps';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => CompanyIntegrationRecordMap_, { nullable: true })
     async CompanyIntegrationRecordMap(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwCompanyIntegrationRecordMaps WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => CompanyIntegrationRecordMap_)
@@ -13416,7 +13505,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyIntegrationRecordMapEntity>await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -13434,11 +13523,9 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => CompanyIntegrationRecordMap_)
@@ -13448,7 +13535,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
+            const entityObject = <CompanyIntegrationRecordMapEntity>await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Record Maps
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -13658,19 +13745,20 @@ export class RecordMergeLogResolver extends ResolverBase {
         input.EntityName = 'Record Merge Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => RecordMergeLog_, { nullable: true })
     async RecordMergeLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordMergeLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
   
     @FieldResolver(() => [RecordMergeDeletionLog_])
     async RecordMergeDeletionLogsArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE RecordMergeLogID=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL);
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE [RecordMergeLogID]=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL));
+        return result;
     }
     
     @Mutation(() => RecordMergeLog_)
@@ -13680,7 +13768,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <RecordMergeLogEntity>await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -13698,11 +13786,9 @@ export class RecordMergeLogResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateRecordMergeLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeLogInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => RecordMergeLog_)
@@ -13712,7 +13798,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <RecordMergeLogEntity>await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Record Merge Logs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
@@ -13854,12 +13940,12 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         input.EntityName = 'Record Merge Deletion Logs';
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
-
     @Query(() => RecordMergeDeletionLog_, { nullable: true })
     async RecordMergeDeletionLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
-        const sSQL = `SELECT * FROM [admin].vwRecordMergeDeletionLogs WHERE ID=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
-        return dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {});
+        const sSQL = `SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
     }
 
     @Mutation(() => RecordMergeDeletionLog_)
@@ -13869,7 +13955,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <RecordMergeDeletionLogEntity>await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
             entityObject.SetMany(input);
             if (await entityObject.Save()) {
@@ -13887,11 +13973,9 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
 
     // Before/After CREATE Event Hooks for Sub-Classes to Override
     protected async BeforeCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
         return true;
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput) {
-        const i = input, d = dataSource; // prevent error
     }
     
     @Mutation(() => RecordMergeDeletionLog_)
@@ -13901,7 +13985,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
+            const entityObject = <RecordMergeDeletionLogEntity>await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
             entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Record Merge Deletion Logs
             
             if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {

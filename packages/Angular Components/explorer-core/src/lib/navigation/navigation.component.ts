@@ -412,13 +412,12 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     else if (data.ResourceType.trim().toLowerCase() === 'user views') {
       // a viwe can be either saved (where we have a view id) or dyanmic (where we have an entity name, and optionally, an extra filter)
-      if (data.ResourceRecordID > 0) {
+      if (data.ResourceRecordID) {
         // saved view
         existingTab = this.tabs.find(t => t.data.ResourceTypeID === data.ResourceTypeID && 
                                           t.data.ResourceRecordID === data.ResourceRecordID &&
                                           data.ResourceRecordID !== null && 
-                                          data.ResourceRecordID !== undefined && 
-                                          data.ResourceRecordID > 0 // make sure that we don't match on null/undefined/0 ResourceRecordID's - these should always be NEW tabs
+                                          data.ResourceRecordID !== undefined   // make sure that we don't match on null/undefined ResourceRecordID's - these should always be NEW tabs
                       );
       }
       else {

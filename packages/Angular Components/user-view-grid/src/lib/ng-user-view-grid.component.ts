@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -19,7 +19,7 @@ import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  primaryKeyValue: any;
+  primaryKeyValues: PrimaryKeyValue[];
 }
 
 export type GridRowEditedEvent = {
@@ -339,11 +339,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(this.compareMode || this.mergeMode) return;
     
     if (this._entityInfo) {
-      const pkeyVal = this.viewData[args.rowIndex][this._entityInfo.PrimaryKey.Name]
+      const pkeyVals: PrimaryKeyValue[] = [];
+      this._entityInfo.PrimaryKeys.forEach((pkey: EntityFieldInfo) => {
+        pkeyVals.push({FieldName: pkey.Name, Value: this.viewData[args.rowIndex][pkey.Name]})
+      })
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        primaryKeyValue: pkeyVal
+        primaryKeyValues: pkeyVals
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -357,10 +360,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (!this.InEditMode && this.AutoNavigate) {
         // tell app router to go to this record
-        this.router.navigate(['resource', 'record', pkeyVal], { queryParams: { Entity: this._entityInfo.Name } })
+        const pkVals: string =  this.GeneratePrimaryKeyValueString(pkeyVals);
+        this.router.navigate(['resource', 'record', pkVals], { queryParams: { Entity: this._entityInfo.Name } })
     }
     } 
   } 
+
+  public GeneratePrimaryKeyValueString(pkVals: PrimaryKeyValue[]): string {
+    return pkVals.length > 1 ? pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||') : pkVals[0].Value;
+  }
 
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
