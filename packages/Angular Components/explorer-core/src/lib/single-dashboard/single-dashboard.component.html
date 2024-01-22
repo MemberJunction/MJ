@@ -7,8 +7,17 @@
 <div class="dashboard-container">
   <div class="main-head-dashboard">
     <div class="dashboard-title">
-      <span class="k-icon k-i-star"></span>
-      <h3>{{ResourceData.Name}}</h3> 
+      <div *ngIf="isEditDashboardNameDialogOpened; else dashboard_name_header" class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
+        <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
+        <kendo-button (click)="saveDashboardName()">
+          <span class="k-i-save k-button-icon k-icon ng-star-inserted"></span>
+          Save
+        </kendo-button>
+      </div>
+      <ng-template #dashboard_name_header>
+        <span class="k-icon k-i-star"></span>
+        <h3 (click)="toggleInlineNameEdit()">{{dashboardEntity.Name}}</h3>
+      </ng-template>
     </div>
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
       <!-- <kendo-button class="btn-ref" >

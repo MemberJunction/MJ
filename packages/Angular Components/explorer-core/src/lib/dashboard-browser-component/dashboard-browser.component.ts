@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { Router } from '@angular/router'
 import { Metadata, RunView } from '@memberjunction/core';
 import { DashboardEntity } from '@memberjunction/core-entities';
+import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
 
 @Component({
   selector: 'app-dashboard-browser',
@@ -26,8 +27,12 @@ export class DashboardBrowserComponent {
       EntityName: 'Dashboards',
       ExtraFilter: `UserID=${md.CurrentUser.ID}`
     })
-    if (result && result.Success)
+    if (result && result.Success){
       this.dashboards = result.Results;
+    }
+    else{
+      this.dashboards = [];
+    }
 
     this.showLoader = false;
   }
@@ -35,5 +40,61 @@ export class DashboardBrowserComponent {
     if (item) {
       this.router.navigate(['resource', 'dashboard', item.ID])
     }
+  }
+
+  public async addNew(): Promise<void> {
+    this.showLoader = true;
+    const metadata: Metadata = new Metadata();
+    let dashboardEntity = <DashboardEntity>await metadata.GetEntityObject('Dashboards');
+    dashboardEntity.NewRecord();
+    dashboardEntity.UserID = metadata.CurrentUser.ID;
+
+    let dashboardCount: number = this.dashboards.length; 
+    let nameSuffix: string = dashboardCount > 0 ? `${dashboardCount + 1}` : "";
+    dashboardEntity.Name = "New Dashboard " + nameSuffix;
+
+    let defaultConfigDetails: DashboardConfigDetails = new DashboardConfigDetails();
+    const config = {
+      columns: defaultConfigDetails.columns,
+      rowHeight: defaultConfigDetails.rowHeight,
+      resizable: defaultConfigDetails.resizable,
+      reorderable: defaultConfigDetails.reorderable,
+      items: []
+    }
+    const configJSON = JSON.stringify(config);
+    dashboardEntity.UIConfigDetails = configJSON;
+
+    const result = await dashboardEntity.Save();
+    if(result){
+      this.dashboards.push(dashboardEntity);
+    }
+    else{
+      console.error("Error creating new dashboard entity");
+    }
+    this.showLoader = false;
+  }
+
+  public async deleteItem(item: DashboardEntity): Promise<void> {
+    this.showLoader = true;
+    if (item && item.ID && item.ID > 0) {
+      const md = new Metadata();
+      let dashboardEntity = <DashboardEntity>await md.GetEntityObject('Dashboards');
+      let loadResult = await dashboardEntity.Load(item.ID);
+
+      if(loadResult){
+        let deleteResult = await dashboardEntity.Delete();
+        if(deleteResult){
+          console.log(`successfully deleted dashboard record ${item.ID}`);
+          this.dashboards = this.dashboards.filter(i => i.ID != item.ID);
+        }
+        else{
+          console.error(`Unable to delete dashboard record ${item.ID}`);
+        }
+      }
+      else{
+        console.error(`unable to fetch dashboard record ${item.ID}`);
+      }
+    }
+    this.showLoader = false;
   }
 }

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { ResourceData } from '../generic/base-resource-component';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
@@ -12,6 +12,9 @@ import { Subject, debounceTime } from 'rxjs';
   styleUrls: ['./single-dashboard.component.css']
 })
 export class SingleDashboardComponent implements OnInit {
+
+  @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
+
   @Input() public ResourceData!: ResourceData;
   @Output() public dashboardSaved: EventEmitter<DashboardEntity> = new EventEmitter<DashboardEntity>();
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
@@ -22,6 +25,7 @@ export class SingleDashboardComponent implements OnInit {
   public config: DashboardConfigDetails = new DashboardConfigDetails();
   public isItemDialogOpened: boolean = false;
   public isEditDialogOpened: boolean = false;
+  public isEditDashboardNameDialogOpened: boolean = false;
   public selectedResource!: ResourceTypeEntity | null;
   private saveChangesSubject: Subject<any> = new Subject();
 
@@ -126,6 +130,7 @@ export class SingleDashboardComponent implements OnInit {
     if(data) {
       const dashboardItem = this.CreateDashboardItem(data);
       this.items.push(dashboardItem);
+      console.log(dashboardItem);
         this.saveChangesSubject.next(true);
     }
     this.selectedResource = null;
@@ -173,6 +178,28 @@ export class SingleDashboardComponent implements OnInit {
 
   public dashboardSaveComplete(entity: DashboardEntity): void {
     this.dashboardSaved.emit(entity);
+  }
+
+  public toggleInlineNameEdit(): void {
+    this.isEditDashboardNameDialogOpened = !this.isEditDashboardNameDialogOpened;
+    if(this.isEditDashboardNameDialogOpened){
+      this.dashboardNameInput?.nativeElement?.focus();
+    }
+    else{
+      console.log("toggle value:", this.isEditDashboardNameDialogOpened);
+    }
+  }
+
+  public saveDashboardName(): void {
+    this.toggleInlineNameEdit();
+    const inputValue = this.dashboardNameInput.nativeElement.value;
+    if(inputValue && inputValue.length > 3){
+      this.dashboardEntity.Name = inputValue;
+      this.SaveDashboard();
+    }
+    else {
+      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning', 1500);
+    }
   }
 
 

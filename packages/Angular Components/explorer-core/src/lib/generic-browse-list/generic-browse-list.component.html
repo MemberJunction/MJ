@@ -4,7 +4,14 @@
             <h1>{{title}}</h1>
         </div>
         <div class="add-item">
-            <button kendoButton (click)="addButtonClicked()" icon="addIcon" [primary]="true">{{addText}}</button>
+          <button kendoButton (click)="addButtonClicked()" [primary]="true">
+            <span class="k-icon k-font-icon k-i-plus"></span>
+              {{addText}}
+          </button>
+          <button kendoButton (click)="goHomeButtonClicked()" [primary]="true">
+            <span class="k-icon k-font-icon k-i-chevron-left"></span>
+              {{backText}}
+          </button>
         </div>
     </div>
     <div class="main-area"> 
@@ -14,6 +21,9 @@
             <kendo-card class="card-wrapper">
               <kendo-card-header class="k-hstack view-card">
                 <kendo-icon name="table" [class]="iconName"></kendo-icon>
+                <button kendoButton (click)="deleteItem(d)" [primary]="true">
+                  <span class="k-icon k-font-icon k-i-chevron-left"></span>
+                </button>
               </kendo-card-header>
     
               <kendo-card-body (click)="itemClick(d)">
