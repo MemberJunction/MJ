@@ -10,7 +10,6 @@
     "start": "npx turbo start --filter=@memberjunction/api --filter=mj_explorer"
   },
   "dependencies": {
-    "@memberjunction/ng-explorer-core": "^0.9.1",
     "@progress/kendo-theme-default": "^7.0.1"
   }
 }

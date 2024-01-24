@@ -77,12 +77,35 @@ export type NewUserSetup = {
     IsComplete: boolean;
 }
 
+
+export type AdvancedGenerationFeatureOption = {
+    name: string;
+    value: any;
+}
+
+export type AdvancedGenerationFeature = {
+    name: string;
+    enabled: boolean;
+    description?: string; // not used, but useful for documentation within the config file
+    systemPrompt?: string;
+    userMessage?: string;
+    options?: AdvancedGenerationFeatureOption[];
+}
+
+export type AdvancedGeneration = {
+    enableAdvancedGeneration: boolean;
+    AIVendor: "openai" | "anthropic" | "mistral";
+    AIModel: "";
+    features: AdvancedGenerationFeature[];
+}
+
 export type ConfigInfo = {
     newUserSetup?: NewUserSetup;
     settings: SettingInfo[];
     excludeSchemas: string[];
     excludeTables: TableInfo[];
     customSQLScripts: CustomSQLScript[];
+    advancedGeneration?: AdvancedGeneration;
     output: OutputInfo[];
     commands: CommandInfo[];
     logging: LogInfo;

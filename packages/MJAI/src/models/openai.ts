@@ -62,7 +62,7 @@ export class OpenAILLM extends BaseLLM implements IChat, ISummarize, IClassify {
                 }),
                 usage: new ModelUsage(result.data.usage.prompt_tokens, result.data.usage.completion_tokens)
             },
-            success: result.success,
+            success: result.status === 200,
             status: result.status,
             statusText: result.statusText,
             startTime: startTime,

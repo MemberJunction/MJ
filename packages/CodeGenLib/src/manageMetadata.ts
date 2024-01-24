@@ -6,9 +6,10 @@
 
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
-import { LogError, LogStatus, Metadata } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { logError, logStatus } from "./logging";
 import { recompileAllBaseViews } from "./sql";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
 
 export const newEntityList: string[] = [];
 
@@ -34,6 +35,10 @@ export async function manageMetadata(ds: DataSource): Promise<boolean> {
    if (! await manageEntityRelationships(ds, md)) {
       logError('Error managing entity relationships');
       bSuccess = false;
+   }
+
+   if (newEntityList.length > 0) {
+      await generateNewEntityDescriptions(ds, md);
    }
 
    // if (! await manageVirtualEntities(ds)) {
@@ -228,6 +233,52 @@ export async function manageEntityFields(ds: DataSource): Promise<boolean> {
    return bSuccess;
 }
 
+async function generateNewEntityDescriptions(ds: DataSource, md: Metadata) {
+   // for the list of new entities, go through and attempt to generate new entity descriptions
+   const ag = new AdvancedGeneration();
+   if (ag.featureEnabled('EntityDescriptions')) {
+      // we have the feature enabled, so let's loop through the new entities and generate descriptions for them
+      const llm = ag.LLM;
+      const prompt = ag.getPrompt('EntityDescriptions');
+      const systemPrompt = prompt.systemPrompt;
+      const userMessage = prompt.userMessage + '\n\n';
+      // now loop through the new entities and generate descriptions for them
+      for (let e of newEntityList) {
+         const data = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
+         const fields = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID = ${data[0].ID}`);
+         const entityUserMessage = userMessage + `Entity Name: ${e}, 
+                                                  Base Table: ${data[0].BaseTable}, 
+                                                  Schema: ${data[0].SchemaName}. 
+                                                  Fields: 
+                                                  ${fields.map(f => `   ${f.Name}: ${f.Type}`).join('\n')}`;
+         const result = await llm.ChatCompletion({
+            model: ag.AIModel,
+            systemPrompt: systemPrompt,
+            userMessage: entityUserMessage,
+            messages: []
+         })
+         if (result?.success) {
+            const resultText = result?.data.choices[0].message.content;
+            try {
+               const structuredResult: EntityDescriptionResult = JSON.parse(resultText);
+               if (structuredResult?.entityDescription && structuredResult.entityDescription.length > 0) {
+                  const ssql = `UPDATE [${mj_core_schema()}].Entity SET Description = '${structuredResult.entityDescription}' WHERE Name = '${e}'`;
+                  await ds.query(ssql);
+               }
+               else {
+                  console.warn('   >>> Advanced Generation Error: LLM returned a blank entity description, skipping entity description for entity ' + e);
+               }
+            }
+            catch (e) {
+               console.warn('   >>> Advanced Generation Error: LLM returned invalid result, skipping entity description for entity ' + e + '. Result from LLM: ' + resultText, e);
+            }
+         }
+         else {
+            console.warn('   >>> Advanced Generation Error: LLM call failed, skipping entity description for entity ' + e);
+         }
+      }
+   }
+}
 
 async function updateEntityFieldDisplayNameWhereNull(ds: DataSource): Promise<boolean> {
    try   {
@@ -538,13 +589,56 @@ async function shouldCreateNewEntity(ds: DataSource, newEntity: any): Promise<{s
       return { shouldCreate: false, validationMessage: errorMsg };
    }   
 }
+async function createNewEntityName(newEntity: any): Promise<string> {
+   const ag = new AdvancedGeneration();
+   if (ag.featureEnabled('EntityNames')) {
+      // get the LLM for this entity
+      const chat = ag.LLM;
+      const prompt = ag.getPrompt('EntityNames')
+      const systemPrompt = ag.fillTemplate(prompt.systemPrompt, newEntity);
+      const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
+      const result = await chat.ChatCompletion({
+         model: ag.AIModel,
+         systemPrompt: systemPrompt,
+         userMessage: userMessage,
+         messages: []
+      })
+      if (result?.success) {
+         const resultText = result?.data.choices[0].message.content;
+         try {
+            const structuredResult: EntityNameResult = JSON.parse(resultText);
+            if (structuredResult?.entityName) {
+               return structuredResult.entityName;
+            }   
+            else {
+               console.warn('   >>> Advanced Generation Error: LLM returned a blank entity name, falling back to simple generated entity name');
+               return simpleNewEntityName(newEntity.TableName);
+            }
+         }
+         catch (e) {
+            console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name. Result from LLM: ' + resultText, e);
+            return simpleNewEntityName(newEntity.TableName);
+         }
+      }
+      else {
+         console.warn('   >>> Advanced Generation Error: LLM call failed, falling back to simple generated entity name.');
+         return simpleNewEntityName(newEntity.TableName);
+      }
+   }
+   else {
+      return simpleNewEntityName(newEntity.TableName);
+   }
+}
+function simpleNewEntityName(tableName: string): string {
+   return convertCamelCaseToHaveSpaces(generatePluralName(tableName));
+}
 
 async function createNewEntity(ds: DataSource, newEntity: any, md: Metadata) {
    try {
       const {shouldCreate, validationMessage} = await shouldCreateNewEntity(ds, newEntity);
       if (shouldCreate) {
          // process a single new entity 
-         let newEntityName: string = convertCamelCaseToHaveSpaces(generatePluralName(newEntity.TableName));
+         let newEntityName: string = await createNewEntityName(newEntity);
          let suffix = '';
          const existingEntity = md.Entities.find(e => e.Name === newEntityName);
          if (existingEntity) {
@@ -713,14 +807,31 @@ function convertCamelCaseToHaveSpaces(s: string): string {
    return result;
 }
 
+function stripWhitespace(s: string): string {
+   return s.replace(/\s/g, '');
+}  
+
 function generatePluralName(singularName: string) {
-   if (singularName.endsWith('y')) {
-      return singularName.substring(0, singularName.length - 1) + 'ies';
+   if (singularName.endsWith('y') && singularName.length > 1) {
+       // Check if the letter before 'y' is a vowel
+       const secondLastChar = singularName[singularName.length - 2].toLowerCase();
+       if ('aeiou'.includes(secondLastChar)) {
+           // If it's a vowel, just add 's', example "key/keys"
+           return singularName + 's';
+       } else {
+           // If it's a consonant, replace 'y' with 'ies' - example "party/parties"
+           return singularName.substring(0, singularName.length - 1) + 'ies';
+       }
+   } else if (singularName.endsWith('y')) {
+       // If the string is just 'y', treat it like a vowel and just add 's'
+       return singularName + 's';
    }
    else if (singularName.endsWith('s')) {
-      return singularName; // singular name already includes ending with s, so just return it
+       // Singular name already ends with 's', so just return it
+       return singularName;
    }
    else {
-      return singularName + 's';
+       // For other cases, just add 's'
+       return singularName + 's';
    }
-}
+} 

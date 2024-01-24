@@ -19,5 +19,8 @@
     "userEmail": "newuser@example.com",
     "userFirstName": "John",
     "userLastName": "Doe",
-    "userName": "johndoe"
+    "userName": "johndoe",
+    "openAIAPIKey":"",
+    "anthropicAPIKey":"",
+    "mistralAPIKey":""    
 }
