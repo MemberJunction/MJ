@@ -8,8 +8,8 @@ MJ is free to use by anyone but was specifically designed to support non-profits
 
 We maintain an extensive documentation site at https://docs.memberjunction.org and we encourage you to visit the site, learn how to get started with MemberJunction
 
-# Community Site
+# Discussions Site
 
-Our goal is to embrace a diverse community of developers and users to grow this project. To this end, we've established a community site here and welcome everyone to join in the conversation. 
+Our goal is to embrace a diverse community of developers and users to grow this project. To this end, we've established a discussion forum for Q&A here and welcome everyone to join in the conversation. 
 
-https://community.sidecarglobal.com/s/member-junction/ 
+https://docs.memberjunction.org/discuss 
