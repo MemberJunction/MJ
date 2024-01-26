@@ -3,6 +3,7 @@ import { Router } from '@angular/router'
 import { Metadata, RunView } from '@memberjunction/core';
 import { DashboardEntity } from '@memberjunction/core-entities';
 import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
+import { SharedService } from '../../shared/shared.service';
 
 @Component({
   selector: 'app-dashboard-browser',
@@ -13,7 +14,7 @@ export class DashboardBrowserComponent {
   public dashboards: DashboardEntity[] = [];
   public showLoader: boolean = false;
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private sharedService: SharedService) {}
 
   ngOnInit(): void {
     this.LoadData();
@@ -69,7 +70,7 @@ export class DashboardBrowserComponent {
       this.dashboards.push(dashboardEntity);
     }
     else{
-      console.error("Error creating new dashboard entity");
+      this.sharedService.CreateSimpleNotification("Error creating new dashboard entity", "error");
     }
     this.showLoader = false;
   }
@@ -84,15 +85,16 @@ export class DashboardBrowserComponent {
       if(loadResult){
         let deleteResult = await dashboardEntity.Delete();
         if(deleteResult){
-          console.log(`successfully deleted dashboard record ${item.ID}`);
+          //todo - change these to use the shared
+          this.sharedService.CreateSimpleNotification(`successfully deleted dashboard record ${item.ID}`, "info");
           this.dashboards = this.dashboards.filter(i => i.ID != item.ID);
         }
         else{
-          console.error(`Unable to delete dashboard record ${item.ID}`);
+          this.sharedService.CreateSimpleNotification(`Unable to delete dashboard record ${item.ID}`, "error");
         }
       }
       else{
-        console.error(`unable to fetch dashboard record ${item.ID}`);
+        this.sharedService.CreateSimpleNotification(`unable to fetch dashboard record ${item.ID}`, "error");
       }
     }
     this.showLoader = false;

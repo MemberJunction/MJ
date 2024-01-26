@@ -21,11 +21,14 @@
             <kendo-card class="card-wrapper">
               <kendo-card-header class="k-hstack view-card">
                 <kendo-icon name="table" [class]="iconName"></kendo-icon>
-                <button kendoButton (click)="deleteItem(d)" [primary]="true">
-                  <span class="k-icon k-font-icon k-i-chevron-left"></span>
-                </button>
+                <div class="btn-wrapper">
+                  <button kendoButton fillMode="flat">
+                    <span class="k-icon k-i-edit"></span>
+                  </button>
+                  <button kendoButton fillMode="flat" (click)="deleteItem(d)"><span
+                      class="k-icon k-i-delete"></span></button>
+                </div>
               </kendo-card-header>
-    
               <kendo-card-body (click)="itemClick(d)">
                 <div class="view-card-content k-cursor-pointer">
                   <h5 kendoCardTitle>{{ d.Name }}</h5>

@@ -35,6 +35,30 @@ line-height: 28px;
     padding-bottom: 20px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
+
 .tile-resource-container .k-tilelayout {
     background: #fff;
+}
+
+.bg-light-grey {
+    background-color: lightgray;
+}
+
+.bg-dark-grey {
+    background-color: darkgray;
+}
+
+.bg-blue {
+    background-color: #4250AD;
+    color: white;
+}
+
+.dashboard-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.button-spacing {
+    margin-right: 8px
 }

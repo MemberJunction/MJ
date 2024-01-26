@@ -1,0 +1,11 @@
+<kendo-dialog class="modal-body-wrap" (close)="closeDialog()">
+    <p class="k-m-7.5 k-text-center">
+        Are you sure you want to delete <b>{{dashboardItem?.title}}</b>?
+    </p>
+    <div class="k-actions k-actions-end popup-actions">
+        <button kendoButton (click)="confirmDeleteItem()" themeColor="primary">
+            <span class="k-icon k-i-check"></span> Yes
+        </button>
+        <button kendoButton (click)="closeDialog()"><span class="k-icon k-i-close"></span> No</button>
+    </div>
+</kendo-dialog>
