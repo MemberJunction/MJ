@@ -19,6 +19,7 @@
     "typescript": "^5.0.3"
   },
   "dependencies": {
+    "@memberjunction/ai": "^0.9.106",
     "@memberjunction/core": "^0.9.116",
     "@memberjunction/core-entities": "^0.9.44",
     "@memberjunction/global": "^0.9.108",

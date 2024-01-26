@@ -74,7 +74,10 @@ async function main() {
     userName,
     userFirstName,
     userLastName,
-    userEmail
+    userEmail,
+    openAIAPIKey,
+    anthropicAPIKey,
+    mistralAPIKey
   } = await getUserConfigurationInput();
 
   // if the user asked for a new user via our config file, need to push that info down to the CodeGen config.json file
@@ -109,6 +112,11 @@ OUTPUT_CODE='${dbDatabase}'
 
 # Name of the schema that MJ has been setup in. This defaults to admin
 MJ_CORE_SCHEMA=admin
+
+# If you are using MJAI library, provide your API KEYS here for the various services
+OPEN_AI_API_KEY = '${openAIAPIKey}'
+ANTHROPIC_API_KEY = '${anthropicAPIKey}'
+MISTRAL_API_KEY = '${mistralAPIKey}'
 
 #CONFIG_FILE is the name of the file that has the configuration parameters for CodeGen
 CONFIG_FILE='config.json'
@@ -161,8 +169,9 @@ AUTH0_DOMAIN=${auth0Domain}
 MJ_CORE_SCHEMA=admin
 
 # If you are using MJAI library, provide your API KEYS here for the various services
-OPEN_AI_API_KEY = ''
-ANTHROPIC_API_KEY = ''
+OPEN_AI_API_KEY = '${openAIAPIKey}'
+ANTHROPIC_API_KEY = '${anthropicAPIKey}'
+MISTRAL_API_KEY = '${mistralAPIKey}'
 
 # Skip API URL, KEY and Org ID
 # YOU MUST ENTER IN THE CORRECT URL and ORG ID for your Skip API USE BELOW
@@ -403,7 +412,9 @@ async function askConfigurationQuestions() {
       userLastName = await askQuestion('   Enter the new user last name: ');
       userName = await askQuestion('   Enter the new user name (leave blank to use email): ', userEmail);
     }
-  
+    const openAIAPIKey = await askQuestion('Enter the OpenAI API Key (leave blank if not using): ', '');
+    const anthropicAPIKey = await askQuestion('Enter the Anthropic API Key (leave blank if not using): ', '');
+    const mistralAPIKey = await askQuestion('Enter the Mistral API Key (leave blank if not using): ', '');
 
     return {
       dbUrl,
@@ -426,7 +437,10 @@ async function askConfigurationQuestions() {
       userName,
       userFirstName,
       userLastName,
-      userEmail
+      userEmail,
+      openAIAPIKey,
+      anthropicAPIKey,
+      mistralAPIKey
     };
 }
 
