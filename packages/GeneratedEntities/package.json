@@ -19,7 +19,7 @@
     "typescript": "^5.0.3"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.127",
-    "@memberjunction/global": "^0.9.116"
+    "@memberjunction/core": "^0.9.128",
+    "@memberjunction/global": "^0.9.117"
   }
 }

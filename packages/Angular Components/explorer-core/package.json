@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.74",
+  "version": "0.9.75",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,12 +27,12 @@
     "@progress/kendo-angular-listview": "^12.1.0"
   },
   "dependencies": {
-    "@memberjunction/global": "^0.9.116",
-    "@memberjunction/core": "^0.9.127",
-    "@memberjunction/ng-compare-records": "^0.9.124",
-    "@memberjunction/ng-record-changes": "^0.9.57",
-    "@memberjunction/ng-container-directives": "^0.9.96",
-    "@memberjunction/ng-user-view-grid": "^0.9.107",
+    "@memberjunction/global": "^0.9.117",
+    "@memberjunction/core": "^0.9.128",
+    "@memberjunction/ng-compare-records": "^0.9.125",
+    "@memberjunction/ng-record-changes": "^0.9.58",
+    "@memberjunction/ng-container-directives": "^0.9.97",
+    "@memberjunction/ng-user-view-grid": "^0.9.108",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
