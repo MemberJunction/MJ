@@ -25,8 +25,9 @@ export async function manageSQLScriptsAndExecution(ds: DataSource, entities: Ent
             return false;
         logStatus(`   Time to run custom SQL scripts: ${(new Date().getTime() - startTime.getTime())/1000} seconds`);
 
-        const includedEntities = entities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
-        const excludedEntities = entities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
+        // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
+        const includedEntities = entities.filter(e => e.IncludeInAPI).filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
+        const excludedEntities = entities.filter(e => e.IncludeInAPI).filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 
         // STEP 2(a) - generate all the SQL files and execute them
         const step2StartTime: Date = new Date();

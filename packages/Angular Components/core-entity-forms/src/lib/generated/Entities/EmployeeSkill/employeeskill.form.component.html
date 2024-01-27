@@ -1,0 +1,19 @@
+<div class="record-form-container">
+    <form *ngIf="record" class="record-form"  #form="ngForm">
+                        <div #topArea class="record-form-group">
+                    <mj-form-toolbar [form]="this"></mj-form-toolbar>
+                    
+                </div>
+                        <kendo-tabstrip #tabStrip (tabSelect)="onTabSelect($event)" [keepTabContent]="true" [animate] = "false" [height]="TabHeight" >
+                                
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                        <ng-template kendoTabTitle>Details</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-form-section Entity="Employee Skills" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
+                                
+                            </kendo-tabstrip>
+    </form>
+  </div>
+    

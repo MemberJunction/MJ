@@ -620,7 +620,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         wsItem = tab.workspaceItem;
       }
 
-      wsItem.ResourceRecordID = tab.data.ResourceRecordID;
+      wsItem.ResourceRecordID = tab.data.ResourceRecordID.toString();
       wsItem.Sequence = index;
       wsItem.Configuration = JSON.stringify(tab.data.Configuration);// JSON.stringify({ Entity: tab.data.Entity });
       const result = await wsItem.Save();

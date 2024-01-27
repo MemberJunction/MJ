@@ -65,6 +65,7 @@ import { AddItemComponent } from './lib/single-dashboard/Components/add-item/add
 import { EditDashboardComponent } from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component';
 import { URLPipe } from './shared/urlPipe';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
+import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
 
 @NgModule({
   declarations: [
@@ -102,6 +103,7 @@ import { UserNotificationsComponent } from './lib/user-notifications/user-notifi
     ViewPropertiesDialogComponent,
     SingleDashboardComponent,
     AddItemComponent,
+    DeleteItemComponent,
     EditDashboardComponent,
     URLPipe,
     UserNotificationsComponent
@@ -175,6 +177,7 @@ import { UserNotificationsComponent } from './lib/user-notifications/user-notifi
     ViewPropertiesDialogComponent,
     SingleDashboardComponent,
     AddItemComponent,
+    DeleteItemComponent,
     EditDashboardComponent,
     URLPipe,
     UserNotificationsComponent

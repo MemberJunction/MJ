@@ -20,6 +20,9 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { CompanyFormComponent, LoadCompanyFormComponent } from "./Entities/Company/company.form.component";
 import { EmployeeFormComponent, LoadEmployeeFormComponent } from "./Entities/Employee/employee.form.component";
 import { UserFavoriteFormComponent, LoadUserFavoriteFormComponent } from "./Entities/UserFavorite/userfavorite.form.component";
+import { EmployeeCompanyIntegrationFormComponent, LoadEmployeeCompanyIntegrationFormComponent } from "./Entities/EmployeeCompanyIntegration/employeecompanyintegration.form.component";
+import { EmployeeRoleFormComponent, LoadEmployeeRoleFormComponent } from "./Entities/EmployeeRole/employeerole.form.component";
+import { EmployeeSkillFormComponent, LoadEmployeeSkillFormComponent } from "./Entities/EmployeeSkill/employeeskill.form.component";
 import { RoleFormComponent, LoadRoleFormComponent } from "./Entities/Role/role.form.component";
 import { SkillFormComponent, LoadSkillFormComponent } from "./Entities/Skill/skill.form.component";
 import { IntegrationURLFormatFormComponent, LoadIntegrationURLFormatFormComponent } from "./Entities/IntegrationURLFormat/integrationurlformat.form.component";
@@ -31,11 +34,15 @@ import { UserFormComponent, LoadUserFormComponent } from "./Entities/User/user.f
 import { EntityRelationshipFormComponent, LoadEntityRelationshipFormComponent } from "./Entities/EntityRelationship/entityrelationship.form.component";
 import { UserRecordLogFormComponent, LoadUserRecordLogFormComponent } from "./Entities/UserRecordLog/userrecordlog.form.component";
 import { UserViewFormComponent, LoadUserViewFormComponent } from "./Entities/UserView/userview.form.component";
+import { CompanyIntegrationRunFormComponent, LoadCompanyIntegrationRunFormComponent } from "./Entities/CompanyIntegrationRun/companyintegrationrun.form.component";
+import { CompanyIntegrationRunDetailFormComponent, LoadCompanyIntegrationRunDetailFormComponent } from "./Entities/CompanyIntegrationRunDetail/companyintegrationrundetail.form.component";
+import { ErrorLogFormComponent, LoadErrorLogFormComponent } from "./Entities/ErrorLog/errorlog.form.component";
 import { ApplicationFormComponent, LoadApplicationFormComponent } from "./Entities/Application/application.form.component";
 import { ApplicationEntityFormComponent, LoadApplicationEntityFormComponent } from "./Entities/ApplicationEntity/applicationentity.form.component";
 import { EntityPermissionFormComponent, LoadEntityPermissionFormComponent } from "./Entities/EntityPermission/entitypermission.form.component";
 import { UserApplicationEntityFormComponent, LoadUserApplicationEntityFormComponent } from "./Entities/UserApplicationEntity/userapplicationentity.form.component";
 import { UserApplicationFormComponent, LoadUserApplicationFormComponent } from "./Entities/UserApplication/userapplication.form.component";
+import { CompanyIntegrationRunAPILogFormComponent, LoadCompanyIntegrationRunAPILogFormComponent } from "./Entities/CompanyIntegrationRunAPILog/companyintegrationrunapilog.form.component";
 import { ListFormComponent, LoadListFormComponent } from "./Entities/List/list.form.component";
 import { ListDetailFormComponent, LoadListDetailFormComponent } from "./Entities/ListDetail/listdetail.form.component";
 import { UserViewRunFormComponent, LoadUserViewRunFormComponent } from "./Entities/UserViewRun/userviewrun.form.component";
@@ -83,6 +90,9 @@ import { RecordMergeDeletionLogFormComponent, LoadRecordMergeDeletionLogFormComp
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
+import { EmployeeCompanyIntegrationDetailsComponent, LoadEmployeeCompanyIntegrationDetailsComponent } from "./Entities/EmployeeCompanyIntegration/sections/details.component"
+import { EmployeeRoleDetailsComponent, LoadEmployeeRoleDetailsComponent } from "./Entities/EmployeeRole/sections/details.component"
+import { EmployeeSkillDetailsComponent, LoadEmployeeSkillDetailsComponent } from "./Entities/EmployeeSkill/sections/details.component"
 import { RoleDetailsComponent, LoadRoleDetailsComponent } from "./Entities/Role/sections/details.component"
 import { SkillDetailsComponent, LoadSkillDetailsComponent } from "./Entities/Skill/sections/details.component"
 import { IntegrationURLFormatDetailsComponent, LoadIntegrationURLFormatDetailsComponent } from "./Entities/IntegrationURLFormat/sections/details.component"
@@ -99,11 +109,15 @@ import { UserDetailsComponent, LoadUserDetailsComponent } from "./Entities/User/
 import { EntityRelationshipDetailsComponent, LoadEntityRelationshipDetailsComponent } from "./Entities/EntityRelationship/sections/details.component"
 import { UserRecordLogDetailsComponent, LoadUserRecordLogDetailsComponent } from "./Entities/UserRecordLog/sections/details.component"
 import { UserViewDetailsComponent, LoadUserViewDetailsComponent } from "./Entities/UserView/sections/details.component"
+import { CompanyIntegrationRunDetailsComponent, LoadCompanyIntegrationRunDetailsComponent } from "./Entities/CompanyIntegrationRun/sections/details.component"
+import { CompanyIntegrationRunDetailDetailsComponent, LoadCompanyIntegrationRunDetailDetailsComponent } from "./Entities/CompanyIntegrationRunDetail/sections/details.component"
+import { ErrorLogDetailsComponent, LoadErrorLogDetailsComponent } from "./Entities/ErrorLog/sections/details.component"
 import { ApplicationDetailsComponent, LoadApplicationDetailsComponent } from "./Entities/Application/sections/details.component"
 import { ApplicationEntityDetailsComponent, LoadApplicationEntityDetailsComponent } from "./Entities/ApplicationEntity/sections/details.component"
 import { EntityPermissionDetailsComponent, LoadEntityPermissionDetailsComponent } from "./Entities/EntityPermission/sections/details.component"
 import { UserApplicationEntityDetailsComponent, LoadUserApplicationEntityDetailsComponent } from "./Entities/UserApplicationEntity/sections/details.component"
 import { UserApplicationDetailsComponent, LoadUserApplicationDetailsComponent } from "./Entities/UserApplication/sections/details.component"
+import { CompanyIntegrationRunAPILogDetailsComponent, LoadCompanyIntegrationRunAPILogDetailsComponent } from "./Entities/CompanyIntegrationRunAPILog/sections/details.component"
 import { ListDetailsComponent, LoadListDetailsComponent } from "./Entities/List/sections/details.component"
 import { ListDetailDetailsComponent, LoadListDetailDetailsComponent } from "./Entities/ListDetail/sections/details.component"
 import { UserViewRunDetailsComponent, LoadUserViewRunDetailsComponent } from "./Entities/UserViewRun/sections/details.component"
@@ -155,6 +169,9 @@ declarations: [
     CompanyFormComponent,
     EmployeeFormComponent,
     UserFavoriteFormComponent,
+    EmployeeCompanyIntegrationFormComponent,
+    EmployeeRoleFormComponent,
+    EmployeeSkillFormComponent,
     RoleFormComponent,
     SkillFormComponent,
     IntegrationURLFormatFormComponent,
@@ -166,12 +183,9 @@ declarations: [
     EntityRelationshipFormComponent,
     UserRecordLogFormComponent,
     UserViewFormComponent,
-    ApplicationFormComponent,
-    ApplicationEntityFormComponent,
-    EntityPermissionFormComponent,
-    UserApplicationEntityFormComponent,
-    UserApplicationFormComponent,
-    ListFormComponent],
+    CompanyIntegrationRunFormComponent,
+    CompanyIntegrationRunDetailFormComponent,
+    ErrorLogFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -192,6 +206,13 @@ export class GeneratedForms_SubModule_0 { }
 
 @NgModule({
 declarations: [
+    ApplicationFormComponent,
+    ApplicationEntityFormComponent,
+    EntityPermissionFormComponent,
+    UserApplicationEntityFormComponent,
+    UserApplicationFormComponent,
+    CompanyIntegrationRunAPILogFormComponent,
+    ListFormComponent,
     ListDetailFormComponent,
     UserViewRunFormComponent,
     UserViewRunDetailFormComponent,
@@ -204,14 +225,7 @@ declarations: [
     AuditLogFormComponent,
     AuthorizationFormComponent,
     AuthorizationRoleFormComponent,
-    AuditLogTypeFormComponent,
-    EntityFieldValueFormComponent,
-    AIModelFormComponent,
-    AIActionFormComponent,
-    AIModelActionFormComponent,
-    EntityAIActionFormComponent,
-    AIModelTypeFormComponent,
-    QueueTypeFormComponent],
+    AuditLogTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -232,6 +246,13 @@ export class GeneratedForms_SubModule_1 { }
 
 @NgModule({
 declarations: [
+    EntityFieldValueFormComponent,
+    AIModelFormComponent,
+    AIActionFormComponent,
+    AIModelActionFormComponent,
+    EntityAIActionFormComponent,
+    AIModelTypeFormComponent,
+    QueueTypeFormComponent,
     QueueFormComponent,
     QueueTaskFormComponent,
     DashboardFormComponent,
@@ -244,14 +265,7 @@ declarations: [
     TagFormComponent,
     TaggedItemFormComponent,
     WorkspaceFormComponent,
-    WorkspaceItemFormComponent,
-    DatasetFormComponent,
-    DatasetItemFormComponent,
-    ConversationDetailFormComponent,
-    ConversationFormComponent,
-    UserNotificationFormComponent,
-    ResourceFolderFormComponent,
-    SchemaInfoFormComponent],
+    WorkspaceItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -272,26 +286,26 @@ export class GeneratedForms_SubModule_2 { }
 
 @NgModule({
 declarations: [
+    DatasetFormComponent,
+    DatasetItemFormComponent,
+    ConversationDetailFormComponent,
+    ConversationFormComponent,
+    UserNotificationFormComponent,
+    ResourceFolderFormComponent,
+    SchemaInfoFormComponent,
     CompanyIntegrationRecordMapFormComponent,
     RecordMergeLogFormComponent,
     RecordMergeDeletionLogFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
+    EmployeeCompanyIntegrationDetailsComponent,
+    EmployeeRoleDetailsComponent,
+    EmployeeSkillDetailsComponent,
     RoleDetailsComponent,
     SkillDetailsComponent,
     IntegrationURLFormatDetailsComponent,
-    IntegrationDetailsComponent,
-    CompanyIntegrationDetailsComponent,
-    EntityFieldDetailsComponent,
-    EntityDetailsComponent,
-    EntityTopComponent,
-    EntityAuditComponent,
-    EntityAPIComponent,
-    EntityDBComponent,
-    EntityUIComponent,
-    UserDetailsComponent,
-    EntityRelationshipDetailsComponent],
+    IntegrationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -312,26 +326,26 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    CompanyIntegrationDetailsComponent,
+    EntityFieldDetailsComponent,
+    EntityDetailsComponent,
+    EntityTopComponent,
+    EntityAuditComponent,
+    EntityAPIComponent,
+    EntityDBComponent,
+    EntityUIComponent,
+    UserDetailsComponent,
+    EntityRelationshipDetailsComponent,
     UserRecordLogDetailsComponent,
     UserViewDetailsComponent,
+    CompanyIntegrationRunDetailsComponent,
+    CompanyIntegrationRunDetailDetailsComponent,
+    ErrorLogDetailsComponent,
     ApplicationDetailsComponent,
     ApplicationEntityDetailsComponent,
     EntityPermissionDetailsComponent,
     UserApplicationEntityDetailsComponent,
-    UserApplicationDetailsComponent,
-    ListDetailsComponent,
-    ListDetailDetailsComponent,
-    UserViewRunDetailsComponent,
-    UserViewRunDetailDetailsComponent,
-    WorkflowRunDetailsComponent,
-    WorkflowDetailsComponent,
-    WorkflowEngineDetailsComponent,
-    RecordChangeDetailsComponent,
-    UserRoleDetailsComponent,
-    RowLevelSecurityFilterDetailsComponent,
-    AuditLogDetailsComponent,
-    AuthorizationDetailsComponent,
-    AuthorizationRoleDetailsComponent],
+    UserApplicationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -352,26 +366,26 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    CompanyIntegrationRunAPILogDetailsComponent,
+    ListDetailsComponent,
+    ListDetailDetailsComponent,
+    UserViewRunDetailsComponent,
+    UserViewRunDetailDetailsComponent,
+    WorkflowRunDetailsComponent,
+    WorkflowDetailsComponent,
+    WorkflowEngineDetailsComponent,
+    RecordChangeDetailsComponent,
+    UserRoleDetailsComponent,
+    RowLevelSecurityFilterDetailsComponent,
+    AuditLogDetailsComponent,
+    AuthorizationDetailsComponent,
+    AuthorizationRoleDetailsComponent,
     AuditLogTypeDetailsComponent,
     EntityFieldValueDetailsComponent,
     AIModelDetailsComponent,
     AIActionDetailsComponent,
     AIModelActionDetailsComponent,
-    EntityAIActionDetailsComponent,
-    AIModelTypeDetailsComponent,
-    QueueTypeDetailsComponent,
-    QueueDetailsComponent,
-    QueueTaskDetailsComponent,
-    DashboardDetailsComponent,
-    OutputTriggerTypeDetailsComponent,
-    OutputFormatTypeDetailsComponent,
-    OutputDeliveryTypeDetailsComponent,
-    ReportDetailsComponent,
-    ReportSnapshotDetailsComponent,
-    ResourceTypeDetailsComponent,
-    TagDetailsComponent,
-    TaggedItemDetailsComponent,
-    WorkspaceDetailsComponent],
+    EntityAIActionDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -392,17 +406,26 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    AIModelTypeDetailsComponent,
+    QueueTypeDetailsComponent,
+    QueueDetailsComponent,
+    QueueTaskDetailsComponent,
+    DashboardDetailsComponent,
+    OutputTriggerTypeDetailsComponent,
+    OutputFormatTypeDetailsComponent,
+    OutputDeliveryTypeDetailsComponent,
+    ReportDetailsComponent,
+    ReportSnapshotDetailsComponent,
+    ResourceTypeDetailsComponent,
+    TagDetailsComponent,
+    TaggedItemDetailsComponent,
+    WorkspaceDetailsComponent,
     WorkspaceItemDetailsComponent,
     DatasetDetailsComponent,
     DatasetItemDetailsComponent,
     ConversationDetailDetailsComponent,
     ConversationDetailsComponent,
-    UserNotificationDetailsComponent,
-    ResourceFolderDetailsComponent,
-    SchemaInfoDetailsComponent,
-    CompanyIntegrationRecordMapDetailsComponent,
-    RecordMergeLogDetailsComponent,
-    RecordMergeDeletionLogDetailsComponent],
+    UserNotificationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -423,6 +446,31 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ResourceFolderDetailsComponent,
+    SchemaInfoDetailsComponent,
+    CompanyIntegrationRecordMapDetailsComponent,
+    RecordMergeLogDetailsComponent,
+    RecordMergeDeletionLogDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    ExplorerCoreModule,
+    UserViewGridModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_7 { }
+
+
+
+@NgModule({
+declarations: [
 ],
 imports: [
     GeneratedForms_SubModule_0,
@@ -431,7 +479,8 @@ imports: [
     GeneratedForms_SubModule_3,
     GeneratedForms_SubModule_4,
     GeneratedForms_SubModule_5,
-    GeneratedForms_SubModule_6
+    GeneratedForms_SubModule_6,
+    GeneratedForms_SubModule_7
 ]
 })
 export class CoreGeneratedFormsModule { }
@@ -445,6 +494,9 @@ export function LoadCoreGeneratedForms() {
     LoadCompanyFormComponent();
     LoadEmployeeFormComponent();
     LoadUserFavoriteFormComponent();
+    LoadEmployeeCompanyIntegrationFormComponent();
+    LoadEmployeeRoleFormComponent();
+    LoadEmployeeSkillFormComponent();
     LoadRoleFormComponent();
     LoadSkillFormComponent();
     LoadIntegrationURLFormatFormComponent();
@@ -456,11 +508,15 @@ export function LoadCoreGeneratedForms() {
     LoadEntityRelationshipFormComponent();
     LoadUserRecordLogFormComponent();
     LoadUserViewFormComponent();
+    LoadCompanyIntegrationRunFormComponent();
+    LoadCompanyIntegrationRunDetailFormComponent();
+    LoadErrorLogFormComponent();
     LoadApplicationFormComponent();
     LoadApplicationEntityFormComponent();
     LoadEntityPermissionFormComponent();
     LoadUserApplicationEntityFormComponent();
     LoadUserApplicationFormComponent();
+    LoadCompanyIntegrationRunAPILogFormComponent();
     LoadListFormComponent();
     LoadListDetailFormComponent();
     LoadUserViewRunFormComponent();
@@ -508,6 +564,9 @@ export function LoadCoreGeneratedForms() {
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
+    LoadEmployeeCompanyIntegrationDetailsComponent();
+    LoadEmployeeRoleDetailsComponent();
+    LoadEmployeeSkillDetailsComponent();
     LoadRoleDetailsComponent();
     LoadSkillDetailsComponent();
     LoadIntegrationURLFormatDetailsComponent();
@@ -524,11 +583,15 @@ export function LoadCoreGeneratedForms() {
     LoadEntityRelationshipDetailsComponent();
     LoadUserRecordLogDetailsComponent();
     LoadUserViewDetailsComponent();
+    LoadCompanyIntegrationRunDetailsComponent();
+    LoadCompanyIntegrationRunDetailDetailsComponent();
+    LoadErrorLogDetailsComponent();
     LoadApplicationDetailsComponent();
     LoadApplicationEntityDetailsComponent();
     LoadEntityPermissionDetailsComponent();
     LoadUserApplicationEntityDetailsComponent();
     LoadUserApplicationDetailsComponent();
+    LoadCompanyIntegrationRunAPILogDetailsComponent();
     LoadListDetailsComponent();
     LoadListDetailDetailsComponent();
     LoadUserViewRunDetailsComponent();
