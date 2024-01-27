@@ -118,44 +118,46 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     NotificationModule,
     HttpClientModule,
     ReactiveFormsModule,
-    // Auth0 --- Import the module into the application, with configuration, IF YOU ARE USING Auth0
-    // AuthModule.forRoot({
-    //   domain: environment.AUTH0_DOMAIN,
-    //   clientId: environment.AUTH0_CLIENTID,
-    //   authorizationParams: {
-    //     redirect_uri: window.location.origin
-    //   },
-    //   cacheLocation: 'localstorage',
-    // }),
-    // MsalModule
-    MsalModule.forRoot(new PublicClientApplication({
-      auth: {
-        clientId: environment.CLIENT_ID, // This is your client ID
-        authority: environment.CLIENT_AUTHORITY, // This is your tenant info
-        redirectUri: window.location.origin
-      },
-      cache: {
-        cacheLocation: 'localStorage',
-        storeAuthStateInCookie: false, // set to true for Internet Explorer 11
-      }
-    }), {
-      interactionType: InteractionType.Redirect, // MSAL Guard Configuration
-      authRequest: {
-        scopes: ['User.Read']
-      }
-    }, {
-      interactionType: InteractionType.Redirect, // MSAL Interceptor Configuration
-      protectedResourceMap: new Map([
-        ['https://graph.microsoft.com/v1.0/me', ['user.read']]
-      ])
-    }),
+    (
+      environment.AUTH_TYPE === 'auth0' ?
+      AuthModule.forRoot({
+          domain: environment.AUTH0_DOMAIN,
+           clientId: environment.AUTH0_CLIENTID,
+           authorizationParams: {
+             redirect_uri: window.location.origin
+           },
+           cacheLocation: 'localstorage',
+         })
+      :
+      MsalModule.forRoot(new PublicClientApplication({
+        auth: {
+          clientId: environment.CLIENT_ID, // This is your client ID
+          authority: environment.CLIENT_AUTHORITY, // This is your tenant info
+          redirectUri: window.location.origin
+        },
+        cache: {
+          cacheLocation: 'localStorage',
+          storeAuthStateInCookie: false, // set to true for Internet Explorer 11
+        }
+      }), {
+        interactionType: InteractionType.Redirect, // MSAL Guard Configuration
+        authRequest: {
+          scopes: ['User.Read']
+        }
+      }, {
+        interactionType: InteractionType.Redirect, // MSAL Interceptor Configuration
+        protectedResourceMap: new Map([
+          ['https://graph.microsoft.com/v1.0/me', ['user.read']]
+        ])
+      })
+    ),
     ChartsModule,
     ListBoxModule
   ],
   providers: [SharedService,
-    MsalService,
-    MsalGuard,
-    MsalBroadcastService,
+    ...(environment.AUTH_TYPE === 'msal' ? [MsalService] : []),
+    ...(environment.AUTH_TYPE === 'msal' ? [MsalGuard] : []),
+    ...(environment.AUTH_TYPE === 'msal' ? [MsalBroadcastService] : []),
     { provide: MJAuthBase, useClass: environment.AUTH_TYPE === 'auth0' ? MJAuth0Provider : MJMSALProvider },],
   bootstrap: [AppComponent, MsalRedirectComponent]
 })
