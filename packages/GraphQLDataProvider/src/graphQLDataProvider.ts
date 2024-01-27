@@ -319,11 +319,11 @@ npm
         return ProviderType.Network;
     }
 
-    public async GetRecordChanges(entityName: string, primaryKeyValue: any): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = '${primaryKeyValue}' AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${primaryKeyValues.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -351,11 +351,11 @@ npm
      * @param entityName the name of the entity to check
      * @param recordId the recordId to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $recordId: Int!) {
-                GetRecordDependencies(entityName: $entityName, recordId: $recordId) {
+            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $primaryKeyValues: [PrimaryKeyValue]!) {
+                GetRecordDependencies(entityName: $entityName, primaryKeyValues: $primaryKeyValues) {
                     EntityName
                     RelatedEntityName
                     FieldName
@@ -364,11 +364,10 @@ npm
             }`
 
             // now we have our query built, execute it
-            const pkeyName = this.Entities.find(e => e.Name === entityName).PrimaryKey.Name;
             const vars = {
-                entityName: entityName
+                entityName: entityName,
+                primaryKeyValues: primaryKeyValues
             };
-            vars[pkeyName] = primaryKeyValue
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
             return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
@@ -388,7 +387,10 @@ npm
                     OverallStatus
                     RecordMergeLogID
                     RecordStatus {
-                        RecordID
+                        PrimaryKeyValues {
+                            FieldName
+                            Value
+                        }
                         Success
                         RecordMergeDeletionLogID
                         Message
@@ -717,7 +719,7 @@ npm
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -728,12 +730,23 @@ npm
                 IsFavorite
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, PrimaryKeyValue: primaryKeyValue.toString()} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
+                                                                            UserID: userId, 
+                                                                            EntityID: e.ID, 
+                                                                            PrimaryKeyValues: primaryKeyValues.map(pkv => { 
+                                                                                                                            return { 
+                                                                                                                                FieldName: pkv.FieldName,
+                                                                                                                                Value: pkv.Value.toString()
+                                                                                                                            }
+                                                                                                                          })
+                                                                            } 
+                                                                  }
+                                                         );
         if (data && data.GetRecordFavoriteStatus && data.GetRecordFavoriteStatus.Success)
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -743,23 +756,43 @@ npm
                 Success
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {UserID: userId, EntityID: e.ID, PrimaryKeyValue: primaryKeyValue.toString(), IsFavorite: isFavorite} });
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
+                                                                                UserID: userId, 
+                                                                                EntityID: e.ID, 
+                                                                                PrimaryKeyValues: primaryKeyValues.map(pkv => { 
+                                                                                        return { 
+                                                                                            FieldName: pkv.FieldName,
+                                                                                            Value: pkv.Value.toString()
+                                                                                        }
+                                                                                    }), 
+                                                                                IsFavorite: isFavorite} 
+                                                                 }
+                                                         );
         if (data && data.SetRecordFavoriteStatus !== null)
             return data.SetRecordFavoriteStatus.Success;        
     }
 
-    public async GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string> {
-        if (!entityName || !primaryKeyValue)
+    public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
+        if (!entityName || !primaryKeyValues)
             return null;
 
-        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $RecordID: String!) {
-            GetEntityRecordName(EntityName: $EntityName, RecordID: $RecordID) {
+        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $PrimaryKeyValues: [PrimaryKeyValueInputType!]!) {
+            GetEntityRecordName(EntityName: $EntityName, PrimaryKeyValues: $PrimaryKeyValues) {
                 Success
                 Status
                 RecordName
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {EntityName: entityName, RecordID: primaryKeyValue.toString()});
+        const data = await GraphQLDataProvider.ExecuteGQL(query, {
+                                                                    EntityName: entityName, 
+                                                                    PrimaryKeyValues: primaryKeyValues.map(pkv => {
+                                                                            // map each pkv so that its Value is a string
+                                                                            return { 
+                                                                                        FieldName: pkv.FieldName, 
+                                                                                        Value: pkv.Value.toString()
+                                                                                   }
+                                                                            })
+                                                                });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
     }
@@ -772,12 +805,26 @@ npm
             GetEntityRecordNames(info: $info) {
                 Success
                 Status
-                RecordID
+                PrimaryKeyValues {
+                    FieldName
+                    Value
+                }
                 EntityName
                 RecordName
             }
         }` 
-        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => {return {EntityName: i.EntityName, RecordID: i.PrimaryKeyValue.toString()}})});
+ 
+        const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
+            // map each info item so that each of its PrimaryKeyValues.Value is a string
+            return { 
+                     EntityName: i.EntityName, 
+                     PrimaryKeyValues: i.PrimaryKeyValues.map(pkv => { 
+                        return { FieldName: pkv.FieldName, 
+                                 Value: pkv.Value.toString() 
+                               } 
+                            })
+                    } 
+                })});
         if (data && data.GetEntityRecordNames)
             return data.GetEntityRecordNames;
     }

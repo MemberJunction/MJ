@@ -49,7 +49,7 @@ export class SingleDashboardComponent implements OnInit {
     if (this.ResourceData) {
       const md = new Metadata();
       let uiConfig: any = {items:[]};
-      this.dashboardEntity = <DashboardEntity>await md.GetEntityObject('Dashboards');
+      this.dashboardEntity = await md.GetEntityObject<DashboardEntity>('Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID > 0) {
         await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
         // now we have loaded and we need to get the UIConfigDetails

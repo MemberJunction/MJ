@@ -868,12 +868,12 @@ type EntityPermission_ {
 
 input EntityRecordNameInput {
   EntityName: String!
-  RecordID: String!
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
 }
 
 type EntityRecordNameResult {
   EntityName: String!
-  RecordID: String!
+  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   RecordName: String
   Status: String!
   Success: Boolean!
@@ -1078,7 +1078,6 @@ type List_ {
 }
 
 type Mutation {
-  AddUserFavorite(input: UserFavoriteSearchParams!): UserFavorite_!
   CreateApplicationEntity(input: CreateApplicationEntityInput!): ApplicationEntity_!
   CreateAuditLog(input: CreateAuditLogInput!): AuditLog_!
   CreateCompany(input: CreateCompanyInput!): Company_!
@@ -1210,6 +1209,16 @@ type OutputTriggerType_ {
   ReportsArray: [Report_!]!
 }
 
+input PrimaryKeyValueInputType {
+  FieldName: String!
+  Value: String!
+}
+
+type PrimaryKeyValueOutputType {
+  FieldName: String!
+  Value: String!
+}
+
 type PushStatusNotification {
   date: Timestamp!
   message: String
@@ -1281,10 +1290,10 @@ type Query {
   ExecuteAskSkipQuery(ConversationId: Int!, UserQuestion: String!): AskSkipResultType!
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
-  GetEntityDependencies(entityName: String!, recordId: Int!): [EntityDependencyResult!]!
-  GetEntityRecordName(EntityName: String!, RecordID: String!): EntityRecordNameResult!
+  GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
+  GetEntityRecordName(EntityName: String!, PrimaryKeyValues: [PrimaryKeyValueInputType!]!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
-  GetRecordDependencies(entityName: String!, recordId: Int!): [RecordDependencyResult!]!
+  GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
   Integration(ID: Int!): Integration_
@@ -1630,7 +1639,7 @@ type RecordMergeDeletionLog_ {
 
 type RecordMergeDetailResult {
   Message: String
-  RecordID: Int!
+  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   RecordMergeDeletionLogID: Int
   Success: Boolean!
 }
@@ -1657,8 +1666,8 @@ type RecordMergeLog_ {
 input RecordMergeRequest {
   EntityName: String!
   FieldMap: [FieldMapping!]
-  RecordsToMerge: [Int!]!
-  SurvivingRecordPrimaryKeyValue: String!
+  RecordsToMerge: [[PrimaryKeyValueInputType!]!]!
+  SurvivingRecordPrimaryKeyValues: [PrimaryKeyValueInputType!]!
 }
 
 type RecordMergeRequestOutput {
@@ -3297,21 +3306,21 @@ type UserApplication_ {
 type UserFavoriteResult {
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValue: String!
+  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   Success: Boolean!
   UserID: Int!
 }
 
 input UserFavoriteSearchParams {
   EntityID: Int!
-  PrimaryKeyValue: String!
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValue: String!
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
   UserID: Int!
 }
 

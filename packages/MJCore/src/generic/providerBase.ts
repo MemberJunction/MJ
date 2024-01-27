@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo";
@@ -39,12 +39,12 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public abstract get ProviderType(): ProviderType;
 
-    public abstract GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string>;
+    public abstract GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean>;
 
-    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
@@ -231,7 +231,7 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
 
 
-    public async GetEntityObject(entityName: string, contextUser: UserInfo = null): Promise<BaseEntity> {
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
         try {
             const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
             if (entity) {
@@ -239,7 +239,7 @@ export abstract class ProviderBase implements IMetadataProvider {
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
 
                 try {
-                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEntity>(BaseEntity, entityName, entity) 
+                    const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
                     if (contextUser)
                         newObject.ContextCurrentUser = contextUser;
 
@@ -264,9 +264,9 @@ export abstract class ProviderBase implements IMetadataProvider {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValue the value of the primary key of the record to check
+     * @param primaryKeyValues the values of the primary key of the record to check
      */
-    public abstract GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> 
+    public abstract GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> 
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

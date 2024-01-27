@@ -881,37 +881,112 @@ export class ValidationResult {
     Errors: ValidationErrorInfo[] = []
 }
 
+/**
+ * Information about the link between two entities
+ */
 export class EntityDependency {
+    /**
+     * The name of the entity that is the "parent" in the relationship
+     */
     EntityName: string
+    /**
+     * The name of the entity that is the "child" in the relationship
+     */
     RelatedEntityName: string
+    /**
+     * The name of the field in the related entity that is the foreign key field back to the primary key of the "parent" entity
+     */
     FieldName: string
 }
 
+/**
+ * Information about the link between two records
+ */
 export class RecordDependency {
+    /**
+     * The name of the entity that is the "parent" in the relationship
+     */
     EntityName: string
+    /**
+     * The name of the entity that is the "child" in the relationship
+     */
     RelatedEntityName: string
+    /**
+     * The name of the field in the related entity that is the foreign key field back to the primary key of the "parent" entity
+     */
     FieldName: string
-    RecordID: any
+    /**
+     * The value of the primary key field in the parent record. At present, MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
+     */
+    PrimaryKeyValue: any
 }
 
+/**
+ * Information about a merge request including the entity, the surviving record and the records to merge into the surviving record. Additionally, there is an optional field map that can be used to override field values in the surviving record to values specified.
+ */
 export class RecordMergeRequest {
+    /**
+     * The name of the entity to merge records for
+     */
     EntityName: string
-    SurvivingRecordPrimaryKeyValue: any
-    RecordsToMerge: any[]
+    /**
+     * The primary key value(s) for the surviving record - if the entity in question has a single-valued primary key this will be an array with a single element, otherwise it will be an array with multiple elements
+     */
+    SurvivingRecordPrimaryKeyValues: PrimaryKeyValue[]
+    /**
+     * The primary key value(s) for the record(s) to merge into the surviving record - if the entity in question has a single-valued primary key, each item in the top level array will be an array with a single element, otherwise each item in the top level array will be an array with multiple elements
+     */
+    RecordsToMerge: PrimaryKeyValue[][] // array of arrays of primary key values
+    /**
+     * If you want to keep the values in the fields of the surviving record as they are, leave this blank. If you want to override the values in the surviving record with other values, specify the values you would like for each field in this array of objects. Each object has two properties, FieldName and Value. The FieldName is the name of the field to set and the Value is the value to set in it.
+     */
     FieldMap?: {FieldName: string, Value: any}[]
 }
 
+/**
+ * The result of a merge request for a single record
+ */
 export class RecordMergeDetailResult {
-    PrimaryKeyValue: any
+    /**
+     * The primary key value(s) for a record that was merged
+     */
+    PrimaryKeyValues: PrimaryKeyValue[]
+    /**
+     * True if the merge for this specific record was successful, false if not
+     */
     Success: boolean
+    /**
+     * Deletion Log ID for the specific record that was merged
+     */
     RecordMergeDeletionLogID: number | null
+    /**
+     * Status message, if any, for the specific record that was merged
+     */
     Message?: string
 }
 
+/**
+ * The result of a merge request
+ */
 export class RecordMergeResult {
+    /**
+     * True if the merge was successful, false if not
+     */
     Success: boolean
+    /**
+     * Status message on the overall operation
+     */
     OverallStatus: string
+    /**
+     * The ID of the log record for the merge operation
+     */
     RecordMergeLogID: number | null
+    /**
+     * The details of the merge operation, including the status of each record that was merged
+     */
     RecordStatus: RecordMergeDetailResult[]
+    /**
+     * The original merge request that was passed in
+     */
     Request: RecordMergeRequest
 }

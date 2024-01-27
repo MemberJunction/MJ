@@ -1,5 +1,5 @@
 import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, ProviderConfigDataBase, ProviderType } from "./interfaces";
-import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
+import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
@@ -92,26 +92,26 @@ export class Metadata {
     }
 
     /**
-     * Returns true if the combination of userId/entityName/primaryKeyValue has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
+     * Returns true if the combination of userId/entityName/primaryKeyValues has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
      * @param userId 
      * @param entityName 
-     * @param primaryKeyValue 
+     * @param primaryKeyValues 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKeyValue);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKeyValues);
     }
 
     /**
-     * Sets the favorite status for a given user for a specific entityName/primaryKeyValue
+     * Sets the favorite status for a given user for a specific entityName/primaryKeyValues
      * @param userId 
      * @param entityName 
-     * @param primaryKeyValue 
+     * @param primaryKeyValues
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKeyValue, isFavorite, contextUser);
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo = null) {
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKeyValues, isFavorite, contextUser);
     }
 
     /**
@@ -122,8 +122,8 @@ export class Metadata {
      * @param entityName the name of the entity to check
      * @param primaryKeyValue the primary key value to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKeyValue);
+    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
+        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKeyValues);
     }
 
     /**
@@ -161,20 +161,20 @@ export class Metadata {
      * @param contextUser - The user to use for context. If null, the current user is used. This is mainly used on the server side, for browser based applications generally the context will be known
      * @returns - a newly created instance of a sub-class of BaseEntity. Remember you still to call Load() or NewRecord() to get going from there.
      */
-    public async GetEntityObject(entityName: string, contextUser: UserInfo = null): Promise<BaseEntity> {
+    public async GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo = null): Promise<T> {
         return await Metadata.Provider.GetEntityObject(entityName, contextUser);
     }
 
     /**
-     * Returns the Name of the specific primaryKeyValue for a given entityName. This is done by 
+     * Returns the Name of the specific primaryKeyValues for a given entityName. This is done by 
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param primaryKeyValue 
+     * @param primaryKeyValues
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string> {
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKeyValue);
+    public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKeyValues);
     }
 
     /**

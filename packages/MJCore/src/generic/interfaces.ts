@@ -57,7 +57,7 @@ export interface IEntityDataProvider {
 
     Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
 
-    GetRecordChanges(entityName: string, PrimaryKeyValue: any): Promise<RecordChange[]>
+    GetRecordChanges(entityName: string, PrimaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]>
 }
 
 export class EntitySaveOptions {
@@ -67,13 +67,13 @@ export class EntitySaveOptions {
 
 export class EntityRecordNameInput  {
     EntityName: string;
-    PrimaryKeyValue: any;
+    PrimaryKeyValues: PrimaryKeyValue[];
 }
 
 export class EntityRecordNameResult  {
     Success: boolean
     Status: string
-    PrimaryKeyValue: any;
+    PrimaryKeyValues: PrimaryKeyValue[];
     EntityName: string;
     RecordName?: string;
  }
@@ -110,16 +110,16 @@ export interface IMetadataProvider {
 
     LocalMetadataObsolete(type?: string): boolean
 
-    GetEntityObject(entityName: string, contextUser: UserInfo): Promise<BaseEntity>
+    GetEntityObject<T extends BaseEntity>(entityName: string, contextUser: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param recordId the recordId to check
+     * @param primaryKeyValues the primary key(s) for the record to check
      */
-    GetRecordDependencies(entityName: string, primaryKeyValue: any): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.
@@ -149,10 +149,10 @@ export interface IMetadataProvider {
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param primaryKeyValue 
+     * @param primaryKeyValues 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, primaryKeyValue: any): Promise<string>
+    GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
@@ -161,9 +161,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string,primaryKeyValue: any): Promise<boolean>
+    GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValue: any, isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 

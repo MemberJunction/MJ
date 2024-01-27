@@ -48,7 +48,7 @@ export class FieldLink extends BaseLink implements OnInit {
           // no luck, no related entity name field map provided in the entity field metadata, so do a lookup
           // requires a server round trip and hitting the DB, so we try to avoid this
           const md = new Metadata();
-          md.GetEntityRecordName(relatedEntity, this.field.Value).then(recordName => {
+          md.GetEntityRecordName(relatedEntity, [{FieldName: "ID", Value: this.field.Value}]).then(recordName => {
             if (recordName && recordName.length > 0)
                 this.renderer.setProperty(this.el.nativeElement, 'textContent', recordName);
           });

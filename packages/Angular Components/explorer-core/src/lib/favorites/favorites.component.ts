@@ -14,31 +14,32 @@ export class FavoritesComponent {
 
   constructor(private router: Router) { }
   
-  ngOnInit() {
+  async ngOnInit() {
     const md = new Metadata();
     const rv = new RunView();
     let sFilter = `UserID=${md.CurrentUser.ID}`
     if (this.ExtraFilter)
       sFilter += `AND (${this.ExtraFilter})`
 
-    rv.RunView({
+    const viewResults = await rv.RunView({
       EntityName: 'User Favorites',
       ExtraFilter: sFilter
-    }).then(async (favorites: any) => {
-      this.favorites = favorites.Results // set the result in the list and let the below happen after async and it will update via data binding when done
-
-      const input: EntityRecordNameInput[] = favorites.Results.map((fav: any) => {
-        return { EntityName: fav.Entity, PrimaryKeyValue: fav.RecordID }
-      })
-      const results = await md.GetEntityRecordNames(input)
-      if (results)
-        results.forEach((result) => {
-          const fav = favorites.Results.find((f: any) => f.Entity == result.EntityName && f.RecordID == result.PrimaryKeyValue)
-          if (fav) {
-            fav.RecordName = result.Success ? result.RecordName : fav.Entity + ' ' + fav.RecordID
-          }
-        });
     })
+    this.favorites = viewResults.Results // set the result in the list and let the below happen after async and it will update via data binding when done
+
+    const input: EntityRecordNameInput[] = this.favorites.map(fav => {
+      return { EntityName: fav.Entity, PrimaryKeyValues: [{FieldName: 'ID', Value: fav.RecordID}] }
+    })
+    const results = await md.GetEntityRecordNames(input)
+    if (results) {
+      results.forEach((result) => {
+        const fav = this.favorites.find(f => f.Entity == result.EntityName && f.RecordID == result.PrimaryKeyValues[0].Value)
+        if (fav) {
+          // typecast fav to any so we can add the recordname into the object below
+          (<any>fav).RecordName = result.Success ? result.RecordName : fav.Entity + ' ' + fav.RecordID
+        }
+      });
+    }
   }
   favoriteItemClick(fav: UserFavoriteEntity) {
     if (fav) {
@@ -48,6 +49,16 @@ export class FavoritesComponent {
       }
       else {
         this.router.navigate(['resource', 'record', fav.RecordID], { queryParams: { Entity: fav.Entity } })
+      }
+    }
+  }
+  favoriteItemDisplayName(fav: any) {
+    if (fav) {
+      if (fav.RecordName) {
+        return fav.RecordName 
+      }  
+      else {
+        return fav.RecordID;
       }
     }
   }

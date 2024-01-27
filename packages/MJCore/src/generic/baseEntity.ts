@@ -232,8 +232,6 @@ export class BaseEntityAIActionParams {
 }
 
 export abstract class BaseEntity {
-    [key: string]: any;
-    
     private _EntityInfo: EntityInfo;
     private _Fields: EntityField[] = [];
     private _recordLoaded: boolean = false;
@@ -243,6 +241,14 @@ export abstract class BaseEntity {
     constructor(Entity: EntityInfo) {
         this._EntityInfo = Entity;
         this.init();
+    }
+
+    /**
+     * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
+     */
+    get IsSaved(): boolean {
+        const v = this.PrimaryKey?.Value;
+        return v !== null && v !== undefined; // if the primary key (or first primary key) value is null/undefined, we haven't saved yet
     }
 
     get TransactionGroup(): TransactionGroupBase {
@@ -266,7 +272,7 @@ export abstract class BaseEntity {
     }
     
     get Dirty(): boolean {
-        return !this.ID || this.ID <=0 || this.Fields.some(f => f.Dirty);
+        return !this.IsSaved || this.Fields.some(f => f.Dirty);
     }
 
     get PrimaryKey(): EntityField {
@@ -454,7 +460,7 @@ export abstract class BaseEntity {
      */
     public async Save(options?: EntitySaveOptions) : Promise<boolean> {
         const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
-        const type: EntityPermissionType = this.ID && this.ID > 0 ? EntityPermissionType.Update : EntityPermissionType.Create;
+        const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
         this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
 
         if (_options.IgnoreDirtyState || this.Dirty) {
@@ -560,7 +566,7 @@ export abstract class BaseEntity {
 
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
-            if (this.ID !== null) 
+            if (!this.IsSaved) 
                 this.init(); // wipe out current data if we're loading on top of existing record
 
             const data = await BaseEntity.Provider.Load(this, PrimaryKeyValues, EntityRelationshipsToLoad, this.ActiveUser);
@@ -696,7 +702,7 @@ export abstract class BaseEntity {
      * Returns a list of changes made to this record, over time. Keep in mind this is only going to return valid data if you have the TrackRecordChanges bit set to 1 on the entity you're working with.
      */
     public get RecordChanges(): Promise<RecordChange[]> {
-        if (this.PrimaryKey.Value) 
+        if (this.IsSaved) 
             return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey.Value)
         else
             throw new Error('Cannot get record changes for a record that has not been saved yet');

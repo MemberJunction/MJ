@@ -4,6 +4,7 @@ import { ClassifyResult, IClassify } from "./generic/IClassify";
 import { ChatResult, IChat } from "./generic/IChat";
 import { BaseEntity, BaseEntityAIActionParams, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
+import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity } from "@memberjunction/core-entities";
 
 
 export class AIActionParams {
@@ -25,10 +26,10 @@ export class AIEngine {
     private static _instance: AIEngine = null;
     private static _globalInstanceKey = '__mj_ai_engine_instance__';
 
-    private _models: BaseEntity[] = null;
-    private _actions: BaseEntity[] = null;
-    private _entityActions: BaseEntity[] = null;
-    private _modelActions: BaseEntity[] = null;
+    private _models: AIModelEntity[] = null;
+    private _actions: AIActionEntity[] = null;
+    private _entityActions: EntityAIActionEntity[] = null;
+    private _modelActions: AIModelActionEntity[] = null;
     private _metadataLoaded: boolean = false;
     public async LoadAIMetadata(contextUser?: UserInfo): Promise<boolean> {
         if (this._metadataLoaded === false) {
@@ -57,19 +58,19 @@ export class AIEngine {
     public static async LoadAIMetadata(contextUser?: UserInfo) {
         return AIEngine.Instance.LoadAIMetadata(contextUser);
     }
-    public static get Models(): BaseEntity[] {
+    public static get Models(): AIModelEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
     }
-    public static get ModelActions(): BaseEntity[] {
+    public static get ModelActions(): AIModelActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._modelActions;
     }
-    public static get Actions(): BaseEntity[] {
+    public static get Actions(): AIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._actions;
     }
-    public static get EntityAIActions(): BaseEntity[] {
+    public static get EntityAIActions(): EntityAIActionEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._entityActions;
     }
@@ -262,7 +263,7 @@ export class AIEngine {
             throw new Error(`Driver ${model.DriverClass} not found or couldn't be loaded.`);
     }
 
-    protected GetStringOutputFromActionResults(action: BaseEntity, result: BaseResult): string {
+    protected GetStringOutputFromActionResults(action: AIActionEntity, result: BaseResult): string {
         switch (action.Name.trim().toLowerCase()) {
             case 'classify':
                 const classifyResult = <ClassifyResult>result;

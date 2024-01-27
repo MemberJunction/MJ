@@ -1,4 +1,5 @@
 import { UserInfo, BaseEntity } from '@memberjunction/core';
+import { QueueEntity, QueueTaskEntity } from '@memberjunction/core-entities';
 //import { QueueTaskEntity, QueueEntity } from 'mj_generatedentities';
 
 export class TaskResult {
@@ -27,7 +28,7 @@ export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 export class TaskBase {
   private _options: TaskOptions;
   private _data: any; 
-  private _taskRecord: BaseEntity
+  private _taskRecord: QueueTaskEntity
   private _status: TaskStatus = TaskStatus.Pending;
 
   public get Options(): TaskOptions 
@@ -41,13 +42,13 @@ export class TaskBase {
   public get ID(): number {
     return this._taskRecord.ID;
   }
-  constructor (taskRecord: BaseEntity, data: any, options: TaskOptions) {
+  constructor (taskRecord: QueueTaskEntity, data: any, options: TaskOptions) {
     this._taskRecord = taskRecord;
     this._options = options;
     this._data = data;
   }
 
-  public get TaskRecord(): BaseEntity {
+  public get TaskRecord(): QueueTaskEntity {
     return this._taskRecord;
   }   
 
@@ -67,9 +68,9 @@ export abstract class QueueBase  {
   protected _contextUser: UserInfo
   private _maxTasks: number = 3; // move to metadata or config param
   private _checkInterval: number = 250; // move to metadata or config param
-  private _queueRecord: BaseEntity
+  private _queueRecord: QueueEntity
 
-  constructor(QueueRecord: BaseEntity, QueueTypeID: number, ContextUser: UserInfo) {
+  constructor(QueueRecord: QueueEntity, QueueTypeID: number, ContextUser: UserInfo) {
     this._queueRecord = QueueRecord;
     this._queueTypeId = QueueTypeID;
     this._contextUser = ContextUser;

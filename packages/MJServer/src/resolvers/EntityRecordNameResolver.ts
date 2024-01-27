@@ -1,14 +1,15 @@
-import { Metadata } from '@memberjunction/core';
+import { Metadata, PrimaryKeyValue } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
+import { PrimaryKeyValueInputType, PrimaryKeyValueOutputType } from './MergeRecordsResolver';
 
 @InputType()
 export class EntityRecordNameInput {
   @Field(() => String)
   EntityName: string;
 
-  @Field(() => String)
-  RecordID: string;
+  @Field(() => [PrimaryKeyValueInputType])
+  PrimaryKeyValues: PrimaryKeyValue[];
 }
 
 @ObjectType()
@@ -19,8 +20,8 @@ export class EntityRecordNameResult {
   @Field(() => String)
   Status: string;
 
-  @Field(() => String)
-  RecordID: string;
+  @Field(() => [PrimaryKeyValueOutputType])
+  PrimaryKeyValues: PrimaryKeyValue[];
 
   @Field(() => String)
   EntityName: string;
@@ -34,11 +35,11 @@ export class EntityRecordNameResolver {
   @Query(() => EntityRecordNameResult)
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
-    @Arg('RecordID', () => String) RecordID: string,
+    @Arg('PrimaryKeyValues', () => [PrimaryKeyValueInputType]) PrimaryKeyValues: PrimaryKeyValue[],
     @Ctx() {}: AppContext
   ): Promise<EntityRecordNameResult> {
     const md = new Metadata();
-    return await this.InnerGetEntityRecordName(md, EntityName, RecordID);
+    return await this.InnerGetEntityRecordName(md, EntityName, PrimaryKeyValues);
   }
 
   @Query(() => [EntityRecordNameResult])
@@ -49,24 +50,27 @@ export class EntityRecordNameResolver {
     const result: EntityRecordNameResult[] = [];
     const md = new Metadata();
     for (const i of info) {
-      result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.RecordID));
+      result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.PrimaryKeyValues));
     }
     return result;
   }
 
-  async InnerGetEntityRecordName(md: Metadata, EntityName: string, RecordID: string): Promise<EntityRecordNameResult> {
+  async InnerGetEntityRecordName(md: Metadata, EntityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<EntityRecordNameResult> {
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
-      const recordName = await md.GetEntityRecordName(e.Name, RecordID);
-      if (recordName) return { Success: true, Status: 'OK', RecordID: RecordID, RecordName: recordName, EntityName: EntityName };
+      const recordName = await md.GetEntityRecordName(e.Name, primaryKeyValues);
+      if (recordName) 
+        return { Success: true, Status: 'OK', PrimaryKeyValues: primaryKeyValues, RecordName: recordName, EntityName: EntityName };
       else
         return {
           Success: false,
-          Status: `Name for record, or record ${RecordID} itself not found, could be an access issue if user doesn't have Row Level Access (RLS) if RLS is enabled for this entity`,
-          RecordID: RecordID,
+          Status: `Name for record, or record ${primaryKeyValues.map(pkv => pkv.FieldName + ':' + pkv.Value).join(',')} itself not found, could be an access issue if user doesn't have Row Level Access (RLS) if RLS is enabled for this entity`,
+          PrimaryKeyValues: primaryKeyValues,
           EntityName: EntityName,
         };
-    } else return { Success: false, Status: `Entity ${EntityName} not found`, RecordID: RecordID, EntityName: EntityName };
+    } 
+    else 
+      return { Success: false, Status: `Entity ${EntityName} not found`, PrimaryKeyValues: primaryKeyValues, EntityName: EntityName };
   }
 }
 

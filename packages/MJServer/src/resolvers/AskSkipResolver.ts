@@ -6,6 +6,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import axios from 'axios';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
+import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 
 @ObjectType()
 export class AskSkipResultType {
@@ -43,7 +44,7 @@ export class AskSkipResolver {
       const user = UserCache.Instance.Users.find((u) => u.Email === userPayload.email);
       if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
-      const convoEntity = await md.GetEntityObject('Conversations', user);
+      const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', user);
       if (!ConversationId || ConversationId <= 0) {
         // create a new conversation id
         convoEntity.NewRecord();
@@ -58,7 +59,7 @@ export class AskSkipResolver {
       }
 
       // now, create a conversation detail record for the user message
-      const convoDetailEntity = await md.GetEntityObject('Conversation Details', user);
+      const convoDetailEntity = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
       convoDetailEntity.NewRecord();
       convoDetailEntity.ConversationID = ConversationId;
       convoDetailEntity.Message = UserQuestion;
@@ -130,7 +131,7 @@ export class AskSkipResolver {
         });
 
         // now, create a conversation detail record for the Skip response
-        const convoDetailEntityAI = await md.GetEntityObject('Conversation Details', user);
+        const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
         convoDetailEntityAI.NewRecord();
         convoDetailEntityAI.ConversationID = ConversationId;
         convoDetailEntityAI.Message = sResult;
@@ -145,7 +146,7 @@ export class AskSkipResolver {
         }
 
         // now create a notification for the user
-        const userNotification = await md.GetEntityObject('User Notifications', user);
+        const userNotification = <UserNotificationEntity>await md.GetEntityObject('User Notifications', user);
         userNotification.NewRecord();
         userNotification.UserID = user.ID;
         userNotification.Title = 'Report Created: ' + sTitle;

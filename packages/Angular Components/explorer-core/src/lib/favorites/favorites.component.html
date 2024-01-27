@@ -14,7 +14,7 @@
         </ng-template>
         <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
             <div class="list-item"  (click)="favoriteItemClick(dataItem)">
-                <b>{{dataItem.Entity}}</b>: {{dataItem.RecordName ? dataItem.RecordName : dataItem.RecordID}}
+                <b>{{dataItem.Entity}}</b>: {{favoriteItemDisplayName(dataItem)}}
             </div>
         </ng-template>
     </ng-container>

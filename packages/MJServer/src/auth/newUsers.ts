@@ -2,6 +2,7 @@ import { LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { configInfo } from "../config";
+import { UserEntity, UserRoleEntity } from "@memberjunction/core-entities";
 
 @RegisterClass(NewUserBase)
 export class NewUserBase {
@@ -13,7 +14,7 @@ export class NewUserBase {
                 LogError(`Failed to load context user ${configInfo?.userHandling?.contextUserForNewUserCreation}, if you've not specified this on your config.json you must do so. This is the user that is contextually used for creating a new user record dynamically.`);
                 return undefined;
             }
-            const u = await md.GetEntityObject('Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
+            const u = <UserEntity>await md.GetEntityObject('Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
             u.NewRecord();
             u.Name = email;
             u.IsActive = true;
@@ -29,7 +30,7 @@ export class NewUserBase {
 
             if (await u.Save()) {
                 // user created, now create however many roles we need to create for this user based on the config settings
-                const ur = await md.GetEntityObject('User Roles', contextUser);
+                const ur = <UserRoleEntity>await md.GetEntityObject('User Roles', contextUser);
                 let bSuccess: boolean = true;
                 for (const role of configInfo.userHandling.newUserRoles) {
                     ur.NewRecord();

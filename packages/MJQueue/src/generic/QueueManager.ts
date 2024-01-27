@@ -1,6 +1,7 @@
 //import { QueueEntity, QueueTaskEntity, QueueTypeEntity } from "mj_generatedentities";
 import { TaskBase, QueueBase } from "./QueueBase";
 import { LogError, Metadata, RunView, UserInfo, BaseEntity } from "@memberjunction/core";
+import { QueueEntity, QueueTaskEntity, QueueTypeEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 import os from 'os';
 
@@ -18,12 +19,12 @@ import os from 'os';
  *or not. After a heartbeat timeout is reached, other queues can pick up tasks from a crashed process.
  */
 export class QueueManager { 
-  private _queueTypes: BaseEntity[] = [];
+  private _queueTypes: QueueTypeEntity[] = [];
   private _queues: QueueBase[] = [];
   private static _instance: QueueManager | null = null;
   private static _globalInstanceKey = '__mj_queue_manager_instance__';
 
-  public static get QueueTypes(): BaseEntity[] {
+  public static get QueueTypes(): QueueTypeEntity[] {
     return QueueManager.Instance._queueTypes;
   }
 
@@ -105,7 +106,7 @@ export class QueueManager {
       if (queue) {
         // STEP 3: Create a task in the database for this new task
         const md = new Metadata();
-        const taskRecord = await md.GetEntityObject('Queue Tasks', contextUser);
+        const taskRecord = <QueueTaskEntity>await md.GetEntityObject('Queue Tasks', contextUser);
         taskRecord.Set('QueueID', queue.QueueID);
         taskRecord.Set('Status', 'Pending');
         taskRecord.Set('Data', JSON.stringify(data));
@@ -129,7 +130,7 @@ export class QueueManager {
   // Initialize a map to hold ongoing queue creation promises
   private ongoingQueueCreations = new Map<number, Promise<QueueBase>>();
 
-  protected async CheckCreateQueue(queueType: BaseEntity, contextUser: UserInfo): Promise<QueueBase | undefined> {
+  protected async CheckCreateQueue(queueType: QueueTypeEntity, contextUser: UserInfo): Promise<QueueBase | undefined> {
     let queue = this._queues.find(q => q.QueueTypeID == queueType.ID);
 
     if (queue === null || queue === undefined) {
@@ -155,11 +156,11 @@ export class QueueManager {
   }
 
 
-  protected async CreateQueue(queueType: BaseEntity, contextUser: UserInfo): Promise<QueueBase | null | undefined> {
+  protected async CreateQueue(queueType: QueueTypeEntity, contextUser: UserInfo): Promise<QueueBase | null | undefined> {
     try {
       // create a new queue, based on the Queue Type metadata and process info
       const md = new Metadata();
-      const newQueueRecord = await md.GetEntityObject('Queues', contextUser);
+      const newQueueRecord = <QueueEntity>await md.GetEntityObject('Queues', contextUser);
       newQueueRecord.NewRecord();
       newQueueRecord.Set('QueueTypeID', queueType.ID);
       newQueueRecord.Set('Name', queueType.Name);

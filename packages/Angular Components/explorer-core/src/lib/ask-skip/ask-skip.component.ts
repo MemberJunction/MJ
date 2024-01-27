@@ -159,7 +159,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     }
     else {
       const md = new Metadata();
-      newConvoObject = <ConversationEntity>await md.GetEntityObject('Conversations');
+      newConvoObject = await md.GetEntityObject('Conversations');
       await newConvoObject.Load(conversation.ID);
       // now replace conversation in the list with the new object
       this.Conversations = this.Conversations.map(c => c.ID == conversation.ID ? newConvoObject : c);

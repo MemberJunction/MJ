@@ -28,7 +28,7 @@ export class EntityRecordResource extends BaseResourceComponent {
             return ''
         else {
             const md = new Metadata();
-            const name = await md.GetEntityRecordName(data.Configuration.Entity, data.ResourceRecordID);
+            const name = await md.GetEntityRecordName(data.Configuration.Entity, [{FieldName: "ID", Value: data.ResourceRecordID}]);
             const e = md.Entities.find(e => e.Name === data.Configuration.Entity);
             if (!e)
                 throw new Error(`Entity ${data.Configuration.Entity} not found in metadata`);

@@ -21,7 +21,7 @@ export class UserViewResource extends BaseResourceComponent {
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = new Metadata();
         if (data.ResourceRecordID > 0) {
-            const name = await md.GetEntityRecordName('User Views', data.ResourceRecordID);
+            const name = await md.GetEntityRecordName('User Views', [{FieldName: "ID", Value: data.ResourceRecordID}]);
             return name ? name : 'View: ' + data.ResourceRecordID;
         }
         else if (data.Configuration?.Entity && data.Configuration?.Entity.length > 0) {

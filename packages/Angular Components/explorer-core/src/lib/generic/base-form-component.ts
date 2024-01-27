@@ -34,7 +34,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const md: Metadata = new Metadata();
    
-      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey.Value)
+      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKeys.map(pk => {return {FieldName: pk.Name, Value: pk.Value}}))
       this.FavoriteInitDone = true;
     }
   }
@@ -106,7 +106,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SetFavoriteStatus(isFavorite: boolean) {
     const md: Metadata = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey.Value, isFavorite)
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKeys.map(pk => {return {FieldName: pk.Name, Value: pk.Value}}), isFavorite)
     this._isFavorite = isFavorite;
   }
 

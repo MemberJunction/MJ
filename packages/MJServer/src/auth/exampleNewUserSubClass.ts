@@ -44,12 +44,13 @@ export class ExampleNewUserSubClass extends NewUserBase {
                 // we don't have a match so create a new person record
                 const p = await md.GetEntityObject('Persons', contextUser);
                 p.NewRecord(); // assumes we have an entity called Persons that has FirstName/LastName/Email fields
-                p.FirstName = firstName;
-                p.LastName = lastName;
-                p.Email = email;
-                p.Status = 'active';
+                // this code is commented out because we don't have a strongly typed sub-class generatd for this "Persons" entity as it is a demo/hypothetical example
+                //p.FirstName = firstName;
+                //p.LastName = lastName;
+                //p.Email = email;
+                //p.Status = 'active';
                 if (await p.Save()) {
-                    personId = p.ID;
+                    personId = p.PrimaryKey.Value; // if we had a strongly typed sub-class above, we could use this code p.ID;
                 }   
                 else {
                     LogError(`Failed to create new person ${firstName} ${lastName} ${email}`)

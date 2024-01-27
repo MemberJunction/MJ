@@ -18,7 +18,7 @@ export class ReportResource extends BaseResourceComponent implements OnInit {
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         const md = new Metadata();
-        const name = await md.GetEntityRecordName('Reports', data.ResourceRecordID);
+        const name = await md.GetEntityRecordName('Reports', [{FieldName: "ID", Value: data.ResourceRecordID}]);
         return `${name ? name : 'Report ID: ' + data.ResourceRecordID}`;
     }
 }

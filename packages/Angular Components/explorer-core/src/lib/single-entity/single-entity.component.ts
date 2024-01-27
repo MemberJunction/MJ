@@ -80,7 +80,7 @@ export class SingleEntityComponent implements OnInit {
     if (this.selectedView) {
       this.showloader = true;
       const md = new Metadata();
-      const viewObj = await md.GetEntityObject('User Views');
+      const viewObj = <UserViewEntity>await md.GetEntityObject('User Views');
       await viewObj.Load(this.selectedView?.ID); // load the view to be deleted
 
       if (await viewObj.Delete()) { // delete the view

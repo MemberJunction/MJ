@@ -79,7 +79,7 @@ export class CompareRecordsComponent {
             let obj: any = {};
             obj['Fields'] = column.Name;
             this.recordsToCompare.forEach((record, index: number) => { 
-              obj[record.PrimaryKey.Value] = { Field: column.Name, Value: record[column.Name], metaData: column, recordId: record.PrimaryKey.Value };
+              obj[record.PrimaryKey.Value] = { Field: column.Name, Value: record.Get(column.Name), metaData: column, recordId: record.PrimaryKey.Value };
               this.columns[index + 1] = { field: record.PrimaryKey.Value, recordId: record.PrimaryKey.Value, title: record.PrimaryKey.Value, width: 200, locked: true, lockable: false, filterable: false, sortable: false };
             });
             if ((this.suppressBlankFields || this.showDifferences) && !['ID', 'Name'].includes(obj.Fields)) {

@@ -4,6 +4,7 @@ import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@member
 import { DataSource } from 'typeorm';
 import { UserView_, UserViewResolverBase } from '../generated/generated';
 import { UserResolver } from './UserResolver';
+import { UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 @Resolver(UserView_)
 export class UserViewResolver extends UserViewResolverBase {
@@ -49,7 +50,7 @@ export class UserViewResolver extends UserViewResolverBase {
     // filter state which in turn will be used to update the where clause in the entity sub-class.
     const md = new Metadata();
     const u = this.GetUserFromPayload(userPayload);
-    const viewEntity = await md.GetEntityObject('User Views', u);
+    const viewEntity = <UserViewEntityExtended>await md.GetEntityObject('User Views', u);
     await viewEntity.Load(ID);
     viewEntity.UpdateWhereClause();
     if (await viewEntity.Save()) {

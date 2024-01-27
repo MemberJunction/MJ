@@ -1,4 +1,4 @@
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata, PrimaryKeyValue } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
 
@@ -19,7 +19,6 @@ export class EntityDependencyResolver {
     @Query(() => [EntityDependencyResult])
     async GetEntityDependencies(
         @Arg('entityName', () => String) entityName: string,
-        @Arg('recordId', () => Int) recordId: number,
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
@@ -36,6 +35,25 @@ export class EntityDependencyResolver {
 }
 
 
+@InputType()
+export class PrimaryKeyValueInputType {
+  @Field(() => String)
+  FieldName: string;
+
+  @Field(() => String)
+  Value: string;
+}
+
+@ObjectType()
+export class PrimaryKeyValueOutputType {
+  @Field(() => String)
+  FieldName: string;
+
+  @Field(() => String)
+  Value: string;
+}
+ 
+
 @ObjectType()
 export class RecordDependencyResult {
   @Field(() => String)
@@ -51,18 +69,21 @@ export class RecordDependencyResult {
   RecordID: number;
 }
 
+ 
+
+
 @Resolver(RecordDependencyResult)
 export class RecordDependencyResolver {
     @Query(() => [RecordDependencyResult])
     async GetRecordDependencies(
       @Arg('entityName', () => String) entityName: string,
-      @Arg('recordId', () => Int) recordId: number,
+      @Arg('primaryKeyValues', () => [PrimaryKeyValueInputType]) primaryKeyValues: PrimaryKeyValue[],
       @Ctx() { dataSource, userPayload }: AppContext,
       @PubSub() pubSub: PubSubEngine
     ) {
         try {
             const md = new Metadata();
-            const result = await md.GetRecordDependencies(entityName, recordId)    
+            const result = await md.GetRecordDependencies(entityName, primaryKeyValues)    
             return result;
         }
         catch (e) {
@@ -95,11 +116,11 @@ export class RecordMergeRequest {
     @Field(() => String)
     EntityName: string;
 
-    @Field(() => String)
-    SurvivingRecordPrimaryKeyValue: string;
+    @Field(() => [PrimaryKeyValueInputType])
+    SurvivingRecordPrimaryKeyValues: PrimaryKeyValue[];
 
-    @Field(() => [Int])
-    RecordsToMerge: number[];
+    @Field(() => [[PrimaryKeyValueInputType]])
+    RecordsToMerge: PrimaryKeyValue[][];
 
     @Field(() => [FieldMapping], { nullable: true })
     FieldMap?: FieldMapping[];
@@ -123,8 +144,8 @@ export class RecordMergeRequestOutput {
 
 @ObjectType()
 export class RecordMergeDetailResult {
-    @Field(() => Int)
-    RecordID: number;
+    @Field(() => [PrimaryKeyValueOutputType])
+    PrimaryKeyValues: PrimaryKeyValue[];
 
     @Field(() => Boolean)
     Success: boolean; 
