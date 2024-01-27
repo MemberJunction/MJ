@@ -79,7 +79,7 @@ export class AddItemComponent implements OnInit {
       title: name ? name : 'New Item - ' + id,
       col: 1,
       rowSpan: 3,
-      colSpan: 1,
+      colSpan: 2,
       ResourceData: new ResourceData({
         Name: '',
         ResourceTypeID: this.resourceType.ID,

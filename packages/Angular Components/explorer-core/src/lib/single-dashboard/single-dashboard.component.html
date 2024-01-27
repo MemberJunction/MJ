@@ -3,41 +3,71 @@
   <app-edit-dashboard (onClose)="closeDashboardDialog($event)" (triggerAddItem)="addItem($event)" [items]="items" [config]="config" (onSave)="saveChanges($event)"></app-edit-dashboard>
 </div>
 
+<app-delete-item-dialog *ngIf="isDeletingDashboardItem" [dashboardItem]="selectedDashboardItem" (removeDashboardItem)="deleteDashboardItem($event)" (onClose)="closeDeleteItemComponent()"></app-delete-item-dialog>
 
 <div class="dashboard-container">
   <div class="main-head-dashboard">
     <div class="dashboard-title">
-      <span class="k-icon k-i-star"></span>
-      <h3>{{ResourceData.Name}}</h3> 
+      <div *ngIf="isEditDashboardNameDialogOpened; else dashboard_name_header" class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
+        <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
+        <kendo-button (click)="saveDashboardName()">
+          <span class="k-i-check k-button-icon k-icon ng-star-inserted"></span>
+        </kendo-button>
+        <kendo-button (click)="cancelNameChange()" >
+          <span class="k-icon k-i-cancel"></span>
+        </kendo-button>
+      </div>
+      <ng-template #dashboard_name_header>
+        <span class="k-icon k-i-star"></span>
+        <h3 (click)="toggleInlineNameEdit(true)">{{dashboardEntity.Name}}</h3>
+      </ng-template>
     </div>
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
-      <!-- <kendo-button class="btn-ref" >
-        <span class="k-icon k-i-reload"></span> 
-        Refresh
-      </kendo-button> -->
-      <kendo-button (click)="addItem()">
-        <span class="k-icon k-i-plus"></span>
-        Add Item
-      </kendo-button>
-      <kendo-button (click)="editDashboard()" [primary]="true">
-        <span class="k-icon k-i-gear"></span>
-        Edit Dashboard
-      </kendo-button>
+      <div *ngIf="isEditingDashboard; else edit_dashboard_buttons">
+        <kendo-button (click)="onClickSaveDashboard()">
+          <span class="k-icon k-i-check"></span>
+          Save
+        </kendo-button>
+        <kendo-button (click)="onclickCancelChanges()">
+          <span class="k-icon k-i-cancel"></span>
+          Cancel
+        </kendo-button>
+      </div>
+      <ng-template #edit_dashboard_buttons>
+        <kendo-button (click)="addItem()">
+          <span class="k-icon k-i-plus"></span>
+          Add Item
+        </kendo-button>
+        <kendo-button (click)="toggleEditDashboard(true)" [primary]="true">
+          <span class="k-icon k-i-gear"></span>
+          Edit Dashboard
+        </kendo-button>
+      </ng-template>
     </div>
   </div>
   <div class="tile-resource-container">
     <kendo-tilelayout
       [columns]="config.columns"
       [rowHeight]="config.rowHeight"
-      [resizable]="false"
-      [reorderable]="false"
+      [resizable]="allowResize"
+      [reorderable]="allowReorder"
+      (reorder)="onReorder($event)"
+      (resize)="onResize($event)"
     >
       <kendo-tilelayout-item *ngFor="let item of items" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
-        <kendo-tilelayout-item-header>
+        <kendo-tilelayout-item-header [ngClass]="['dashboard-item-header', getIsEditingItemHeaderStyle()]">
           {{item.title}}
-          <!-- <kendo-button class="k-float-right" *ngIf="editMode" (click)="removeItem(item)">X</kendo-button> -->
+          <div *ngIf="!isEditingDashboard">
+            <div class="btn-wrapper">
+              <button kendoButton fillMode="flat" (click)="toggleEditDashboard(true)">
+                <span class="k-icon k-i-edit"></span>
+              </button>
+              <button kendoButton fillMode="flat" (click)="showConfirmDeleteDashboardItem(item)"><span
+                  class="k-icon k-i-delete"></span></button>
+            </div>
+          </div>
         </kendo-tilelayout-item-header>
-        <kendo-tilelayout-item-body>
+        <kendo-tilelayout-item-body [ngClass]="[getIsEditingItemBodyStyle()]">
           <app-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></app-resource>
         </kendo-tilelayout-item-body>
       </kendo-tilelayout-item>

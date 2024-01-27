@@ -13,18 +13,33 @@ export class GenericBrowseListComponent {
   @Input() public items: any[] = [];
   @Input() public iconName: string = 'view-icon';
   @Input() public showAddButton: boolean = false;
-  @Input() public addText: string = 'Add';
+  @Input() public addText: string = 'Create New';
+  @Input() public backText: string = 'Go Back';
   @Output() public addButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
+  @Output() public deleteButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
 
-  constructor(private router: Router) {}
+  constructor(private router: Router) {
+    this.router = router;
+  }
 
   public itemClick(item: any) {
     if (item) {
       this.itemClickEvent.emit(item);
     }
   }
+
+  public deleteItem(item: any){
+    if(item){
+      this.deleteButtonClickEvent.emit(item);
+    }
+  }
+
   public addButtonClicked() {
     this.addButtonClickEvent.emit();
+  }
+
+  public goHomeButtonClicked(){
+    this.router.navigate(["dashboard"]);
   }
 }

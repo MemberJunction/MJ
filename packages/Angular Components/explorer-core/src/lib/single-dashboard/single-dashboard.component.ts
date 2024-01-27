@@ -1,4 +1,5 @@
-import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
+import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '../generic/base-resource-component';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
@@ -12,6 +13,9 @@ import { Subject, debounceTime } from 'rxjs';
   styleUrls: ['./single-dashboard.component.css']
 })
 export class SingleDashboardComponent implements OnInit {
+
+  @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
+
   @Input() public ResourceData!: ResourceData;
   @Output() public dashboardSaved: EventEmitter<DashboardEntity> = new EventEmitter<DashboardEntity>();
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
@@ -22,7 +26,13 @@ export class SingleDashboardComponent implements OnInit {
   public config: DashboardConfigDetails = new DashboardConfigDetails();
   public isItemDialogOpened: boolean = false;
   public isEditDialogOpened: boolean = false;
+  public isEditDashboardNameDialogOpened: boolean = false;
+  public isDeletingDashboardItem: boolean = false;
+  public allowResize: boolean = false;
+  public allowReorder: boolean = false;
+  public isEditingDashboard: boolean = false;
   public selectedResource!: ResourceTypeEntity | null;
+  public selectedDashboardItem!: DashboardItem | null;
   private saveChangesSubject: Subject<any> = new Subject();
 
   public get contentLoading(): boolean {
@@ -126,14 +136,35 @@ export class SingleDashboardComponent implements OnInit {
     if(data) {
       const dashboardItem = this.CreateDashboardItem(data);
       this.items.push(dashboardItem);
+      console.log(dashboardItem);
         this.saveChangesSubject.next(true);
     }
     this.selectedResource = null;
     this.isItemDialogOpened = false;
   }
 
-  public editDashboard(): void {
-    this.isEditDialogOpened = true;
+  public toggleEditDashboard(allowEdit: boolean): void {
+    this.allowReorder = allowEdit;
+    this.allowResize = allowEdit;
+    this.isEditingDashboard = allowEdit;
+    this.toggleInlineNameEdit(false);
+  }
+
+  public async onClickSaveDashboard(): Promise<void> {
+    this.toggleEditDashboard(false);
+    let result = await this.SaveDashboard();
+    if(result){
+      this.sharedService.CreateSimpleNotification("Dashboard changes have been saved.", "success");
+      await this.ngOnInit();
+    }
+    else{
+      this.sharedService.CreateSimpleNotification("An error occured saving the dashboard changes", "error");
+    }
+  }
+
+  public async onclickCancelChanges(): Promise<void> {
+    this.toggleEditDashboard(false);
+    await this.ngOnInit();
   }
 
   public closeDashboardDialog(data: any = null){
@@ -175,28 +206,81 @@ export class SingleDashboardComponent implements OnInit {
     this.dashboardSaved.emit(entity);
   }
 
+  public toggleInlineNameEdit(visible: boolean): void {
+    this.isEditDashboardNameDialogOpened = visible;
+    if(this.isEditDashboardNameDialogOpened){
+      this.dashboardNameInput?.nativeElement?.focus();
+    }
+  }
 
-  // onReorder(e: TileLayoutReorderEvent): void {
-  //   const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
-  //   if (item) {
-  //     // move the item in our config state to the new index
-  //     if (e.oldIndex !== e.newIndex) {
-  //       this.items.splice(e.oldIndex, 1);
-  //       this.items.splice(e.newIndex, 0, item);  
-  //     }
-  //     //item.order = e.item.order;
-  //     item.col = e.newCol ? e.newCol : item.col;
-  //     item.row = e.newRow ? e.newRow : item.row;
-  //   }
-  // }
+  public saveDashboardName(): void {
+    this.toggleInlineNameEdit(true);
+    const inputValue = this.dashboardNameInput.nativeElement.value;
+    if(inputValue && inputValue.length > 3){
+      this.dashboardEntity.Name = inputValue;
+      this.SaveDashboard();
+    }
+    else {
+      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning');
+    }
+  }
+
+  public cancelNameChange(): void {
+    this.toggleInlineNameEdit(false);
+  }
+
+  public closeDeleteItemComponent(): void {
+    this.selectedDashboardItem = null;
+    this.isDeletingDashboardItem = false;
+  }
+
+  public showConfirmDeleteDashboardItem(item: DashboardItem): void {
+    this.selectedDashboardItem = item;
+    this.isDeletingDashboardItem = true;
+  }
+
+  public async deleteDashboardItem(item: DashboardItem): Promise<void> {
+    this.items = this.items.filter(i => i.uniqueId != item.uniqueId);
+    let result = await this.SaveDashboard();
+    if(result){
+      this.sharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, "success");
+    }
+    else{
+      this.sharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, "error");
+    }
+    this.selectedDashboardItem = null;
+    this.isDeletingDashboardItem = false;
+  }
+
+  public getIsEditingItemBodyStyle(): string {
+    return this.isEditingDashboard ? "bg-light-grey" : "";
+  }
+
+  public getIsEditingItemHeaderStyle(): string {
+    return this.isEditingDashboard ? "bg-dark-grey" : "bg-blue";
+  }
+
+  onReorder(e: TileLayoutReorderEvent): void {
+    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+    if (item) {
+      // move the item in our config state to the new index
+      if (e.oldIndex !== e.newIndex) {
+        this.items.splice(e.oldIndex, 1);
+        this.items.splice(e.newIndex, 0, item);  
+      }
+      //item.order = e.item.order;
+      item.col = e.newCol ? e.newCol : item.col;
+      item.row = e.newRow ? e.newRow : item.row;
+    }
+  }
   
-  // onResize(e: TileLayoutResizeEvent): void {
-  //   const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
-  //   if (item) {      
-  //     item.colSpan = e.newColSpan;
-  //     item.rowSpan = e.newRowSpan;
-  //   }
-  // }
+  onResize(e: TileLayoutResizeEvent): void {
+    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+    if (item) {      
+      item.colSpan = e.newColSpan;
+      item.rowSpan = e.newRowSpan;
+    }
+  }
 }
 
 export class DashboardConfigDetails {
