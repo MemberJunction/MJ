@@ -1,8 +1,8 @@
 {
   "userHandling": {
     "autoCreateNewUsers": false,
-    "newUserAuthorizedDomains": [],
-    "newUserRoles": [],
+    "newUserAuthorizedDomains": ["localhost"],
+    "newUserRoles": ["UI", "Developer", "Integration"],
     "updateCacheWhenNotFound": true,
     "updateCacheWhenNotFoundDelay": 5000,
     "contextUserForNewUserCreation": "fill.in.user.email.here@whatever.com"
