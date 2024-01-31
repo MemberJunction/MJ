@@ -1,0 +1,19 @@
+{
+    "userHandling": {
+      "autoCreateNewUsers": false,
+      "newUserAuthorizedDomains": ["localhost"],
+      "newUserRoles": ["UI", "Developer", "Integration"],
+      "updateCacheWhenNotFound": true,
+      "updateCacheWhenNotFoundDelay": 5000,
+      "contextUserForNewUserCreation": "fill.in.user.email.here@whatever.com"
+    },
+    "databaseSettings": {
+      "connectionTimeout": 45000,
+      "requestTimeout": 30000,
+      "metadataCacheRefreshInterval": 180000
+    },
+    "viewingSystem" : {
+      "enableSmartFilters": true
+    }
+  }
+  
