@@ -281,7 +281,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 }                       
                 const stopTime = new Date();
 
-                if (params.ForceAuditLog || (viewEntity?.ID && (extraFilter === null || extraFilter.trim().length === 0) && entityInfo.AuditViewRuns)) {
+                if (params.ForceAuditLog || (viewEntity?.ID && (extraFilter === undefined || extraFilter === null || extraFilter?.trim().length === 0) && entityInfo.AuditViewRuns)) {
                     // ONLY LOG TOP LEVEL VIEW EXECUTION - this would be for views with an ID, and don't have ExtraFilter as ExtraFilter
                     // is only used in the system on a tab or just for ad hoc view execution
 
