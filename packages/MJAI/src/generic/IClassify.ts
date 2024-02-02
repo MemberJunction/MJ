@@ -1,4 +1,3 @@
-import { AIActionParams } from "../AIEngine";
 import { BaseResult, BaseParams } from "./baseModel"
 
 export class ClassifyParams extends BaseParams {

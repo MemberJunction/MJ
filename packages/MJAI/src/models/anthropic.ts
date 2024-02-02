@@ -6,9 +6,7 @@ import { ChatParams, ChatResult, IChat } from "../generic/IChat";
 import { ISummarize, SummarizeParams, SummarizeResult } from '../generic/ISummarize';
 import { ClassifyParams, ClassifyResult, IClassify } from '../generic/IClassify';
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
-import { RegisterClass } from '@memberjunction/global';
 
-@RegisterClass(BaseModel, 'LLM' , 0)
 export class AnthropicLLM extends BaseLLM implements IChat, ISummarize, IClassify {
     static _anthropic;//: OpenAIApi;
 
