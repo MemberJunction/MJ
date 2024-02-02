@@ -87,10 +87,19 @@ export const verifyUserRecord = async (email?: string, firstName?: string, lastN
   });
 
   if (!user) {
-    if (configInfo.userHandling.autoCreateNewUsers && firstName && lastName && requestDomain) {
+    if (configInfo.userHandling.autoCreateNewUsers && firstName && lastName && (requestDomain || configInfo.userHandling.newUserLimitedToAuthorizedDomains === false)) {
       // check to see if the domain that we have a request coming in from matches one of the domains in the autoCreateNewUsersDomains setting
-      const domainMatch: boolean = configInfo.userHandling.newUserAuthorizedDomains.some((domain) => domain.toLowerCase().trim() === requestDomain.toLowerCase().trim());
-      if (domainMatch) {
+      let passesDomainCheck: boolean =  configInfo.userHandling.newUserLimitedToAuthorizedDomains === false /*in this first condition, we are set up to NOT care about domain */
+      if (!passesDomainCheck && requestDomain) {
+          /*in this second condition, we check the domain against authorized domains*/
+          passesDomainCheck = configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
+                                    // Convert wildcard domain patterns to regular expressions
+                                    const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+                                    return regex.test(requestDomain?.toLowerCase().trim());
+                                  });
+      }
+      
+      if (passesDomainCheck) {
         // we have a domain from the request that matches one of the domains provided by the configuration, so we will create a new user
         console.warn(`User ${email} not found in cache. Attempting to create a new user...`);
         const newUserCreator: NewUserBase = <NewUserBase>MJGlobal.Instance.ClassFactory.CreateInstance(NewUserBase); // this will create the object that handles creating the new user for us
@@ -106,7 +115,7 @@ export const verifyUserRecord = async (email?: string, firstName?: string, lastN
         }
       }
       else {
-        console.warn(`User ${email} not found in cache. Request domain '${requestDomain}' does not match any of the domains in the newUserAuthorizedDomains setting. NOT creating a new user.`);
+        console.warn(`User ${email} not found in cache. Request domain '${requestDomain}' does not match any of the domains in the newUserAuthorizedDomains setting. To ignore domain, make sure you set the newUserLimitedToAuthorizedDomains setting to false. In this case we are NOT creating a new user.`);
       }
     }
     if(!user && configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
