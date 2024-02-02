@@ -1,6 +1,7 @@
 {
   "userHandling": {
     "autoCreateNewUsers": false,
+    "newUserLimitedToAuthorizedDomains": false,
     "newUserAuthorizedDomains": [],
     "newUserRoles": [],
     "updateCacheWhenNotFound": true,

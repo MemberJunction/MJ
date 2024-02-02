@@ -33,6 +33,7 @@ export const configFile = env.get('CONFIG_FILE').asString();
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-compare-records",
-  "version": "0.9.127",
+  "version": "0.9.128",
   "description": "MemberJunction: Angular UI Dialog Component to Compare Records",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@memberjunction/core": "^0.9.128",
-    "@memberjunction/core-entities": "^0.9.105",
+    "@memberjunction/core-entities": "^0.9.106",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

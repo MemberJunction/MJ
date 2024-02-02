@@ -16,7 +16,7 @@ export function generateAllEntitySubClasses(entities: EntityInfo[], directory: s
     }
 }
 export function generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, PrimaryKeyValue } from "@memberjunction/core";
+    return `import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 `
 }
@@ -38,11 +38,11 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
                 e.ValueListType.length > 0 && 
                 e.ValueListType.trim().toLowerCase() !== 'none') {
                 values = e.EntityFieldValues.map(v => `\n    * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
-                valueList = `\n    * Value List Type: ${e.ValueListType}\n    * Possible Values `+ values  
+                valueList = `\n        * Value List Type: ${e.ValueListType}\n        * Possible Values `+ values  
             }
-            let sRet: string = `    /**
-        * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-        * * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity: ' +  e.RelatedEntity : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + e.Description : ''}
+            let sRet: string = `        /**
+        * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n        * * Display Name: ' + e.DisplayName : ''}
+        * * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n        * * Related Entity: ' +  e.RelatedEntity : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n        * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n        * * Description: ' + e.Description : ''}
         */
         get ${e.CodeName}(): ${TypeScriptTypeFromSQLType(e.Type)} {  
             return this.Get('${e.Name}');
@@ -79,13 +79,40 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
     `    
+        const deleteFunction: string = entity.AllowDeleteAPI ? '' : `    
+        /**
+        * ${entity.Name} - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ${sClassName}
+        * @throws {Error} - Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        `
+
+        const saveFunction: string = entity.AllowCreateAPI || entity.AllowUpdateAPI ? '' : `    
+        /**
+        * ${entity.Name} - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ${sClassName}
+        * @throws {Error} - Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+        */
+        public async Save(options?: EntitySaveOptions) : Promise<boolean> {
+            throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+        } 
+        `
 
         let sRet: string = `
     /**
      * ${entity.Name} - strongly typed entity sub-class
      * * Schema: ${entity.SchemaName}
      * * Base Table: ${entity.BaseTable}
-     * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n * * @description ' + entity.Description : ''}
+     * * Base View: ${entity.BaseView}${entity.Description && entity.Description.length > 0 ? '\n     * * @description ' + entity.Description : ''}
      * * Primary Key${entity.PrimaryKeys.length > 1 ? 's' : ''}: ${entity.PrimaryKeys.map(f => f.Name).join(', ')}
      * @extends {BaseEntity}
      * @class
@@ -93,7 +120,7 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
      */
     ${subClassImportStatement}@RegisterClass(BaseEntity, '${entity.Name}')
     export class ${sClassName} extends ${sBaseClass} {
-    ${loadFunction}
+    ${loadFunction}${saveFunction}${deleteFunction}
     ${fields}
     }
     `
