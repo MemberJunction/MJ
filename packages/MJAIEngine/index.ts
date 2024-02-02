@@ -1,0 +1,5 @@
+export * from './src/generic/baseModel'
+export * from './src/generic/IChat'
+export * from './src/generic/IClassify'
+export * from './src/generic/ISummarize'
+export * from './src/AIEngine'

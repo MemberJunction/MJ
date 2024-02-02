@@ -2,7 +2,7 @@ import { BaseModel, BaseResult } from "./generic/baseModel";
 import { ISummarize, SummarizeResult } from "./generic/ISummarize";
 import { ClassifyResult, IClassify } from "./generic/IClassify";
 import { ChatResult, IChat } from "./generic/IChat";
-import { BaseEntity, BaseEntityAIActionParams, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity } from "@memberjunction/core-entities";
 
@@ -313,5 +313,4 @@ export class AIEngine {
     
         return AIEngine._instance;
       }
-    
 }
