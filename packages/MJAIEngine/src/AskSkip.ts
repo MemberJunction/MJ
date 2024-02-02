@@ -1,4 +1,4 @@
-import { OpenAILLM } from './models/openai';
+import { OpenAILLM } from '@memberjunction/ai';
  
 
 export async function SkipAnalyzeData(userQuestion: string, sql: string, sampleDataJSON: string): Promise<string> {

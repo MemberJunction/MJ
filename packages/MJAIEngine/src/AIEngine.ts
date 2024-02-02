@@ -1,7 +1,7 @@
-import { BaseModel, BaseResult } from "./generic/baseModel";
-import { ISummarize, SummarizeResult } from "./generic/ISummarize";
-import { ClassifyResult, IClassify } from "./generic/IClassify";
-import { ChatResult, IChat } from "./generic/IChat";
+import { BaseModel, BaseResult } from "@memberjunction/ai";
+import { ISummarize, SummarizeResult } from "@memberjunction/ai";
+import { ClassifyResult, IClassify } from "@memberjunction/ai";
+import { ChatResult, IChat } from "@memberjunction/ai";
 import { BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity } from "@memberjunction/core-entities";
