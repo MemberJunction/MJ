@@ -5,11 +5,9 @@ import { BaseLLM, BaseModel, ModelUsage } from "../generic/baseModel";
 import { ChatParams, ChatResult, IChat } from "../generic/IChat";
 import { ISummarize, SummarizeParams, SummarizeResult } from '../generic/ISummarize';
 import { ClassifyParams, ClassifyResult, IClassify } from '../generic/IClassify';
-import { RegisterClass } from '@memberjunction/global';
 
 const { ChatCompletionRequestMessageRoleEnum, Configuration, OpenAIApi } = require("openai");
 
-@RegisterClass(BaseModel, 'LLM' , 1) // priority of 1 puts ahead of Anthropic which has a priority of 0
 export class OpenAILLM extends BaseLLM implements IChat, ISummarize, IClassify {
     static _openAI;//: OpenAIApi;
 
