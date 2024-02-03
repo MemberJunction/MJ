@@ -12,6 +12,7 @@ import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponen
          checkUserEntityPermissions, AuthGuardService as AuthGuard } from "@memberjunction/ng-explorer-core";
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
+import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core/dist/lib/query-browser-component/query-browser.component';
 
 
 
@@ -44,6 +45,9 @@ export class ResourceResolver implements Resolve<void> {
           break;
         case 'reports':
           code = EventCodes.AddReport;
+          break;
+        case 'queries':
+          code = EventCodes.AddQuery;
           break;
         case 'records':
           code = EventCodes.EntityRecordClicked;
@@ -87,6 +91,7 @@ const routes: Routes = [
   { path: 'askskip/:conversationId', component: AskSkipComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
+  { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'settings', component: SettingsComponent, canActivate: [AuthGuard] },  
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },  

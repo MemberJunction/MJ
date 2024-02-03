@@ -12,7 +12,7 @@ export class GenericBrowseListComponent {
   @Input() public itemType: string = '';
   @Input() public title: string = '';
   @Input() public items: any[] = [];
-  @Input() public iconName: string = 'view-icon';
+  @Input() public iconName: string = 'view';
   @Input() public showAddButton: boolean = false;
   @Input() public addText: string = 'Create New';
   @Input() public backText: string = 'Go Back';

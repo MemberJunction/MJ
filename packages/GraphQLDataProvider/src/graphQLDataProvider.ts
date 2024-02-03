@@ -154,7 +154,8 @@ npm
             }
         }`
 
-        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
+        const queryId = typeof params.QueryID === 'string' ? parseInt(params.QueryID) : params.QueryID;
+        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: queryId} );
         if (result && result.GetQueryData)
             return {
                 QueryID: params.QueryID,

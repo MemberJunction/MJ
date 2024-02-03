@@ -284,6 +284,7 @@ export class SharedService {
     { routeSegment: 'view', name: 'user views' },
     { routeSegment: 'search', name: 'search results' },
     { routeSegment: 'report', name: 'reports' },
+    { routeSegment: 'query', name: 'queries' },
     { routeSegment: 'dashboard', name: 'dashboards' }
   ]
   /**
@@ -344,6 +345,7 @@ export const EventCodes = {
   EntityRecordClicked: "EntityRecordClicked",
   AddDashboard: "AddDashboard",
   AddReport: "AddReport",
+  AddQuery: "AddQuery",
   ViewCreated: "ViewCreated",
   ViewUpdated: "ViewUpdated",
   RunSearch: "RunSearch",

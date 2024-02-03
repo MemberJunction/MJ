@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.93",
+  "version": "0.9.94",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -38,7 +38,7 @@
     "@memberjunction/ng-record-changes": "^0.9.63",
     "@memberjunction/ng-container-directives": "^0.9.102",
     "@memberjunction/ng-user-view-grid": "^0.9.118",
-    "@memberjunction/ng-query-grid": "^0.9.6",
+    "@memberjunction/ng-query-grid": "^0.9.7",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

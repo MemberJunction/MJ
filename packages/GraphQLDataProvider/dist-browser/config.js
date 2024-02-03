@@ -21,6 +21,7 @@
         core_1.Metadata.Provider = provider;
         core_1.RunView.Provider = provider;
         core_1.RunReport.Provider = provider;
+        core_1.RunQuery.Provider = provider;
         await provider.Config(config);
         // fire off the logged in event if we get here
         global_1.MJGlobal.Instance.RaiseEvent({ event: global_1.MJEventType.LoggedIn, eventCode: null, component: this, args: null });

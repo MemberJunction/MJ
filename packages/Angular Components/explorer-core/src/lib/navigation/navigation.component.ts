@@ -198,6 +198,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
               case EventCodes.ViewCreated:
               case EventCodes.AddDashboard:
               case EventCodes.AddReport:
+              case EventCodes.AddQuery:
               case EventCodes.EntityRecordClicked:
               case EventCodes.ViewClicked:
               case EventCodes.ViewClicked:
@@ -517,6 +518,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         break;
       case 'reports':
         url += `/report/${data.ResourceRecordID}`;
+        break;
+      case 'queries':
+        url += `/query/${data.ResourceRecordID}`;
         break;
       case 'records':
         url += `/record/${data.ResourceRecordID}?Entity=${data.Configuration.Entity}`;
@@ -839,6 +843,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Reports
     await this.loadResourceType('Reports','Reports','/reports', md.CurrentUser.ID);
+
+    // Queries
+    await this.loadResourceType('Queries','Queries','/queries', md.CurrentUser.ID);
 
     // Settings
     await this.loadSettings(md);

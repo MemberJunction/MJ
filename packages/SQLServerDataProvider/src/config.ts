@@ -1,4 +1,4 @@
-import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView, LogError, LogStatus, RunReport, RunQuery } from "@memberjunction/core";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "./SQLServerDataProvider";
 import { DataSource } from "typeorm";
 import { UserCache } from "./UserCache";
@@ -18,6 +18,7 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData):
             Metadata.Provider = provider
             RunView.Provider = provider
             RunReport.Provider = provider
+            RunQuery.Provider = provider
 
             // now setup the user cache
             await UserCache.Instance.Refresh(ds,config.CheckRefreshIntervalSeconds);   

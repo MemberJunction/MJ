@@ -14,6 +14,10 @@
                 <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
                 <span>Data</span>
             </div>
+            <div class="nav-item" (click)="navigate('queries')">
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('data')"></kendo-svgicon>
+                <span>Queries</span>
+            </div>
             <div class="nav-item" (click)="navigate('dashboards')">
                 <kendo-svgicon [icon]="sharedService.kendoSVGIcon('aggregateFields')"></kendo-svgicon>
                 <span>Dashboards</span>

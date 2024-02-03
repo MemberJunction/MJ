@@ -69,6 +69,7 @@ import { UserNotificationsComponent } from './lib/user-notifications/user-notifi
 import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
 import { SingleQueryComponent } from './lib/single-query/single-query.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
+import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 
 @NgModule({
   declarations: [
@@ -87,6 +88,7 @@ import { QueryResource } from './lib/resource-wrappers/query-resource.component'
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,
+    QueryBrowserComponent,
     DashboardResource,
     EntityRecordResource,
     ReportResource,
