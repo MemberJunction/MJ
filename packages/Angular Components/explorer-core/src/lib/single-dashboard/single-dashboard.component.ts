@@ -44,7 +44,7 @@ export class SingleDashboardComponent implements OnInit {
     return false;
   }
 
-  constructor(private sharedService: SharedService) {
+  constructor(public sharedService: SharedService) {
     this.saveChangesSubject
     .pipe(debounceTime(500))
     .subscribe(() => {

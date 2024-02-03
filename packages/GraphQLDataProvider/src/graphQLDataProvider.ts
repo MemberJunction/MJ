@@ -10,7 +10,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          ApplicationInfo, ApplicationEntityInfo, RunViewParams, ProviderBase, ProviderType, RoleInfo, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, RowLevelSecurityFilterInfo, AuditLogTypeInfo, AuthorizationInfo, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, QueryCategoryInfo, QueryInfo, IRunQueryProvider, RunQueryResult  } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -19,6 +19,7 @@ import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { Observable } from 'rxjs';
 import { Client, createClient } from 'graphql-ws';
+import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
 
 
 export class GraphQLProviderConfigData extends ProviderConfigDataBase {
@@ -51,7 +52,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
-export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider {
+export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
     private _url: string;
     private _token: string;
     private static _client: GraphQLClient;
@@ -137,6 +138,37 @@ npm
     /**************************************************************************/
     // END ---- IRunReportProvider
     /**************************************************************************/
+
+    /**************************************************************************/
+    // START ---- IRunQueryProvider
+    /**************************************************************************/
+    public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        const query = gql`
+        query GetQueryDataQuery ($QueryID: Int!) {
+            GetQueryData(QueryID: $QueryID) {
+                Success
+                Results
+                RowCount
+                ExecutionTime
+                ErrorMessage
+            }
+        }`
+
+        const result = await GraphQLDataProvider.ExecuteGQL(query, {QueryID: params.QueryID} );
+        if (result && result.GetQueryData)
+            return {
+                QueryID: params.QueryID,
+                Success: result.GetQueryData.Success,
+                Results: JSON.parse(result.GetQueryData.Results),
+                RowCount: result.GetQueryData.RowCount,
+                ExecutionTime: result.GetQueryData.ExecutionTime,
+                ErrorMessage: result.GetQueryData.ErrorMessage,
+            };
+    }
+    /**************************************************************************/
+    // END ---- IRunReportProvider
+    /**************************************************************************/
+
 
 
     /**************************************************************************/
@@ -840,36 +872,36 @@ npm
         }
     }
 
-    private _allLatestMetadataUpdatesQuery = gql`query mdUpdates {
-        AllLatestMetadataUpdates {
-            ID
-            Type
-            UpdatedAt
-        }    
-    }
-    `
+    // private _allLatestMetadataUpdatesQuery = gql`query mdUpdates {
+    //     AllLatestMetadataUpdates {
+    //         ID
+    //         Type
+    //         UpdatedAt
+    //     }    
+    // }
+    // `
 
-    private _innerAllEntitiesQueryString = `AllEntities {
-            ${this.entityInfoString()}
-        }`
+    // private _innerAllEntitiesQueryString = `AllEntities {
+    //         ${this.entityInfoString()}
+    //     }`
 
-    private _innerAllEntityFieldsQueryString = `AllEntityFields {
-            ${this.entityFieldInfoString()}
-        }`
-    private _innerAllEntityRelationshipsQueryString = `AllEntityRelationships {
-            ${this.entityRelationshipInfoString()}
-        }`
-    private _innerAllEntityPermissionsQueryString = `AllEntityPermissions {
-            ${this.entityPermissionInfoString()}
-        }`
+    // private _innerAllEntityFieldsQueryString = `AllEntityFields {
+    //         ${this.entityFieldInfoString()}
+    //     }`
+    // private _innerAllEntityRelationshipsQueryString = `AllEntityRelationships {
+    //         ${this.entityRelationshipInfoString()}
+    //     }`
+    // private _innerAllEntityPermissionsQueryString = `AllEntityPermissions {
+    //         ${this.entityPermissionInfoString()}
+    //     }`
 
-    private _innerAllApplicationsQueryString = `AllApplications {
-        ${this.applicationInfoString()}
-        ApplicationEntities {
-            ${this.applicationEntityInfoString()}
-        }
-    }
-    `
+    // private _innerAllApplicationsQueryString = `AllApplications {
+    //     ${this.applicationInfoString()}
+    //     ApplicationEntities {
+    //         ${this.applicationEntityInfoString()}
+    //     }
+    // }
+    // `
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
         UserRolesArray {
@@ -878,40 +910,52 @@ npm
     }
     `
 
-    private _allApplicationsQuery = gql`
-        ${this._innerAllApplicationsQueryString}
-    `
-    private _innerAllRolesQueryString = `AllRoles {
-        ${this.roleInfoString()}
-    }
-    `
-    private _innerAllRowLevelSecurityFiltersQueryString = `AllRowLevelSecurityFilters {
-        ${this.rowLevelSecurityFilterInfoString()}
-    }
-    `
+    // private _allApplicationsQuery = gql`
+    //     ${this._innerAllApplicationsQueryString}
+    // `
+    // private _innerAllRolesQueryString = `AllRoles {
+    //     ${this.roleInfoString()}
+    // }
+    // `
+    // private _innerAllRowLevelSecurityFiltersQueryString = `AllRowLevelSecurityFilters {
+    //     ${this.rowLevelSecurityFilterInfoString()}
+    // }
+    // `
 
-    private _innerAllAuditLogTypesQueryString = `AllAuditLogTypes {
-        ${this.auditLogTypeInfoString()}
-    }
-    `
+    // private _innerAllAuditLogTypesQueryString = `AllAuditLogTypes {
+    //     ${this.auditLogTypeInfoString()}
+    // }
+    // `
 
-    private _innerAllAuthorizationsQueryString = `AllAuthorizations {
-        ${this.authorizationInfoString()}
-    }
-    `
+    // private _innerAllAuthorizationsQueryString = `AllAuthorizations {
+    //     ${this.authorizationInfoString()}
+    // }
+    // `
 
-    private _allMetaDataQuery = gql`query AllApplicationsAndEntities {
-        ${this._innerAllApplicationsQueryString}
-        ${this._innerAllEntitiesQueryString}    
-        ${this._innerAllEntityFieldsQueryString}    
-        ${this._innerAllEntityPermissionsQueryString}    
-        ${this._innerAllEntityRelationshipsQueryString}    
-        ${this._innerCurrentUserQueryString}    
-        ${this._innerAllRolesQueryString}    
-        ${this._innerAllRowLevelSecurityFiltersQueryString}
-        ${this._innerAllAuditLogTypesQueryString}
-        ${this._innerAllAuthorizationsQueryString}
-    }`
+    // private _innerAllQueriesQueryString = `AllQueries {
+    //     ${this.queryInfoString()}
+    // }
+    // `
+
+    // private _innerAllQueryCategoriesQueryString = `AllQueryCategories {
+    //     ${this.queryCategoryInfoString()}
+    // }
+    // `
+
+    // private _allMetaDataQuery = gql`query AllApplicationsAndEntities {
+    //     ${this._innerAllApplicationsQueryString}
+    //     ${this._innerAllEntitiesQueryString}    
+    //     ${this._innerAllEntityFieldsQueryString}    
+    //     ${this._innerAllEntityPermissionsQueryString}    
+    //     ${this._innerAllEntityRelationshipsQueryString}    
+    //     ${this._innerCurrentUserQueryString}    
+    //     ${this._innerAllRolesQueryString}    
+    //     ${this._innerAllRowLevelSecurityFiltersQueryString}
+    //     ${this._innerAllAuditLogTypesQueryString}
+    //     ${this._innerAllAuthorizationsQueryString}
+    //     ${this._innerAllQueriesQueryString}
+    //     ${this._innerAllQueryCategoriesQueryString}
+    // }`
 
     private _currentUserQuery = gql`query CurrentUserAndRoles {
         ${this._innerCurrentUserQueryString}    
@@ -919,42 +963,48 @@ npm
 
 
 
-    private roleInfoString(): string {
-        return this.infoString(new RoleInfo(null))
-    }
+    // private roleInfoString(): string {
+    //     return this.infoString(new RoleInfo(null))
+    // }
     private userInfoString(): string {
         return this.infoString(new UserInfo(null, null))
     }
     private userRoleInfoString(): string {
         return this.infoString(new UserRoleInfo(null))
     }
-    private rowLevelSecurityFilterInfoString(): string {
-        return this.infoString(new RowLevelSecurityFilterInfo(null))
-    }
-    private auditLogTypeInfoString(): string {
-        return this.infoString(new AuditLogTypeInfo(null))
-    }
-    private authorizationInfoString(): string {
-        return this.infoString(new AuthorizationInfo(null))
-    }
-    private applicationInfoString(): string {
-        return this.infoString(new ApplicationInfo(null, null))
-    }
-    private applicationEntityInfoString(): string {
-        return this.infoString(new ApplicationEntityInfo(null))
-    }
-    private entityInfoString(): string {
-        return this.infoString(new EntityInfo(null))
-    }
-    private entityFieldInfoString(): string {
-        return this.infoString(new EntityFieldInfo(null))
-    }
-    private entityRelationshipInfoString(): string {
-        return this.infoString(new EntityRelationshipInfo(null))
-    }
-    private entityPermissionInfoString(): string {
-        return this.infoString(new EntityPermissionInfo(null))
-    }
+    // private rowLevelSecurityFilterInfoString(): string {
+    //     return this.infoString(new RowLevelSecurityFilterInfo(null))
+    // }
+    // private auditLogTypeInfoString(): string {
+    //     return this.infoString(new AuditLogTypeInfo(null))
+    // }
+    // private authorizationInfoString(): string {
+    //     return this.infoString(new AuthorizationInfo(null))
+    // }
+    // private queryInfoString(): string {
+    //     return this.infoString(new QueryInfo(null))
+    // }
+    // private queryCategoryInfoString(): string {
+    //     return this.infoString(new QueryCategoryInfo(null))
+    // }
+    // private applicationInfoString(): string {
+    //     return this.infoString(new ApplicationInfo(null, null))
+    // }
+    // private applicationEntityInfoString(): string {
+    //     return this.infoString(new ApplicationEntityInfo(null))
+    // }
+    // private entityInfoString(): string {
+    //     return this.infoString(new EntityInfo(null))
+    // }
+    // private entityFieldInfoString(): string {
+    //     return this.infoString(new EntityFieldInfo(null))
+    // }
+    // private entityRelationshipInfoString(): string {
+    //     return this.infoString(new EntityRelationshipInfo(null))
+    // }
+    // private entityPermissionInfoString(): string {
+    //     return this.infoString(new EntityPermissionInfo(null))
+    // }
     private infoString(object: any): string {
         let sOutput: string = '';
         const keys = Object.keys(object)

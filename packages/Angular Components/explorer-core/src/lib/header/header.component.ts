@@ -48,7 +48,7 @@ export class HeaderComponent implements OnInit {
         return SharedService.UnreadUserNotificationCount;
     }
 
-    constructor(public authBase: MJAuthBase, private sharedService: SharedService, private msftUserImageService: MSFTUserImageService, private router: Router) {}
+    constructor(public authBase: MJAuthBase, public sharedService: SharedService, private msftUserImageService: MSFTUserImageService, private router: Router) {}
 
     public changeTheme(theme: {href: string, text: string}) {
         this.selectedTheme = theme;

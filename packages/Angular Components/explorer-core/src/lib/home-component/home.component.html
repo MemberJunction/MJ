@@ -7,23 +7,23 @@
     <div class="main-area"> 
         <div class="nav-container">
             <div class="nav-item" (click)="navigate('askskip')">
-                <span class="k-icon k-i-user"></span>
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('user')"></kendo-svgicon>
                 <span>Ask Skip</span>
             </div>
             <div class="nav-item" (click)="navigate('data')">
-                <span class="k-icon k-i-table"></span>
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
                 <span>Data</span>
             </div>
             <div class="nav-item" (click)="navigate('dashboards')">
-                <span class="k-icon k-i-aggregate-fields"></span>
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('aggregateFields')"></kendo-svgicon>
                 <span>Dashboards</span>
             </div>
             <div class="nav-item" (click)="navigate('reports')">
-                <span class="k-icon k-i-graph"></span>
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
                 <span>Reports</span>
             </div>
             <div class="nav-item" (click)="navigate('settings')">
-                <span class="k-icon k-i-gear"></span>
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('gear')"></kendo-svgicon>
                 <span>Settings</span>
             </div>
         </div>

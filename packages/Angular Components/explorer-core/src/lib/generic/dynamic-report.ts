@@ -36,7 +36,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
   <kendo-tabstrip mjFillContainer [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip>
       <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)">
           <ng-template kendoTabTitle>
-            <kendo-icon name="graph" ></kendo-icon>
+            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
             <span class="report-tab-title">Chart</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
@@ -46,7 +46,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
       </kendo-tabstrip-tab>  
       <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
           <ng-template kendoTabTitle>
-            <kendo-icon name="table"></kendo-icon>
+            <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
             <span class="report-tab-title">Table</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
@@ -65,7 +65,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
       </kendo-tabstrip-tab>  
       <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(3)">
           <ng-template kendoTabTitle>
-            <kendo-icon name="file"></kendo-icon>
+            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('file')"></kendo-svgicon>
             <span class="report-tab-title">Explanation</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
@@ -74,7 +74,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
       </kendo-tabstrip-tab>  
       <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(4)">
           <ng-template kendoTabTitle>
-            <kendo-icon name="page-properties"></kendo-icon>
+            <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('pageProperties')" name="page-properties"></kendo-svgicon>
             <span class="report-tab-title">Details</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
@@ -108,7 +108,7 @@ export class DynamicReportComponent {
   @ViewChild('theChart', { static: false }) theChart!: DynamicChartComponent;
   @ViewChild('tabStrip', { static: false }) tabStrip!: TabStripComponent;
 
-  constructor (private sharedService: SharedService, private router: Router) {}
+  constructor (public sharedService: SharedService, private router: Router) {}
 
   public matchingReportID: number | null = null;
   public matchingReportName: string | null = null;

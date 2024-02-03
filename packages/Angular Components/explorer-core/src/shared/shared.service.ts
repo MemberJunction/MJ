@@ -5,6 +5,7 @@ import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@me
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable } from 'rxjs';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
+import * as KendoSVGIcons from "@progress/kendo-svg-icons";
 
 @Injectable({
   providedIn: 'root'
@@ -309,6 +310,19 @@ export class SharedService {
       return item.name;
     else
       return null 
+  }
+
+  public kendoSVGIcon(iconName: string) {
+    // Cast KendoSVGIcons to any to bypass the index signature check
+    try {
+      const lookupName: string = iconName.endsWith('Icon') ? iconName : iconName + 'Icon';
+      const icon = (KendoSVGIcons as any)[lookupName];
+      return icon || null;  
+    }
+    catch (e) {
+      // icon not found
+      return null;
+    }
   }
 
 }

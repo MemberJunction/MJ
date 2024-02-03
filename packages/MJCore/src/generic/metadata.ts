@@ -5,6 +5,7 @@ import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -44,6 +45,22 @@ export class Metadata {
 
     public get Entities(): EntityInfo[] {
         return Metadata.Provider.Entities;
+    }
+
+    public get Queries(): QueryInfo[] {
+        return Metadata.Provider.Queries;
+    }
+
+    public get QueryFields(): QueryFieldInfo[] {
+        return Metadata.Provider.QueryFields;
+    }
+
+    public get QueryCategories(): QueryCategoryInfo[] {
+        return Metadata.Provider.QueryCategories;
+    }
+
+    public get QueryPermissions(): QueryPermissionInfo[] {
+        return Metadata.Provider.QueryPermissions;
     }
 
     /**

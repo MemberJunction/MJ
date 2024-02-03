@@ -244,6 +244,16 @@
                                                [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
                         </ng-template>
                     </kendo-tabstrip-tab>
+          
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Query Fields')">
+                        <ng-template kendoTabTitle>Query Fields</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Query Fields')"  
+                                               [AllowLoad]="this.IsCurrentTab('Query Fields')"  
+                                               [EditMode]="this.GridEditMode()"  
+                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
                             </kendo-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

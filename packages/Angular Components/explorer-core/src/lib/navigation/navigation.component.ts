@@ -852,7 +852,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Ask Skip',
       path: '/askskip',
-      icon: 'k-i-user'
+      svgIcon: this.sharedService.kendoSVGIcon('user')
     }
     this.drawerItems.push(drawerItem);
   }
@@ -863,7 +863,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: true,
       text: 'Home',
       path: '/home',
-      icon: 'k-i-home'
+      svgIcon: this.sharedService.kendoSVGIcon('home') 
     }
     this.drawerItems.push(drawerItem);
   }
@@ -874,7 +874,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Settings',
       path: '/settings',
-      icon: 'k-i-gear'
+      svgIcon: this.sharedService.kendoSVGIcon('gear') 
     }
     this.drawerItems.push(drawerItem);
   }
@@ -886,7 +886,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Data',
       path: '/data',
-      icon: 'k-i-data'
+      svgIcon: this.sharedService.kendoSVGIcon('data') 
     }
     this.drawerItems.push(drawerItem);
   }
@@ -901,7 +901,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         selected: false,
         text: resourceType,
         path: path,
-        icon: icon ? 'k-i-' + icon : ''
+        svgIcon: this.sharedService.kendoSVGIcon(icon) 
       }
       this.drawerItems.push(drawerItem); 
     }

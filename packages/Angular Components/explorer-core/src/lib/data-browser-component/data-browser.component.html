@@ -10,7 +10,7 @@
           <div *ngFor="let app of applications">
             <kendo-card class="card-wrapper">
               <kendo-card-header class="k-hstack view-card">
-                <kendo-icon name="table" class="view-icon"></kendo-icon>
+                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
                 <!-- <div class="btn-wrapper">
                   <button kendoButton fillMode="flat" (click)="editView(entity)">
                     <span class="k-icon k-i-edit"></span>

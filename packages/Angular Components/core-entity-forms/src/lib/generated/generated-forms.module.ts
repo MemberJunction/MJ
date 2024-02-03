@@ -87,6 +87,10 @@ import { SchemaInfoFormComponent, LoadSchemaInfoFormComponent } from "./Entities
 import { CompanyIntegrationRecordMapFormComponent, LoadCompanyIntegrationRecordMapFormComponent } from "./Entities/CompanyIntegrationRecordMap/companyintegrationrecordmap.form.component";
 import { RecordMergeLogFormComponent, LoadRecordMergeLogFormComponent } from "./Entities/RecordMergeLog/recordmergelog.form.component";
 import { RecordMergeDeletionLogFormComponent, LoadRecordMergeDeletionLogFormComponent } from "./Entities/RecordMergeDeletionLog/recordmergedeletionlog.form.component";
+import { QueryFieldFormComponent, LoadQueryFieldFormComponent } from "./Entities/QueryField/queryfield.form.component";
+import { QueryCategoryFormComponent, LoadQueryCategoryFormComponent } from "./Entities/QueryCategory/querycategory.form.component";
+import { QueryFormComponent, LoadQueryFormComponent } from "./Entities/Query/query.form.component";
+import { QueryPermissionFormComponent, LoadQueryPermissionFormComponent } from "./Entities/QueryPermission/querypermission.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -162,6 +166,10 @@ import { SchemaInfoDetailsComponent, LoadSchemaInfoDetailsComponent } from "./En
 import { CompanyIntegrationRecordMapDetailsComponent, LoadCompanyIntegrationRecordMapDetailsComponent } from "./Entities/CompanyIntegrationRecordMap/sections/details.component"
 import { RecordMergeLogDetailsComponent, LoadRecordMergeLogDetailsComponent } from "./Entities/RecordMergeLog/sections/details.component"
 import { RecordMergeDeletionLogDetailsComponent, LoadRecordMergeDeletionLogDetailsComponent } from "./Entities/RecordMergeDeletionLog/sections/details.component"
+import { QueryFieldDetailsComponent, LoadQueryFieldDetailsComponent } from "./Entities/QueryField/sections/details.component"
+import { QueryCategoryDetailsComponent, LoadQueryCategoryDetailsComponent } from "./Entities/QueryCategory/sections/details.component"
+import { QueryDetailsComponent, LoadQueryDetailsComponent } from "./Entities/Query/sections/details.component"
+import { QueryPermissionDetailsComponent, LoadQueryPermissionDetailsComponent } from "./Entities/QueryPermission/sections/details.component"
 
 
 @NgModule({
@@ -296,16 +304,16 @@ declarations: [
     CompanyIntegrationRecordMapFormComponent,
     RecordMergeLogFormComponent,
     RecordMergeDeletionLogFormComponent,
+    QueryFieldFormComponent,
+    QueryCategoryFormComponent,
+    QueryFormComponent,
+    QueryPermissionFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
     EmployeeCompanyIntegrationDetailsComponent,
     EmployeeRoleDetailsComponent,
-    EmployeeSkillDetailsComponent,
-    RoleDetailsComponent,
-    SkillDetailsComponent,
-    IntegrationURLFormatDetailsComponent,
-    IntegrationDetailsComponent],
+    EmployeeSkillDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -326,6 +334,10 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    RoleDetailsComponent,
+    SkillDetailsComponent,
+    IntegrationURLFormatDetailsComponent,
+    IntegrationDetailsComponent,
     CompanyIntegrationDetailsComponent,
     EntityFieldDetailsComponent,
     EntityDetailsComponent,
@@ -341,11 +353,7 @@ declarations: [
     CompanyIntegrationRunDetailsComponent,
     CompanyIntegrationRunDetailDetailsComponent,
     ErrorLogDetailsComponent,
-    ApplicationDetailsComponent,
-    ApplicationEntityDetailsComponent,
-    EntityPermissionDetailsComponent,
-    UserApplicationEntityDetailsComponent,
-    UserApplicationDetailsComponent],
+    ApplicationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -366,6 +374,10 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    ApplicationEntityDetailsComponent,
+    EntityPermissionDetailsComponent,
+    UserApplicationEntityDetailsComponent,
+    UserApplicationDetailsComponent,
     CompanyIntegrationRunAPILogDetailsComponent,
     ListDetailsComponent,
     ListDetailDetailsComponent,
@@ -381,11 +393,7 @@ declarations: [
     AuthorizationDetailsComponent,
     AuthorizationRoleDetailsComponent,
     AuditLogTypeDetailsComponent,
-    EntityFieldValueDetailsComponent,
-    AIModelDetailsComponent,
-    AIActionDetailsComponent,
-    AIModelActionDetailsComponent,
-    EntityAIActionDetailsComponent],
+    EntityFieldValueDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -406,6 +414,10 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    AIModelDetailsComponent,
+    AIActionDetailsComponent,
+    AIModelActionDetailsComponent,
+    EntityAIActionDetailsComponent,
     AIModelTypeDetailsComponent,
     QueueTypeDetailsComponent,
     QueueDetailsComponent,
@@ -421,11 +433,7 @@ declarations: [
     TaggedItemDetailsComponent,
     WorkspaceDetailsComponent,
     WorkspaceItemDetailsComponent,
-    DatasetDetailsComponent,
-    DatasetItemDetailsComponent,
-    ConversationDetailDetailsComponent,
-    ConversationDetailsComponent,
-    UserNotificationDetailsComponent],
+    DatasetDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -446,11 +454,19 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    DatasetItemDetailsComponent,
+    ConversationDetailDetailsComponent,
+    ConversationDetailsComponent,
+    UserNotificationDetailsComponent,
     ResourceFolderDetailsComponent,
     SchemaInfoDetailsComponent,
     CompanyIntegrationRecordMapDetailsComponent,
     RecordMergeLogDetailsComponent,
-    RecordMergeDeletionLogDetailsComponent],
+    RecordMergeDeletionLogDetailsComponent,
+    QueryFieldDetailsComponent,
+    QueryCategoryDetailsComponent,
+    QueryDetailsComponent,
+    QueryPermissionDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -561,6 +577,10 @@ export function LoadCoreGeneratedForms() {
     LoadCompanyIntegrationRecordMapFormComponent();
     LoadRecordMergeLogFormComponent();
     LoadRecordMergeDeletionLogFormComponent();
+    LoadQueryFieldFormComponent();
+    LoadQueryCategoryFormComponent();
+    LoadQueryFormComponent();
+    LoadQueryPermissionFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -636,4 +656,8 @@ export function LoadCoreGeneratedForms() {
     LoadCompanyIntegrationRecordMapDetailsComponent();
     LoadRecordMergeLogDetailsComponent();
     LoadRecordMergeDeletionLogDetailsComponent();
+    LoadQueryFieldDetailsComponent();
+    LoadQueryCategoryDetailsComponent();
+    LoadQueryDetailsComponent();
+    LoadQueryPermissionDetailsComponent();
 }

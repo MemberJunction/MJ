@@ -10885,3 +10885,594 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
     
+    /**
+     * Query Fields - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: QueryField
+     * * Base View: vwQueryFields
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Query Fields')
+    export class QueryFieldEntity extends BaseEntity {
+        /**
+        * Loads the Query Fields record from the database
+        * @param ID: Number - primary key value to load the Query Fields record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof QueryFieldEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Query Fields - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof QueryFieldEntity
+        * @throws {Error} - Delete is not allowed for Query Fields, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Query Fields, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: QueryID
+        * * Display Name: Query ID
+        * * SQL Data Type: int
+        * * Related Entity: Queries
+        */
+        get QueryID(): number {  
+            return this.Get('QueryID');
+        }
+        set QueryID(value: number) {
+            this.Set('QueryID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        */
+        get Sequence(): number {  
+            return this.Get('Sequence');
+        }
+        set Sequence(value: number) {
+            this.Set('Sequence', value);
+        }
+        /**
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity ID
+        * * SQL Data Type: int
+        * * Related Entity: Entities
+        */
+        get SourceEntityID(): number {  
+            return this.Get('SourceEntityID');
+        }
+        set SourceEntityID(value: number) {
+            this.Set('SourceEntityID', value);
+        }
+        /**
+        * * Field Name: SourceFieldName
+        * * Display Name: Source Field Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get SourceFieldName(): string {  
+            return this.Get('SourceFieldName');
+        }
+        set SourceFieldName(value: string) {
+            this.Set('SourceFieldName', value);
+        }
+        /**
+        * * Field Name: IsComputed
+        * * Display Name: Is Computed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get IsComputed(): boolean {  
+            return this.Get('IsComputed');
+        }
+        set IsComputed(value: boolean) {
+            this.Set('IsComputed', value);
+        }
+        /**
+        * * Field Name: ComputationDescription
+        * * Display Name: Computation Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get ComputationDescription(): string {  
+            return this.Get('ComputationDescription');
+        }
+        set ComputationDescription(value: string) {
+            this.Set('ComputationDescription', value);
+        }
+        /**
+        * * Field Name: IsSummary
+        * * Display Name: Is Summary
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get IsSummary(): boolean {  
+            return this.Get('IsSummary');
+        }
+        set IsSummary(value: boolean) {
+            this.Set('IsSummary', value);
+        }
+        /**
+        * * Field Name: SummaryDescription
+        * * Display Name: Summary Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get SummaryDescription(): string {  
+            return this.Get('SummaryDescription');
+        }
+        set SummaryDescription(value: string) {
+            this.Set('SummaryDescription', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Query
+        * * Display Name: Query
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Query(): string {  
+            return this.Get('Query');
+        }
+    
+        /**
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get SourceEntity(): string {  
+            return this.Get('SourceEntity');
+        }
+    
+
+    }
+    
+    /**
+     * Query Categories - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: QueryCategory
+     * * Base View: vwQueryCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Query Categories')
+    export class QueryCategoryEntity extends BaseEntity {
+        /**
+        * Loads the Query Categories record from the database
+        * @param ID: Number - primary key value to load the Query Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof QueryCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Query Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof QueryCategoryEntity
+        * @throws {Error} - Delete is not allowed for Query Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Query Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity: Query Categories
+        */
+        get ParentID(): number {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Parent(): string {  
+            return this.Get('Parent');
+        }
+    
+
+    }
+    
+    /**
+     * Queries - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: Query
+     * * Base View: vwQueries
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Queries')
+    export class QueryEntity extends BaseEntity {
+        /**
+        * Loads the Queries record from the database
+        * @param ID: Number - primary key value to load the Queries record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof QueryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Queries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof QueryEntity
+        * @throws {Error} - Delete is not allowed for Queries, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Queries, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity: Query Categories
+        */
+        get CategoryID(): number {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number) {
+            this.Set('CategoryID', value);
+        }
+        /**
+        * * Field Name: SQL
+        * * Display Name: SQL
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get SQL(): string {  
+            return this.Get('SQL');
+        }
+        set SQL(value: string) {
+            this.Set('SQL', value);
+        }
+        /**
+        * * Field Name: OriginalSQL
+        * * Display Name: Original SQL
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get OriginalSQL(): string {  
+            return this.Get('OriginalSQL');
+        }
+        set OriginalSQL(value: string) {
+            this.Set('OriginalSQL', value);
+        }
+        /**
+        * * Field Name: Feedback
+        * * Display Name: Feedback
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Feedback(): string {  
+            return this.Get('Feedback');
+        }
+        set Feedback(value: string) {
+            this.Set('Feedback', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(15)
+        * * Default Value: N'Pending'
+        */
+        get Status(): string {  
+            return this.Get('Status');
+        }
+        set Status(value: string) {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: QualityRank
+        * * Display Name: Quality Rank
+        * * SQL Data Type: int
+        * * Default Value: 0
+        */
+        get QualityRank(): number {  
+            return this.Get('QualityRank');
+        }
+        set QualityRank(value: number) {
+            this.Set('QualityRank', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Category(): string {  
+            return this.Get('Category');
+        }
+    
+
+    }
+    
+    /**
+     * Query Permissions - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: QueryPermission
+     * * Base View: vwQueryPermissions
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Query Permissions')
+    export class QueryPermissionEntity extends BaseEntity {
+        /**
+        * Loads the Query Permissions record from the database
+        * @param ID: Number - primary key value to load the Query Permissions record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof QueryPermissionEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Query Permissions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof QueryPermissionEntity
+        * @throws {Error} - Delete is not allowed for Query Permissions, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Query Permissions, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: QueryID
+        * * Display Name: Query ID
+        * * SQL Data Type: int
+        * * Related Entity: Queries
+        */
+        get QueryID(): number {  
+            return this.Get('QueryID');
+        }
+        set QueryID(value: number) {
+            this.Set('QueryID', value);
+        }
+        /**
+        * * Field Name: RoleName
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)
+        * * Related Entity: Roles
+        */
+        get RoleName(): string {  
+            return this.Get('RoleName');
+        }
+        set RoleName(value: string) {
+            this.Set('RoleName', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+
+    }
+    

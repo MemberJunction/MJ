@@ -15,7 +15,7 @@
       <kendo-tabstrip mjFillContainer class="drawer-container" [scrollable]="true" [keepTabContent]="true" (tabClose)="onClose($event)" (tabSelect)="onTabSelect($event)" [animate]="false" #tabstrip>
         <kendo-tabstrip-tab [selected]="activeTabIndex === 0" [closable]="false">
           <ng-template kendoTabTitle>
-            <kendo-icon name="home" (contextmenu)="onTabContextMenu($event, 0)"></kendo-icon>
+            <kendo-svgicon name="home" [icon]="sharedService.kendoSVGIcon('home')" (contextmenu)="onTabContextMenu($event, 0)"></kendo-svgicon>
             <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, 0)">Home</span>
           </ng-template>
           <ng-template kendoTabContent class="navigation-tab-contents">
@@ -24,10 +24,8 @@
         </kendo-tabstrip-tab>
         <kendo-tabstrip-tab *ngFor="let tab of tabs;let i = index" [selected]="isTabActive(tab.id)" [closable]="true">
           <ng-template kendoTabTitle>
-            <kendo-icon [style.display]="tab?.contentLoading ? 'inline' : 'none'" name="clock" (contextmenu)="onTabContextMenu($event, i)"></kendo-icon>
-            <kendo-icon [style.display]="!tab?.contentLoading && tab?.icon ? 'inline' : 'none'" [name]="tab.icon" (contextmenu)="onTabContextMenu($event, i)"></kendo-icon>
-            <!-- <kendo-icon *ngIf="tab?.contentLoading" name="clock"></kendo-icon>
-            <kendo-icon *ngIf="!tab?.contentLoading && tab?.icon" [name]="tab.icon"></kendo-icon> -->
+            <kendo-svgicon [style.display]="tab?.contentLoading ? 'inline' : 'none'" [icon]="sharedService.kendoSVGIcon('clock')" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
+            <kendo-svgicon [style.display]="!tab?.contentLoading && tab?.icon ? 'inline' : 'none'" [icon]="sharedService.kendoSVGIcon(tab.icon)" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
             <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, i)">{{ tab.labelLoading ? 'Loading...' : tab.label }}</span>
           </ng-template>
           <ng-template kendoTabContent class="navigation-tab-contents">

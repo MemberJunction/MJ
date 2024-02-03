@@ -450,6 +450,41 @@ input CreateListInput {
   UserID: Int!
 }
 
+input CreateQueryCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+}
+
+input CreateQueryFieldInput {
+  ComputationDescription: String
+  Description: String
+  IsComputed: Boolean!
+  IsSummary: Boolean!
+  Name: String!
+  QueryID: Int!
+  Sequence: Int!
+  SourceEntityID: Int
+  SourceFieldName: String
+  SummaryDescription: String
+}
+
+input CreateQueryInput {
+  CategoryID: Int!
+  Description: String
+  Feedback: String
+  Name: String!
+  OriginalSQL: String
+  QualityRank: Int
+  SQL: String
+  Status: String!
+}
+
+input CreateQueryPermissionInput {
+  QueryID: Int!
+  RoleName: String!
+}
+
 input CreateQueueInput {
   Description: String
   IsActive: Boolean!
@@ -979,6 +1014,7 @@ type Entity_ {
 
   """Reserved for future use"""
   ParentID: Int
+  QueryFieldsArray: [QueryField_!]!
   RecordChangesArray: [RecordChange_!]!
   RecordMergeLogsArray: [RecordMergeLog_!]!
   ResourceTypesArray: [ResourceType_!]!
@@ -1092,6 +1128,10 @@ type Mutation {
   CreateEntityRelationship(input: CreateEntityRelationshipInput!): EntityRelationship_!
   CreateList(input: CreateListInput!): List_!
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
+  CreateQuery(input: CreateQueryInput!): Query_!
+  CreateQueryCategory(input: CreateQueryCategoryInput!): QueryCategory_!
+  CreateQueryField(input: CreateQueryFieldInput!): QueryField_!
+  CreateQueryPermission(input: CreateQueryPermissionInput!): QueryPermission_!
   CreateQueue(input: CreateQueueInput!): Queue_!
   CreateQueueTask(input: CreateQueueTaskInput!): QueueTask_!
   CreateRecordChange(input: CreateRecordChangeInput!): RecordChange_!
@@ -1162,6 +1202,10 @@ type Mutation {
   UpdateIntegrationURLFormat(input: UpdateIntegrationURLFormatInput!): IntegrationURLFormat_!
   UpdateList(input: UpdateListInput!): List_!
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
+  UpdateQuery(input: UpdateQueryInput!): Query_!
+  UpdateQueryCategory(input: UpdateQueryCategoryInput!): QueryCategory_!
+  UpdateQueryField(input: UpdateQueryFieldInput!): QueryField_!
+  UpdateQueryPermission(input: UpdateQueryPermissionInput!): QueryPermission_!
   UpdateQueue(input: UpdateQueueInput!): Queue_!
   UpdateQueueTask(input: UpdateQueueTaskInput!): QueueTask_!
   UpdateRecordMergeDeletionLog(input: UpdateRecordMergeDeletionLogInput!): RecordMergeDeletionLog_!
@@ -1293,6 +1337,7 @@ type Query {
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
   GetEntityRecordName(EntityName: String!, PrimaryKeyValues: [PrimaryKeyValueInputType!]!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
+  GetQueryData(QueryID: Int!): RunQueryResultType!
   GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
@@ -1303,6 +1348,10 @@ type Query {
   OutputDeliveryType(ID: Int!): OutputDeliveryType_
   OutputFormatType(ID: Int!): OutputFormatType_
   OutputTriggerType(ID: Int!): OutputTriggerType_
+  Query(ID: Int!): Query_
+  QueryCategory(ID: Int!): QueryCategory_
+  QueryField(ID: Int!): QueryField_
+  QueryPermission(ID: Int!): QueryPermission_
   Queue(ID: Int!): Queue_
   QueueTask(ID: Int!): QueueTask_
   QueueType(ID: Int!): QueueType_
@@ -1433,6 +1482,18 @@ type Query {
   RunOutputTriggerTypeDynamicView(input: RunDynamicViewInput!): RunOutputTriggerTypeViewResult!
   RunOutputTriggerTypeViewByID(input: RunViewByIDInput!): RunOutputTriggerTypeViewResult!
   RunOutputTriggerTypeViewByName(input: RunViewByNameInput!): RunOutputTriggerTypeViewResult!
+  RunQueryCategoryDynamicView(input: RunDynamicViewInput!): RunQueryCategoryViewResult!
+  RunQueryCategoryViewByID(input: RunViewByIDInput!): RunQueryCategoryViewResult!
+  RunQueryCategoryViewByName(input: RunViewByNameInput!): RunQueryCategoryViewResult!
+  RunQueryDynamicView(input: RunDynamicViewInput!): RunQueryViewResult!
+  RunQueryFieldDynamicView(input: RunDynamicViewInput!): RunQueryFieldViewResult!
+  RunQueryFieldViewByID(input: RunViewByIDInput!): RunQueryFieldViewResult!
+  RunQueryFieldViewByName(input: RunViewByNameInput!): RunQueryFieldViewResult!
+  RunQueryPermissionDynamicView(input: RunDynamicViewInput!): RunQueryPermissionViewResult!
+  RunQueryPermissionViewByID(input: RunViewByIDInput!): RunQueryPermissionViewResult!
+  RunQueryPermissionViewByName(input: RunViewByNameInput!): RunQueryPermissionViewResult!
+  RunQueryViewByID(input: RunViewByIDInput!): RunQueryViewResult!
+  RunQueryViewByName(input: RunViewByNameInput!): RunQueryViewResult!
   RunQueueDynamicView(input: RunDynamicViewInput!): RunQueueViewResult!
   RunQueueTaskDynamicView(input: RunDynamicViewInput!): RunQueueTaskViewResult!
   RunQueueTaskViewByID(input: RunViewByIDInput!): RunQueueTaskViewResult!
@@ -1555,6 +1616,61 @@ type Query {
   Workspace(ID: Int!): Workspace_
   WorkspaceItem(ID: Int!): WorkspaceItem_
   colors: [Color!]!
+}
+
+type QueryCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+  Parent: String
+  ParentID: Int
+  QueriesArray: [Query_!]!
+  QueryCategoriesArray: [QueryCategory_!]!
+  UpdatedAt: Timestamp!
+}
+
+type QueryField_ {
+  ComputationDescription: String
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  IsComputed: Boolean!
+  IsSummary: Boolean!
+  Name: String!
+  Query: String!
+  QueryID: Int!
+  Sequence: Int!
+  SourceEntity: String
+  SourceEntityID: Int
+  SourceFieldName: String
+  SummaryDescription: String
+  UpdatedAt: Timestamp!
+}
+
+type QueryPermission_ {
+  CreatedAt: Timestamp!
+  ID: Int!
+  QueryID: Int!
+  RoleName: String!
+  UpdatedAt: Timestamp!
+}
+
+type Query_ {
+  Category: String!
+  CategoryID: Int!
+  CreatedAt: Timestamp!
+  Description: String
+  Feedback: String
+  ID: Int!
+  Name: String!
+  OriginalSQL: String
+  QualityRank: Int
+  QueryFieldsArray: [QueryField_!]!
+  QueryPermissionsArray: [QueryPermission_!]!
+  SQL: String
+  Status: String!
+  UpdatedAt: Timestamp!
 }
 
 type QueueTask_ {
@@ -1760,6 +1876,7 @@ type Role_ {
   EntityPermissionsArray: [EntityPermission_!]!
   ID: Int!
   Name: String!
+  QueryPermissionsArray: [QueryPermission_!]!
   SQLName: String!
   UpdatedAt: Timestamp!
   UserRolesArray: [UserRole_!]!
@@ -2203,6 +2320,55 @@ type RunOutputTriggerTypeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [OutputTriggerType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunQueryCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [QueryCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunQueryFieldViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [QueryField_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunQueryPermissionViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [QueryPermission_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunQueryResultType {
+  ErrorMessage: String!
+  ExecutionTime: Float!
+  QueryID: Float!
+  Results: String!
+  RowCount: Float!
+  Success: Boolean!
+}
+
+type RunQueryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Query_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3037,6 +3203,45 @@ input UpdateListInput {
   ID: Int!
   Name: String!
   UserID: Int!
+}
+
+input UpdateQueryCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+}
+
+input UpdateQueryFieldInput {
+  ComputationDescription: String
+  Description: String
+  ID: Int!
+  IsComputed: Boolean!
+  IsSummary: Boolean!
+  Name: String!
+  QueryID: Int!
+  Sequence: Int!
+  SourceEntityID: Int
+  SourceFieldName: String
+  SummaryDescription: String
+}
+
+input UpdateQueryInput {
+  CategoryID: Int!
+  Description: String
+  Feedback: String
+  ID: Int!
+  Name: String!
+  OriginalSQL: String
+  QualityRank: Int
+  SQL: String
+  Status: String!
+}
+
+input UpdateQueryPermissionInput {
+  ID: Int!
+  QueryID: Int!
+  RoleName: String!
 }
 
 input UpdateQueueInput {

@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Router } from '@angular/router'
+import { SharedService } from '../../public-api';
 
 @Component({
   selector: 'app-generic-browse-list',
@@ -19,7 +20,7 @@ export class GenericBrowseListComponent {
   @Output() public deleteButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
 
-  constructor(private router: Router) {
+  constructor(public sharedService: SharedService, private router: Router) {
     this.router = router;
   }
 

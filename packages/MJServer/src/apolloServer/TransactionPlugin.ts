@@ -9,7 +9,7 @@ export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
     const isMutation = /^\s*mutation\b/i.test(query);
 
     if (!isMutation) {
-      return;
+      return null;
     }
 
     // Start transaction, one or more mutations. If it is just one mutation, this trans wrapper isn't really needed

@@ -1,0 +1,9 @@
+.query-grid-wrap {
+    height: calc(100vh-20px);
+}
+
+.query-grid-column-header {
+    background-color: #ec8641;
+    font-size: 20pt;
+    font-weight: bold;
+}

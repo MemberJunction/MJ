@@ -5,6 +5,8 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { RunQueryParams } from "./runQuery";
 
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
@@ -103,6 +105,14 @@ export interface IMetadataProvider {
     get AuditLogTypes(): AuditLogTypeInfo[]
 
     get Authorizations(): AuthorizationInfo[]
+
+    get Queries(): QueryInfo[]
+
+    get QueryFields(): QueryFieldInfo[]
+
+    get QueryCategories(): QueryCategoryInfo[]
+
+    get QueryPermissions(): QueryPermissionInfo[]
 
     get LatestRemoteMetadata(): MetadataInfo[]
 
@@ -297,6 +307,20 @@ export interface IRunViewProvider {
     RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult>
 }
 
+export type RunQueryResult = {
+    QueryID: number;
+    Success: boolean;
+    Results: any[];
+    RowCount: number;
+    ExecutionTime: number;
+    ErrorMessage: string;
+}
+
+export interface IRunQueryProvider {
+    Config(configData: ProviderConfigDataBase): Promise<boolean>
+
+    RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult>
+}
 
 export type RunReportResult = {
     ReportID: number;

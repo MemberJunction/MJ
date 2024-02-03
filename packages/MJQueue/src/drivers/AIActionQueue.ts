@@ -1,6 +1,6 @@
 import { QueueBase, TaskBase, TaskResult } from "../generic/QueueBase";
 import { RegisterClass } from '@memberjunction/global'
-import { AIEngine } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 
 @RegisterClass(QueueBase, 'AI Action', 1)
 export class AIActionQueue extends QueueBase {

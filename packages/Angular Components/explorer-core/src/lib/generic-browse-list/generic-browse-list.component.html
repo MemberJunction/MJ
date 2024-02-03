@@ -20,7 +20,7 @@
           <div *ngFor="let d of items">
             <kendo-card class="card-wrapper">
               <kendo-card-header class="k-hstack view-card">
-                <kendo-icon name="table" [class]="iconName"></kendo-icon>
+                <kendo-svgicon name="table" [icon]="sharedService.kendoSVGIcon(iconName)"></kendo-svgicon>
                 <div class="btn-wrapper">
                   <button kendoButton fillMode="flat">
                     <span class="k-icon k-i-edit"></span>

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/1/2024, 11:09:57 PM
+* GENERATED: 2/2/2024, 2:13:47 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN

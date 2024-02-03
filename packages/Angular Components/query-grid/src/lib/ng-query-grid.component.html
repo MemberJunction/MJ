@@ -1,0 +1,39 @@
+<div class="query-grid-wrap" mjFillContainer>
+    <kendo-grid #kendoGrid
+        mjFillContainer
+        [resizable]="true"
+        [data]="gridView" 
+        [skip]="skip"
+        [pageSize]="pageSize"
+        scrollable="virtual"
+        [rowHeight]="36"
+        (pageChange)="pageChange($event)"
+        [loading]="isLoading"
+        [height]="gridHeight"
+        [sortable]="true"
+        [resizable]="true"
+        [reorderable]="true"
+        [selectable]="true"
+        kendoGridSelectBy
+        [(selectedKeys)]="selectedKeys"
+        (cellClick)="cellClickHandler($event)"
+        >
+        <ng-template kendoGridToolbarTemplate>
+            <button kendoButton icon="file-excel" (click)="doExcelExport()" >Export to Excel</button>
+            <button
+                kendoButton
+                [primary]="true"
+                icon="refresh"
+                *ngIf="showRefreshButton"
+                (click)="RefreshFromSavedParams()">
+                Refresh
+            </button>
+        </ng-template>
+
+        <kendo-excelexport #excelExport [data]="exportData" [fileName]="Params?.QueryID + '_Query.xlsx'">
+            <kendo-excelexport-column *ngFor="let exportCol of queryColumns()" [field]="exportCol" [title]="exportCol">
+            </kendo-excelexport-column>
+        </kendo-excelexport>
+    </kendo-grid>
+</div>
+ 

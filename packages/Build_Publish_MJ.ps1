@@ -208,15 +208,16 @@ $ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publ
 # Define a custom object for each library including the directory name and the dependencies list (in order)
 $baseLibraries = @(
     @{Name='MJGlobal'; PackageName='global'; Dependencies=@()},
+    @{Name='MJAI'; PackageName='ai'; Dependencies=@()},
     @{Name='MJCore'; PackageName='core'; Dependencies=@('global')},
     @{Name='MJCoreEntities'; PackageName='core-entities'; Dependencies=@('global', 'core')},
-    @{Name='MJAI'; PackageName='ai'; Dependencies=@('global', 'core', 'core-entities')},
+    @{Name='MJAIEngine'; PackageName='aiengine'; Dependencies=@('global', 'core', 'core-entities', 'ai')},
     @{Name='MJQueue'; PackageName='queue'; Dependencies=@('global', 'core', 'core-entities', 'ai')},
     @{Name='SQLServerDataProvider'; PackageName='sqlserver-dataprovider'; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai')},
     @{Name='CodeGenLib'; PackageName='codegen-lib'; Dependencies=@('global', 'core', 'sqlserver-dataprovider')},
     @{Name='GraphQLDataProvider'; PackageName='graphql-dataprovider'; Dependencies=@('global', 'core', 'core-entities')},
     @{Name='GeneratedEntities'; PackageName=$null; Dependencies=@('global', 'core')},
-    @{Name='MJServer'; PackageName='server'; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai', 'sqlserver-dataprovider')}
+    @{Name='MJServer'; PackageName='server'; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai', 'aiengine', 'sqlserver-dataprovider')}
 )
 # Iterate over the custom objects
 foreach ($libObject in $baseLibraries) {
@@ -273,8 +274,9 @@ $angularLibraries = @(
     @{Name='link-directives'; PackageName='ng-link-directives'; Dependencies=@('core')},
     @{Name='compare-records'; PackageName='ng-compare-records'; Dependencies=@('core', 'core-entities')},
     @{Name='record-changes'; PackageName='ng-record-changes'; Dependencies=@('global', 'core')},
+    @{Name='query-grid'; PackageName='ng-query-grid'; Dependencies=@('global', 'core', 'core-entities', 'ng-container-directives')},
     @{Name='user-view-grid'; PackageName='ng-user-view-grid'; Dependencies=@('global', 'core', 'core-entities', 'ng-compare-records', 'ng-container-directives')},
-    @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
+    @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'ng-query-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
     @{Name='core-entity-forms'; PackageName='ng-core-entity-forms'; Dependencies=@('core', 'core-entities', 'ng-explorer-core')}
 )
 

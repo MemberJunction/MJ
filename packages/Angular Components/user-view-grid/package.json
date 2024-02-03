@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-user-view-grid",
-  "version": "0.9.111",
+  "version": "0.9.116",
   "description": "MemberJunction: Angular Grid to display dynamic and saved user views for any entity in MemberJunction.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -15,22 +15,23 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "^15.2.0",
-    "@angular/compiler-cli": "^15.2.0"
+    "@angular/compiler": "^17.1.2",
+    "@angular/compiler-cli": "^17.1.2"
   },
   "peerDependencies": {
-    "@angular/common": "^15.2.0",
-    "@angular/core": "^15.2.0",
-    "@angular/forms": "^15.2.0",
-    "@angular/router": "^15.2.0",
-    "@progress/kendo-angular-grid": "^12.1.0"
+    "@angular/common": "^17.1.2",
+    "@angular/core": "^17.1.2",
+    "@angular/forms": "^17.1.2",
+    "@angular/router": "^17.1.2",
+    "@progress/kendo-angular-grid": "^15.0.1",
+    "@progress/kendo-svg-icons": "^15.0.1"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^0.9.106",
-    "@memberjunction/global": "^0.9.117",
-    "@memberjunction/core": "^0.9.128",
-    "@memberjunction/ng-compare-records": "^0.9.128",
-    "@memberjunction/ng-container-directives": "^0.9.97",
+    "@memberjunction/core-entities": "^0.9.111",
+    "@memberjunction/global": "^0.9.122",
+    "@memberjunction/core": "^0.9.133",
+    "@memberjunction/ng-compare-records": "^0.9.133",
+    "@memberjunction/ng-container-directives": "^0.9.102",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

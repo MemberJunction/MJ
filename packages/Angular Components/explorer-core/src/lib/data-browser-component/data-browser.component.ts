@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router'
 import { ApplicationInfo, Metadata } from '@memberjunction/core';
+import { SharedService } from '../../public-api';
 
 @Component({
   selector: 'app-data-browser',
@@ -11,7 +12,7 @@ export class DataBrowserComponent {
   public showLoader: boolean = true;
   public applications: ApplicationInfo[] = [];
 
-  constructor(private router: Router) {}
+  constructor(public sharedService: SharedService, private router: Router) {}
 
   ngOnInit(): void {
     this.LoadData();

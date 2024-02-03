@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core-entities",
-  "version": "0.9.106",
+  "version": "0.9.111",
   "description": "Entity subclasses for the metadata layer of MemberJunction defined in the MJ_CORE schema (usually 'admin'), distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,10 +16,10 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.0.3"
+    "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.128",
-    "@memberjunction/global": "^0.9.117"
+    "@memberjunction/core": "^0.9.133",
+    "@memberjunction/global": "^0.9.122"
   }
 }

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/1/2024, 11:09:57 PM
+* GENERATED: 2/2/2024, 2:13:47 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -17,7 +17,7 @@ import { AppContext } from '@memberjunction/server';
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -1266,6 +1266,9 @@ export class Role_ {
     @Field(() => [AuthorizationRole_])
     AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
 
+    @Field(() => [QueryPermission_])
+    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+
 }
         
 //****************************************************************************
@@ -1378,6 +1381,14 @@ export class RoleResolver extends ResolverBase {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [QueryPermission_])
+    async QueryPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Query Permissions', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
     
@@ -2841,6 +2852,9 @@ export class Entity_ {
     @Field(() => [RecordMergeLog_])
     RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
 
+    @Field(() => [QueryField_])
+    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+
 }
         
 //****************************************************************************
@@ -3289,6 +3303,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [QueryField_])
+    async QueryFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Query Fields', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [SourceEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
     
@@ -14006,6 +14028,875 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Query Fields
+//****************************************************************************
+@ObjectType()
+export class QueryField_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    QueryID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int) 
+    Sequence: number;
+      
+    @Field(() => Int, {nullable: true}) 
+    SourceEntityID?: number;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceFieldName?: string;
+      
+    @Field(() => Boolean) 
+    IsComputed: boolean;
+      
+    @Field({nullable: true}) 
+    ComputationDescription?: string;
+      
+    @Field(() => Boolean) 
+    IsSummary: boolean;
+      
+    @Field({nullable: true}) 
+    SummaryDescription?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(510)
+    Query: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    SourceEntity?: string;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Query Fields   
+//****************************************************************************
+@InputType()
+export class CreateQueryFieldInput {
+    @Field(() => Int, )
+    QueryID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    Sequence: number;
+
+    @Field(() => Int, { nullable: true })
+    SourceEntityID: number;
+
+    @Field({ nullable: true })
+    SourceFieldName: string;
+
+    @Field(() => Boolean, )
+    IsComputed: boolean;
+
+    @Field({ nullable: true })
+    ComputationDescription: string;
+
+    @Field(() => Boolean, )
+    IsSummary: boolean;
+
+    @Field({ nullable: true })
+    SummaryDescription: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Query Fields   
+//****************************************************************************
+@InputType()
+export class UpdateQueryFieldInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field(() => Int, )
+    QueryID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    Sequence: number;
+
+    @Field(() => Int, { nullable: true })
+    SourceEntityID: number;
+
+    @Field({ nullable: true })
+    SourceFieldName: string;
+
+    @Field(() => Boolean, )
+    IsComputed: boolean;
+
+    @Field({ nullable: true })
+    ComputationDescription: string;
+
+    @Field(() => Boolean, )
+    IsSummary: boolean;
+
+    @Field({ nullable: true })
+    SummaryDescription: string;
+}
+
+//****************************************************************************
+// RESOLVER for Query Fields
+//****************************************************************************
+@ObjectType()
+export class RunQueryFieldViewResult {
+    @Field(() => [QueryField_])
+    Results: QueryField_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QueryField_)
+export class QueryFieldResolver extends ResolverBase {
+    @Query(() => RunQueryFieldViewResult)
+    async RunQueryFieldViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryFieldViewResult)
+    async RunQueryFieldViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryFieldViewResult)
+    async RunQueryFieldDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Query Fields';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => QueryField_, { nullable: true })
+    async QueryField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryField_ | null> {
+        this.CheckUserReadPermissions('Query Fields', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => QueryField_)
+    async CreateQueryField(
+        @Arg('input', () => CreateQueryFieldInput) input: CreateQueryFieldInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryFieldEntity>await new Metadata().GetEntityObject('Query Fields', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryFieldInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateQueryFieldInput) {
+    }
+    
+    @Mutation(() => QueryField_)
+    async UpdateQueryField(
+        @Arg('input', () => UpdateQueryFieldInput) input: UpdateQueryFieldInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryFieldEntity>await new Metadata().GetEntityObject('Query Fields', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Fields
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryFieldInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryFieldInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Query Categories
+//****************************************************************************
+@ObjectType()
+export class QueryCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(100)
+    Name: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Parent?: string;
+    
+    @Field(() => [QueryCategory_])
+    QueryCategoriesArray: QueryCategory_[]; // Link to QueryCategories
+
+    @Field(() => [Query_])
+    QueriesArray: Query_[]; // Link to Queries
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Query Categories   
+//****************************************************************************
+@InputType()
+export class CreateQueryCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+
+    @Field({ nullable: true })
+    Description: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Query Categories   
+//****************************************************************************
+@InputType()
+export class UpdateQueryCategoryInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+
+    @Field({ nullable: true })
+    Description: string;
+}
+
+//****************************************************************************
+// RESOLVER for Query Categories
+//****************************************************************************
+@ObjectType()
+export class RunQueryCategoryViewResult {
+    @Field(() => [QueryCategory_])
+    Results: QueryCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QueryCategory_)
+export class QueryCategoryResolver extends ResolverBase {
+    @Query(() => RunQueryCategoryViewResult)
+    async RunQueryCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryCategoryViewResult)
+    async RunQueryCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryCategoryViewResult)
+    async RunQueryCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Query Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => QueryCategory_, { nullable: true })
+    async QueryCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryCategory_ | null> {
+        this.CheckUserReadPermissions('Query Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [QueryCategory_])
+    async QueryCategoriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Query Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryCategories] WHERE [ParentID]=${querycategory_.ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Query_])
+    async QueriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Queries', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueries] WHERE [CategoryID]=${querycategory_.ID} ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => QueryCategory_)
+    async CreateQueryCategory(
+        @Arg('input', () => CreateQueryCategoryInput) input: CreateQueryCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryCategoryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateQueryCategoryInput) {
+    }
+    
+    @Mutation(() => QueryCategory_)
+    async UpdateQueryCategory(
+        @Arg('input', () => UpdateQueryCategoryInput) input: UpdateQueryCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Categories
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Queries
+//****************************************************************************
+@ObjectType()
+export class Query_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int) 
+    CategoryID: number;
+      
+    @Field({nullable: true}) 
+    SQL?: string;
+      
+    @Field({nullable: true}) 
+    OriginalSQL?: string;
+      
+    @Field({nullable: true}) 
+    Feedback?: string;
+      
+    @Field() 
+    @MaxLength(30)
+    Status: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    QualityRank?: number;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(100)
+    Category: string;
+    
+    @Field(() => [QueryField_])
+    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+
+    @Field(() => [QueryPermission_])
+    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Queries   
+//****************************************************************************
+@InputType()
+export class CreateQueryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    CategoryID: number;
+
+    @Field({ nullable: true })
+    SQL: string;
+
+    @Field({ nullable: true })
+    OriginalSQL: string;
+
+    @Field({ nullable: true })
+    Feedback: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int, { nullable: true })
+    QualityRank: number;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Queries   
+//****************************************************************************
+@InputType()
+export class UpdateQueryInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    CategoryID: number;
+
+    @Field({ nullable: true })
+    SQL: string;
+
+    @Field({ nullable: true })
+    OriginalSQL: string;
+
+    @Field({ nullable: true })
+    Feedback: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Int, { nullable: true })
+    QualityRank: number;
+}
+
+//****************************************************************************
+// RESOLVER for Queries
+//****************************************************************************
+@ObjectType()
+export class RunQueryViewResult {
+    @Field(() => [Query_])
+    Results: Query_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Query_)
+export class QueryResolver extends ResolverBase {
+    @Query(() => RunQueryViewResult)
+    async RunQueryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryViewResult)
+    async RunQueryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryViewResult)
+    async RunQueryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Queries';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Query_, { nullable: true })
+    async Query(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Query_ | null> {
+        this.CheckUserReadPermissions('Queries', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [QueryField_])
+    async QueryFieldsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Query Fields', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [QueryPermission_])
+    async QueryPermissionsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Query Permissions', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => Query_)
+    async CreateQuery(
+        @Arg('input', () => CreateQueryInput) input: CreateQueryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryEntity>await new Metadata().GetEntityObject('Queries', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateQueryInput) {
+    }
+    
+    @Mutation(() => Query_)
+    async UpdateQuery(
+        @Arg('input', () => UpdateQueryInput) input: UpdateQueryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryEntity>await new Metadata().GetEntityObject('Queries', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queries
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Query Permissions
+//****************************************************************************
+@ObjectType()
+export class QueryPermission_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    QueryID: number;
+      
+    @Field() 
+    @MaxLength(100)
+    RoleName: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Query Permissions   
+//****************************************************************************
+@InputType()
+export class CreateQueryPermissionInput {
+    @Field(() => Int, )
+    QueryID: number;
+
+    @Field()
+    RoleName: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Query Permissions   
+//****************************************************************************
+@InputType()
+export class UpdateQueryPermissionInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field(() => Int, )
+    QueryID: number;
+
+    @Field()
+    RoleName: string;
+}
+
+//****************************************************************************
+// RESOLVER for Query Permissions
+//****************************************************************************
+@ObjectType()
+export class RunQueryPermissionViewResult {
+    @Field(() => [QueryPermission_])
+    Results: QueryPermission_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(QueryPermission_)
+export class QueryPermissionResolver extends ResolverBase {
+    @Query(() => RunQueryPermissionViewResult)
+    async RunQueryPermissionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryPermissionViewResult)
+    async RunQueryPermissionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunQueryPermissionViewResult)
+    async RunQueryPermissionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Query Permissions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => QueryPermission_, { nullable: true })
+    async QueryPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryPermission_ | null> {
+        this.CheckUserReadPermissions('Query Permissions', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => QueryPermission_)
+    async CreateQueryPermission(
+        @Arg('input', () => CreateQueryPermissionInput) input: CreateQueryPermissionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryPermissionEntity>await new Metadata().GetEntityObject('Query Permissions', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryPermissionInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateQueryPermissionInput) {
+    }
+    
+    @Mutation(() => QueryPermission_)
+    async UpdateQueryPermission(
+        @Arg('input', () => UpdateQueryPermissionInput) input: UpdateQueryPermissionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <QueryPermissionEntity>await new Metadata().GetEntityObject('Query Permissions', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Permissions
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput) {
         const i = input, d = dataSource; // prevent error
     }
 

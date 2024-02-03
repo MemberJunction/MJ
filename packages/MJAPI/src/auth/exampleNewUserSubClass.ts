@@ -8,7 +8,8 @@ import { UserCache } from "@memberjunction/sqlserver-dataprovider";
  * called "Persons" that is mapped to the User table in the core MemberJunction schema. You can sub-class the NewUserBase to do whatever behavior you want and pre-process, post-process or entirely override the base
  * class behavior.
  */
-@RegisterClass(NewUserBase, undefined, 1) /*by putting 1 into the priority setting, MJGlobal ClassFactory will use this instead of the base class as that registration had no priority*/
+// -- COMMENTED OUT AS DEFAULT CONFIG - if you want to use this as an example sub-class uncomment the below line
+//@RegisterClass(NewUserBase, undefined, 1) /*by putting 1 into the priority setting, MJGlobal ClassFactory will use this instead of the base class as that registration had no priority*/
 export class ExampleNewUserSubClass extends NewUserBase {
     public override async createNewUser(firstName: string, lastName: string, email: string) {
         try {

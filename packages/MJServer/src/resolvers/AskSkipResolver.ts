@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { SkipAnalyzeData, SkipExplainQuery } from '@memberjunction/ai';
+import { SkipAnalyzeData, SkipExplainQuery } from '@memberjunction/aiengine';
 import { Metadata } from '@memberjunction/core';
 import { AppContext } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';

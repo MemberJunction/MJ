@@ -9,16 +9,17 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult} from "@memberjunction/core";
 
 import { RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
-import { AIEngine, EntityAIActionParams } from "@memberjunction/ai";
+import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
 import { QueueManager } from '@memberjunction/queue'
 
 import { DataSource, QueryRunner } from 'typeorm';
 import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 
 import { UserCache } from "./UserCache";
+import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
   
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
@@ -45,7 +46,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase {
 }
 
 // Implements both the IEntityDataProvider and IMetadataProvider interfaces.
-export class SQLServerDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider {
+export class SQLServerDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
     private _dataSource: DataSource;
     private _queryRunner: QueryRunner;
     private _currentUserEmail: string;
@@ -99,6 +100,41 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     /**************************************************************************/
     // END ---- IRunReportProvider
     /**************************************************************************/
+
+
+
+    /**************************************************************************/
+    // START ---- IRunQueryProvider
+    /**************************************************************************/
+    public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        try {
+            const QueryID = params.QueryID;
+            // run the sql and return the data
+            const sqlQuery = `SELECT SQL FROM [${this.MJCoreSchemaName}].vwQueries WHERE ID =${QueryID}`;
+            const queryInfo = await this.ExecuteSQL(sqlQuery);
+            if (queryInfo && queryInfo.length > 0) {
+                const start = new Date().getTime();
+                const sql = queryInfo[0].SQL;
+                const result = await this.ExecuteSQL(sql);
+                const end = new Date().getTime();
+                if (result)
+                    return {Success: true, QueryID: QueryID, Results: result, RowCount: result.length, ExecutionTime: end-start, ErrorMessage: ''};
+                else
+                    return {Success: false, QueryID: QueryID, Results: [], RowCount: 0, ExecutionTime: end - start, ErrorMessage: 'Error running query SQL'};
+            }
+            else
+                return {Success: false, QueryID: QueryID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Query not found'};    
+        }
+        catch (e) {
+            LogError(e);
+            return {Success: false, QueryID: params.QueryID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: e.message};
+        }
+    }
+    /**************************************************************************/
+    // END ---- IRunQueryProvider
+    /**************************************************************************/
+
+
 
     /**************************************************************************/
     // START ---- IRunViewProvider

@@ -2,10 +2,11 @@ import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 const _rootPath = '../'
 
 // implement some generic functionality that all/many providers will need
@@ -17,6 +18,10 @@ export type AllMetadata = {
     AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[];
     AllAuditLogTypes: AuditLogTypeInfo[];
     AllAuthorizations: AuthorizationInfo[];
+    AllQueryCategories: QueryCategoryInfo[];
+    AllQueries: QueryInfo[];
+    AllQueryFields: QueryFieldInfo[];
+    AllQueryPermissions: QueryPermissionInfo[];
 }
 
 export abstract class ProviderBase implements IMetadataProvider {
@@ -30,6 +35,11 @@ export abstract class ProviderBase implements IMetadataProvider {
     private _rowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
     private _auditLogTypes: AuditLogTypeInfo[] = [];
     private _authorizations: AuthorizationInfo[] = [];
+    private _queries: QueryInfo[] = [];
+    private _queryCategories: QueryCategoryInfo[] = [];
+    private _queryFields: QueryFieldInfo[] = [];
+    private _queryPermissions: QueryPermissionInfo[] = [];
+
     private _refresh = false;
 
     /******** ABSTRACT SECTION ****************************************************************** */
@@ -52,6 +62,8 @@ export abstract class ProviderBase implements IMetadataProvider {
         this._ConfigData = data;
         this._entities = []; // make sure to clear the array first - we could get this from a hard refresh
         this._applications = []; // make sure to clear the array first - we could get this from a hard refresh
+        this._queries = []; // make sure to clear the array first - we could get this from a hard refresh
+        this._queryCategories = []; // make sure to clear the array first - we could get this from a hard refresh
 
         if (this._refresh || await this.IsRefreshNeeded()) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
@@ -145,7 +157,11 @@ export abstract class ProviderBase implements IMetadataProvider {
                     CurrentUser: u,
                     AllRowLevelSecurityFilters: allMetadata.RowLevelSecurityFilters.map((r: any) => new RowLevelSecurityFilterInfo(r)),
                     AllAuditLogTypes: allMetadata.AuditLogTypes.map((a: any) => new AuditLogTypeInfo(a)),
-                    AllAuthorizations: allMetadata.Authorizations.map((a: any) => new AuthorizationInfo(a))
+                    AllAuthorizations: allMetadata.Authorizations.map((a: any) => new AuthorizationInfo(a)),
+                    AllQueries: allMetadata.Queries ? allMetadata.Queries.map((q: any) => new QueryInfo(q)) : [],
+                    AllQueryFields: allMetadata.QueryFields ? allMetadata.QueryFields.map((qf: any) => new QueryFieldInfo(qf)) : [],
+                    AllQueryPermissions: allMetadata.QueryPermissions ? allMetadata.QueryPermissions.map((qp: any) => new QueryPermissionInfo(qp)) : [],
+                    AllQueryCategories: allMetadata.QueryCategories ? allMetadata.QueryCategories.map((qc: any) => new QueryCategoryInfo(qc)) : []
                 }
             }
             else {
@@ -201,6 +217,18 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
     public get Authorizations(): AuthorizationInfo[] {
         return this._authorizations;
+    }
+    public get Queries(): QueryInfo[] {
+        return this._queries;
+    }
+    public get QueryCategories(): QueryCategoryInfo[] {
+        return this._queryCategories;
+    }
+    public get QueryFields(): QueryFieldInfo[] {
+        return this._queryFields;
+    }
+    public get QueryPermissions(): QueryPermissionInfo[] {
+        return this._queryPermissions;
     }
 
     public async Refresh(): Promise<boolean> {
@@ -609,6 +637,38 @@ export abstract class ProviderBase implements IMetadataProvider {
             }
         }
 
+        if (res.AllQueries) {
+            this._queries = [];
+            for (let i = 0; i < res.AllQueries.length; i++) {
+                const q = new QueryInfo(res.AllQueries[i])
+                this._queries.push(q);
+            }
+        }
+
+        if (res.AllQueryCategories) {
+            this._queryCategories = [];
+            for (let i = 0; i < res.AllQueryCategories.length; i++) {
+                const qc = new QueryCategoryInfo(res.AllQueryCategories[i])
+                this._queryCategories.push(qc);
+            }
+        }
+
+        if (res.AllQueryFields) {
+            this._queryFields = [];
+            for (let i = 0; i < res.AllQueryFields.length; i++) {
+                const qf = new QueryFieldInfo(res.AllQueryFields[i])
+                this._queryFields.push(qf);
+            }
+        }
+
+        if (res.AllQueryPermissions) {
+            this._queryPermissions = [];
+            for (let i = 0; i < res.AllQueryPermissions.length; i++) {
+                const qp = new QueryPermissionInfo(res.AllQueryPermissions[i])
+                this._queryPermissions.push(qp);
+            }
+        }
+
         if (res.CurrentUser)
             this._currentUser = new UserInfo(this, res.CurrentUser);
 
@@ -629,6 +689,10 @@ export abstract class ProviderBase implements IMetadataProvider {
                 const rls = JSON.parse(await ls.getItem(ProviderBase.localStorageRowLevelSecurityFiltersKey))
                 const alt = JSON.parse(await ls.getItem(ProviderBase.localStorageAuditLogTypesKey))
                 const ai = JSON.parse(await ls.getItem(ProviderBase.localStorageAuthorizationsKey))
+                const queries = JSON.parse(await ls.getItem(ProviderBase.localStorageQueriesKey))
+                const qcs = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryCategoriesKey))
+                const qf = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryFieldsKey))
+                const qp = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryPermissionsKey))
                 this.UpdateLocalMetadata({ 
                                             AllEntities: e, 
                                             AllApplications: a, 
@@ -636,7 +700,11 @@ export abstract class ProviderBase implements IMetadataProvider {
                                             AllRoles: r, 
                                             AllRowLevelSecurityFilters: rls,
                                             AllAuditLogTypes: alt,
-                                            AllAuthorizations: ai
+                                            AllAuthorizations: ai,
+                                            AllQueries: queries,
+                                            AllQueryCategories: qcs,
+                                            AllQueryFields: qf,
+                                            AllQueryPermissions: qp
                                         })
             }
         }
@@ -654,6 +722,11 @@ export abstract class ProviderBase implements IMetadataProvider {
     private static localStorageRowLevelSecurityFiltersKey = this.localStorageRootKey + '_RowLevelSecurityFilters'
     private static localStorageAuditLogTypesKey = this.localStorageRootKey + '_AuditLogTypes'
     private static localStorageAuthorizationsKey = this.localStorageRootKey + '_Authorizations'
+    private static localStorageQueriesKey = this.localStorageRootKey + '_Queries'
+    private static localStorageQueryCategoriesKey = this.localStorageRootKey + '_QueryCategories'
+    private static localStorageQueryFieldsKey = this.localStorageRootKey + '_QueryFields'
+    private static localStorageQueryPermissionsKey = this.localStorageRootKey + '_QueryPermissions'
+
     private static localStorageKeys = [
         ProviderBase.localStorageTimestampsKey,
         ProviderBase.localStorageEntitiesKey,
@@ -662,7 +735,11 @@ export abstract class ProviderBase implements IMetadataProvider {
         ProviderBase.localStorageRolesKey,
         ProviderBase.localStorageRowLevelSecurityFiltersKey,
         ProviderBase.localStorageAuditLogTypesKey,
-        ProviderBase.localStorageAuthorizationsKey
+        ProviderBase.localStorageAuthorizationsKey,
+        ProviderBase.localStorageQueriesKey,
+        ProviderBase.localStorageQueryCategoriesKey,
+        ProviderBase.localStorageQueryFieldsKey,
+        ProviderBase.localStorageQueryPermissionsKey
     ];
     public async SaveLocalMetadataToStorage() {
         try {
@@ -677,6 +754,10 @@ export abstract class ProviderBase implements IMetadataProvider {
                 await ls.setItem(ProviderBase.localStorageRowLevelSecurityFiltersKey, JSON.stringify(this._rowLevelSecurityFilters))
                 await ls.setItem(ProviderBase.localStorageAuditLogTypesKey, JSON.stringify(this._auditLogTypes))
                 await ls.setItem(ProviderBase.localStorageAuthorizationsKey, JSON.stringify(this._authorizations))
+                await ls.setItem(ProviderBase.localStorageQueriesKey, JSON.stringify(this._queries))
+                await ls.setItem(ProviderBase.localStorageQueryCategoriesKey, JSON.stringify(this._queryCategories))
+                await ls.setItem(ProviderBase.localStorageQueryFieldsKey, JSON.stringify(this._queryFields))
+                await ls.setItem(ProviderBase.localStorageQueryPermissionsKey, JSON.stringify(this._queryPermissions))
             }
         }
         catch (e) {

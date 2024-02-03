@@ -1,15 +1,12 @@
 {
   "name": "memberjunction-workspace",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "workspaces": [
     "packages/*",
     "packages/Angular Components/*",
     "packages/Angular Elements/*"
   ],
-  "scripts": {
-    "start": "npx turbo start --filter=@memberjunction/api --filter=mj_explorer"
-  },
+  "scripts": {},
   "dependencies": {
-    "@progress/kendo-theme-default": "^7.0.1"
   }
 }

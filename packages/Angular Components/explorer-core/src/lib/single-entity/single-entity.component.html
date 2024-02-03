@@ -4,7 +4,9 @@
       <h1>{{entityName}}</h1>
       <p> <span class="k-icon k-i-information"></span> {{entityDescription}}</p>
     </div>
-    <button kendoButton icon="gear" (click)="createNewView()">Create New View</button>
+    <button kendoButton (click)="createNewView()">
+      <kendo-svgicon [icon]="sharedService.kendoSVGIcon('plus')"></kendo-svgicon>
+      Create New View</button>
   </div>
   <app-view-properties-dialog [EntityName]="this.entityName" [ShowPropertiesButton]="false"
     (dialogClosed)="viewPropertiesClosed($event)"></app-view-properties-dialog>
@@ -14,7 +16,7 @@
       <div *ngFor="let entity of entityViews">
         <kendo-card class="card-wrapper">
           <kendo-card-header class="k-hstack view-card">
-            <kendo-icon name="table" class="view-icon"></kendo-icon>
+            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')" class="view-icon"></kendo-svgicon>
             <div class="btn-wrapper">
               <button kendoButton fillMode="flat" (click)="editView(entity)">
                 <span class="k-icon k-i-edit"></span>

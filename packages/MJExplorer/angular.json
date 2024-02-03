@@ -24,7 +24,7 @@
               "src/staticwebapp.config.json",
               {
                 "glob": "**/*",
-                "input": "node_modules/@progress/kendo-theme-default/dist",
+                "input": "../../node_modules/@progress/kendo-theme-default/dist",
                 "output": "/assets/kendo-theme-default/dist"
               }
             ],

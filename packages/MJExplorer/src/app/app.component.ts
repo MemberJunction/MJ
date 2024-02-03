@@ -77,7 +77,7 @@ export class AppComponent implements OnInit {
         if (!retriedRecently && expiryError) {
           LogStatus('JWT Expired, retrying once: ' + err);
           localStorage.setItem(retryKey, new Date().toISOString());
-          const login$ = this.authBase.login({ appState: { target: window.location.pathname } });
+          const login$ = await this.authBase.login({ appState: { target: window.location.pathname } });
           await lastValueFrom(login$);
         } else {
           this.HasError = true;
@@ -90,7 +90,8 @@ export class AppComponent implements OnInit {
   }
 
   async setupAuth() {
-    this.authBase.getUserClaims().subscribe((claims: any) => {
+    const claims = await this.authBase.getUserClaims()
+    claims.subscribe((claims: any) => {
       if (claims) {
         const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
         const result = claims.idTokenClaims ? 
@@ -103,8 +104,8 @@ export class AppComponent implements OnInit {
       LogError('Error Logging In: ' + err);
     });
   
-    this.authBase.isAuthenticated()
-      .pipe(take(1)) /* only do this for the first message */
+    const isAuth = await this.authBase.isAuthenticated()
+    isAuth.pipe(take(1)) /* only do this for the first message */
       .subscribe((loggedIn: any) => {
         if (!loggedIn) {
           this.authBase.login(); 

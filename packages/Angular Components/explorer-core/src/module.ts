@@ -13,7 +13,7 @@ import { LabelModule } from '@progress/kendo-angular-label';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { ChartsModule } from '@progress/kendo-angular-charts';
 import { TabStripModule } from '@progress/kendo-angular-layout';
-import { IconModule } from '@progress/kendo-angular-icons';
+import { IconsModule, IconModule } from '@progress/kendo-angular-icons';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
@@ -26,6 +26,7 @@ import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { QueryGridModule } from '@memberjunction/ng-query-grid';
 
 // Local Components
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
@@ -66,6 +67,8 @@ import { EditDashboardComponent } from './lib/single-dashboard/Components/edit-d
 import { URLPipe } from './shared/urlPipe';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
+import { SingleQueryComponent } from './lib/single-query/single-query.component';
+import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 
 @NgModule({
   declarations: [
@@ -99,6 +102,7 @@ import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-it
     SingleReportComponent,
     SingleSearchResultComponent,
     SingleViewComponent,
+    SingleQueryComponent,
     UserProfileComponent,
     ViewPropertiesDialogComponent,
     SingleDashboardComponent,
@@ -106,7 +110,8 @@ import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-it
     DeleteItemComponent,
     EditDashboardComponent,
     URLPipe,
-    UserNotificationsComponent
+    UserNotificationsComponent,
+    QueryResource
   ],
   imports: [
     CommonModule,
@@ -132,11 +137,13 @@ import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-it
     InputsModule,
     LabelModule,
     IconModule,
+    IconsModule,
     CompareRecordsModule,
     RecordChangesModule,
     ContainerDirectivesModule,
     ListViewModule,
     UserViewGridModule,
+    QueryGridModule,
     SortableModule,
     LayoutModule,
     FilterModule,

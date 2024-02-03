@@ -12,7 +12,7 @@ import { SharedService } from '../../shared/shared.service';
   styleUrls: ['./single-entity.component.css', '../../shared/first-tab-styles.css']
 })
 export class SingleEntityComponent implements OnInit {
-  constructor(private router: Router, private route: ActivatedRoute, private notificationService: NotificationService, private sharedService: SharedService) {
+  constructor(private router: Router, private route: ActivatedRoute, private notificationService: NotificationService, public sharedService: SharedService) {
 
   }
   public appName: string = ''

@@ -7,6 +7,7 @@ export * from "./generic/metadata";
 export * from "./generic/baseInfo";
 export * from "./views/runView";
 export * from "./generic/runReport";
+export * from "./generic/runQuery";
 export * from "./generic/interfaces";
 export * from "./generic/baseEntity";
 export * from "./generic/applicationInfo";
@@ -16,6 +17,7 @@ export * from "./generic/securityInfo";
 export * from "./generic/transactionGroup";
 export * from "./generic/util";
 export * from "./generic/logging";
+export * from "./generic/queryInfo";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;

@@ -1,7 +1,7 @@
 import { OpenAILLM } from '@memberjunction/ai';
  
 
-export async function SkipAnalyzeData(userQuestion: string, sql: string, sampleDataJSON: string): Promise<string> {
+export async function SkipAnalyzeData(userQuestion: string, sql: string, sampleDataJSON: string): Promise<string | null> {
   const model = new OpenAILLM();
   const result = await model.ChatCompletion({
     systemPrompt: `You are an expert data analyst who is great at finding unique insights in data and explaning them to non-technical people. The user message will include:
@@ -19,8 +19,10 @@ export async function SkipAnalyzeData(userQuestion: string, sql: string, sampleD
       },
     ],
   });
-  if (result && result.data && result.data.choices && result.data.choices.length > 0) return result.data.choices[0].message.content;
-  else return null;
+  if (result && result.data && result.data.choices && result.data.choices.length > 0) 
+    return result.data.choices[0].message.content;
+  else 
+    return null;
 }
 
 export async function SkipExplainQuery(userQuestion: string, sql: string): Promise<string> {

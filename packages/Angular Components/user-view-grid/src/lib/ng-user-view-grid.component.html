@@ -25,7 +25,10 @@
         (sortChange)="sortChanged($event)"
         >
         <ng-template kendoGridToolbarTemplate>
-            <button kendoButton icon="file-excel" *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" >Export to Excel</button>
+            <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" >
+                <kendo-svgicon [icon]="kendoSVGIcon('fileExcel')"></kendo-svgicon>
+                Export to Excel
+            </button>
             <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
             <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
             <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
@@ -38,9 +41,9 @@
             <button
                 kendoButton
                 [primary]="true"
-                icon="refresh"
                 *ngIf="showRefreshButton && !compareMode && !mergeMode"
                 (click)="RefreshFromSavedParams()">
+                <kendo-svgicon [icon]="kendoSVGIcon('refresh')"></kendo-svgicon>
                 Refresh
             </button>
         </ng-template>

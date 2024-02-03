@@ -2,9 +2,10 @@
   <button *ngIf="ShowPropertiesButton"
     kendoButton
     [primary]="true"
-    icon="gear"
     (click)="this.Open()"
-  >Properties</button>
+  >
+  <kendo-svgicon [icon]="sharedService.kendoSVGIcon('gear')"></kendo-svgicon>
+  Properties</button>
   <div class="k-overlay" *ngIf="isDialogOpened"></div>
   <kendo-window
     [width]="700"
@@ -65,7 +66,7 @@
                         class="k-checkbox-label"
                       ></kendo-label>
                     </div>
-                    <kendo-icon name="reorder"></kendo-icon>
+                    <kendo-svgicon [icon]="sharedService.kendoSVGIcon('reorder')"></kendo-svgicon>
                   </div>
                 </ng-template>
               </kendo-sortable>
@@ -100,7 +101,9 @@
           <kendo-tabstrip-tab title="Sorting">
             <ng-template kendoTabContent>
               <div class="sort-header">
-                <button kendoButton (click)="addSort()" icon="add"></button>
+                <button kendoButton (click)="addSort()">
+                  <kendo-svgicon [icon]="sharedService.kendoSVGIcon('add')"></kendo-svgicon>
+                </button>
                 
               </div>
               <div *ngFor="let s of this.sortState"> 
@@ -161,7 +164,8 @@
         </kendo-tabstrip>
   
         <div class="k-actions k-actions-end popup-actions">
-          <button kendoButton icon="save" (click)="saveProperties()" themeColor="primary">
+          <button kendoButton (click)="saveProperties()" themeColor="primary">
+            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('save')"></kendo-svgicon>
             Save
           </button>
           <button kendoButton (click)="closePropertiesDialog()">Cancel</button>

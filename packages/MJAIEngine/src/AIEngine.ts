@@ -23,13 +23,13 @@ export class EntityAIActionParams extends AIActionParams {
 
 // this class handles execution of AI Actions
 export class AIEngine {
-    private static _instance: AIEngine = null;
+    private static _instance: AIEngine | null = null;
     private static _globalInstanceKey = '__mj_ai_engine_instance__';
 
-    private _models: AIModelEntity[] = null;
-    private _actions: AIActionEntity[] = null;
-    private _entityActions: EntityAIActionEntity[] = null;
-    private _modelActions: AIModelActionEntity[] = null;
+    private _models: AIModelEntity[] = [];
+    private _actions: AIActionEntity[] = [];
+    private _entityActions: EntityAIActionEntity[] = [];
+    private _modelActions: AIModelActionEntity[] = [];
     private _metadataLoaded: boolean = false;
     public async LoadAIMetadata(contextUser?: UserInfo): Promise<boolean> {
         if (this._metadataLoaded === false) {

@@ -19,19 +19,19 @@ export class MJAuth0Provider extends MJAuthBase {
     this.auth.loginWithRedirect(options);
   }
 
-  public logout(): void {
+  public async logout(): Promise<void> {
     this.auth.logout({ logoutParams: { returnTo: document.location.origin } });
   }
 
-  getUser(): Observable<User | null | undefined> {
+  async getUser(): Promise<Observable<User | null | undefined>> {
     return this.auth.user$;
   }
 
-  isAuthenticated() {
+  async isAuthenticated() {
     return this.auth.isAuthenticated$;
   }
 
-  getUserClaims(): Observable<any> {
+  async getUserClaims(): Promise<Observable<any>> {
     return this.auth.idTokenClaims$;
   }
 
