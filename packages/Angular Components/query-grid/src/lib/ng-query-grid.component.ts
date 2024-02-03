@@ -8,7 +8,7 @@ import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, Selecta
 import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
-
+import * as KendoSVGIcons from "@progress/kendo-svg-icons";
 
 export type GridRowClickedEvent = {
   entityId: number;
@@ -189,6 +189,24 @@ export class QueryGridComponent implements OnInit, AfterViewInit {
     const firstRow = this.queryData[0];
     if (firstRow) {
       return Object.keys(firstRow);
+    }
+  }
+
+  
+  public kendoSVGIcon(iconName: string) {
+    // Cast KendoSVGIcons to any to bypass the index signature check
+    try {
+      const lookupName: string = iconName.endsWith('Icon') ? iconName : iconName + 'Icon';
+      const icon = (KendoSVGIcons as any)[lookupName];
+      if (!icon)
+        console.log('Icon not found: ' + iconName)
+      
+      return icon || null;  
+    }
+    catch (e) {
+      // icon not found
+      console.log('Icon not found: ' + iconName)
+      return null;
     }
   }
 

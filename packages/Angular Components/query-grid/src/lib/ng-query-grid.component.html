@@ -23,10 +23,11 @@
             <button
                 kendoButton
                 [primary]="true"
-                icon="refresh"
                 *ngIf="showRefreshButton"
                 (click)="RefreshFromSavedParams()">
                 Refresh
+            />
+                <kendo-svgicon [icon]="kendoSVGIcon('arrowRotateCcwSmall')"></kendo-svgicon>
             </button>
         </ng-template>
 

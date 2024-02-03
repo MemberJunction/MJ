@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input } from '@angular/core';
+import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
@@ -84,7 +84,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     public sharedService: SharedService,
     private location: Location,
     private renderer: Renderer2,
-    private titleService: Title
+    private titleService: Title,
+    private cdr: ChangeDetectorRef
   ) {
     this.tabs = [];
   }
@@ -635,6 +636,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public setTabContentLoadingStatus(tab: Tab, bLoading: boolean) {
       tab.contentLoading = bLoading;
+      this.cdr.detectChanges(); // Manually trigger change detection
   }
 
   public async onClose(ev: TabCloseEvent): Promise<void> {

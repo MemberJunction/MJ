@@ -317,10 +317,14 @@ export class SharedService {
     try {
       const lookupName: string = iconName.endsWith('Icon') ? iconName : iconName + 'Icon';
       const icon = (KendoSVGIcons as any)[lookupName];
+      if (!icon)
+        console.log('Icon not found: ' + iconName)
+      
       return icon || null;  
     }
     catch (e) {
       // icon not found
+      console.log('Icon not found: ' + iconName)
       return null;
     }
   }

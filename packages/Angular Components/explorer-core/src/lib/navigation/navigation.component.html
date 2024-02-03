@@ -24,8 +24,8 @@
         </kendo-tabstrip-tab>
         <kendo-tabstrip-tab *ngFor="let tab of tabs;let i = index" [selected]="isTabActive(tab.id)" [closable]="true">
           <ng-template kendoTabTitle>
-            <kendo-svgicon [style.display]="tab?.contentLoading ? 'inline' : 'none'" [icon]="sharedService.kendoSVGIcon('clock')" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
-            <kendo-svgicon [style.display]="!tab?.contentLoading && tab?.icon ? 'inline' : 'none'" [icon]="sharedService.kendoSVGIcon(tab.icon)" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
+            <kendo-svgicon *ngIf="tab?.contentLoading" [icon]="sharedService.kendoSVGIcon('clock')" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
+            <kendo-svgicon *ngIf="!tab?.contentLoading && tab?.icon" [icon]="sharedService.kendoSVGIcon(tab.icon)" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
             <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, i)">{{ tab.labelLoading ? 'Loading...' : tab.label }}</span>
           </ng-template>
           <ng-template kendoTabContent class="navigation-tab-contents">

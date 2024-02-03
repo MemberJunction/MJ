@@ -2,7 +2,7 @@
   <div class="header header-bg">
     <div class="nav-container">
       <div class="menu-button">
-        <span class="k-icon hamburger-icon" (click)="onButtonClick()"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('hamburger')" ></kendo-svgicon></span>
+        <span class="k-icon" (click)="onButtonClick()"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('menu')" ></kendo-svgicon></span>
       </div>
 
       <div class="title">
@@ -28,10 +28,10 @@
             (keydown.enter)="onSearch($event)"
             #searchInput
           />
-                        <span class="k-icon k-i-zoom" (click)="onSearch($event)"></span>
+                        <span class="k-icon" (click)="onSearch($event)"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('search')"></kendo-svgicon></span>
                 </div>
       <div class="icon-inbox" (click)="showNotifications($event)">
-          <span class="k-icon k-i-inbox" style="cursor: pointer;"></span>
+          <span class="k-icon" style="cursor: pointer;"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('inbox')"></kendo-svgicon></span>
           <span class="notification" *ngIf="UnreadNotificationCount > 0">{{UnreadNotificationCount}}</span>
       </div>
         <kendo-avatar class="k-m-0" style="margin: 0;" [imageSrc]="userImageURL" shape="circle"> </kendo-avatar>
