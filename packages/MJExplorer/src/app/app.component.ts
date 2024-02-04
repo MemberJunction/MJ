@@ -9,7 +9,7 @@ import { environment } from '../environments/environment';
 import { NavigationComponent } from '@memberjunction/ng-explorer-core';
 import { LoadGeneratedEntities } from 'mj_generatedentities'
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
-import { SharedService } from '@memberjunction/ng-explorer-core';
+import { SharedService } from '@memberjunction/ng-shared';
 LoadGeneratedEntities(); // forces the generated entities library to load up, sometimes tree shaking in the build process can break this, so this is a workaround that ensures it always happens
 
 @Component({

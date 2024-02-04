@@ -19,9 +19,8 @@ import { MJAuthBase, MJAuth0Provider, MJMSALProvider } from '@memberjunction/ng-
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-
-import { SharedService, LoadResourceWrappers } from '@memberjunction/ng-explorer-core'; 
-
+import { SharedService } from '@memberjunction/ng-shared';
+import { LoadResourceWrappers } from '@memberjunction/ng-explorer-core'; 
 
 //***********************************************************
 // Kendo

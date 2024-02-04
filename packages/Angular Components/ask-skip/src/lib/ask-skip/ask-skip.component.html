@@ -1,12 +1,11 @@
 <div class = "chat-container">
-    <button kendoButton (click)="runQuery()" >Test - Run Query</button>
     <div class="conversation-history">
         <button kendoButton (click)="createNewConversation()" >+ New Chat</button>
         <kendo-listview
             class="conversation-list"
             [data]="Conversations"
             [style.height.px]="280"
-            [itemClass]="{ 'item-border': true }"
+            [itemClass]="{ 'item-border': true }" 
             mjFillContainer 
             [fillWidth]="false"
             #conversationList

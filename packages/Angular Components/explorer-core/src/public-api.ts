@@ -5,7 +5,6 @@
 export * from './lib/generic/base-form-component';
 export * from './lib/generic/base-form-section-component';
 export * from './lib/generic/base-record-component';
-export * from '@memberjunction/ng-shared/src/lib/base-resource-component';
 export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 export * from './lib/generic/section-loader-component';
@@ -42,5 +41,9 @@ export * from './lib/user-view-properties/view-properties-dialog.component'
 export * from './lib/user-notifications/user-notifications.component';
 export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/entities.guard';
+
+export * from './lib/query-browser-component/query-browser.component'
+export * from './lib/single-query/single-query.component'
+export * from './lib/resource-wrappers/query-resource.component'
 
 export * from './module';

@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
+import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, PrimaryKeyValue } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';

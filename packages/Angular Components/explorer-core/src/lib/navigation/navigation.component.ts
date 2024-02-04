@@ -7,7 +7,7 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
-import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
+import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { Title } from '@angular/platform-browser';
 
 export interface Tab {

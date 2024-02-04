@@ -83,7 +83,7 @@ function Get-ChangesSinceLastBuild {
         return Test-FileChangesRecursive -directoryPath $directoryPath -lastBuildTime $lastBuildTime
     }
 
-    return $false # Assume false if no log found
+    return $true # Assume true if no log found since we have never built this project.
 }
 
 

@@ -452,21 +452,4 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     else 
       return false;
   }
-
-  protected async runQuery() {
-    // total test crap code, get rid of this once we have a real queries UI
-    const rq = new RunQuery();
-    // ask the user which query ID to run
-    const queryId = prompt('Enter the query ID to run');
-    if (queryId) {
-      const result = await rq.RunQuery({ QueryID: parseInt(queryId, 10) });
-      if (result && result.Success) {
-        alert ('Success! ' + JSON.stringify(result.Results));
-        console.log(result.Results);
-      }
-      else {
-        alert('Error! ' + result.ErrorMessage);
-      }
-    }
-  }
 }

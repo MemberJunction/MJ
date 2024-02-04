@@ -6,14 +6,14 @@ import {
   ActivatedRouteSnapshot,
   RouterStateSnapshot
 } from '@angular/router';
-import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponent, HomeComponent, ResourceData, 
+import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponent, HomeComponent, 
          UserNotificationsComponent, SettingsComponent, DataBrowserComponent, ReportBrowserComponent, 
-         DashboardBrowserComponent, EventCodes, SharedService, AskSkipComponent,
-         checkUserEntityPermissions, AuthGuardService as AuthGuard } from "@memberjunction/ng-explorer-core";
+         DashboardBrowserComponent, AuthGuardService as AuthGuard } from "@memberjunction/ng-explorer-core";
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core/dist/lib/query-browser-component/query-browser.component';
-
+import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core';
+import { AskSkipComponent} from '@memberjunction/ng-ask-skip'
+import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared'
 
 
 @Injectable({

@@ -4,7 +4,7 @@ import { Metadata, EntityFieldInfo, EntityInfo } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '../generic/base-form-component';
-import { ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
+import { ResourceData } from '@memberjunction/ng-shared';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { TabComponent } from '@progress/kendo-angular-layout';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
