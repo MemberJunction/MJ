@@ -1,3 +1,27 @@
+function Get-MemberJunctionDependencies {
+    param (
+        [string]$directoryPath
+    )
+    $packageJsonPath = Join-Path $directoryPath "package.json"
+    $dependenciesArray = @()
+
+    if (Test-Path $packageJsonPath) {
+        $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+        $dependencies = @($packageJson.dependencies.PSObject.Properties.Name)
+        $devDependencies = @($packageJson.devDependencies.PSObject.Properties.Name)
+        $peerDependencies = @($packageJson.peerDependencies.PSObject.Properties.Name)
+
+        $allDependencies = $dependencies + $devDependencies + $peerDependencies
+        $filteredDependencies = $allDependencies | Where-Object {$_ -like "@memberjunction/*"}
+
+        foreach ($dep in $filteredDependencies) {
+            $dependenciesArray += $dep -replace "@memberjunction/", ""
+        }
+    }
+    return $dependenciesArray
+}
+
+
 function Test-FileChangesRecursive {
     param (
         [string]$directoryPath,
@@ -207,17 +231,17 @@ $ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publ
 
 # Define a custom object for each library including the directory name and the dependencies list (in order)
 $baseLibraries = @(
-    @{Name='MJGlobal'; PackageName='global'; Dependencies=@()},
-    @{Name='MJAI'; PackageName='ai'; Dependencies=@()},
-    @{Name='MJCore'; PackageName='core'; Dependencies=@('global')},
-    @{Name='MJCoreEntities'; PackageName='core-entities'; Dependencies=@('global', 'core')},
-    @{Name='MJAIEngine'; PackageName='aiengine'; Dependencies=@('global', 'core', 'core-entities', 'ai')},
-    @{Name='MJQueue'; PackageName='queue'; Dependencies=@('global', 'core', 'core-entities', 'ai')},
-    @{Name='SQLServerDataProvider'; PackageName='sqlserver-dataprovider'; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai')},
-    @{Name='CodeGenLib'; PackageName='codegen-lib'; Dependencies=@('global', 'core', 'sqlserver-dataprovider')},
-    @{Name='GraphQLDataProvider'; PackageName='graphql-dataprovider'; Dependencies=@('global', 'core', 'core-entities')},
-    @{Name='GeneratedEntities'; PackageName=$null; Dependencies=@('global', 'core')},
-    @{Name='MJServer'; PackageName='server'; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai', 'aiengine', 'sqlserver-dataprovider')}
+    @{Name='MJGlobal'; PackageName='global'}, #; Dependencies=@()},
+    @{Name='MJAI'; PackageName='ai'}, #; Dependencies=@()},
+    @{Name='MJCore'; PackageName='core'}, #; Dependencies=@('global')},
+    @{Name='MJCoreEntities'; PackageName='core-entities'}, #; Dependencies=@('global', 'core')},
+    @{Name='MJAIEngine'; PackageName='aiengine'}, #; Dependencies=@('global', 'core', 'core-entities', 'ai')},
+    @{Name='MJQueue'; PackageName='queue'}, #; Dependencies=@('global', 'core', 'core-entities', 'ai')},
+    @{Name='SQLServerDataProvider'; PackageName='sqlserver-dataprovider'}, #; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai')},
+    @{Name='CodeGenLib'; PackageName='codegen-lib'}, #; Dependencies=@('global', 'core', 'sqlserver-dataprovider')},
+    @{Name='GraphQLDataProvider'; PackageName='graphql-dataprovider'}, #; Dependencies=@('global', 'core', 'core-entities')},
+    @{Name='GeneratedEntities'; PackageName=$null}, #; Dependencies=@('global', 'core')},
+    @{Name='MJServer'; PackageName='server'} #; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai', 'aiengine', 'sqlserver-dataprovider')}
 )
 # Iterate over the custom objects
 foreach ($libObject in $baseLibraries) {
@@ -226,10 +250,12 @@ foreach ($libObject in $baseLibraries) {
     Write-Host "   Checking for changes"
     Set-Location $lib
 
-    # always update the dependencies to the latest versions for each package before we test for changes.
-    # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-    foreach ($dep in $libObject.Dependencies) {
-        UpdatePackageJSONToLatestDependencyVersion $dep $false
+    # Dynamically fetch MJ dependencies for the current package
+    $MJDependencies = Get-MemberJunctionDependencies -directoryPath "."
+    foreach ($mjDep in $MJDependencies) {
+        # always update the dependencies to the latest versions for each package before we test for changes.
+        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+        UpdatePackageJSONToLatestDependencyVersion $mjDep $false
     }
 
     if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
@@ -269,16 +295,16 @@ foreach ($libObject in $baseLibraries) {
 
 # Define a custom object for each Angular library
 $angularLibraries = @(
-    @{Name='shared'; PackageName='ng-shared'; Dependencies=@()},
-    @{Name='auth-services'; PackageName='ng-auth-services'; Dependencies=@('core')},
-    @{Name='container-directives'; PackageName='ng-container-directives'; Dependencies=@('global', 'core')},
-    @{Name='link-directives'; PackageName='ng-link-directives'; Dependencies=@('core')},
-    @{Name='compare-records'; PackageName='ng-compare-records'; Dependencies=@('core', 'core-entities')},
-    @{Name='record-changes'; PackageName='ng-record-changes'; Dependencies=@('global', 'core')},
-    @{Name='query-grid'; PackageName='ng-query-grid'; Dependencies=@('global', 'core', 'core-entities', 'ng-container-directives')},
-    @{Name='user-view-grid'; PackageName='ng-user-view-grid'; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider', 'ng-compare-records', 'ng-container-directives')},
-    @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'graphql-dataprovider', 'ng-query-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
-    @{Name='core-entity-forms'; PackageName='ng-core-entity-forms'; Dependencies=@('core', 'core-entities', 'ng-explorer-core')}
+    @{Name='shared'; PackageName='ng-shared'}, #; Dependencies=@()},
+    @{Name='auth-services'; PackageName='ng-auth-services'}, #; Dependencies=@('core')},
+    @{Name='container-directives'; PackageName='ng-container-directives'}, #; Dependencies=@('global', 'core')},
+    @{Name='link-directives'; PackageName='ng-link-directives'}, #; Dependencies=@('core')},
+    @{Name='compare-records'; PackageName='ng-compare-records'}, #; Dependencies=@('core', 'core-entities')},
+    @{Name='record-changes'; PackageName='ng-record-changes'}, #; Dependencies=@('global', 'core')},
+    @{Name='query-grid'; PackageName='ng-query-grid'}, #; Dependencies=@('global', 'core', 'core-entities', 'ng-container-directives')},
+    @{Name='user-view-grid'; PackageName='ng-user-view-grid'}, #; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider', 'ng-compare-records', 'ng-container-directives')},
+    @{Name='explorer-core'; PackageName='ng-explorer-core'}, #; Dependencies=@('global', 'core', 'ng-user-view-grid', 'graphql-dataprovider', 'ng-query-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
+    @{Name='core-entity-forms'; PackageName='ng-core-entity-forms'} #; Dependencies=@('core', 'core-entities', 'ng-explorer-core')}
 )
 
 Write-Host ""
@@ -294,10 +320,12 @@ foreach ($libObject in $angularLibraries) {
     Write-Host "   Checking for changes"
     Set-Location ('Angular Components\' + $lib)
 
-    # ALWAYS update the dependencies to the latest versions for each package before we test for changes.
-    # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-    foreach ($dep in $libObject.Dependencies) {
-        UpdatePackageJSONToLatestDependencyVersion $dep $true
+    # Dynamically fetch MJ dependencies for the current package
+    $MJdependencies = Get-MemberJunctionDependencies -directoryPath "."
+    foreach ($mjDep in $MJdependencies) {
+        # always update the dependencies to the latest versions for each package before we test for changes.
+        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+        UpdatePackageJSONToLatestDependencyVersion $mjDep $true #yep, this is an angular project, gotta tell the function that
     }
 
     if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
@@ -340,9 +368,9 @@ Write-Host ""
 # Step 3: Update dependencies in executable projects
 # Define a custom object for each executable project
 $remainingProjects = @(
-    @{Name='CodeGen'; Dependencies=@('codegen-lib')},
-    @{Name='MJAPI'; Dependencies=@('global', 'core', 'ai', 'sqlserver-dataprovider', 'server')},
-    @{Name='MJExplorer'; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider'); AngularDeps=@('ng-auth-services', 'ng-compare-records', 'ng-container-directives', 'ng-explorer-core', 'ng-link-directives', 'ng-record-changes', 'ng-user-view-grid')}
+    @{Name='CodeGen'},#; Dependencies=@('codegen-lib')},
+    @{Name='MJAPI'},#; Dependencies=@('global', 'core', 'ai', 'sqlserver-dataprovider', 'server')},
+    @{Name='MJExplorer'} #; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider'); AngularDeps=@('ng-auth-services', 'ng-compare-records', 'ng-container-directives', 'ng-explorer-core', 'ng-link-directives', 'ng-record-changes', 'ng-user-view-grid')}
 )
 # Iterate over the custom objects
 foreach ($projObject in $remainingProjects) {
@@ -351,24 +379,31 @@ foreach ($projObject in $remainingProjects) {
     Write-Host "   Updating dependencies"
     Set-Location $proj
 
-    # Use the InstallLatestVersion function for each dependency
-    foreach ($dep in $projObject.Dependencies) {
-        UpdatePackageJSONToLatestDependencyVersion $dep $false
+    $MJDependencies = Get-MemberJunctionDependencies -directoryPath "."
+    foreach ($mjDep in $MJDependencies) {
+        # always update the dependencies to the latest versions for each package  
+        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
+        UpdatePackageJSONToLatestDependencyVersion $mjDep $false
     }
 
-    # Handle Angular Libraries dependencies if AngularDeps exists
-    if ($projObject.AngularDeps) {
-        foreach ($lib in $projObject.AngularDeps) {
-            UpdatePackageJSONToLatestDependencyVersion $lib $false
-        }
-        # # Combine AngularDeps and Dependencies into one array
-        # $allDeps = $projObject.Dependencies + $projObject.AngularDeps
-        # LinkAllDependencies $allDeps
-    }
-    else {
-        # # Link all dependencies in a single command to switch to local linking
-        # LinkAllDependencies $projObject.Dependencies
-    }
+    # # Use the InstallLatestVersion function for each dependency
+    # foreach ($dep in $projObject.Dependencies) {
+    #     UpdatePackageJSONToLatestDependencyVersion $dep $false
+    # }
+
+    # # Handle Angular Libraries dependencies if AngularDeps exists
+    # if ($projObject.AngularDeps) {
+    #     foreach ($lib in $projObject.AngularDeps) {
+    #         UpdatePackageJSONToLatestDependencyVersion $lib $false
+    #     }
+    #     # # Combine AngularDeps and Dependencies into one array
+    #     # $allDeps = $projObject.Dependencies + $projObject.AngularDeps
+    #     # LinkAllDependencies $allDeps
+    # }
+    # else {
+    #     # # Link all dependencies in a single command to switch to local linking
+    #     # LinkAllDependencies $projObject.Dependencies
+    # }
 
     Set-Location ..
 }
