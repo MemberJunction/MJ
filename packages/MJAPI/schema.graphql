@@ -255,6 +255,7 @@ type ConversationDetail_ {
   CreatedAt: Timestamp!
   Error: String
   ExternalID: String
+  HiddenToUser: Boolean!
   ID: Int!
   Message: String!
   ReportsArray: [Report_!]!
@@ -265,10 +266,12 @@ type ConversationDetail_ {
 type Conversation_ {
   ConversationDetailsArray: [ConversationDetail_!]!
   CreatedAt: Timestamp!
+  Description: String
   ExternalID: String
   ID: Int!
   Name: String
   ReportsArray: [Report_!]!
+  Type: String!
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -312,13 +315,16 @@ input CreateConversationDetailInput {
   ConversationID: Int!
   Error: String
   ExternalID: String
+  HiddenToUser: Boolean!
   Message: String!
   Role: String!
 }
 
 input CreateConversationInput {
+  Description: String
   ExternalID: String
   Name: String
+  Type: String!
   UserID: Int!
 }
 
@@ -1332,6 +1338,7 @@ type Query {
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipQuery(ConversationId: Int!, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipViewAnalysisQuery(ConversationId: Int!, UserQuestion: String!, ViewId: Int!): AskSkipResultType!
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
@@ -2995,15 +3002,18 @@ input UpdateConversationDetailInput {
   ConversationID: Int!
   Error: String
   ExternalID: String
+  HiddenToUser: Boolean!
   ID: Int!
   Message: String!
   Role: String!
 }
 
 input UpdateConversationInput {
+  Description: String
   ExternalID: String
   ID: Int!
   Name: String
+  Type: String!
   UserID: Int!
 }
 

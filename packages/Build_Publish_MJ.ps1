@@ -269,14 +269,15 @@ foreach ($libObject in $baseLibraries) {
 
 # Define a custom object for each Angular library
 $angularLibraries = @(
+    @{Name='shared'; PackageName='ng-shared'; Dependencies=@()},
     @{Name='auth-services'; PackageName='ng-auth-services'; Dependencies=@('core')},
     @{Name='container-directives'; PackageName='ng-container-directives'; Dependencies=@('global', 'core')},
     @{Name='link-directives'; PackageName='ng-link-directives'; Dependencies=@('core')},
     @{Name='compare-records'; PackageName='ng-compare-records'; Dependencies=@('core', 'core-entities')},
     @{Name='record-changes'; PackageName='ng-record-changes'; Dependencies=@('global', 'core')},
     @{Name='query-grid'; PackageName='ng-query-grid'; Dependencies=@('global', 'core', 'core-entities', 'ng-container-directives')},
-    @{Name='user-view-grid'; PackageName='ng-user-view-grid'; Dependencies=@('global', 'core', 'core-entities', 'ng-compare-records', 'ng-container-directives')},
-    @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'ng-query-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
+    @{Name='user-view-grid'; PackageName='ng-user-view-grid'; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider', 'ng-compare-records', 'ng-container-directives')},
+    @{Name='explorer-core'; PackageName='ng-explorer-core'; Dependencies=@('global', 'core', 'ng-user-view-grid', 'graphql-dataprovider', 'ng-query-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
     @{Name='core-entity-forms'; PackageName='ng-core-entity-forms'; Dependencies=@('core', 'core-entities', 'ng-explorer-core')}
 )
 

@@ -64,7 +64,7 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
 import { SingleDashboardComponent } from './lib/single-dashboard/single-dashboard.component';
 import { AddItemComponent } from './lib/single-dashboard/Components/add-item/add-item.component';
 import { EditDashboardComponent } from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component';
-import { URLPipe } from './shared/urlPipe';
+import { MemberJunctionSharedModule, URLPipe } from '@memberjunction/ng-shared';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
 import { SingleQueryComponent } from './lib/single-query/single-query.component';
@@ -111,7 +111,6 @@ import { QueryBrowserComponent } from './lib/query-browser-component/query-brows
     AddItemComponent,
     DeleteItemComponent,
     EditDashboardComponent,
-    URLPipe,
     UserNotificationsComponent,
     QueryResource
   ],
@@ -149,7 +148,8 @@ import { QueryBrowserComponent } from './lib/query-browser-component/query-brows
     SortableModule,
     LayoutModule,
     FilterModule,
-    DropDownsModule
+    DropDownsModule,
+    MemberJunctionSharedModule
   ],
   exports: [
     FormToolbarComponent,
@@ -188,7 +188,6 @@ import { QueryBrowserComponent } from './lib/query-browser-component/query-brows
     AddItemComponent,
     DeleteItemComponent,
     EditDashboardComponent,
-    URLPipe,
     UserNotificationsComponent
   ]
 })

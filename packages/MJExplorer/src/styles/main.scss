@@ -133,7 +133,9 @@ kendo-recurrence-frequency-editor .k-edit-field {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding-bottom: 10px;
+  padding-right: 10px;
+  padding-left: 0px;
 
   #txtSearch {
     width: 300px;
@@ -141,6 +143,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
     border: 1px solid #ccc;
     border-radius: 5px;
     margin-right: 5px;
+    margin-left: 10px;
   }
 }
 

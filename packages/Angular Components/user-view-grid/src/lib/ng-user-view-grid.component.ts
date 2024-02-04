@@ -14,8 +14,12 @@ import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
-import * as KendoSVGIcons from "@progress/kendo-svg-icons";
-
+import { kendoSVGIcon } from '@memberjunction/ng-shared';
+import { TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { PlotlyComponent } from 'angular-plotly.js';
+//import * as Plotly from 'plotly.js-dist-min';
+ 
 
 export type GridRowClickedEvent = {
   entityId: number;
@@ -56,6 +60,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @ViewChild('excelExport', { read: ExcelExportComponent }) kendoExcelExport: ExcelExportComponent | null = null;
   @ViewChild('recordCompareRef', { static: false }) recordCompareComponent: CompareRecordsComponent | null = null;
 
+  @ViewChild('analysisQuestion', { read: TextAreaComponent }) analysisQuestion: TextAreaComponent | null = null;
+  @ViewChild('analysisResults', { read: ElementRef }) analysisResults: ElementRef | null = null;
+
+  @ViewChild('plotlyPlot', { read: PlotlyComponent }) plotlyPlot: PlotlyComponent | null = null;
+
   private _pendingRecords: GridPendingRecordItem[] = [];
 
   public viewData: [] = [];
@@ -74,6 +83,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public _viewEntity: UserViewEntityExtended | undefined
   public  _entityInfo: EntityInfo | undefined;
   private _newGridState: ViewGridState = {};
+
+  public plotData = [];
+  public plotLayout: any = {};
 
   private editModeEnded = new Subject<void>();
 
@@ -488,15 +500,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
  
-
+ 
   ngOnInit(): void {
-    
+
   }
 
   ngAfterViewInit(): void {
     //this.setGridHeight();
     if (this.Params)
-      this.Refresh(this.Params)
+      this.Refresh(this.Params);
   }
 
   private _deferLoadCount: number = 0;
@@ -796,21 +808,57 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       throw new Error("Unable to get export data");    
   }
 
-  public kendoSVGIcon(iconName: string) {
-    // Cast KendoSVGIcons to any to bypass the index signature check
-    try {
-      const lookupName: string = iconName.endsWith('Icon') ? iconName : iconName + 'Icon';
-      const icon = (KendoSVGIcons as any)[lookupName];
-      if (!icon)
-        console.log('Icon not found: ' + iconName)
-      
-      return icon || null;  
-    }
-    catch (e) {
-      // icon not found
-      console.log('Icon not found: ' + iconName)
-      return null;
-    }
+  public kendoSVGIcon = kendoSVGIcon;
+
+  public submitAnalysis() {
+    // submit the analysis request...
+    const val = this.analysisQuestion?.value
+    console.log(val);
+    if (val)
+     this.ExecuteAskSkipViewAnalysisQuery(val, this._viewEntity!.ID, 0);
   }
 
+  private _resultSequence: number = 1;
+  async ExecuteAskSkipViewAnalysisQuery(question: string, viewId: number, conversationId: number) {
+    try {
+      const gql = `query ExecuteAskSkipViewAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
+        ExecuteAskSkipViewAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
+          Success
+          Status
+          Result
+          ConversationId 
+          UserMessageConversationDetailId
+          AIMessageConversationDetailId
+        }
+      }`
+  
+      const result = await GraphQLDataProvider.ExecuteGQL(gql, { userQuestion: question, 
+                                                                  conversationId: conversationId,
+                                                                  viewId: viewId});
+      if (result && result.ExecuteAskSkipViewAnalysisQuery) {
+        // it worked, get the bits we care about
+        const resultRaw = result.ExecuteAskSkipViewAnalysisQuery.Result;
+        const resultObj = JSON.parse(resultRaw);
+        const plotData = resultObj.resultData.content.plotData
+
+        this.plotData= plotData.data;
+        this.plotLayout = plotData.layout;
+        // this.plotlyPlot!.data = plotData.data;
+        // this.plotlyPlot!.layout = plotData.layout;
+
+        // // now, we need to add a new element to the analysisResults div that will contain the plotly chart
+        // const div = document.createElement('div');
+        // div.id = 'analysisResultsDiv_' + (this._resultSequence++);
+        // this.analysisResults?.nativeElement.appendChild(div);
+        // // now we can create the plotly chart
+        // this._Plotly.newPlot(div.id, /* JSON object */ {
+        //     "data": plotData.data,
+        //     "layout": plotData.layout
+        // })
+      }
+    }
+    catch (err) {
+      console.error(err);          
+    }
+  }
 }

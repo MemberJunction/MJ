@@ -10,9 +10,17 @@ import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { IconsModule } from '@progress/kendo-angular-icons';
+import { LayoutModule } from '@progress/kendo-angular-layout';
+import { InputsModule } from '@progress/kendo-angular-inputs';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+
+import { PlotlyViaCDNModule } from 'angular-plotly.js';
+
+
+PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
+PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
 
 @NgModule({
   declarations: [
@@ -29,7 +37,10 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     ButtonsModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    IconsModule
+    IconsModule,
+    LayoutModule,
+    InputsModule,
+    PlotlyViaCDNModule
   ],
   exports: [
     UserViewGridComponent

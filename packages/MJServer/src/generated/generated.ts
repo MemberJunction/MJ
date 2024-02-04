@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/2/2024, 2:13:47 PM
+* GENERATED: 2/3/2024, 4:49:15 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -12322,6 +12322,9 @@ export class ConversationDetail_ {
     @Field({nullable: true}) 
     Error?: string;
       
+    @Field(() => Boolean) 
+    HiddenToUser: boolean;
+      
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
@@ -12358,6 +12361,9 @@ export class CreateConversationDetailInput {
 
     @Field({ nullable: true })
     Error: string;
+
+    @Field(() => Boolean, )
+    HiddenToUser: boolean;
 }
 
         
@@ -12383,6 +12389,9 @@ export class UpdateConversationDetailInput {
 
     @Field({ nullable: true })
     Error: string;
+
+    @Field(() => Boolean, )
+    HiddenToUser: boolean;
 }
 
 //****************************************************************************
@@ -12553,6 +12562,13 @@ export class Conversation_ {
     @MaxLength(200)
     Name?: string;
       
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field() 
+    @MaxLength(100)
+    Type: string;
+      
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
@@ -12586,6 +12602,12 @@ export class CreateConversationInput {
 
     @Field({ nullable: true })
     Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field()
+    Type: string;
 }
 
         
@@ -12605,6 +12627,12 @@ export class UpdateConversationInput {
 
     @Field({ nullable: true })
     Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field()
+    Type: string;
 }
 
 //****************************************************************************

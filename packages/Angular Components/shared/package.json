@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ng-compare-records",
-  "version": "0.9.134",
-  "description": "MemberJunction: Angular UI Dialog Component to Compare Records",
+  "name": "@memberjunction/ng-shared",
+  "version": "0.9.3",
+  "description": "MemberJunction: Angular Shared Package - utility functions and other reusable elements used across other MJ Angular packages",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -11,7 +11,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "ngc"
   },
-  "keywords": [],
+  "keywords": [
+    "MemberJunction",
+    "Angular"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
@@ -21,12 +24,9 @@
   "peerDependencies": {
     "@angular/common": "^17.1.2",
     "@angular/core": "^17.1.2",
-    "@angular/forms": "^17.1.2",
-    "@progress/kendo-angular-grid": "^15.0.1"
+    "@progress/kendo-svg-icons": "^2.1.0"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.134",
-    "@memberjunction/core-entities": "^0.9.112",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

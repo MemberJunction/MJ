@@ -31,6 +31,10 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Error"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Hidden To User</label>
+            <input type="checkbox" [(ngModel)]="record.HiddenToUser" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
             <span >{{FormatValue('CreatedAt', 0)}}</span>   
         </div>               
@@ -64,6 +68,10 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Error</label>
             <span >{{FormatValue('Error', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Hidden To User</label>
+            <span >{{FormatValue('HiddenToUser', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

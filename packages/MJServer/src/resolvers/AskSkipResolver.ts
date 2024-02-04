@@ -32,6 +32,55 @@ export class AskSkipResultType {
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
 
+
+  @Query(() => AskSkipResultType)
+  async ExecuteAskSkipViewAnalysisQuery(
+    @Arg('UserQuestion', () => String) UserQuestion: string,
+    @Arg('ViewId', () => Int) ViewId: number,
+    @Arg('ConversationId', () => Int) ConversationId: number,
+    @Ctx() { dataSource, userPayload }: AppContext,
+    @PubSub() pubSub: PubSubEngine
+  ) {
+    // TEMP - call the separate server, we'll move this to real skip server soon!!!!!
+    const input = { userInput: UserQuestion, conversationID: ConversationId, viewID: ViewId };
+    //const url = 'https://tasioskipapi.azurewebsites.net/report';
+    const url = 'http://localhost:8000'//process.env.BOT_EXTERNAL_API_URL;
+
+    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+      message: JSON.stringify({
+        type: 'AskSkip',
+        status: 'OK',
+        message: 'Sure, I can help with that, I\'ll get right on it!',
+      }),
+      sessionId: userPayload.sessionId,
+    });
+
+    const response = await axios({
+      method: 'post',
+      url: url,
+      data: input,
+    });
+    if (response.status === 200) {
+      return {
+        Success: true,
+        Status: 'OK',
+        Result: JSON.stringify(response.data),
+        ConversationId: ConversationId,
+        UserMessageConversationDetailId: 0,
+        AIMessageConversationDetailId: 0,
+      }
+    }
+    else
+      return {
+        Success: false,
+        Status: 'Error',
+        Result: `User Question ${UserQuestion} didn't work!`,
+        ConversationId: ConversationId,
+        UserMessageConversationDetailId: 0,
+        AIMessageConversationDetailId: 0,
+      };
+  }
+
   @Query(() => AskSkipResultType)
   async ExecuteAskSkipQuery(
     @Arg('UserQuestion', () => String) UserQuestion: string,

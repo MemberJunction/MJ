@@ -9859,6 +9859,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Error', value);
         }
         /**
+        * * Field Name: HiddenToUser
+        * * Display Name: Hidden To User
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get HiddenToUser(): boolean {  
+            return this.Get('HiddenToUser');
+        }
+        set HiddenToUser(value: boolean) {
+            this.Set('HiddenToUser', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
@@ -9961,6 +9973,29 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Name(value: string) {
             this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: N'Skip'
+        */
+        get Type(): string {  
+            return this.Get('Type');
+        }
+        set Type(value: string) {
+            this.Set('Type', value);
         }
         /**
         * * Field Name: CreatedAt

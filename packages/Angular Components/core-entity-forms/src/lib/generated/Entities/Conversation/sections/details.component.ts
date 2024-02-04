@@ -23,6 +23,14 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Name"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Description</label>
+            <kendo-textbox [(ngModel)]="record.Description"  />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Type</label>
+            <kendo-textbox [(ngModel)]="record.Type"  />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
             <span >{{FormatValue('CreatedAt', 0)}}</span>   
         </div>               
@@ -48,6 +56,14 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Name</label>
             <span >{{FormatValue('Name', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Description</label>
+            <span >{{FormatValue('Description', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Type</label>
+            <span >{{FormatValue('Type', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

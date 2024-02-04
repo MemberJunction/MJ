@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.94",
+  "version": "0.9.96",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,18 +27,20 @@
     "@progress/kendo-angular-listview": "^15.0.1",
     "@progress/kendo-angular-notification": "^15.0.1",
     "@progress/kendo-angular-dialog": "^15.0.1",
+    "@progress/kendo-angular-layout": "^15.0.1",
     "@progress/kendo-angular-label": "^15.0.1",
     "@progress/kendo-angular-filter": "^15.0.1",
-    "@progress/kendo-svg-icons": "^15.0.1"
+    "@progress/kendo-svg-icons": "^2.1.0"
   },
   "dependencies": {
-    "@memberjunction/global": "^0.9.122",
-    "@memberjunction/core": "^0.9.133",
-    "@memberjunction/ng-compare-records": "^0.9.133",
-    "@memberjunction/ng-record-changes": "^0.9.63",
-    "@memberjunction/ng-container-directives": "^0.9.102",
-    "@memberjunction/ng-user-view-grid": "^0.9.118",
-    "@memberjunction/ng-query-grid": "^0.9.7",
+    "@memberjunction/global": "^0.9.123",
+    "@memberjunction/core": "^0.9.134",
+    "@memberjunction/ng-compare-records": "^0.9.134",
+    "@memberjunction/ng-record-changes": "^0.9.64",
+    "@memberjunction/ng-container-directives": "^0.9.103",
+    "@memberjunction/ng-user-view-grid": "^0.9.120",
+    "@memberjunction/ng-query-grid": "^0.9.9",
+    "@memberjunction/ng-shared": "^0.9.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
