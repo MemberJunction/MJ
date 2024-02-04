@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ResourceData } from '../../../generic/base-resource-component';
+import { ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
 import { TileLayoutReorderEvent, TileLayoutResizeEvent } from '@progress/kendo-angular-layout';
-import { SharedService } from '../../../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 import { DashboardConfigDetails, DashboardItem } from '../../single-dashboard.component';
 
 @Component({

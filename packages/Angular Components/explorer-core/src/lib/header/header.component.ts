@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { EventCodes, SharedService } from '../../shared/shared.service';
+import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { Metadata, RunView } from '@memberjunction/core';
 import { DropDownListComponent } from '@progress/kendo-angular-dropdowns';
 import { MSFTUserImageService } from './MSFT_UserImageService';

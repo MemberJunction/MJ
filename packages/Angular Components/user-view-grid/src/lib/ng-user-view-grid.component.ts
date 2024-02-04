@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, ViewContainerRef} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
@@ -63,7 +63,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @ViewChild('analysisQuestion', { read: TextAreaComponent }) analysisQuestion: TextAreaComponent | null = null;
   @ViewChild('analysisResults', { read: ElementRef }) analysisResults: ElementRef | null = null;
 
-  @ViewChild('plotlyPlot', { read: PlotlyComponent }) plotlyPlot: PlotlyComponent | null = null;
+//  @ViewChild('plotlyPlot', { read: PlotlyComponent }) plotlyPlot: PlotlyComponent | null = null;
+  @ViewChild('plotContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
 
   private _pendingRecords: GridPendingRecordItem[] = [];
 
@@ -84,8 +85,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public  _entityInfo: EntityInfo | undefined;
   private _newGridState: ViewGridState = {};
 
-  public plotData = [];
-  public plotLayout: any = {};
+  // public plotData = [];
+  // public plotLayout: any = {};
 
   private editModeEnded = new Subject<void>();
 
@@ -841,24 +842,25 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const resultObj = JSON.parse(resultRaw);
         const plotData = resultObj.resultData.content.plotData
 
-        this.plotData= plotData.data;
-        this.plotLayout = plotData.layout;
-        // this.plotlyPlot!.data = plotData.data;
-        // this.plotlyPlot!.layout = plotData.layout;
-
-        // // now, we need to add a new element to the analysisResults div that will contain the plotly chart
-        // const div = document.createElement('div');
-        // div.id = 'analysisResultsDiv_' + (this._resultSequence++);
-        // this.analysisResults?.nativeElement.appendChild(div);
-        // // now we can create the plotly chart
-        // this._Plotly.newPlot(div.id, /* JSON object */ {
-        //     "data": plotData.data,
-        //     "layout": plotData.layout
-        // })
+        this.addPlotlyComponent(plotData.data, plotData.layout);
       }
     }
     catch (err) {
       console.error(err);          
     }
   }
+
+  addPlotlyComponent(data: any, layout: any): void {
+    try {
+      const plotlyComponentRef = this.container.createComponent(PlotlyComponent);
+      plotlyComponentRef.instance.data = data;
+      plotlyComponentRef.instance.layout = layout;
+      plotlyComponentRef.instance.useResizeHandler = true;  
+      plotlyComponentRef.instance.style = {position: 'relative', width: '100%', height: '100%', marginBottom: '20px', border: '1px solid #ccc'};
+    }
+    catch (e) {
+      console.log(e);
+    }
+  }
 }
+ 

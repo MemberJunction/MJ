@@ -92,9 +92,10 @@
                   <kendo-button (click)="submitAnalysis()">
                     Ask
                   </kendo-button>
-                <div #analysisResults>
+                <ng-template #plotContainer></ng-template>
+                <!-- <div #analysisResults>
                     <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" ></plotly-plot>
-                </div>
+                </div> -->
             </ng-template>
         </kendo-tabstrip-tab>
     </kendo-tabstrip>

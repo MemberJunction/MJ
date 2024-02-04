@@ -1,9 +1,9 @@
 import { Component, EventEmitter, Input, OnChanges,  Output,  SimpleChanges, ViewChild, ViewContainerRef } from '@angular/core';
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, ResourceData } from './base-resource-component';
+import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
 
 @Component({
   selector: 'app-resource',

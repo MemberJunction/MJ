@@ -4,8 +4,8 @@ import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
 import { EntityFieldTSType, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { SeriesClickEvent } from '@progress/kendo-angular-charts';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { EventCodes, SharedService } from '../../shared/shared.service';
-import { ResourceData } from './base-resource-component';
+import { EventCodes, SharedService } from '@memberjunction/ng-shared';
+import { ResourceData } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-dynamic-chart',

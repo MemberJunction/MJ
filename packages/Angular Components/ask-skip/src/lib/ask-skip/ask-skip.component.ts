@@ -5,12 +5,13 @@ import { Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
+
 import { SkipDynamicReportComponent } from './skip-dynamic-report-wrapper';
 import { Subscription } from 'rxjs';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
 
-class SkipMessage {
+export class SkipMessage {
   Type: string='user'
   Message: string= ''
   ID: number = 0

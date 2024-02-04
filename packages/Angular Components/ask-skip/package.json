@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ng-query-grid",
-  "version": "0.9.15",
-  "description": "MemberJunction: Angular Grid to display any MemberJunction Query",
+  "name": "@memberjunction/ng-ask-skip",
+  "version": "0.9.1",
+  "description": "MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [
@@ -24,11 +24,15 @@
     "@angular/forms": "^17.1.2",
     "@angular/router": "^17.1.2",
     "@progress/kendo-angular-grid": "^15.0.1",
-    "@progress/kendo-angular-buttons": "^15.0.1",
-    "@progress/kendo-angular-dialog": "^15.0.1"
+    "@progress/kendo-angular-listview": "^15.0.1",
+    "@progress/kendo-angular-notification": "^15.0.1",
+    "@progress/kendo-angular-dialog": "^15.0.1",
+    "@progress/kendo-angular-layout": "^15.0.1",
+    "@progress/kendo-angular-label": "^15.0.1",
+    "@progress/kendo-angular-filter": "^15.0.1",
+    "@progress/kendo-svg-icons": "^2.1.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^0.9.118",
     "@memberjunction/global": "^0.9.131",
     "@memberjunction/core": "^0.9.140",
     "@memberjunction/ng-container-directives": "^0.9.108",

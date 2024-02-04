@@ -3,7 +3,7 @@ import { Router } from '@angular/router'
 import { Metadata, RunView } from '@memberjunction/core';
 import { DashboardEntity } from '@memberjunction/core-entities';
 import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-dashboard-browser',

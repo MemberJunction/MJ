@@ -5,7 +5,7 @@ import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@me
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable } from 'rxjs';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
-import { kendoSVGIcon } from '@memberjunction/ng-shared';
+import { kendoSVGIcon } from './util';
 
 @Injectable({
   providedIn: 'root'

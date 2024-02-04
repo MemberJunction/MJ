@@ -1,3 +1,31 @@
+function Get-PackageNameFromPackageJson {
+    param (
+        [string]$directoryPath
+    )
+    $packageName = $null
+    $packageJsonPath = Join-Path -Path $directoryPath -ChildPath "package.json"
+
+    if (Test-Path $packageJsonPath) {
+        try {
+            $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+            $packageName = $packageJson.name
+            if (-not $packageName) {
+                Write-Host "Package name not found in $packageJsonPath"
+            }
+            else {
+                # Remove '@memberjunction/' prefix from the package name
+                $packageName = $packageName -replace '^@memberjunction/', ''
+            }
+        } catch {
+            Write-Host "Error reading or parsing $packageJsonPath $_"
+        }
+    } else {
+        Write-Host "$packageJsonPath does not exist."
+    }
+
+    return $packageName
+}
+
 function Get-MemberJunctionDependencies {
     param (
         [string]$directoryPath
@@ -80,18 +108,6 @@ function Update-BuildLog {
 }
 
 
-
-# Define function to update package.json patch version number
-# function Update-PatchVersion {
-#     $json = Get-Content 'package.json' | ConvertFrom-Json
-#     $version = $json.version -split '\.'
-#     $patch = [int]$version[2] + 1
-#     $newVersion = "$($version[0]).$($version[1]).$patch"
-#     $json.version = $newVersion
-#     $json | ConvertTo-Json -Depth 64 | Set-Content 'package.json'
-# }
-
-
 function Update-PatchVersion {
     param (
         [int]$maxRetries = 10, # Maximum number of retries
@@ -122,8 +138,6 @@ function Update-PatchVersion {
         throw "Update-PatchVersion failed after multiple retries."
     }
 }
-
-
 
 
 
@@ -224,25 +238,88 @@ function LinkAllDependencies($dependenciesArray) {
     npm link $linkString
 }
 
-# Step 1: Building and Publishing foundational libraries
-# Prompt the user for local linking
-$publishToNPM = Read-Host "Do you want to publish to npm? (y/n)"
-$ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publish EVERYTHING, regardless of if things changed)? (y/n)"
 
+############################################################################################################
+############################################################################################################
 # Define a custom object for each library including the directory name and the dependencies list (in order)
 $baseLibraries = @(
-    @{Name='MJGlobal'; PackageName='global'}, #; Dependencies=@()},
-    @{Name='MJAI'; PackageName='ai'}, #; Dependencies=@()},
-    @{Name='MJCore'; PackageName='core'}, #; Dependencies=@('global')},
-    @{Name='MJCoreEntities'; PackageName='core-entities'}, #; Dependencies=@('global', 'core')},
-    @{Name='MJAIEngine'; PackageName='aiengine'}, #; Dependencies=@('global', 'core', 'core-entities', 'ai')},
-    @{Name='MJQueue'; PackageName='queue'}, #; Dependencies=@('global', 'core', 'core-entities', 'ai')},
-    @{Name='SQLServerDataProvider'; PackageName='sqlserver-dataprovider'}, #; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai')},
-    @{Name='CodeGenLib'; PackageName='codegen-lib'}, #; Dependencies=@('global', 'core', 'sqlserver-dataprovider')},
-    @{Name='GraphQLDataProvider'; PackageName='graphql-dataprovider'}, #; Dependencies=@('global', 'core', 'core-entities')},
-    @{Name='GeneratedEntities'; PackageName=$null}, #; Dependencies=@('global', 'core')},
-    @{Name='MJServer'; PackageName='server'} #; Dependencies=@('global', 'core', 'core-entities', 'queue', 'ai', 'aiengine', 'sqlserver-dataprovider')}
+    @{Name='MJGlobal'},
+    @{Name='MJAI'}, 
+    @{Name='MJCore'},
+    @{Name='MJCoreEntities'},
+    @{Name='MJAIEngine'}, 
+    @{Name='MJQueue'}, 
+    @{Name='SQLServerDataProvider'}, 
+    @{Name='CodeGenLib'}, 
+    @{Name='GraphQLDataProvider'}, 
+    @{Name='GeneratedEntities'}, 
+    @{Name='MJServer'} 
 )
+foreach ($lib in $baseLibraries) {
+    # Use the Get-PackageNameFromPackageJson function to fetch the package name
+    if ($lib.Name -eq 'GeneratedEntities') {
+        $lib.PackageName = $null
+    } else {
+        $packageName = Get-PackageNameFromPackageJson -directoryPath $lib.Name
+
+        # Check if a package name was returned and update the library object
+        if ($packageName) {
+            $lib.PackageName = $packageName
+        } else {
+            Write-Host "Could not retrieve package name for library: $($lib.Name)"
+        }
+    }
+}
+
+# Define a custom object for each Angular library
+$angularLibraries = @(
+    @{Name='shared'}, 
+    @{Name='auth-services'}, 
+    @{Name='container-directives'},
+    @{Name='link-directives'}, 
+    @{Name='compare-records'}, 
+    @{Name='record-changes'}, 
+    @{Name='query-grid'}, 
+    @{Name='ask-skip'}, 
+    @{Name='user-view-grid'}, 
+    @{Name='explorer-core'}, 
+    @{Name='core-entity-forms'}
+)
+
+
+# now populate the package name for each angular library
+foreach ($lib in $angularLibraries) {
+    # Use the Get-PackageNameFromPackageJson function to fetch the package name
+    $packageName = Get-PackageNameFromPackageJson -directoryPath ('Angular Components/' + $lib.Name)
+
+    # Check if a package name was returned and update the library object
+    if ($packageName) {
+        $lib.PackageName = $packageName
+    } else {
+        Write-Host "Could not retrieve package name for library: $($lib.Name)"
+    }
+}
+
+
+# Define a custom object for each executable project
+$remainingProjects = @(
+    @{Name='CodeGen'},
+    @{Name='MJAPI'},
+    @{Name='MJExplorer'}
+)
+############################################################################################################
+
+
+
+
+############################################################################################################
+# GET USER INPUT ON OPTIONS
+$publishToNPM = Read-Host "Do you want to publish to npm? (y/n)"
+$ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publish EVERYTHING, regardless of if things changed)? (y/n)"
+############################################################################################################
+
+
+
 # Iterate over the custom objects
 foreach ($libObject in $baseLibraries) {
     $lib = $libObject.Name
@@ -293,19 +370,6 @@ foreach ($libObject in $baseLibraries) {
 
 # Step 2: Building and Publishing Angular libraries
 
-# Define a custom object for each Angular library
-$angularLibraries = @(
-    @{Name='shared'; PackageName='ng-shared'}, #; Dependencies=@()},
-    @{Name='auth-services'; PackageName='ng-auth-services'}, #; Dependencies=@('core')},
-    @{Name='container-directives'; PackageName='ng-container-directives'}, #; Dependencies=@('global', 'core')},
-    @{Name='link-directives'; PackageName='ng-link-directives'}, #; Dependencies=@('core')},
-    @{Name='compare-records'; PackageName='ng-compare-records'}, #; Dependencies=@('core', 'core-entities')},
-    @{Name='record-changes'; PackageName='ng-record-changes'}, #; Dependencies=@('global', 'core')},
-    @{Name='query-grid'; PackageName='ng-query-grid'}, #; Dependencies=@('global', 'core', 'core-entities', 'ng-container-directives')},
-    @{Name='user-view-grid'; PackageName='ng-user-view-grid'}, #; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider', 'ng-compare-records', 'ng-container-directives')},
-    @{Name='explorer-core'; PackageName='ng-explorer-core'}, #; Dependencies=@('global', 'core', 'ng-user-view-grid', 'graphql-dataprovider', 'ng-query-grid', 'ng-record-changes', 'ng-compare-records', 'ng-container-directives')}
-    @{Name='core-entity-forms'; PackageName='ng-core-entity-forms'} #; Dependencies=@('core', 'core-entities', 'ng-explorer-core')}
-)
 
 Write-Host ""
 Write-Host ""
@@ -366,12 +430,6 @@ Write-Host ""
 
 
 # Step 3: Update dependencies in executable projects
-# Define a custom object for each executable project
-$remainingProjects = @(
-    @{Name='CodeGen'},#; Dependencies=@('codegen-lib')},
-    @{Name='MJAPI'},#; Dependencies=@('global', 'core', 'ai', 'sqlserver-dataprovider', 'server')},
-    @{Name='MJExplorer'} #; Dependencies=@('global', 'core', 'core-entities', 'graphql-dataprovider'); AngularDeps=@('ng-auth-services', 'ng-compare-records', 'ng-container-directives', 'ng-explorer-core', 'ng-link-directives', 'ng-record-changes', 'ng-user-view-grid')}
-)
 # Iterate over the custom objects
 foreach ($projObject in $remainingProjects) {
     $proj = $projObject.Name
@@ -385,25 +443,6 @@ foreach ($projObject in $remainingProjects) {
         # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
         UpdatePackageJSONToLatestDependencyVersion $mjDep $false
     }
-
-    # # Use the InstallLatestVersion function for each dependency
-    # foreach ($dep in $projObject.Dependencies) {
-    #     UpdatePackageJSONToLatestDependencyVersion $dep $false
-    # }
-
-    # # Handle Angular Libraries dependencies if AngularDeps exists
-    # if ($projObject.AngularDeps) {
-    #     foreach ($lib in $projObject.AngularDeps) {
-    #         UpdatePackageJSONToLatestDependencyVersion $lib $false
-    #     }
-    #     # # Combine AngularDeps and Dependencies into one array
-    #     # $allDeps = $projObject.Dependencies + $projObject.AngularDeps
-    #     # LinkAllDependencies $allDeps
-    # }
-    # else {
-    #     # # Link all dependencies in a single command to switch to local linking
-    #     # LinkAllDependencies $projObject.Dependencies
-    # }
 
     Set-Location ..
 }

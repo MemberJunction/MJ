@@ -4,7 +4,7 @@ import { Metadata } from '@memberjunction/core';
 import { ViewInfo, UserViewEntity } from '@memberjunction/core-entities';
 import { ViewPropertiesDialogComponent } from '../user-view-properties/view-properties-dialog.component';
 import { NotificationService } from "@progress/kendo-angular-notification";
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-single-entity',

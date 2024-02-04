@@ -1,10 +1,10 @@
 import { NgModule } from '@angular/core';
 import { IconsModule } from '@progress/kendo-angular-icons';
 import { URLPipe } from './lib/urlPipe';
- 
+
 @NgModule({
   declarations: [ 
-    URLPipe
+    URLPipe 
   ],
   imports: [
     IconsModule

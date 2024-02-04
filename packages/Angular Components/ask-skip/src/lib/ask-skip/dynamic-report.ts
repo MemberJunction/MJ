@@ -1,7 +1,7 @@
 import { Component, Input, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
-import { SharedService, HtmlListType, EventCodes } from '../../shared/shared.service';
+import { SkipColumnInfo, SkipData } from './ask-skip.component';
+import { SharedService, HtmlListType, EventCodes } from '@memberjunction/ng-shared';
 import { DynamicGridComponent } from './dynamic-grid';
 import { DynamicChartComponent } from './dynamic-chart';
 import { Metadata, RunView } from '@memberjunction/core';

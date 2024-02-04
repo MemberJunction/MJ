@@ -1,8 +1,8 @@
 import { Component } from '@angular/core';
-import { BaseResourceComponent, ResourceData } from '../generic/base-resource-component';
+import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, PrimaryKeyValue } from '@memberjunction/core';
-import { SharedService } from '../../public-api';
+import { SharedService } from '@memberjunction/ng-shared';
 
 export function LoadRecordResource() {
     const test = new EntityRecordResource(); // this looks really dumb. Thing is, in production builds, tree shaking causes the class below to not be included in the bundle. This is a hack to force it to be included.

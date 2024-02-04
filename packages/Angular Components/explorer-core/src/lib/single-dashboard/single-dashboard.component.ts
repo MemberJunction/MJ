@@ -1,9 +1,9 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
-import { ResourceData } from '../generic/base-resource-component';
+import { ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
 

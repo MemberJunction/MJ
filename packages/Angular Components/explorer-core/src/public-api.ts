@@ -5,17 +5,10 @@
 export * from './lib/generic/base-form-component';
 export * from './lib/generic/base-form-section-component';
 export * from './lib/generic/base-record-component';
-export * from './lib/generic/base-resource-component';
-export * from './lib/generic/dynamic-chart';
-export * from './lib/generic/dynamic-grid';
-export * from './lib/generic/dynamic-report';
+export * from '@memberjunction/ng-shared/src/lib/base-resource-component';
 export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 export * from './lib/generic/section-loader-component';
-
-export * from './shared/shared.service';
-export * from './lib/ask-skip/ask-skip.component';
-export * from './lib/ask-skip/skip-dynamic-report-wrapper';
 
 export * from './lib/auth-button/auth-button.component'
 export * from './lib/dashboard-browser-component/dashboard-browser.component'

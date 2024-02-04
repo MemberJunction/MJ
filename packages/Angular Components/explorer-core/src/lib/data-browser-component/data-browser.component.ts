@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router'
 import { ApplicationInfo, Metadata } from '@memberjunction/core';
-import { SharedService } from '../../public-api';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-data-browser',

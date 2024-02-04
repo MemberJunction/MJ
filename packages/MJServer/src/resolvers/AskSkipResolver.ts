@@ -61,6 +61,15 @@ export class AskSkipResolver {
       data: input,
     });
     if (response.status === 200) {
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        message: JSON.stringify({
+          type: 'AskSkip',
+          status: 'OK',
+          message: 'View Analysis successful, updating the conversation...',
+        }),
+        sessionId: userPayload.sessionId,
+      });
+
       return {
         Success: true,
         Status: 'OK',
@@ -70,7 +79,16 @@ export class AskSkipResolver {
         AIMessageConversationDetailId: 0,
       }
     }
-    else
+    else {
+      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        message: JSON.stringify({
+          type: 'AskSkip',
+          status: 'Error',
+          message: 'Analysis failed to run, please try again later and if this continues, contact your support desk.',
+        }),
+        sessionId: userPayload.sessionId,
+      });
+
       return {
         Success: false,
         Status: 'Error',
@@ -79,6 +97,7 @@ export class AskSkipResolver {
         UserMessageConversationDetailId: 0,
         AIMessageConversationDetailId: 0,
       };
+    }
   }
 
   @Query(() => AskSkipResultType)

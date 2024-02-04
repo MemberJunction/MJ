@@ -1,8 +1,7 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { LogError, Metadata, RunReport } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
-import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
-import { DynamicReportComponent } from '../generic/dynamic-report';
+import { SkipColumnInfo, SkipData, DynamicReportComponent } from '@memberjunction/ng-ask-skip';
 
 @Component({
   selector: 'app-single-report',

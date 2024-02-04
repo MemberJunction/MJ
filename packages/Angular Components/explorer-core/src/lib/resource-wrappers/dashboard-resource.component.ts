@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { BaseResourceComponent, ResourceData } from '../generic/base-resource-component';
+import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
 import { RegisterClass } from '@memberjunction/global';
 
 export function LoadDashboardResource() {

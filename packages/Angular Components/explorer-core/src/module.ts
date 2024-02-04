@@ -30,13 +30,8 @@ import { QueryGridModule } from '@memberjunction/ng-query-grid';
 
 // Local Components
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
-import { DynamicGridComponent } from './lib/generic/dynamic-grid';
 import { SectionLoaderComponent } from './lib/generic/section-loader-component';
-import { DynamicChartComponent } from './lib/generic/dynamic-chart';
-import { DynamicReportComponent } from './lib/generic/dynamic-report';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
-import { AskSkipComponent } from './lib/ask-skip/ask-skip.component' 
-import { SkipDynamicReportComponent } from './lib/ask-skip/skip-dynamic-report-wrapper';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
 import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
 import { DataBrowserComponent } from './lib/data-browser-component/data-browser.component';
@@ -64,23 +59,19 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
 import { SingleDashboardComponent } from './lib/single-dashboard/single-dashboard.component';
 import { AddItemComponent } from './lib/single-dashboard/Components/add-item/add-item.component';
 import { EditDashboardComponent } from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component';
-import { MemberJunctionSharedModule, URLPipe } from '@memberjunction/ng-shared';
+import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
 import { SingleQueryComponent } from './lib/single-query/single-query.component';
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
+import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 @NgModule({
   declarations: [
     FormToolbarComponent,
-    DynamicGridComponent,
-    DynamicChartComponent,
-    DynamicReportComponent,
     SectionLoaderComponent,
     ResourceContainerComponent,
-    SkipDynamicReportComponent,
-    AskSkipComponent,
     AuthButtonComponent,
     DashboardBrowserComponent,
     DataBrowserComponent,
@@ -149,17 +140,13 @@ import { QueryBrowserComponent } from './lib/query-browser-component/query-brows
     LayoutModule,
     FilterModule,
     DropDownsModule,
-    MemberJunctionSharedModule
+    MemberJunctionSharedModule,
+    AskSkipModule
   ],
   exports: [
     FormToolbarComponent,
-    DynamicGridComponent,
-    DynamicChartComponent,
-    DynamicReportComponent,
     SectionLoaderComponent,
     ResourceContainerComponent,
-    SkipDynamicReportComponent,
-    AskSkipComponent,
     AuthButtonComponent,
     DashboardBrowserComponent,
     DataBrowserComponent,

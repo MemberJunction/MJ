@@ -1,5 +1,5 @@
 import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { Router } from '@angular/router';

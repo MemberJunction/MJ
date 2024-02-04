@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, RunView, EntityRecordNameInput } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
-import { SharedService } from '../../shared/shared.service';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-single-application',

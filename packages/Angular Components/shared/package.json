@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared",
-  "version": "0.9.3",
+  "version": "0.9.8",
   "description": "MemberJunction: Angular Shared Package - utility functions and other reusable elements used across other MJ Angular packages",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

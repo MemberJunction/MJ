@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Router } from '@angular/router'
-import { SharedService } from '../../public-api';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-generic-browse-list',

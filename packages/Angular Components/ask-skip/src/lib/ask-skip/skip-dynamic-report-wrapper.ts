@@ -1,5 +1,5 @@
 import { Component, Input, ViewChild } from '@angular/core';
-import { DynamicReportComponent } from '../generic/dynamic-report';
+import { DynamicReportComponent } from './dynamic-report';
 import { SkipData } from './ask-skip.component';
 
 @Component({

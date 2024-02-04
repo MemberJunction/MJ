@@ -1,8 +1,8 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceTypeEntity, ViewInfo} from '@memberjunction/core-entities';
-import { ResourceData } from '../../../generic/base-resource-component';
-import { SharedService } from '../../../../shared/shared.service';
+import { ResourceData } from '@memberjunction/ng-shared/src/lib/base-resource-component';
+import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'app-add-item-dialog',
