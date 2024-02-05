@@ -254,6 +254,16 @@
                                                [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
                         </ng-template>
                     </kendo-tabstrip-tab>
+          
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Conversations')">
+                        <ng-template kendoTabTitle>Conversations</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Conversations')"  
+                                               [AllowLoad]="this.IsCurrentTab('Conversations')"  
+                                               [EditMode]="this.GridEditMode()"  
+                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
                             </kendo-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

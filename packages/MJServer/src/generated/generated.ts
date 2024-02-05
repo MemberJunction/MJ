@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/3/2024, 4:49:15 PM
+* GENERATED: 2/4/2024, 9:07:38 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2855,6 +2855,9 @@ export class Entity_ {
     @Field(() => [QueryField_])
     QueryFieldsArray: QueryField_[]; // Link to QueryFields
 
+    @Field(() => [Conversation_])
+    ConversationsArray: Conversation_[]; // Link to Conversations
+
 }
         
 //****************************************************************************
@@ -3311,6 +3314,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [SourceEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Conversation_])
+    async ConversationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Conversations', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [LinkedEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
     
@@ -12569,6 +12580,12 @@ export class Conversation_ {
     @MaxLength(100)
     Type: string;
       
+    @Field(() => Int, {nullable: true}) 
+    LinkedEntityID?: number;
+      
+    @Field(() => Int, {nullable: true}) 
+    LinkedRecordID?: number;
+      
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
@@ -12580,6 +12597,10 @@ export class Conversation_ {
     @Field() 
     @MaxLength(200)
     User: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    LinkedEntity?: string;
     
     @Field(() => [ConversationDetail_])
     ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
@@ -12608,6 +12629,12 @@ export class CreateConversationInput {
 
     @Field()
     Type: string;
+
+    @Field(() => Int, { nullable: true })
+    LinkedEntityID: number;
+
+    @Field(() => Int, { nullable: true })
+    LinkedRecordID: number;
 }
 
         
@@ -12633,6 +12660,12 @@ export class UpdateConversationInput {
 
     @Field()
     Type: string;
+
+    @Field(() => Int, { nullable: true })
+    LinkedEntityID: number;
+
+    @Field(() => Int, { nullable: true })
+    LinkedRecordID: number;
 }
 
 //****************************************************************************

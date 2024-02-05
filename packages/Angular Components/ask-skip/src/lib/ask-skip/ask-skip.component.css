@@ -41,7 +41,6 @@
 }
 
 .messages {
-    flex-grow: 1; /* This will make the messages take the remaining space */
     overflow-y: auto; /* enable scrolling if the content overflows */
     overflow-x: hidden; /* hide horizontal scrollbar */
     border: solid 1px rgba(0, 0, 0, 0.08);
@@ -167,6 +166,7 @@
     height: 49px;
     display: flex;
     align-items: center;
+    margin-bottom: 20px;
 }
 
 .input-area > button {

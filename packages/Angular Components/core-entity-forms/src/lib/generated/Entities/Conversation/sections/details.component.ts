@@ -31,6 +31,14 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Type"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Linked Entity ID</label>
+            <kendo-numerictextbox [(value)]="record.LinkedEntityID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Linked Record ID</label>
+            <kendo-numerictextbox [(value)]="record.LinkedRecordID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
             <span >{{FormatValue('CreatedAt', 0)}}</span>   
         </div>               
@@ -41,6 +49,10 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Linked Entity</label>
+            <span >{{FormatValue('LinkedEntity', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -66,6 +78,14 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('Type', 0)}}</span>
         </div>              
         <div class="record-form-row">
+            <label class="fieldLabel">Linked Entity ID</label>
+            <span mjFieldLink [record]="record" fieldName="LinkedEntityID" >{{FormatValue('LinkedEntityID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Linked Record ID</label>
+            <span >{{FormatValue('LinkedRecordID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
             <span >{{FormatValue('CreatedAt', 0)}}</span>
         </div>              
@@ -76,6 +96,10 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Linked Entity</label>
+            <span >{{FormatValue('LinkedEntity', 0)}}</span>
         </div>
     </div>
 </div>

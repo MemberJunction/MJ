@@ -16,11 +16,12 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
-import { PlotlyViaCDNModule } from 'angular-plotly.js';
+//import { PlotlyViaCDNModule } from 'angular-plotly.js';
+import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 
-PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
-PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
+// PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
+// PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
 
 @NgModule({
   declarations: [
@@ -40,7 +41,8 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
     IconsModule,
     LayoutModule,
     InputsModule,
-    PlotlyViaCDNModule
+//    PlotlyViaCDNModule,
+    AskSkipModule
   ],
   exports: [
     UserViewGridComponent

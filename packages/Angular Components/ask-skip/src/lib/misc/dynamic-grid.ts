@@ -5,7 +5,7 @@ import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
 import { LogStatus } from '@memberjunction/core';
 
 @Component({
-  selector: 'app-dynamic-grid',
+  selector: 'mj-dynamic-grid',
   template: `
     <kendo-grid [data]="gridView"
                 [skip]="startingRow"
@@ -44,8 +44,8 @@ export class DynamicGridComponent implements AfterViewInit {
   set SkipData(d: SkipData | undefined){
       this._skipData = d;
       if (d) {
-        this.data = d.SQLResults.results;
-        this.columns = d.SQLResults.columns;  
+        this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
+        this.columns = d.executionResults?.tableDataColumns ? d.executionResults?.tableDataColumns : [];
         this.loadGridView();
       }
   }

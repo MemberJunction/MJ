@@ -1,5 +1,5 @@
 <div class="user-view-grid-wrap" mjFillContainer>
-    <kendo-tabstrip [keepTabContent]="true" [animate] = "false">        
+    <kendo-tabstrip [keepTabContent]="true" [animate] = "false" mjFillContainer (tabSelect)="selectTabHandler()">        
         <kendo-tabstrip-tab [selected]="true">
             <ng-template kendoTabTitle>Data</ng-template>
             <ng-template kendoTabContent>
@@ -81,21 +81,11 @@
                 </kendo-grid>
             </ng-template>            
         </kendo-tabstrip-tab>
-        <kendo-tabstrip-tab>
+        <kendo-tabstrip-tab *ngIf="Params?.ViewID">
             <ng-template kendoTabTitle>Analysis</ng-template>
             <ng-template kendoTabContent>
-                <kendo-textarea #analysisQuestion
-                    placeholder="Ask any question about the data in this view..."
-                    [rows]="3"
-                    resizable="none"
-                  ></kendo-textarea>
-                  <kendo-button (click)="submitAnalysis()">
-                    Ask
-                  </kendo-button>
-                <ng-template #plotContainer></ng-template>
-                <!-- <div #analysisResults>
-                    <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" ></plotly-plot>
-                </div> -->
+                <mj-ask-skip mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" [ViewID]="ViewID" [LinkedEntity]="'User Views'" [LinkedEntityRecordID]="ViewID">
+                </mj-ask-skip>
             </ng-template>
         </kendo-tabstrip-tab>
     </kendo-tabstrip>

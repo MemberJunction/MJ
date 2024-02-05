@@ -14,7 +14,7 @@ import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
-import { kendoSVGIcon } from '@memberjunction/ng-shared';
+import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { PlotlyComponent } from 'angular-plotly.js';
@@ -109,6 +109,13 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   public get PendingRecords(): GridPendingRecordItem[] {
     return this._pendingRecords;
+  }
+
+  public get ViewID(): number {
+    if (this.Params && this.Params.ViewID)
+      return this.Params.ViewID;
+    else
+      return 0;
   }
 
   protected StartEditMode() {
@@ -811,56 +818,66 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   public kendoSVGIcon = kendoSVGIcon;
 
-  public submitAnalysis() {
-    // submit the analysis request...
-    const val = this.analysisQuestion?.value
-    console.log(val);
-    if (val)
-     this.ExecuteAskSkipViewAnalysisQuery(val, this._viewEntity!.ID, 0);
+  public selectTabHandler() {
+    SharedService.Instance.InvokeManualResize(100); // resize when the tab is clicked
   }
 
-  private _resultSequence: number = 1;
-  async ExecuteAskSkipViewAnalysisQuery(question: string, viewId: number, conversationId: number) {
-    try {
-      const gql = `query ExecuteAskSkipViewAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
-        ExecuteAskSkipViewAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
-          Success
-          Status
-          Result
-          ConversationId 
-          UserMessageConversationDetailId
-          AIMessageConversationDetailId
-        }
-      }`
+  // public submitAnalysis() {
+  //   // submit the analysis request...
+  //   const val = this.analysisQuestion?.value
+  //   console.log(val);
+  //   if (val)
+  //    this.ExecuteAskSkipViewAnalysisQuery(val, this._viewEntity!.ID, 0);
+  // }
+
+  // private _resultSequence: number = 1;
+  // async ExecuteAskSkipViewAnalysisQuery(question: string, viewId: number, conversationId: number) {
+  //   try {
+  //     const gql = `query ExecuteAskSkipViewAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
+  //       ExecuteAskSkipViewAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
+  //         Success
+  //         Status
+  //         Result
+  //         ConversationId 
+  //         UserMessageConversationDetailId
+  //         AIMessageConversationDetailId
+  //       }
+  //     }`
   
-      const result = await GraphQLDataProvider.ExecuteGQL(gql, { userQuestion: question, 
-                                                                  conversationId: conversationId,
-                                                                  viewId: viewId});
-      if (result && result.ExecuteAskSkipViewAnalysisQuery) {
-        // it worked, get the bits we care about
-        const resultRaw = result.ExecuteAskSkipViewAnalysisQuery.Result;
-        const resultObj = JSON.parse(resultRaw);
-        const plotData = resultObj.resultData.content.plotData
+  //     const result = await GraphQLDataProvider.ExecuteGQL(gql, { userQuestion: question, 
+  //                                                                 conversationId: conversationId,
+  //                                                                 viewId: viewId});
+  //     if (result && result.ExecuteAskSkipViewAnalysisQuery) {
+  //       // it worked, get the bits we care about
+  //       const resultRaw = result.ExecuteAskSkipViewAnalysisQuery.Result;
+  //       const resultObj = JSON.parse(resultRaw);
+  //       if (resultObj.success) {
+  //         const plotData = resultObj.executionResults.plotData
 
-        this.addPlotlyComponent(plotData.data, plotData.layout);
-      }
-    }
-    catch (err) {
-      console.error(err);          
-    }
-  }
+  //         this.addPlotlyComponent(plotData.data, plotData.layout);  
+  //       }
+  //       else {
+  //         console.error(resultObj.error);
+  //         SharedService.Instance.CreateSimpleNotification("Error executing analysis request.", 'error', 5000)
+  //       }
+  //     }
+  //   }
+  //   catch (err) {
+  //     console.error(err);          
+  //   }
+  //}
 
-  addPlotlyComponent(data: any, layout: any): void {
-    try {
-      const plotlyComponentRef = this.container.createComponent(PlotlyComponent);
-      plotlyComponentRef.instance.data = data;
-      plotlyComponentRef.instance.layout = layout;
-      plotlyComponentRef.instance.useResizeHandler = true;  
-      plotlyComponentRef.instance.style = {position: 'relative', width: '100%', height: '100%', marginBottom: '20px', border: '1px solid #ccc'};
-    }
-    catch (e) {
-      console.log(e);
-    }
-  }
+  // addPlotlyComponent(data: any, layout: any): void {
+  //   try {
+  //     const plotlyComponentRef = this.container.createComponent(PlotlyComponent);
+  //     plotlyComponentRef.instance.data = data;
+  //     plotlyComponentRef.instance.layout = layout;
+  //     plotlyComponentRef.instance.useResizeHandler = true;  
+  //     plotlyComponentRef.instance.style = {position: 'relative', width: '100%', height: '100%', marginBottom: '20px', border: '1px solid #ccc'};
+  //   }
+  //   catch (e) {
+  //     console.log(e);
+  //   }
+  // }
 }
  

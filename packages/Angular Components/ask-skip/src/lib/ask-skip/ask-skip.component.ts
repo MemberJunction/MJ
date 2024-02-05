@@ -1,4 +1,4 @@
-import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy } from '@angular/core';
+import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Metadata, RunQuery, RunView } from '@memberjunction/core';
@@ -7,7 +7,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 import { SharedService } from '@memberjunction/ng-shared';
 
-import { SkipDynamicReportComponent } from './skip-dynamic-report-wrapper';
+import { SkipDynamicReportComponent } from '../misc/skip-dynamic-report-wrapper';
 import { Subscription } from 'rxjs';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
 
@@ -23,43 +23,61 @@ export class SkipColumnInfo {
   DataType!: string
   Description?: string
 }
-export class SkipSQLResults {
-    results!: any[]
-    sql!: string
-    columns!: SkipColumnInfo[]
-}
-export class SkipChartOptions {
-    xAxis!: string
-    xLabel!: string
-    yAxis!: string
-    yLabel!: string
-    color?: string
-    yFormat?: string
-}
-export class SkipData {
-  SQLResults!: SkipSQLResults
-  ReportTitle!: string 
-  DisplayType!: string
-  ChartOptions!: SkipChartOptions
-  DrillDownView?: string
-  DrillDownBaseViewField?: string
-  DrillDownReportValueField?: string
-  UserMessage?: string
-  ReportExplanation?: string
-  Analysis?: string
+
+export class SkipExecutionResult {
+  analysis?: string
+  errorMessage?: string | null;
+  htmlReport?: string | null;
+  plotData?: { data: any[]; layout: any } | null; // Compatible with Plotly
+  resultType!: "data" | "plot" | "html" | null;
+  status!: "success" | "error";
+  tableData?: any[] | null; // any array of objects
+  tableDataColumns: SkipColumnInfo[] = [];
 }
 
+export class SkipData {
+  executionResults?: SkipExecutionResult
+  reportTitle!: string
+  scriptText!: string;
+  success!: boolean;
+  suggestedQuestions?: string[] | null;
+  techExplanation?: string
+  userExplanation?: string
+}
+
+export class ExecuteAskSkipAnalysisQueryResult {
+  Success!: boolean
+  Status!: string
+  Result!: string
+  ResultObject!: SkipData;
+  ConversationId!: number
+  UserMessageConversationDetailId!: number
+  AIMessageConversationDetailId!: number
+}
+
+
 @Component({
-  selector: 'app-ask-skip',
+  selector: 'mj-ask-skip',
   templateUrl: './ask-skip.component.html',
   styleUrls: ['./ask-skip.component.css']
 })
 export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
-  public AllowSend: boolean = true;
-  public Messages: ConversationDetailEntity[] = [];
-  public Conversations: ConversationEntity[] = [];
-  public SelectedConversation: ConversationEntity | undefined;
-  public ConversationEditMode: boolean = false;
+  @Input() AllowSend: boolean = true;
+  @Input() public Messages: ConversationDetailEntity[] = [];
+  @Input() public Conversations: ConversationEntity[] = [];
+  @Input() public SelectedConversation: ConversationEntity | undefined;
+  @Input() public ConversationEditMode: boolean = false;
+  @Input() public ShowConversationList: boolean = true;
+  @Input() public AllowNewConversations: boolean = true;
+  @Input() public Title: string = "Ask Skip"
+  @Input() public ViewID: number = 0;
+  @Input() public LinkedEntity: string = '';
+  @Input() public LinkedEntityRecordID: number = 0;
+
+  /**
+   * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
+   */
+  @Input() public UpdateAppRoute: boolean = true;
 
   @ViewChild(Container, { static: true }) askSkip!: Container;
   @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
@@ -78,6 +96,17 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
   private paramsSubscription!: Subscription;
   ngOnInit() {
+  }
+
+  public get LinkedEntityID(): number | null {
+    if (this.LinkedEntity && this.LinkedEntity.length > 0) {
+      // lookup the entity id from the linkedentity provided to us as a property
+      const md = new Metadata();
+      const e = md.Entities.find(e => e.Name === this.LinkedEntity);
+      if (e) 
+        return e.ID;
+    }
+    return null;
   }
 
   ngOnDestroy() {
@@ -114,9 +143,13 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
     const md = new Metadata();
     const rv = new RunView();
+    let linkFilter: string = '';
+    if (this.LinkedEntity && this.LinkedEntityRecordID > 0) 
+      linkFilter = ` AND LinkedEntity='${this.LinkedEntity}' AND LinkedRecordID=${this.LinkedEntityRecordID}`
+
     const result = await rv.RunView({
       EntityName: 'Conversations',
-      ExtraFilter: 'UserID=' + md.CurrentUser.ID,
+      ExtraFilter: 'UserID=' + md.CurrentUser.ID + linkFilter,
       OrderBy: 'CreatedAt DESC' // get in reverse order
     })
     if (result && result.Success) {
@@ -124,23 +157,23 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     }
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
-      this.createNewConversation();
+      this.CreateNewConversation();
       this.sharedService.InvokeManualResize();
     }
     else if (conversationIdToLoad) {
       // we have > 0 convos and we were asked to load a specific one
       const convo = this.Conversations.find(c => c.ID == conversationIdToLoad);
       if (convo) {
-        this.selectConversation(convo);
+        this.SelectConversation(convo);
       }
       else {
         // we didn't find the conversation so just select the first one
-        this.selectConversation(this.Conversations[0])
+        this.SelectConversation(this.Conversations[0])
       }
     }
     else {
       // select the first conversation since no param was provided and we have > 0 convos
-      this.selectConversation(this.Conversations[0])
+      this.SelectConversation(this.Conversations[0])
     }
   }
 
@@ -181,7 +214,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
         this.Conversations = this.Conversations.filter(c => c.ID != conversation.ID);
         if (this.Conversations.length > 0) {
           const newIdx = idx > 0 ? idx - 1 : 0;
-          this.selectConversation(this.Conversations[newIdx]);
+          this.SelectConversation(this.Conversations[newIdx]);
         }
         else
           this.Messages = [];
@@ -193,15 +226,20 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   }
 
   
-  protected async createNewConversation() {
+  public async CreateNewConversation() {
     const md = new Metadata();
-    const convo = <ConversationEntity>await md.GetEntityObject('Conversations');
+    const convo = await md.GetEntityObject<ConversationEntity>('Conversations');
     convo.NewRecord();
     convo.Name = 'New Chat'; // default value
     convo.UserID = md.CurrentUser.ID;
+    const linkedEntityID = this.LinkedEntityID;
+    if (linkedEntityID && linkedEntityID > 0 && this.LinkedEntityRecordID > 0) {
+      convo.LinkedEntityID = linkedEntityID;
+      convo.LinkedRecordID = this.LinkedEntityRecordID
+    }
     await convo.Save();
     this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
-    this.selectConversation(convo);
+    this.SelectConversation(convo);
     this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
   }
   
@@ -209,7 +247,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     this.sendSkipQuestion();
   }
 
-  async selectConversation(conversation: ConversationEntity) {
+  public async SelectConversation(conversation: ConversationEntity) {
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
       // load up the conversation if not already the one that's loaded
       this.Messages = []; // clear out the messages
@@ -218,6 +256,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       this.SelectedConversation = conversation;
       const md = new Metadata();
       const rv = new RunView();
+
       const result = await rv.RunView({
         EntityName: 'Conversation Details',
         ExtraFilter: 'ConversationID=' + conversation.ID,
@@ -234,9 +273,11 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       // ensure the list box has the conversation in view
       this.scrollToConversation(conversation.ID);
 
-      // finally update the browser URL since we've changed the conversation ID
-      this.location.go('/askskip/' + conversation.ID);
-      //      this.router.navigate(['askskip', conversation.ID]);
+      if (this.UpdateAppRoute) {
+        // finally update the browser URL since we've changed the conversation ID
+        this.location.go('/askskip/' + conversation.ID);
+        //      this.router.navigate(['askskip', conversation.ID]);
+      }
     }
   }
 
@@ -275,26 +316,27 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
       this.askSkipInput.nativeElement.value = '';
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
-      const result = await this.ExecuteAskSkipQuery(val, this.SelectedConversation);
-      if (result && result.ExecuteAskSkipQuery && result.ExecuteAskSkipQuery.Success) {
+      const result = await this.ExecuteAskSkipQuery(val, this.ViewID, this.SelectedConversation);
+      const queryResult = <ExecuteAskSkipAnalysisQueryResult>result?.ExecuteAskSkipAnalysisQuery;
+      if (queryResult?.Success) {
         if (convoID !== this.SelectedConversation?.ID) {
           // this scenario arises when we have a selected convo change after we submitted our request to skip
           // so we do nothing here other than update the status. 
           this._processingStatus[convoID] = false;
         }
         else {
-          const resultObject = <SkipData>JSON.parse(result.ExecuteAskSkipQuery.Result) 
+          queryResult.ResultObject = <SkipData>JSON.parse(queryResult.Result)
 
           if (!this.SelectedConversation) {
             const convo = <ConversationEntity>await md.GetEntityObject('Conversations');
-            await convo.Load(result.ExecuteAskSkipQuery.ConversationId);
-            this._processingStatus[result.ExecuteAskSkipQuery.ConversationId] = true;
+            await convo.Load(queryResult.ConversationId);
+            this._processingStatus[queryResult.ConversationId] = true;
             this.Conversations.push(convo)
             this.SelectedConversation = convo;
           }
           else if (this.Messages.length === 1) {
             // we are on the first message so skip renamed the convo, use that 
-            this.SelectedConversation.Name = resultObject.ReportTitle; // this will update the UI
+            this.SelectedConversation.Name = queryResult.ResultObject.reportTitle; // this will update the UI
 
             // the below LOOKS redundant to just updating this.SelectedConversation.Name, but it is needed to ensure that the list box is updated
             // otherwise Angular binding doesn't pick up the change without the below.
@@ -304,9 +346,9 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
               this.Conversations[idx].Name = this.SelectedConversation.Name;
             }
           }
-          await convoDetail.Load(result.ExecuteAskSkipQuery.UserMessageConversationDetailId); // update the object to load from DB
+          await convoDetail.Load(queryResult.UserMessageConversationDetailId); // update the object to load from DB
           const aiDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
-          await aiDetail.Load(result.ExecuteAskSkipQuery.AIMessageConversationDetailId) // get record from the database
+          await aiDetail.Load(queryResult.AIMessageConversationDetailId) // get record from the database
           this.Messages.push(aiDetail);  
 
           // we don't create a user notification here in the client, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
@@ -344,18 +386,15 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
         const resultObject = <SkipData>JSON.parse(detail.Message);
         const newId = this.Messages.length;
     
-        if (resultObject && resultObject.SQLResults && resultObject.SQLResults.results.length > 0) {
+        if (resultObject?.success) {
           sMessage = "Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+          this.addReportToConversation(detail, resultObject, detail.ID);
         }
         else {
           sMessage = `<div class="alert alert-warning" role="alert">
                       <strong>No data returned.</strong>
                       </div>`;
         }
-    
-        if (resultObject && resultObject.SQLResults && resultObject.SQLResults.results.length > 0) {
-          this.addReportToConversation(detail, resultObject, detail.ID);
-        } 
       }
       else {
         sMessage = detail.Message;
@@ -409,10 +448,10 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     return this.sharedService.CurrentUserImage;
   }
 
-  async ExecuteAskSkipQuery(question: string, SelectedConversation: ConversationEntity | undefined) {
+  async ExecuteAskSkipQuery(question: string, viewId: number, SelectedConversation: ConversationEntity | undefined) {
     try {
-      const gql = `query ExecuteAskSkipQuery($userQuestion: String!, $conversationId: Int!) {
-        ExecuteAskSkipQuery(UserQuestion: $userQuestion, ConversationId: $conversationId) {
+      const gql = `query ExecuteAskSkipAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
+        ExecuteAskSkipAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
           Success
           Status
           Result
@@ -421,8 +460,12 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
           AIMessageConversationDetailId
         }
       }`
-  
-      const result = await GraphQLDataProvider.ExecuteGQL(gql, { userQuestion: question, conversationId: SelectedConversation ? SelectedConversation.ID : 0 });
+      const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
+          userQuestion: question, 
+          conversationId: SelectedConversation ? SelectedConversation.ID : 0,
+          viewId: viewId
+        });
+
       return result;
     }
     catch (err) {
@@ -436,6 +479,42 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       this.AllowSend = true;
     }
   }
+
+  // async ExecuteAskSkipViewAnalysisQuery(question: string, viewId: number, conversationId: number) {
+  //   try {
+  //     const gql = `query ExecuteAskSkipViewAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
+  //       ExecuteAskSkipViewAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
+  //         Success
+  //         Status
+  //         Result
+  //         ConversationId 
+  //         UserMessageConversationDetailId
+  //         AIMessageConversationDetailId
+  //       }
+  //     }`
+  
+  //     const result = await GraphQLDataProvider.ExecuteGQL(gql, { userQuestion: question, 
+  //                                                                 conversationId: conversationId,
+  //                                                                 viewId: viewId});
+  //     if (result && result.ExecuteAskSkipViewAnalysisQuery) {
+  //       // it worked, get the bits we care about
+  //       const resultRaw = result.ExecuteAskSkipViewAnalysisQuery.Result;
+  //       const resultObj = JSON.parse(resultRaw);
+  //       if (resultObj.success) {
+  //         const plotData = resultObj.executionResults.plotData
+
+  //         this.addPlotlyComponent(plotData.data, plotData.layout);  
+  //       }
+  //       else {
+  //         console.error(resultObj.error);
+  //         SharedService.Instance.CreateSimpleNotification("Error executing analysis request.", 'error', 5000)
+  //       }
+  //     }
+  //   }
+  //   catch (err) {
+  //     console.error(err);          
+  //   }
+  // }
   
   protected async DeleteConversation(ConversationID: number) {
     const md = new Metadata();

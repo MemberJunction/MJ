@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-user-view-grid",
-  "version": "0.9.126",
+  "version": "0.9.130",
   "description": "MemberJunction: Angular Grid to display dynamic and saved user views for any entity in MemberJunction.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -29,16 +29,15 @@
     "@progress/kendo-angular-buttons": "^15.0.1"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^0.9.118",
+    "@memberjunction/core-entities": "^0.9.119",
     "@memberjunction/global": "^0.9.131",
     "@memberjunction/core": "^0.9.140",
-    "@memberjunction/graphql-dataprovider": "^0.9.140",
+    "@memberjunction/graphql-dataprovider": "^0.9.141",
     "@memberjunction/ng-shared": "^0.9.8",
-    "@memberjunction/ng-compare-records": "^0.9.139",
+    "@memberjunction/ng-compare-records": "^0.9.140",
     "@memberjunction/ng-container-directives": "^0.9.108",
-    "angular-plotly.js": "^5.2.2",
-    "tslib": "^2.3.0",
-    "@types/plotly.js-dist-min": "^2.3.4"
+    "@memberjunction/ng-ask-skip": "^0.9.6",
+    "tslib": "^2.3.0"
   },
   "sideEffects": false
 }

@@ -1,6 +1,6 @@
 import { Component, Input, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { SkipColumnInfo, SkipData } from './ask-skip.component';
+import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
 import { SharedService, HtmlListType, EventCodes } from '@memberjunction/ng-shared';
 import { DynamicGridComponent } from './dynamic-grid';
 import { DynamicChartComponent } from './dynamic-chart';
@@ -14,7 +14,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
 // which is what Skip does in its conversational UI
 
 @Component({
-  selector: 'app-dynamic-report',
+  selector: 'mj-dynamic-report',
   styles: [
     `.report-tab-title { margin-left: 10px;}`,
     `.create-report-button { 
@@ -40,8 +40,8 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
             <span class="report-tab-title">Chart</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
-              <app-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData">
-              </app-dynamic-chart>
+              <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData">
+              </mj-dynamic-chart>
           </ng-template>
       </kendo-tabstrip-tab>  
       <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
@@ -50,8 +50,8 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
             <span class="report-tab-title">Table</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
-              <app-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
-              </app-dynamic-grid>
+              <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
+              </mj-dynamic-grid>
           </ng-template>
       </kendo-tabstrip-tab>  
       <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(2)">
@@ -69,7 +69,10 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
             <span class="report-tab-title">Explanation</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
-              <div mjFillContainer>{{SkipData?.ReportExplanation || 'No Explanation Provided'}}</div>
+            <label>Explanation:</label>
+              <div mjFillContainer>{{SkipData?.userExplanation || 'No Explanation Provided'}}</div>
+              <label>Technical Details:</label>
+              <div mjFillContainer>{{SkipData?.techExplanation || 'No Technical Details Provided'}}</div>
           </ng-template>
       </kendo-tabstrip-tab>  
       <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(4)">
@@ -78,7 +81,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
             <span class="report-tab-title">Details</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
-              <div><span><b>SQL:</b></span><span><textarea [disabled]="true" mjFillContainer [fillHeight]="false">{{SkipData?.SQLResults?.sql}}</textarea></span></div>
+              <div><span><b>Script: </b></span><span><textarea [disabled]="true" mjFillContainer [fillHeight]="false">{{SkipData?.scriptText}}</textarea></span></div>
               <div *ngIf="ConversationID!==null"><span>Skip Conversation ID:</span><span>{{ConversationID}}</span></div>
               <div *ngIf="ConversationDetailID!==null"><span>Skip Conversation Detail ID:</span><span>{{ConversationDetailID}}</span></div>
           </ng-template>
@@ -155,20 +158,24 @@ export class DynamicReportComponent {
   }
 
   public get Columns(): SkipColumnInfo[] {
-    return this.SkipData?.SQLResults.columns || [];
+    return this.SkipData?.executionResults?.tableDataColumns || [];
   }
 
   public get IsChart(): boolean {
     if (!this.SkipData) return false;
-    return this.SkipData.DisplayType.trim().toLowerCase() !== 'table';
+    return this.SkipData.executionResults?.resultType?.trim().toLowerCase() === 'plot';
   }
   public get IsTable(): boolean {
     if (!this.SkipData) return false;
-    return this.SkipData.DisplayType.trim().toLowerCase() === 'table';
+    return this.SkipData.executionResults?.resultType?.trim().toLowerCase() === 'table';
+  }
+  public get IsHTML(): boolean {
+    if (!this.SkipData) return false;
+    return this.SkipData.executionResults?.resultType?.trim().toLowerCase() === 'html';
   }
 
   public createAnalysisHtml(): string {
-    const analysis = this.SkipData?.Analysis;
+    const analysis = this.SkipData?.executionResults?.analysis;
     if (analysis && analysis.length > 0) {
       return this.sharedService.ConvertMarkdownStringToHtmlList(HtmlListType.Unordered, analysis);
     }
@@ -183,13 +190,13 @@ export class DynamicReportComponent {
     else {
       if (confirm('Do you want to save this report?')) {
         const md = new Metadata();
-        const report = <ReportEntity>await md.GetEntityObject('Reports');
+        const report = await md.GetEntityObject<ReportEntity>('Reports');
         report.NewRecord();
-        report.Name = this.SkipData.ReportTitle;
-        report.Description = this.SkipData.ReportExplanation ? this.SkipData.ReportExplanation : '';
+        report.Name = this.SkipData.reportTitle;
+        report.Description = this.SkipData.userExplanation ? this.SkipData.userExplanation : '';
         report.ConversationID = this.ConversationID;
         report.ConversationDetailID = this.ConversationDetailID;
-        report.ReportSQL = this.SkipData.SQLResults.sql;
+        //TO-DO FIX UP REPORT SCHEMA TO PROPERLY MAP TO SKIP DATA FORMAT AS IT IS NOW ----- report.ReportSQL = this.SkipData.SQLResults.sql;
         report.ReportConfiguration = JSON.stringify(this.SkipData) 
         report.SharingScope = 'None'
         report.UserID = md.CurrentUser.ID

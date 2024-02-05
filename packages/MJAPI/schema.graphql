@@ -269,6 +269,9 @@ type Conversation_ {
   Description: String
   ExternalID: String
   ID: Int!
+  LinkedEntity: String
+  LinkedEntityID: Int
+  LinkedRecordID: Int
   Name: String
   ReportsArray: [Report_!]!
   Type: String!
@@ -323,6 +326,8 @@ input CreateConversationDetailInput {
 input CreateConversationInput {
   Description: String
   ExternalID: String
+  LinkedEntityID: Int
+  LinkedRecordID: Int
   Name: String
   Type: String!
   UserID: Int!
@@ -980,6 +985,7 @@ type Entity_ {
   CodeName: String
   CompanyIntegrationRecordMapsArray: [CompanyIntegrationRecordMap_!]!
   CompanyIntegrationRunDetailsArray: [CompanyIntegrationRunDetail_!]!
+  ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
   CustomResolverAPI: Boolean!
   DatasetItemsArray: [DatasetItem_!]!
@@ -1337,8 +1343,7 @@ type Query {
   EntityPermission(ID: Int!): EntityPermission_
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
-  ExecuteAskSkipQuery(ConversationId: Int!, UserQuestion: String!): AskSkipResultType!
-  ExecuteAskSkipViewAnalysisQuery(ConversationId: Int!, UserQuestion: String!, ViewId: Int!): AskSkipResultType!
+  ExecuteAskSkipAnalysisQuery(ConversationId: Int!, UserQuestion: String!, ViewId: Int!): AskSkipResultType!
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
@@ -3012,6 +3017,8 @@ input UpdateConversationInput {
   Description: String
   ExternalID: String
   ID: Int!
+  LinkedEntityID: Int
+  LinkedRecordID: Int
   Name: String
   Type: String!
   UserID: Int!

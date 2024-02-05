@@ -15,18 +15,24 @@ import { ListViewModule } from '@progress/kendo-angular-listview';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { GridModule } from '@progress/kendo-angular-grid';
-import { ChartModule } from '@progress/kendo-angular-charts';
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
 // Local Components 
 import { AskSkipComponent } from './lib/ask-skip/ask-skip.component' 
-import { SkipDynamicReportComponent } from './lib/ask-skip/skip-dynamic-report-wrapper'; 
+import { SkipDynamicReportComponent } from './lib/misc/skip-dynamic-report-wrapper'; 
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared'; 
-import { DynamicReportComponent } from './lib/ask-skip/dynamic-report';
-import { DynamicChartComponent } from './lib/ask-skip/dynamic-chart';
-import { DynamicGridComponent } from './lib/ask-skip/dynamic-grid';
+import { DynamicReportComponent } from './lib/misc/dynamic-report';
+import { DynamicChartComponent } from './lib/misc/dynamic-chart';
+import { DynamicGridComponent } from './lib/misc/dynamic-grid';
+
+import { PlotlyViaCDNModule } from 'angular-plotly.js';
+
+
+PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
+PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
+
 
 @NgModule({
   declarations: [ 
@@ -60,14 +66,14 @@ import { DynamicGridComponent } from './lib/ask-skip/dynamic-grid';
     DropDownsModule,
     MemberJunctionSharedModule,
     GridModule,
-    ChartModule
+    PlotlyViaCDNModule
   ],
   exports: [
     SkipDynamicReportComponent,
     AskSkipComponent,
     DynamicChartComponent,
     DynamicGridComponent,
-    DynamicReportComponent
+    DynamicReportComponent 
   ]
 })
 export class AskSkipModule { }

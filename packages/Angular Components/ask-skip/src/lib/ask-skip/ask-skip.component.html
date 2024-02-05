@@ -1,6 +1,6 @@
-<div class = "chat-container">
-    <div class="conversation-history">
-        <button kendoButton (click)="createNewConversation()" >+ New Chat</button>
+<div class = "chat-container" mjFillContainer>
+    <div class="conversation-history" *ngIf="ShowConversationList">
+        <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()" >+ New Chat</button>
         <kendo-listview
             class="conversation-list"
             [data]="Conversations"
@@ -14,7 +14,7 @@
                 <div class="conversation-item" 
                      [ngClass]="SelectedConversation?.ID === dataItem.ID ? 'conversation-item-selected' : ''"
                      [title]="dataItem.Name" 
-                     (click)="selectConversation(dataItem)"> 
+                     (click)="SelectConversation(dataItem)"> 
                     <kendo-svgicon *ngIf="!IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('comment')" name="comment" svgIcon="conversation-icon"></kendo-svgicon>
                     <kendo-svgicon *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('clock')" name="clock" class="conversation-icon"></kendo-svgicon>
                     <div class="text-container">
@@ -31,9 +31,18 @@
             </ng-template>
         </kendo-listview>
     </div>
-    <div class="input-wrapper">
-        <div class="skip-title">Ask Skip!</div>
-        <div #AskSkipPanel mjContainer class="messages" mjFillContainer [bottomMargin]="60" [fillWidth]="false">
+    <div class="conversation-wrapper" mjFillContainer>
+        <div class="skip-title">{{Title}}</div>
+        <div class="input-area">
+            <textarea
+                    #AskSkipInput 
+                    [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
+                    (keyup.enter)="onEnter($event)" 
+                    type="text" 
+                    placeholder="Type your message..."></textarea>
+            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipQuestion()" [primary]="true">Send</button>
+        </div>
+        <div #AskSkipPanel class="messages" mjContainer mjFillContainer [bottomMargin]="1" [fillWidth]="false" [fillHeight]="true">
             <div *ngFor="let message of Messages">  
                 <div class="message-row" [ngClass]="message.Role.trim().toLowerCase() === 'ai' ? 'ai-message' : message.Role.trim().toLowerCase() === 'error' ? 'error-message' : 'user-message'" >
                     <div class="message-image">
@@ -47,15 +56,6 @@
             <div *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
                 <kendo-loader></kendo-loader>
             </div>
-        </div>
-        <div class="input-area">
-            <textarea
-                    #AskSkipInput 
-                    [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
-                    (keyup.enter)="onEnter($event)" 
-                    type="text" 
-                    placeholder="Type your message..."></textarea>
-            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipQuestion()" [primary]="true">Send</button>
         </div>
     </div>
 </div>     

@@ -51,8 +51,8 @@ export class SingleReportComponent implements OnInit {
       const result = await runReport.RunReport({ReportID: this.reportId});
       if (result && result.Success && result.Results.length > 0) {
         this.reportData = result.Results;
-      if (this.ReportConfiguration && this.ReportConfiguration.SQLResults)
-          this.ReportConfiguration.SQLResults.results = this.reportData // put the report data into the right spot so the dynamic report knows where to get it
+      if (this.ReportConfiguration?.executionResults)
+          this.ReportConfiguration.executionResults.tableData = this.reportData // put the report data into the right spot so the dynamic report knows where to get it
       }
       else {
         // report has an invalid configuration

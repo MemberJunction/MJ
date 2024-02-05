@@ -1,27 +1,25 @@
 import { Component, Input, ViewChild } from '@angular/core';
 import { DynamicReportComponent } from './dynamic-report';
-import { SkipData } from './ask-skip.component';
+import { SkipData } from '../ask-skip/ask-skip.component';
 
 @Component({
-  selector: 'app-skip-dynamic-report',
+  selector: 'mj-skip-dynamic-report',
   styles: [
     `.report-tab-title { margin-left: 10px;}`,
     `.skip-dynamic-report-container {
         display: block;
-        height: 450px;
-        width: 90%;
         margin-right: 20px;
     }`
     ],
   template: `
 <div class='skip-dynamic-report-container'> 
-    <app-dynamic-report #theReport
+    <mj-dynamic-report #theReport
         [SkipData]="SkipData"
         [ConversationID]="ConversationID"
         [ConversationName]="ConversationName"
         [ConversationDetailID]="ConversationDetailID"
         [ShowCreateReportButton]="true"
-    ></app-dynamic-report>
+    ></mj-dynamic-report>
 </div>
 ` 
 })

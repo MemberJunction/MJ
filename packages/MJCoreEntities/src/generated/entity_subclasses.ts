@@ -9998,6 +9998,29 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Type', value);
         }
         /**
+        * * Field Name: LinkedEntityID
+        * * Display Name: Linked Entity ID
+        * * SQL Data Type: int
+        * * Related Entity: Entities
+        */
+        get LinkedEntityID(): number {  
+            return this.Get('LinkedEntityID');
+        }
+        set LinkedEntityID(value: number) {
+            this.Set('LinkedEntityID', value);
+        }
+        /**
+        * * Field Name: LinkedRecordID
+        * * Display Name: Linked Record ID
+        * * SQL Data Type: int
+        */
+        get LinkedRecordID(): number {  
+            return this.Get('LinkedRecordID');
+        }
+        set LinkedRecordID(value: number) {
+            this.Set('LinkedRecordID', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
@@ -10024,6 +10047,16 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+    
+        /**
+        * * Field Name: LinkedEntity
+        * * Display Name: Linked Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get LinkedEntity(): string {  
+            return this.Get('LinkedEntity');
         }
     
 
