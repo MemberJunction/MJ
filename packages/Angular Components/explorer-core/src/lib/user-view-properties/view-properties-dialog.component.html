@@ -126,7 +126,7 @@
                   [(ngModel)]="s.direction"
                 >
                 </kendo-dropdownlist>
-                <button kendoButton (click)="removeSort(s)" icon="delete"></button>
+                <button kendoButton (click)="removeSort(s)"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('sortClear')"></kendo-svgicon></button>
               </div> 
             </ng-template>
           </kendo-tabstrip-tab>
