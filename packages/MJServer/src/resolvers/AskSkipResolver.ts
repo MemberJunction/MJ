@@ -6,7 +6,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import axios from 'axios';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
-import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 @ObjectType()
 export class AskSkipResultType {
@@ -48,6 +48,101 @@ class SkipAPIResponse {
   analysis: string | null;
   scriptText: string | null;
 }
+
+
+export class SkipDataContextFieldInfo {
+  Name!: string;
+  Type!: string;
+  Description?: string;
+}
+export class SkipDataContextItem {
+  Type!: 'view' | 'query' | 'full_entity';
+  /**
+   * The ID of the view, query, or entity in the system
+   */
+  RecordID!: number;
+  /**
+   * The name of the view, query, or entity in the system
+   */
+  RecordName!: string;
+
+  /**
+   * The name of the entity in the system, only used if type = 'full_entity' or type = 'view' --- for type of 'query' this is not used as query can come from any number of entities in combination
+   */
+  EntityName?: string;
+  /*
+  * The fields in the view, query, or entity
+  */
+  Fields: SkipDataContextFieldInfo[] = [];    
+
+  get Description(): string {
+      switch (this.Type) {
+          case 'view':
+              return `View: ${this.RecordName}, From Entity: ${this.EntityName}`;
+          case 'query':
+              return `Query: ${this.RecordName}`;
+          case 'full_entity':
+              return `Full Entity - All Records: ${this.EntityName}`;
+          default:
+              return `Unknown Type: ${this.Type}`;
+      }
+  }
+
+  /**
+   * Populate the SkipDataContextItem from a UserViewEntity class instance
+   * @param viewEntity 
+   */
+  public static fromViewEntity(viewEntity: UserViewEntityExtended) {
+      const instance = new SkipDataContextItem();
+      // update our data from the viewEntity definition
+      instance.Type= 'view';
+      instance.EntityName = viewEntity.ViewEntityInfo.Name;
+      instance.RecordID = viewEntity.ID;
+      instance.RecordName = viewEntity.Name;
+      instance.Fields = viewEntity.ViewEntityInfo.Fields.map(f => {
+          return {
+              Name: f.Name,
+              Type: f.Type,
+              Description: f.Description
+          }
+      });
+      return instance;
+  }
+
+  Data?: any[];
+
+  public ValidateDataExists(): boolean {
+      return this.Data ? this.Data.length > 0 : false;
+  }
+}
+export class SkipDataContext {
+  Items: SkipDataContextItem[] = [];
+
+  public ValidateDataExists(): boolean {
+      if (this.Items)
+          return !this.Items.some(i => !i.ValidateDataExists()); // if any data item is invalid, return false
+      else    
+          return false;
+  }
+
+  public ConvertToSimpleObject(): any {
+      // Return a simple object that will have a property for each item in our Items array. We will name each item sequentially as data_item_1, data_item_2, etc.
+      const ret: any = {};
+      for (let i = 0; i < this.Items.length; i++) {
+          ret[`data_item_${i}`] = this.Items[i].Data;
+      }
+      return ret;
+  }
+
+  public CreateSimpleObjectTypeDefinition(): string {
+      let sOutput: string = "";
+      for (let i = 0; i < this.Items.length; i++) {
+          sOutput += `data_item_${i}: []; // array of data items\n`;
+      }
+      return `{${sOutput}}`;
+  }
+}   
+
 
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
@@ -91,11 +186,24 @@ export class AskSkipResolver {
 
     //const OrganizationId = 2 //HG 8/1/2023 TODO: Pull this from an environment variable
     const OrganizationId = process.env.BOT_SCHEMA_ORGANIZATION_ID;
+    const dataContext: SkipDataContext = new SkipDataContext();
+    dataContext.Items.push(
+      {
+        Type: 'view',
+        RecordID: ViewId,
+      } as SkipDataContextItem
+    );    
+    dataContext.Items.push(
+      {
+        Type: 'view',
+        RecordID: 123,
+      } as SkipDataContextItem
+    );
 
     const input = { 
                     userInput: UserQuestion, 
                     conversationID: ConversationId, 
-                    viewID: ViewId, 
+                    dataContext: dataContext, 
                     organizationID: OrganizationId };
     const url = 'http://localhost:8000' 
     //      const url = process.env.BOT_EXTERNAL_API_URL;
