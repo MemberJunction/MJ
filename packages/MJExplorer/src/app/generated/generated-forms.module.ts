@@ -17,9 +17,101 @@ import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 // Import Generated Components
+import { IndustryFormComponent, LoadIndustryFormComponent } from "./Entities/Industry/industry.form.component";
+import { ContactRoleFormComponent, LoadContactRoleFormComponent } from "./Entities/ContactRole/contactrole.form.component";
+import { ContactLevelFormComponent, LoadContactLevelFormComponent } from "./Entities/ContactLevel/contactlevel.form.component";
+import { AccountFormComponent, LoadAccountFormComponent } from "./Entities/Account/account.form.component";
+import { ContactFormComponent, LoadContactFormComponent } from "./Entities/Contact/contact.form.component";
+import { DealStageFormComponent, LoadDealStageFormComponent } from "./Entities/DealStage/dealstage.form.component";
+import { ActivityFormComponent, LoadActivityFormComponent } from "./Entities/Activity/activity.form.component";
+import { DealForecastCategoryFormComponent, LoadDealForecastCategoryFormComponent } from "./Entities/DealForecastCategory/dealforecastcategory.form.component";
+import { DealFormComponent, LoadDealFormComponent } from "./Entities/Deal/deal.form.component";
+import { DealTypeFormComponent, LoadDealTypeFormComponent } from "./Entities/DealType/dealtype.form.component";
+import { InvoiceFormComponent, LoadInvoiceFormComponent } from "./Entities/Invoice/invoice.form.component";
+import { ActivityAttachmentFormComponent, LoadActivityAttachmentFormComponent } from "./Entities/ActivityAttachment/activityattachment.form.component";
+import { PaymentTermsTypeFormComponent, LoadPaymentTermsTypeFormComponent } from "./Entities/PaymentTermsType/paymenttermstype.form.component";
+import { InvoiceStatusTypeFormComponent, LoadInvoiceStatusTypeFormComponent } from "./Entities/InvoiceStatusType/invoicestatustype.form.component";
+import { IndustryDetailsComponent, LoadIndustryDetailsComponent } from "./Entities/Industry/sections/details.component"
+import { ContactRoleDetailsComponent, LoadContactRoleDetailsComponent } from "./Entities/ContactRole/sections/details.component"
+import { ContactLevelDetailsComponent, LoadContactLevelDetailsComponent } from "./Entities/ContactLevel/sections/details.component"
+import { AccountDetailsComponent, LoadAccountDetailsComponent } from "./Entities/Account/sections/details.component"
+import { ContactDetailsComponent, LoadContactDetailsComponent } from "./Entities/Contact/sections/details.component"
+import { DealStageDetailsComponent, LoadDealStageDetailsComponent } from "./Entities/DealStage/sections/details.component"
+import { ActivityDetailsComponent, LoadActivityDetailsComponent } from "./Entities/Activity/sections/details.component"
+import { DealForecastCategoryDetailsComponent, LoadDealForecastCategoryDetailsComponent } from "./Entities/DealForecastCategory/sections/details.component"
+import { DealDetailsComponent, LoadDealDetailsComponent } from "./Entities/Deal/sections/details.component"
+import { DealTypeDetailsComponent, LoadDealTypeDetailsComponent } from "./Entities/DealType/sections/details.component"
+import { InvoiceDetailsComponent, LoadInvoiceDetailsComponent } from "./Entities/Invoice/sections/details.component"
+import { ActivityAttachmentDetailsComponent, LoadActivityAttachmentDetailsComponent } from "./Entities/ActivityAttachment/sections/details.component"
+import { PaymentTermsTypeDetailsComponent, LoadPaymentTermsTypeDetailsComponent } from "./Entities/PaymentTermsType/sections/details.component"
+import { InvoiceStatusTypeDetailsComponent, LoadInvoiceStatusTypeDetailsComponent } from "./Entities/InvoiceStatusType/sections/details.component"
+
+
+@NgModule({
+declarations: [
+    IndustryFormComponent,
+    ContactRoleFormComponent,
+    ContactLevelFormComponent,
+    AccountFormComponent,
+    ContactFormComponent,
+    DealStageFormComponent,
+    ActivityFormComponent,
+    DealForecastCategoryFormComponent,
+    DealFormComponent,
+    DealTypeFormComponent,
+    InvoiceFormComponent,
+    ActivityAttachmentFormComponent,
+    PaymentTermsTypeFormComponent,
+    InvoiceStatusTypeFormComponent,
+    IndustryDetailsComponent,
+    ContactRoleDetailsComponent,
+    ContactLevelDetailsComponent,
+    AccountDetailsComponent,
+    ContactDetailsComponent,
+    DealStageDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    ExplorerCoreModule,
+    UserViewGridModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_0 { }
 
 
 
+@NgModule({
+declarations: [
+    ActivityDetailsComponent,
+    DealForecastCategoryDetailsComponent,
+    DealDetailsComponent,
+    DealTypeDetailsComponent,
+    InvoiceDetailsComponent,
+    ActivityAttachmentDetailsComponent,
+    PaymentTermsTypeDetailsComponent,
+    InvoiceStatusTypeDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    ExplorerCoreModule,
+    UserViewGridModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_1 { }
 
 
 
@@ -27,7 +119,8 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 declarations: [
 ],
 imports: [
-    
+    GeneratedForms_SubModule_0,
+    GeneratedForms_SubModule_1
 ]
 })
 export class GeneratedFormsModule { }
@@ -38,6 +131,32 @@ export function LoadGeneratedForms() {
     // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
-    
-    
+    LoadIndustryFormComponent();
+    LoadContactRoleFormComponent();
+    LoadContactLevelFormComponent();
+    LoadAccountFormComponent();
+    LoadContactFormComponent();
+    LoadDealStageFormComponent();
+    LoadActivityFormComponent();
+    LoadDealForecastCategoryFormComponent();
+    LoadDealFormComponent();
+    LoadDealTypeFormComponent();
+    LoadInvoiceFormComponent();
+    LoadActivityAttachmentFormComponent();
+    LoadPaymentTermsTypeFormComponent();
+    LoadInvoiceStatusTypeFormComponent();
+    LoadIndustryDetailsComponent();
+    LoadContactRoleDetailsComponent();
+    LoadContactLevelDetailsComponent();
+    LoadAccountDetailsComponent();
+    LoadContactDetailsComponent();
+    LoadDealStageDetailsComponent();
+    LoadActivityDetailsComponent();
+    LoadDealForecastCategoryDetailsComponent();
+    LoadDealDetailsComponent();
+    LoadDealTypeDetailsComponent();
+    LoadInvoiceDetailsComponent();
+    LoadActivityAttachmentDetailsComponent();
+    LoadPaymentTermsTypeDetailsComponent();
+    LoadInvoiceStatusTypeDetailsComponent();
 }

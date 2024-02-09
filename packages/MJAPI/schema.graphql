@@ -51,6 +51,80 @@ type AIModel_ {
   Vendor: String
 }
 
+type Account_ {
+  Acronym: String
+  ActivitiesArray: [Activity_!]!
+  ActivityCount: Int!
+  AddressLine1: String
+  AddressLine2: String
+  AddressLine3: String
+  BCMID: String!
+  City: String
+  ContactsArray: [Contact_!]!
+  Country: String
+  CreatedAt: Timestamp!
+  DealsArray: [Deal_!]!
+  Description: String
+  DisplayName: String
+  Domain: String
+  EarliestActivityDate: Timestamp
+  EmailPattern: String
+  Facebook: String
+  ID: Int!
+  ISOCountryCode: String
+  IndustryID: Int
+  InvoicesArray: [Invoice_!]!
+  LastEnrichedAt: Timestamp
+  LastReviewedDate: Timestamp
+  LatestActivityDate: Timestamp
+  LeadershipPageURL: String
+  LinkedIn: String
+  Logo: String
+  LogoURL: String
+  Name: String!
+  OperatingName: String
+  PhoneNumber: String
+  PostalCode: String
+  RecordSource: String
+  StateProvince: String
+  TaxID: String
+  UpdatedAt: Timestamp!
+  Website: String
+}
+
+type ActivityAttachment_ {
+  ActivitiesArray: [Activity_!]!
+  Attachments: String
+  CreatedAt: Timestamp!
+  ID: Int!
+  UpdatedAt: Timestamp!
+}
+
+type Activity_ {
+  Account: String
+  AccountID: Int
+  ActivityDate: Timestamp
+  Attachment: String
+  AttachmentID: Int
+  BCMID: String!
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  CreatedAt: Timestamp!
+  DealID: Int
+  Description: String
+  EmployeeID: Int
+  ExternalSystemRecordID: String
+  ID: Int!
+  IsActive: Boolean
+  IsBounced: Boolean
+  IsOpened: Boolean
+  IsReplied: Boolean
+  Summary: String
+  Title: String
+  Type: String
+  UpdatedAt: Timestamp!
+}
+
 type ApplicationEntity_ {
   Application: String!
   ApplicationName: String
@@ -249,6 +323,66 @@ type Company_ {
   WorkflowsArray: [Workflow_!]!
 }
 
+type ContactLevel_ {
+  ContactsArray: [Contact_!]!
+  CreatedAt: Timestamp!
+  Description: String
+  ExcludeKeywords: String
+  ID: Int!
+  Keywords: String
+  Name: String!
+  Rank: Int!
+  UpdatedAt: Timestamp!
+}
+
+type ContactRole_ {
+  ContactsArray: [Contact_!]!
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Keywords: String
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+type Contact_ {
+  Account: String
+  AccountID: Int
+  ActivitiesArray: [Activity_!]!
+  ActivityCount: Int!
+  BCMID: String!
+  CreatedAt: Timestamp!
+  DealsArray: [Deal_!]!
+  EarliestActivityDate: Timestamp
+  Email1: String
+  Email2: String
+  EmailSource: String
+  EmailStatus: String
+  Facebook: String
+  FirstName: String!
+  ID: Int!
+  Instagram: String
+  InvoicesArray: [Invoice_!]!
+  LastEnrichedAt: Timestamp
+  LastName: String!
+  LastReviewedDate: Timestamp
+  LatestActivityDate: Timestamp
+  LevelID: Int
+  LinkedIn: String
+  NickName: String
+  PhoneNumber: String
+  Prefix: String
+  ProfilePictureURL: String
+  RecordSource: String
+  RoleID: Int
+  Status: String
+  Suffix: String
+  Tags: String
+  Title: String
+  Twitter: String
+  UpdatedAt: Timestamp!
+}
+
 type ConversationDetail_ {
   Conversation: String
   ConversationID: Int!
@@ -278,6 +412,63 @@ type Conversation_ {
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
+}
+
+input CreateAccountInput {
+  Acronym: String
+  ActivityCount: Int!
+  AddressLine1: String
+  AddressLine2: String
+  AddressLine3: String
+  City: String
+  Country: String
+  Description: String
+  DisplayName: String
+  Domain: String
+  EarliestActivityDate: Timestamp
+  EmailPattern: String
+  Facebook: String
+  ISOCountryCode: String
+  IndustryID: Int
+  LastEnrichedAt: Timestamp
+  LastReviewedDate: Timestamp
+  LatestActivityDate: Timestamp
+  LeadershipPageURL: String
+  LinkedIn: String
+  Logo: String
+  LogoURL: String
+  Name: String!
+  OperatingName: String
+  PhoneNumber: String
+  PostalCode: String
+  RecordSource: String
+  StateProvince: String
+  TaxID: String
+  Website: String
+}
+
+input CreateActivityAttachmentInput {
+  Attachments: String
+}
+
+input CreateActivityInput {
+  AccountID: Int
+  ActivityDate: Timestamp
+  Attachment: String
+  AttachmentID: Int
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  DealID: Int
+  Description: String
+  EmployeeID: Int
+  ExternalSystemRecordID: String
+  IsActive: Boolean
+  IsBounced: Boolean
+  IsOpened: Boolean
+  IsReplied: Boolean
+  Summary: String
+  Title: String
+  Type: String
 }
 
 input CreateApplicationEntityInput {
@@ -314,6 +505,50 @@ input CreateCompanyIntegrationRecordMapInput {
   ExternalSystemRecordID: String!
 }
 
+input CreateContactInput {
+  AccountID: Int
+  ActivityCount: Int!
+  EarliestActivityDate: Timestamp
+  Email1: String
+  Email2: String
+  EmailSource: String
+  EmailStatus: String
+  Facebook: String
+  FirstName: String!
+  Instagram: String
+  LastEnrichedAt: Timestamp
+  LastName: String!
+  LastReviewedDate: Timestamp
+  LatestActivityDate: Timestamp
+  LevelID: Int
+  LinkedIn: String
+  NickName: String
+  PhoneNumber: String
+  Prefix: String
+  ProfilePictureURL: String
+  RecordSource: String
+  RoleID: Int
+  Status: String
+  Suffix: String
+  Tags: String
+  Title: String
+  Twitter: String
+}
+
+input CreateContactLevelInput {
+  Description: String
+  ExcludeKeywords: String
+  Keywords: String
+  Name: String!
+  Rank: Int!
+}
+
+input CreateContactRoleInput {
+  Description: String
+  Keywords: String
+  Name: String!
+}
+
 input CreateConversationDetailInput {
   ConversationID: Int!
   Error: String
@@ -338,6 +573,50 @@ input CreateDashboardInput {
   Name: String!
   UIConfigDetails: String!
   UserID: Int
+}
+
+input CreateDealForecastCategoryInput {
+  Description: String!
+  DisplayName: String
+  Name: String
+}
+
+input CreateDealInput {
+  AccountID: Int
+  CloseDate: Timestamp
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  ContractTermMonths: Int!
+  DealForecastCategoryID: Int
+  DealStageID: Int
+  DealTypeID: Int
+  Description: String
+  EmployeeID: Int
+  ExternalSystemCreatedAt: Timestamp
+  ExternalSystemRecordID: String!
+  ExternalSystemUpdatedAt: Timestamp
+  ForecastNotes: String
+  IncludeInForecast: Boolean
+  IsDeleted: Boolean!
+  LeadSource: String
+  LeadSourceDetail: String
+  MRR: Float!
+  OneTimeFees: Float!
+  Pipeline: String
+  Probability: Float
+  Title: String
+  Value: Float
+}
+
+input CreateDealStageInput {
+  Description: String!
+  Name: String!
+}
+
+input CreateDealTypeInput {
+  Description: String!
+  DisplayName: String
+  Name: String
 }
 
 input CreateEmployeeInput {
@@ -444,6 +723,33 @@ input CreateEntityRelationshipInput {
   Type: String!
 }
 
+input CreateIndustryInput {
+  Description: String!
+  Keywords: String
+  Name: String!
+}
+
+input CreateInvoiceInput {
+  AccountID: Int!
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  DueDate: Timestamp
+  ExternalSystemRecordID: String!
+  InvoiceDate: Timestamp!
+  InvoiceNumber: String!
+  PaymentTermsID: Int
+  PostingDate: Timestamp
+  StatusID: Int!
+  SubTotal: Float!
+  Tax: Float!
+  Total: Float!
+}
+
+input CreateInvoiceStatusTypeInput {
+  Description: String!
+  Name: String!
+}
+
 input CreateListDetailInput {
   ID: Int!
   ListID: Int!
@@ -459,6 +765,16 @@ input CreateListInput {
   ID: Int!
   Name: String!
   UserID: Int!
+}
+
+input CreatePaymentTermsTypeInput {
+  Code: String
+  CompanyIntegrationID: Int
+  Description: String
+  DisplayName: String
+  DueDateCalculation: String
+  ExternalSystemRecordID: String
+  Name: String!
 }
 
 input CreateQueryCategoryInput {
@@ -742,6 +1058,71 @@ type Dataset_ {
   ID: Int!
   Name: String!
   UpdatedAt: Timestamp!
+}
+
+type DealForecastCategory_ {
+  CreatedAt: Timestamp!
+  DealsArray: [Deal_!]!
+  Description: String!
+  DisplayName: String
+  ID: Int!
+  Name: String
+  UpdatedAt: Timestamp!
+}
+
+type DealStage_ {
+  CreatedAt: Timestamp!
+  DealsArray: [Deal_!]!
+  Description: String!
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+type DealType_ {
+  CreatedAt: Timestamp!
+  DealsArray: [Deal_!]!
+  Description: String!
+  DisplayName: String
+  ID: Int!
+  Name: String
+  UpdatedAt: Timestamp!
+}
+
+type Deal_ {
+  Account: String
+  AccountID: Int
+  ActivitiesArray: [Activity_!]!
+  BCMID: String!
+  CloseDate: Timestamp
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  ContractTermMonths: Int!
+  CreatedAt: Timestamp!
+  DealForecastCategory: String
+  DealForecastCategoryID: Int
+  DealStage: String
+  DealStageID: Int
+  DealType: String
+  DealTypeID: Int
+  Description: String
+  EmployeeID: Int
+  ExternalSystemCreatedAt: Timestamp
+  ExternalSystemRecordID: String!
+  ExternalSystemUpdatedAt: Timestamp
+  ForecastNotes: String
+  ID: Int!
+  IncludeInForecast: Boolean
+  IsDeleted: Boolean!
+  LeadSource: String
+  LeadSourceDetail: String
+  MRR: Float!
+  OneTimeFees: Float!
+  Pipeline: String
+  Probability: Float
+  Title: String
+  UpdatedAt: Timestamp!
+  Value: Float
 }
 
 type EmployeeCompanyIntegration_ {
@@ -1074,6 +1455,16 @@ type FieldMappingOutput {
   Value: String!
 }
 
+type Industry_ {
+  AccountsArray: [Account_!]!
+  CreatedAt: Timestamp!
+  Description: String!
+  ID: Int!
+  Keywords: String
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
 type IntegrationURLFormat_ {
   EntityID: Int!
   FullURLFormat: String
@@ -1103,6 +1494,38 @@ type Integration_ {
   UpdatedAt: Timestamp!
 }
 
+type InvoiceStatusType_ {
+  CreatedAt: Timestamp!
+  Description: String!
+  ID: Int!
+  InvoicesArray: [Invoice_!]!
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+type Invoice_ {
+  Account: String!
+  AccountID: Int!
+  BCMID: String!
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  CreatedAt: Timestamp!
+  DueDate: Timestamp
+  ExternalSystemRecordID: String!
+  ID: Int!
+  InvoiceDate: Timestamp!
+  InvoiceNumber: String!
+  PaymentTerms: String
+  PaymentTermsID: Int
+  PostingDate: Timestamp
+  Status: String!
+  StatusID: Int!
+  SubTotal: Float!
+  Tax: Float!
+  Total: Float!
+  UpdatedAt: Timestamp!
+}
+
 type ListDetail_ {
   ID: Int!
   ListID: Int!
@@ -1126,20 +1549,34 @@ type List_ {
 }
 
 type Mutation {
+  CreateAccount(input: CreateAccountInput!): Account_!
+  CreateActivity(input: CreateActivityInput!): Activity_!
+  CreateActivityAttachment(input: CreateActivityAttachmentInput!): ActivityAttachment_!
   CreateApplicationEntity(input: CreateApplicationEntityInput!): ApplicationEntity_!
   CreateAuditLog(input: CreateAuditLogInput!): AuditLog_!
   CreateCompany(input: CreateCompanyInput!): Company_!
   CreateCompanyIntegrationRecordMap(input: CreateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
+  CreateContact(input: CreateContactInput!): Contact_!
+  CreateContactLevel(input: CreateContactLevelInput!): ContactLevel_!
+  CreateContactRole(input: CreateContactRoleInput!): ContactRole_!
   CreateConversation(input: CreateConversationInput!): Conversation_!
   CreateConversationDetail(input: CreateConversationDetailInput!): ConversationDetail_!
   CreateDashboard(input: CreateDashboardInput!): Dashboard_!
+  CreateDeal(input: CreateDealInput!): Deal_!
+  CreateDealForecastCategory(input: CreateDealForecastCategoryInput!): DealForecastCategory_!
+  CreateDealStage(input: CreateDealStageInput!): DealStage_!
+  CreateDealType(input: CreateDealTypeInput!): DealType_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
   CreateEntityField(input: CreateEntityFieldInput!): EntityField_!
   CreateEntityPermission(input: CreateEntityPermissionInput!): EntityPermission_!
   CreateEntityRelationship(input: CreateEntityRelationshipInput!): EntityRelationship_!
+  CreateIndustry(input: CreateIndustryInput!): Industry_!
+  CreateInvoice(input: CreateInvoiceInput!): Invoice_!
+  CreateInvoiceStatusType(input: CreateInvoiceStatusTypeInput!): InvoiceStatusType_!
   CreateList(input: CreateListInput!): List_!
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
+  CreatePaymentTermsType(input: CreatePaymentTermsTypeInput!): PaymentTermsType_!
   CreateQuery(input: CreateQueryInput!): Query_!
   CreateQueryCategory(input: CreateQueryCategoryInput!): QueryCategory_!
   CreateQueryField(input: CreateQueryFieldInput!): QueryField_!
@@ -1188,6 +1625,9 @@ type Mutation {
   UpdateAIModel(input: UpdateAIModelInput!): AIModel_!
   UpdateAIModelAction(input: UpdateAIModelActionInput!): AIModelAction_!
   UpdateAIModelType(input: UpdateAIModelTypeInput!): AIModelType_!
+  UpdateAccount(input: UpdateAccountInput!): Account_!
+  UpdateActivity(input: UpdateActivityInput!): Activity_!
+  UpdateActivityAttachment(input: UpdateActivityAttachmentInput!): ActivityAttachment_!
   UpdateApplication(input: UpdateApplicationInput!): Application_!
   UpdateApplicationEntity(input: UpdateApplicationEntityInput!): ApplicationEntity_!
   UpdateAuditLog(input: UpdateAuditLogInput!): AuditLog_!
@@ -1197,9 +1637,16 @@ type Mutation {
   UpdateCompanyIntegrationRun(input: UpdateCompanyIntegrationRunInput!): CompanyIntegrationRun_!
   UpdateCompanyIntegrationRunAPILog(input: UpdateCompanyIntegrationRunAPILogInput!): CompanyIntegrationRunAPILog_!
   UpdateCompanyIntegrationRunDetail(input: UpdateCompanyIntegrationRunDetailInput!): CompanyIntegrationRunDetail_!
+  UpdateContact(input: UpdateContactInput!): Contact_!
+  UpdateContactLevel(input: UpdateContactLevelInput!): ContactLevel_!
+  UpdateContactRole(input: UpdateContactRoleInput!): ContactRole_!
   UpdateConversation(input: UpdateConversationInput!): Conversation_!
   UpdateConversationDetail(input: UpdateConversationDetailInput!): ConversationDetail_!
   UpdateDashboard(input: UpdateDashboardInput!): Dashboard_!
+  UpdateDeal(input: UpdateDealInput!): Deal_!
+  UpdateDealForecastCategory(input: UpdateDealForecastCategoryInput!): DealForecastCategory_!
+  UpdateDealStage(input: UpdateDealStageInput!): DealStage_!
+  UpdateDealType(input: UpdateDealTypeInput!): DealType_!
   UpdateEmployee(input: UpdateEmployeeInput!): Employee_!
   UpdateEmployeeCompanyIntegration(input: UpdateEmployeeCompanyIntegrationInput!): EmployeeCompanyIntegration_!
   UpdateEmployeeRole(input: UpdateEmployeeRoleInput!): EmployeeRole_!
@@ -1210,10 +1657,14 @@ type Mutation {
   UpdateEntityPermission(input: UpdateEntityPermissionInput!): EntityPermission_!
   UpdateEntityRelationship(input: UpdateEntityRelationshipInput!): EntityRelationship_!
   UpdateErrorLog(input: UpdateErrorLogInput!): ErrorLog_!
+  UpdateIndustry(input: UpdateIndustryInput!): Industry_!
   UpdateIntegration(input: UpdateIntegrationInput!): Integration_!
   UpdateIntegrationURLFormat(input: UpdateIntegrationURLFormatInput!): IntegrationURLFormat_!
+  UpdateInvoice(input: UpdateInvoiceInput!): Invoice_!
+  UpdateInvoiceStatusType(input: UpdateInvoiceStatusTypeInput!): InvoiceStatusType_!
   UpdateList(input: UpdateListInput!): List_!
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
+  UpdatePaymentTermsType(input: UpdatePaymentTermsTypeInput!): PaymentTermsType_!
   UpdateQuery(input: UpdateQueryInput!): Query_!
   UpdateQueryCategory(input: UpdateQueryCategoryInput!): QueryCategory_!
   UpdateQueryField(input: UpdateQueryFieldInput!): QueryField_!
@@ -1265,6 +1716,20 @@ type OutputTriggerType_ {
   ReportsArray: [Report_!]!
 }
 
+type PaymentTermsType_ {
+  Code: String
+  CompanyIntegrationID: Int
+  CreatedAt: Timestamp!
+  Description: String
+  DisplayName: String
+  DueDateCalculation: String
+  ExternalSystemRecordID: String
+  ID: Int!
+  InvoicesArray: [Invoice_!]!
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
 input PrimaryKeyValueInputType {
   FieldName: String!
   Value: String!
@@ -1286,6 +1751,9 @@ type Query {
   AIModel(ID: Int!): AIModel_
   AIModelAction(ID: Int!): AIModelAction_
   AIModelType(ID: Int!): AIModelType_
+  Account(ID: Int!): Account_
+  Activity(ID: Int!): Activity_
+  ActivityAttachment(ID: Int!): ActivityAttachment_
   AllAIActions: [AIAction_!]!
   AllAIModelActions: [AIModelAction_!]!
   AllAIModelTypes: [AIModelType_!]!
@@ -1322,6 +1790,9 @@ type Query {
   CompanyIntegrationRun(ID: Int!): CompanyIntegrationRun_
   CompanyIntegrationRunAPILog(ID: Int!): CompanyIntegrationRunAPILog_
   CompanyIntegrationRunDetail(ID: Int!): CompanyIntegrationRunDetail_
+  Contact(ID: Int!): Contact_
+  ContactLevel(ID: Int!): ContactLevel_
+  ContactRole(ID: Int!): ContactRole_
   Conversation(ID: Int!): Conversation_
   ConversationDetail(ID: Int!): ConversationDetail_
   CurrentUser: User_!
@@ -1330,6 +1801,10 @@ type Query {
   Dashboard(ID: Int!): Dashboard_
   Dataset(ID: Int!): Dataset_
   DatasetItem(ID: Int!): DatasetItem_
+  Deal(ID: Int!): Deal_
+  DealForecastCategory(ID: Int!): DealForecastCategory_
+  DealStage(ID: Int!): DealStage_
+  DealType(ID: Int!): DealType_
   DefaultViewByUserAndEntity(EntityID: Int!, UserID: Int!): [UserView_!]!
   Employee(ID: Int!): Employee_
   EmployeeCompanyIntegration(ID: Int!): EmployeeCompanyIntegration_
@@ -1353,13 +1828,17 @@ type Query {
   GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
+  Industry(ID: Int!): Industry_
   Integration(ID: Int!): Integration_
   IntegrationURLFormat(ID: Int!): IntegrationURLFormat_
+  Invoice(ID: Int!): Invoice_
+  InvoiceStatusType(ID: Int!): InvoiceStatusType_
   List(ID: Int!): List_
   ListDetail(ID: Int!): ListDetail_
   OutputDeliveryType(ID: Int!): OutputDeliveryType_
   OutputFormatType(ID: Int!): OutputFormatType_
   OutputTriggerType(ID: Int!): OutputTriggerType_
+  PaymentTermsType(ID: Int!): PaymentTermsType_
   Query(ID: Int!): Query_
   QueryCategory(ID: Int!): QueryCategory_
   QueryField(ID: Int!): QueryField_
@@ -1388,6 +1867,15 @@ type Query {
   RunAIModelTypeViewByName(input: RunViewByNameInput!): RunAIModelTypeViewResult!
   RunAIModelViewByID(input: RunViewByIDInput!): RunAIModelViewResult!
   RunAIModelViewByName(input: RunViewByNameInput!): RunAIModelViewResult!
+  RunAccountDynamicView(input: RunDynamicViewInput!): RunAccountViewResult!
+  RunAccountViewByID(input: RunViewByIDInput!): RunAccountViewResult!
+  RunAccountViewByName(input: RunViewByNameInput!): RunAccountViewResult!
+  RunActivityAttachmentDynamicView(input: RunDynamicViewInput!): RunActivityAttachmentViewResult!
+  RunActivityAttachmentViewByID(input: RunViewByIDInput!): RunActivityAttachmentViewResult!
+  RunActivityAttachmentViewByName(input: RunViewByNameInput!): RunActivityAttachmentViewResult!
+  RunActivityDynamicView(input: RunDynamicViewInput!): RunActivityViewResult!
+  RunActivityViewByID(input: RunViewByIDInput!): RunActivityViewResult!
+  RunActivityViewByName(input: RunViewByNameInput!): RunActivityViewResult!
   RunApplicationDynamicView(input: RunDynamicViewInput!): RunApplicationViewResult!
   RunApplicationEntityDynamicView(input: RunDynamicViewInput!): RunApplicationEntityViewResult!
   RunApplicationEntityViewByID(input: RunViewByIDInput!): RunApplicationEntityViewResult!
@@ -1424,6 +1912,15 @@ type Query {
   RunCompanyIntegrationViewByName(input: RunViewByNameInput!): RunCompanyIntegrationViewResult!
   RunCompanyViewByID(input: RunViewByIDInput!): RunCompanyViewResult!
   RunCompanyViewByName(input: RunViewByNameInput!): RunCompanyViewResult!
+  RunContactDynamicView(input: RunDynamicViewInput!): RunContactViewResult!
+  RunContactLevelDynamicView(input: RunDynamicViewInput!): RunContactLevelViewResult!
+  RunContactLevelViewByID(input: RunViewByIDInput!): RunContactLevelViewResult!
+  RunContactLevelViewByName(input: RunViewByNameInput!): RunContactLevelViewResult!
+  RunContactRoleDynamicView(input: RunDynamicViewInput!): RunContactRoleViewResult!
+  RunContactRoleViewByID(input: RunViewByIDInput!): RunContactRoleViewResult!
+  RunContactRoleViewByName(input: RunViewByNameInput!): RunContactRoleViewResult!
+  RunContactViewByID(input: RunViewByIDInput!): RunContactViewResult!
+  RunContactViewByName(input: RunViewByNameInput!): RunContactViewResult!
   RunConversationDetailDynamicView(input: RunDynamicViewInput!): RunConversationDetailViewResult!
   RunConversationDetailViewByID(input: RunViewByIDInput!): RunConversationDetailViewResult!
   RunConversationDetailViewByName(input: RunViewByNameInput!): RunConversationDetailViewResult!
@@ -1439,6 +1936,18 @@ type Query {
   RunDatasetItemViewByName(input: RunViewByNameInput!): RunDatasetItemViewResult!
   RunDatasetViewByID(input: RunViewByIDInput!): RunDatasetViewResult!
   RunDatasetViewByName(input: RunViewByNameInput!): RunDatasetViewResult!
+  RunDealDynamicView(input: RunDynamicViewInput!): RunDealViewResult!
+  RunDealForecastCategoryDynamicView(input: RunDynamicViewInput!): RunDealForecastCategoryViewResult!
+  RunDealForecastCategoryViewByID(input: RunViewByIDInput!): RunDealForecastCategoryViewResult!
+  RunDealForecastCategoryViewByName(input: RunViewByNameInput!): RunDealForecastCategoryViewResult!
+  RunDealStageDynamicView(input: RunDynamicViewInput!): RunDealStageViewResult!
+  RunDealStageViewByID(input: RunViewByIDInput!): RunDealStageViewResult!
+  RunDealStageViewByName(input: RunViewByNameInput!): RunDealStageViewResult!
+  RunDealTypeDynamicView(input: RunDynamicViewInput!): RunDealTypeViewResult!
+  RunDealTypeViewByID(input: RunViewByIDInput!): RunDealTypeViewResult!
+  RunDealTypeViewByName(input: RunViewByNameInput!): RunDealTypeViewResult!
+  RunDealViewByID(input: RunViewByIDInput!): RunDealViewResult!
+  RunDealViewByName(input: RunViewByNameInput!): RunDealViewResult!
   RunDynamicView(input: RunDynamicViewInput!): RunViewResult!
   RunEmployeeCompanyIntegrationDynamicView(input: RunDynamicViewInput!): RunEmployeeCompanyIntegrationViewResult!
   RunEmployeeCompanyIntegrationViewByID(input: RunViewByIDInput!): RunEmployeeCompanyIntegrationViewResult!
@@ -1473,12 +1982,21 @@ type Query {
   RunErrorLogDynamicView(input: RunDynamicViewInput!): RunErrorLogViewResult!
   RunErrorLogViewByID(input: RunViewByIDInput!): RunErrorLogViewResult!
   RunErrorLogViewByName(input: RunViewByNameInput!): RunErrorLogViewResult!
+  RunIndustryDynamicView(input: RunDynamicViewInput!): RunIndustryViewResult!
+  RunIndustryViewByID(input: RunViewByIDInput!): RunIndustryViewResult!
+  RunIndustryViewByName(input: RunViewByNameInput!): RunIndustryViewResult!
   RunIntegrationDynamicView(input: RunDynamicViewInput!): RunIntegrationViewResult!
   RunIntegrationURLFormatDynamicView(input: RunDynamicViewInput!): RunIntegrationURLFormatViewResult!
   RunIntegrationURLFormatViewByID(input: RunViewByIDInput!): RunIntegrationURLFormatViewResult!
   RunIntegrationURLFormatViewByName(input: RunViewByNameInput!): RunIntegrationURLFormatViewResult!
   RunIntegrationViewByID(input: RunViewByIDInput!): RunIntegrationViewResult!
   RunIntegrationViewByName(input: RunViewByNameInput!): RunIntegrationViewResult!
+  RunInvoiceDynamicView(input: RunDynamicViewInput!): RunInvoiceViewResult!
+  RunInvoiceStatusTypeDynamicView(input: RunDynamicViewInput!): RunInvoiceStatusTypeViewResult!
+  RunInvoiceStatusTypeViewByID(input: RunViewByIDInput!): RunInvoiceStatusTypeViewResult!
+  RunInvoiceStatusTypeViewByName(input: RunViewByNameInput!): RunInvoiceStatusTypeViewResult!
+  RunInvoiceViewByID(input: RunViewByIDInput!): RunInvoiceViewResult!
+  RunInvoiceViewByName(input: RunViewByNameInput!): RunInvoiceViewResult!
   RunListDetailDynamicView(input: RunDynamicViewInput!): RunListDetailViewResult!
   RunListDetailViewByID(input: RunViewByIDInput!): RunListDetailViewResult!
   RunListDetailViewByName(input: RunViewByNameInput!): RunListDetailViewResult!
@@ -1494,6 +2012,9 @@ type Query {
   RunOutputTriggerTypeDynamicView(input: RunDynamicViewInput!): RunOutputTriggerTypeViewResult!
   RunOutputTriggerTypeViewByID(input: RunViewByIDInput!): RunOutputTriggerTypeViewResult!
   RunOutputTriggerTypeViewByName(input: RunViewByNameInput!): RunOutputTriggerTypeViewResult!
+  RunPaymentTermsTypeDynamicView(input: RunDynamicViewInput!): RunPaymentTermsTypeViewResult!
+  RunPaymentTermsTypeViewByID(input: RunViewByIDInput!): RunPaymentTermsTypeViewResult!
+  RunPaymentTermsTypeViewByName(input: RunViewByNameInput!): RunPaymentTermsTypeViewResult!
   RunQueryCategoryDynamicView(input: RunDynamicViewInput!): RunQueryCategoryViewResult!
   RunQueryCategoryViewByID(input: RunViewByIDInput!): RunQueryCategoryViewResult!
   RunQueryCategoryViewByName(input: RunViewByNameInput!): RunQueryCategoryViewResult!
@@ -1944,6 +2465,36 @@ type RunAIModelViewResult {
   UserViewRunID: Int
 }
 
+type RunAccountViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Account_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActivityAttachmentViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActivityAttachment_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActivityViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Activity_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunApplicationEntityViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -2064,6 +2615,36 @@ type RunCompanyViewResult {
   UserViewRunID: Int
 }
 
+type RunContactLevelViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ContactLevel_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunContactRoleViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ContactRole_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunContactViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Contact_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunConversationDetailViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -2108,6 +2689,46 @@ type RunDatasetViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Dataset_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDealForecastCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DealForecastCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDealStageViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DealStage_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDealTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DealType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDealViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Deal_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -2268,6 +2889,16 @@ type RunErrorLogViewResult {
   UserViewRunID: Int
 }
 
+type RunIndustryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Industry_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunIntegrationURLFormatViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -2282,6 +2913,26 @@ type RunIntegrationViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Integration_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunInvoiceStatusTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [InvoiceStatusType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunInvoiceViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Invoice_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -2332,6 +2983,16 @@ type RunOutputTriggerTypeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [OutputTriggerType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunPaymentTermsTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [PaymentTermsType_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -2914,6 +3575,66 @@ input UpdateAIModelTypeInput {
   Name: String!
 }
 
+input UpdateAccountInput {
+  Acronym: String
+  ActivityCount: Int!
+  AddressLine1: String
+  AddressLine2: String
+  AddressLine3: String
+  City: String
+  Country: String
+  Description: String
+  DisplayName: String
+  Domain: String
+  EarliestActivityDate: Timestamp
+  EmailPattern: String
+  Facebook: String
+  ID: Int!
+  ISOCountryCode: String
+  IndustryID: Int
+  LastEnrichedAt: Timestamp
+  LastReviewedDate: Timestamp
+  LatestActivityDate: Timestamp
+  LeadershipPageURL: String
+  LinkedIn: String
+  Logo: String
+  LogoURL: String
+  Name: String!
+  OperatingName: String
+  PhoneNumber: String
+  PostalCode: String
+  RecordSource: String
+  StateProvince: String
+  TaxID: String
+  Website: String
+}
+
+input UpdateActivityAttachmentInput {
+  Attachments: String
+  ID: Int!
+}
+
+input UpdateActivityInput {
+  AccountID: Int
+  ActivityDate: Timestamp
+  Attachment: String
+  AttachmentID: Int
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  DealID: Int
+  Description: String
+  EmployeeID: Int
+  ExternalSystemRecordID: String
+  ID: Int!
+  IsActive: Boolean
+  IsBounced: Boolean
+  IsOpened: Boolean
+  IsReplied: Boolean
+  Summary: String
+  Title: String
+  Type: String
+}
+
 input UpdateApplicationEntityInput {
   ApplicationName: String
   DefaultForNewUser: Boolean!
@@ -3003,6 +3724,53 @@ input UpdateCompanyIntegrationRunInput {
   TotalRecords: Int!
 }
 
+input UpdateContactInput {
+  AccountID: Int
+  ActivityCount: Int!
+  EarliestActivityDate: Timestamp
+  Email1: String
+  Email2: String
+  EmailSource: String
+  EmailStatus: String
+  Facebook: String
+  FirstName: String!
+  ID: Int!
+  Instagram: String
+  LastEnrichedAt: Timestamp
+  LastName: String!
+  LastReviewedDate: Timestamp
+  LatestActivityDate: Timestamp
+  LevelID: Int
+  LinkedIn: String
+  NickName: String
+  PhoneNumber: String
+  Prefix: String
+  ProfilePictureURL: String
+  RecordSource: String
+  RoleID: Int
+  Status: String
+  Suffix: String
+  Tags: String
+  Title: String
+  Twitter: String
+}
+
+input UpdateContactLevelInput {
+  Description: String
+  ExcludeKeywords: String
+  ID: Int!
+  Keywords: String
+  Name: String!
+  Rank: Int!
+}
+
+input UpdateContactRoleInput {
+  Description: String
+  ID: Int!
+  Keywords: String
+  Name: String!
+}
+
 input UpdateConversationDetailInput {
   ConversationID: Int!
   Error: String
@@ -3030,6 +3798,54 @@ input UpdateDashboardInput {
   Name: String!
   UIConfigDetails: String!
   UserID: Int
+}
+
+input UpdateDealForecastCategoryInput {
+  Description: String!
+  DisplayName: String
+  ID: Int!
+  Name: String
+}
+
+input UpdateDealInput {
+  AccountID: Int
+  CloseDate: Timestamp
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  ContractTermMonths: Int!
+  DealForecastCategoryID: Int
+  DealStageID: Int
+  DealTypeID: Int
+  Description: String
+  EmployeeID: Int
+  ExternalSystemCreatedAt: Timestamp
+  ExternalSystemRecordID: String!
+  ExternalSystemUpdatedAt: Timestamp
+  ForecastNotes: String
+  ID: Int!
+  IncludeInForecast: Boolean
+  IsDeleted: Boolean!
+  LeadSource: String
+  LeadSourceDetail: String
+  MRR: Float!
+  OneTimeFees: Float!
+  Pipeline: String
+  Probability: Float
+  Title: String
+  Value: Float
+}
+
+input UpdateDealStageInput {
+  Description: String!
+  ID: Int!
+  Name: String!
+}
+
+input UpdateDealTypeInput {
+  Description: String!
+  DisplayName: String
+  ID: Int!
+  Name: String
 }
 
 input UpdateEmployeeCompanyIntegrationInput {
@@ -3187,6 +4003,13 @@ input UpdateErrorLogInput {
   Status: String
 }
 
+input UpdateIndustryInput {
+  Description: String!
+  ID: Int!
+  Keywords: String
+  Name: String!
+}
+
 input UpdateIntegrationInput {
   BatchMaxRequestCount: Int!
   BatchRequestWaitTime: Int!
@@ -3205,6 +4028,29 @@ input UpdateIntegrationURLFormatInput {
   URLFormat: String!
 }
 
+input UpdateInvoiceInput {
+  AccountID: Int!
+  CompanyIntegrationID: Int!
+  ContactID: Int
+  DueDate: Timestamp
+  ExternalSystemRecordID: String!
+  ID: Int!
+  InvoiceDate: Timestamp!
+  InvoiceNumber: String!
+  PaymentTermsID: Int
+  PostingDate: Timestamp
+  StatusID: Int!
+  SubTotal: Float!
+  Tax: Float!
+  Total: Float!
+}
+
+input UpdateInvoiceStatusTypeInput {
+  Description: String!
+  ID: Int!
+  Name: String!
+}
+
 input UpdateListDetailInput {
   ID: Int!
   ListID: Int!
@@ -3220,6 +4066,17 @@ input UpdateListInput {
   ID: Int!
   Name: String!
   UserID: Int!
+}
+
+input UpdatePaymentTermsTypeInput {
+  Code: String
+  CompanyIntegrationID: Int
+  Description: String
+  DisplayName: String
+  DueDateCalculation: String
+  ExternalSystemRecordID: String
+  ID: Int!
+  Name: String!
 }
 
 input UpdateQueryCategoryInput {

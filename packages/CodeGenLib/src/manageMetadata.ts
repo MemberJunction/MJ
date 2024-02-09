@@ -830,6 +830,10 @@ function generatePluralName(singularName: string) {
        // Singular name already ends with 's', so just return it
        return singularName;
    }
+   else if (singularName.endsWith('ch') || singularName.endsWith('sh') || singularName.endsWith('x') || singularName.endsWith('z')) {
+         // If the singular name ends with 'ch', 'sh', 'x', or 'z', add 'es' - example "box/boxes", "index/indexes", "church/churches", "dish/dishes", "buzz/buzzes"
+         return singularName + 'es';
+   }
    else {
        // For other cases, just add 's'
        return singularName + 's';

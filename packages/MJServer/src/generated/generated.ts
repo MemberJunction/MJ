@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/4/2024, 9:07:38 PM
+* GENERATED: 2/8/2024, 8:06:18 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -17,7 +17,7 @@ import { AppContext } from '@memberjunction/server';
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -367,6 +367,12 @@ export class Employee_ {
     @Field(() => [EmployeeSkill_])
     EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
 
+    @Field(() => [Activity_])
+    ActivitiesArray: Activity_[]; // Link to Activities
+
+    @Field(() => [Deal_])
+    DealsArray: Deal_[]; // Link to Deals
+
 }
         
 //****************************************************************************
@@ -522,6 +528,22 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Activity_])
+    async ActivitiesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Activities', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Deal_])
+    async DealsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Deals', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
     
@@ -1980,6 +2002,18 @@ export class CompanyIntegration_ {
     @Field(() => [CompanyIntegrationRecordMap_])
     CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
 
+    @Field(() => [Activity_])
+    ActivitiesArray: Activity_[]; // Link to Activities
+
+    @Field(() => [Deal_])
+    DealsArray: Deal_[]; // Link to Deals
+
+    @Field(() => [Invoice_])
+    InvoicesArray: Invoice_[]; // Link to Invoices
+
+    @Field(() => [PaymentTermsType_])
+    PaymentTermsTypesArray: PaymentTermsType_[]; // Link to PaymentTermsTypes
+
 }
         
 //****************************************************************************
@@ -2108,6 +2142,38 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Activity_])
+    async ActivitiesArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Activities', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Deal_])
+    async DealsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Deals', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Invoice_])
+    async InvoicesArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Invoices', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [PaymentTermsType_])
+    async PaymentTermsTypesArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Payment Terms Types', userPayload);
+        const sSQL = `SELECT * FROM [crm].[vwPaymentTermsTypes] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Payment Terms Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Payment Terms Types', await dataSource.query(sSQL));
         return result;
     }
     
@@ -2858,6 +2924,9 @@ export class Entity_ {
     @Field(() => [Conversation_])
     ConversationsArray: Conversation_[]; // Link to Conversations
 
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
 }
         
 //****************************************************************************
@@ -3322,6 +3391,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [LinkedEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [EntityDocument_])
+    async EntityDocumentsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
     
@@ -8904,6 +8981,9 @@ export class AIModel_ {
     @Field(() => [EntityAIAction_])
     EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
 
+    @Field(() => [VectorIndex_])
+    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+
 }
         
 //****************************************************************************
@@ -9017,6 +9097,14 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [AIModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [VectorIndex_])
+    async VectorIndexesArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Vector Indexes', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwVectorIndexes] WHERE [EmbeddingModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
     }
     
@@ -14958,6 +15046,1200 @@ export class QueryPermissionResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Vector Indexes
+//****************************************************************************
+@ObjectType()
+export class VectorIndex_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int) 
+    VectorDatabaseID: number;
+      
+    @Field(() => Int) 
+    EmbeddingModelID: number;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(200)
+    VectorDatabase: string;
+      
+    @Field() 
+    @MaxLength(100)
+    EmbeddingModel: string;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Vector Indexes   
+//****************************************************************************
+@InputType()
+export class CreateVectorIndexInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    VectorDatabaseID: number;
+
+    @Field(() => Int, )
+    EmbeddingModelID: number;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Vector Indexes   
+//****************************************************************************
+@InputType()
+export class UpdateVectorIndexInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    VectorDatabaseID: number;
+
+    @Field(() => Int, )
+    EmbeddingModelID: number;
+}
+
+//****************************************************************************
+// RESOLVER for Vector Indexes
+//****************************************************************************
+@ObjectType()
+export class RunVectorIndexViewResult {
+    @Field(() => [VectorIndex_])
+    Results: VectorIndex_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(VectorIndex_)
+export class VectorIndexResolver extends ResolverBase {
+    @Query(() => RunVectorIndexViewResult)
+    async RunVectorIndexViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunVectorIndexViewResult)
+    async RunVectorIndexViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunVectorIndexViewResult)
+    async RunVectorIndexDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Vector Indexes';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => VectorIndex_, { nullable: true })
+    async VectorIndex(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorIndex_ | null> {
+        this.CheckUserReadPermissions('Vector Indexes', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwVectorIndexes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => VectorIndex_)
+    async CreateVectorIndex(
+        @Arg('input', () => CreateVectorIndexInput) input: CreateVectorIndexInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <VectorIndexEntity>await new Metadata().GetEntityObject('Vector Indexes', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateVectorIndexInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateVectorIndexInput) {
+    }
+    
+    @Mutation(() => VectorIndex_)
+    async UpdateVectorIndex(
+        @Arg('input', () => UpdateVectorIndexInput) input: UpdateVectorIndexInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <VectorIndexEntity>await new Metadata().GetEntityObject('Vector Indexes', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Vector Indexes
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVectorIndexInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorIndexInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Document Types
+//****************************************************************************
+@ObjectType()
+export class EntityDocumentType_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+    @Field(() => [EntityDocument_])
+    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Document Types   
+//****************************************************************************
+@InputType()
+export class CreateEntityDocumentTypeInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Entity Document Types   
+//****************************************************************************
+@InputType()
+export class UpdateEntityDocumentTypeInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+}
+
+//****************************************************************************
+// RESOLVER for Entity Document Types
+//****************************************************************************
+@ObjectType()
+export class RunEntityDocumentTypeViewResult {
+    @Field(() => [EntityDocumentType_])
+    Results: EntityDocumentType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityDocumentType_)
+export class EntityDocumentTypeResolver extends ResolverBase {
+    @Query(() => RunEntityDocumentTypeViewResult)
+    async RunEntityDocumentTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentTypeViewResult)
+    async RunEntityDocumentTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentTypeViewResult)
+    async RunEntityDocumentTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Document Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityDocumentType_, { nullable: true })
+    async EntityDocumentType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentType_ | null> {
+        this.CheckUserReadPermissions('Entity Document Types', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityDocumentTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Document Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [EntityDocument_])
+    async EntityDocumentsArray(@Root() entitydocumenttype_: EntityDocumentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [TypeID]=${entitydocumenttype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => EntityDocumentType_)
+    async CreateEntityDocumentType(
+        @Arg('input', () => CreateEntityDocumentTypeInput) input: CreateEntityDocumentTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentTypeEntity>await new Metadata().GetEntityObject('Entity Document Types', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput) {
+    }
+    
+    @Mutation(() => EntityDocumentType_)
+    async UpdateEntityDocumentType(
+        @Arg('input', () => UpdateEntityDocumentTypeInput) input: UpdateEntityDocumentTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentTypeEntity>await new Metadata().GetEntityObject('Entity Document Types', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Types
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Document Runs
+//****************************************************************************
+@ObjectType()
+export class EntityDocumentRun_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    EntityDocumentID: number;
+      
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    StartedAt?: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+      
+    @Field() 
+    @MaxLength(30)
+    Status: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(500)
+    EntityDocument: string;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Document Runs   
+//****************************************************************************
+@InputType()
+export class CreateEntityDocumentRunInput {
+    @Field(() => Int, )
+    EntityDocumentID: number;
+
+    @Field({ nullable: true })
+    StartedAt: Date;
+
+    @Field({ nullable: true })
+    EndedAt: Date;
+
+    @Field()
+    Status: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Entity Document Runs   
+//****************************************************************************
+@InputType()
+export class UpdateEntityDocumentRunInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field(() => Int, )
+    EntityDocumentID: number;
+
+    @Field({ nullable: true })
+    StartedAt: Date;
+
+    @Field({ nullable: true })
+    EndedAt: Date;
+
+    @Field()
+    Status: string;
+}
+
+//****************************************************************************
+// RESOLVER for Entity Document Runs
+//****************************************************************************
+@ObjectType()
+export class RunEntityDocumentRunViewResult {
+    @Field(() => [EntityDocumentRun_])
+    Results: EntityDocumentRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityDocumentRun_)
+export class EntityDocumentRunResolver extends ResolverBase {
+    @Query(() => RunEntityDocumentRunViewResult)
+    async RunEntityDocumentRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentRunViewResult)
+    async RunEntityDocumentRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentRunViewResult)
+    async RunEntityDocumentRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Document Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityDocumentRun_, { nullable: true })
+    async EntityDocumentRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentRun_ | null> {
+        this.CheckUserReadPermissions('Entity Document Runs', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityDocumentRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => EntityDocumentRun_)
+    async CreateEntityDocumentRun(
+        @Arg('input', () => CreateEntityDocumentRunInput) input: CreateEntityDocumentRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentRunEntity>await new Metadata().GetEntityObject('Entity Document Runs', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput) {
+    }
+    
+    @Mutation(() => EntityDocumentRun_)
+    async UpdateEntityDocumentRun(
+        @Arg('input', () => UpdateEntityDocumentRunInput) input: UpdateEntityDocumentRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentRunEntity>await new Metadata().GetEntityObject('Entity Document Runs', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Runs
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Vector Databases
+//****************************************************************************
+@ObjectType()
+export class VectorDatabase_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    DefaultURL?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ClassKey?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+    @Field(() => [VectorIndex_])
+    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Vector Databases   
+//****************************************************************************
+@InputType()
+export class CreateVectorDatabaseInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field({ nullable: true })
+    DefaultURL: string;
+
+    @Field({ nullable: true })
+    ClassKey: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Vector Databases   
+//****************************************************************************
+@InputType()
+export class UpdateVectorDatabaseInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field({ nullable: true })
+    DefaultURL: string;
+
+    @Field({ nullable: true })
+    ClassKey: string;
+}
+
+//****************************************************************************
+// RESOLVER for Vector Databases
+//****************************************************************************
+@ObjectType()
+export class RunVectorDatabaseViewResult {
+    @Field(() => [VectorDatabase_])
+    Results: VectorDatabase_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(VectorDatabase_)
+export class VectorDatabaseResolver extends ResolverBase {
+    @Query(() => RunVectorDatabaseViewResult)
+    async RunVectorDatabaseViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunVectorDatabaseViewResult)
+    async RunVectorDatabaseViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunVectorDatabaseViewResult)
+    async RunVectorDatabaseDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Vector Databases';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => VectorDatabase_, { nullable: true })
+    async VectorDatabase(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorDatabase_ | null> {
+        this.CheckUserReadPermissions('Vector Databases', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwVectorDatabases] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Vector Databases', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Vector Databases', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [VectorIndex_])
+    async VectorIndexesArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Vector Indexes', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwVectorIndexes] WHERE [VectorDatabaseID]=${vectordatabase_.ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => VectorDatabase_)
+    async CreateVectorDatabase(
+        @Arg('input', () => CreateVectorDatabaseInput) input: CreateVectorDatabaseInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <VectorDatabaseEntity>await new Metadata().GetEntityObject('Vector Databases', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateVectorDatabaseInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateVectorDatabaseInput) {
+    }
+    
+    @Mutation(() => VectorDatabase_)
+    async UpdateVectorDatabase(
+        @Arg('input', () => UpdateVectorDatabaseInput) input: UpdateVectorDatabaseInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <VectorDatabaseEntity>await new Metadata().GetEntityObject('Vector Databases', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Vector Databases
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Record Documents
+//****************************************************************************
+@ObjectType()
+export class EntityRecordDocument_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    EntityID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
+      
+    @Field({nullable: true}) 
+    DocumentText?: string;
+      
+    @Field(() => Int) 
+    VectorIndexID: number;
+      
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    VectorID?: string;
+      
+    @Field({nullable: true}) 
+    VectorJSON?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    EntityRecordUpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Record Documents   
+//****************************************************************************
+@InputType()
+export class CreateEntityRecordDocumentInput {
+    @Field(() => Int, )
+    EntityID: number;
+
+    @Field()
+    RecordID: string;
+
+    @Field({ nullable: true })
+    DocumentText: string;
+
+    @Field(() => Int, )
+    VectorIndexID: number;
+
+    @Field({ nullable: true })
+    VectorID: string;
+
+    @Field({ nullable: true })
+    VectorJSON: string;
+
+    @Field()
+    EntityRecordUpdatedAt: Date;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Entity Record Documents   
+//****************************************************************************
+@InputType()
+export class UpdateEntityRecordDocumentInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field(() => Int, )
+    EntityID: number;
+
+    @Field()
+    RecordID: string;
+
+    @Field({ nullable: true })
+    DocumentText: string;
+
+    @Field(() => Int, )
+    VectorIndexID: number;
+
+    @Field({ nullable: true })
+    VectorID: string;
+
+    @Field({ nullable: true })
+    VectorJSON: string;
+
+    @Field()
+    EntityRecordUpdatedAt: Date;
+}
+
+//****************************************************************************
+// RESOLVER for Entity Record Documents
+//****************************************************************************
+@ObjectType()
+export class RunEntityRecordDocumentViewResult {
+    @Field(() => [EntityRecordDocument_])
+    Results: EntityRecordDocument_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityRecordDocument_)
+export class EntityRecordDocumentResolver extends ResolverBase {
+    @Query(() => RunEntityRecordDocumentViewResult)
+    async RunEntityRecordDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityRecordDocumentViewResult)
+    async RunEntityRecordDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityRecordDocumentViewResult)
+    async RunEntityRecordDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Record Documents';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityRecordDocument_, { nullable: true })
+    async EntityRecordDocument(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRecordDocument_ | null> {
+        this.CheckUserReadPermissions('Entity Record Documents', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityRecordDocuments] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => EntityRecordDocument_)
+    async CreateEntityRecordDocument(
+        @Arg('input', () => CreateEntityRecordDocumentInput) input: CreateEntityRecordDocumentInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityRecordDocumentEntity>await new Metadata().GetEntityObject('Entity Record Documents', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput) {
+    }
+    
+    @Mutation(() => EntityRecordDocument_)
+    async UpdateEntityRecordDocument(
+        @Arg('input', () => UpdateEntityRecordDocumentInput) input: UpdateEntityRecordDocumentInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityRecordDocumentEntity>await new Metadata().GetEntityObject('Entity Record Documents', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Record Documents
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Documents
+//****************************************************************************
+@ObjectType()
+export class EntityDocument_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(500)
+    Name: string;
+      
+    @Field(() => Int) 
+    EntityID: number;
+      
+    @Field(() => Int) 
+    TypeID: number;
+      
+    @Field() 
+    @MaxLength(30)
+    Status: string;
+      
+    @Field({nullable: true}) 
+    Template?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+      
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+    
+    @Field(() => [EntityDocumentRun_])
+    EntityDocumentRunsArray: EntityDocumentRun_[]; // Link to EntityDocumentRuns
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Documents   
+//****************************************************************************
+@InputType()
+export class CreateEntityDocumentInput {
+    @Field()
+    Name: string;
+
+    @Field(() => Int, )
+    EntityID: number;
+
+    @Field(() => Int, )
+    TypeID: number;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Template: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Entity Documents   
+//****************************************************************************
+@InputType()
+export class UpdateEntityDocumentInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field(() => Int, )
+    EntityID: number;
+
+    @Field(() => Int, )
+    TypeID: number;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Template: string;
+}
+
+//****************************************************************************
+// RESOLVER for Entity Documents
+//****************************************************************************
+@ObjectType()
+export class RunEntityDocumentViewResult {
+    @Field(() => [EntityDocument_])
+    Results: EntityDocument_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityDocument_)
+export class EntityDocumentResolver extends ResolverBase {
+    @Query(() => RunEntityDocumentViewResult)
+    async RunEntityDocumentViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentViewResult)
+    async RunEntityDocumentViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentViewResult)
+    async RunEntityDocumentDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Documents';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityDocument_, { nullable: true })
+    async EntityDocument(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocument_ | null> {
+        this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [EntityDocumentRun_])
+    async EntityDocumentRunsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Document Runs', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwEntityDocumentRuns] WHERE [EntityDocumentID]=${entitydocument_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => EntityDocument_)
+    async CreateEntityDocument(
+        @Arg('input', () => CreateEntityDocumentInput) input: CreateEntityDocumentInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentEntity>await new Metadata().GetEntityObject('Entity Documents', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentInput) {
+    }
+    
+    @Mutation(() => EntityDocument_)
+    async UpdateEntityDocument(
+        @Arg('input', () => UpdateEntityDocumentInput) input: UpdateEntityDocumentInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentEntity>await new Metadata().GetEntityObject('Entity Documents', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Documents
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput) {
         const i = input, d = dataSource; // prevent error
     }
 

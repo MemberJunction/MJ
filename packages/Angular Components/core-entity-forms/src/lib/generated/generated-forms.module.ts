@@ -91,6 +91,12 @@ import { QueryFieldFormComponent, LoadQueryFieldFormComponent } from "./Entities
 import { QueryCategoryFormComponent, LoadQueryCategoryFormComponent } from "./Entities/QueryCategory/querycategory.form.component";
 import { QueryFormComponent, LoadQueryFormComponent } from "./Entities/Query/query.form.component";
 import { QueryPermissionFormComponent, LoadQueryPermissionFormComponent } from "./Entities/QueryPermission/querypermission.form.component";
+import { VectorIndexFormComponent, LoadVectorIndexFormComponent } from "./Entities/VectorIndex/vectorindex.form.component";
+import { EntityDocumentTypeFormComponent, LoadEntityDocumentTypeFormComponent } from "./Entities/EntityDocumentType/entitydocumenttype.form.component";
+import { EntityDocumentRunFormComponent, LoadEntityDocumentRunFormComponent } from "./Entities/EntityDocumentRun/entitydocumentrun.form.component";
+import { VectorDatabaseFormComponent, LoadVectorDatabaseFormComponent } from "./Entities/VectorDatabase/vectordatabase.form.component";
+import { EntityRecordDocumentFormComponent, LoadEntityRecordDocumentFormComponent } from "./Entities/EntityRecordDocument/entityrecorddocument.form.component";
+import { EntityDocumentFormComponent, LoadEntityDocumentFormComponent } from "./Entities/EntityDocument/entitydocument.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -170,6 +176,12 @@ import { QueryFieldDetailsComponent, LoadQueryFieldDetailsComponent } from "./En
 import { QueryCategoryDetailsComponent, LoadQueryCategoryDetailsComponent } from "./Entities/QueryCategory/sections/details.component"
 import { QueryDetailsComponent, LoadQueryDetailsComponent } from "./Entities/Query/sections/details.component"
 import { QueryPermissionDetailsComponent, LoadQueryPermissionDetailsComponent } from "./Entities/QueryPermission/sections/details.component"
+import { VectorIndexDetailsComponent, LoadVectorIndexDetailsComponent } from "./Entities/VectorIndex/sections/details.component"
+import { EntityDocumentTypeDetailsComponent, LoadEntityDocumentTypeDetailsComponent } from "./Entities/EntityDocumentType/sections/details.component"
+import { EntityDocumentRunDetailsComponent, LoadEntityDocumentRunDetailsComponent } from "./Entities/EntityDocumentRun/sections/details.component"
+import { VectorDatabaseDetailsComponent, LoadVectorDatabaseDetailsComponent } from "./Entities/VectorDatabase/sections/details.component"
+import { EntityRecordDocumentDetailsComponent, LoadEntityRecordDocumentDetailsComponent } from "./Entities/EntityRecordDocument/sections/details.component"
+import { EntityDocumentDetailsComponent, LoadEntityDocumentDetailsComponent } from "./Entities/EntityDocument/sections/details.component"
 
 
 @NgModule({
@@ -308,12 +320,12 @@ declarations: [
     QueryCategoryFormComponent,
     QueryFormComponent,
     QueryPermissionFormComponent,
-    CompanyDetailsComponent,
-    EmployeeDetailsComponent,
-    UserFavoriteDetailsComponent,
-    EmployeeCompanyIntegrationDetailsComponent,
-    EmployeeRoleDetailsComponent,
-    EmployeeSkillDetailsComponent],
+    VectorIndexFormComponent,
+    EntityDocumentTypeFormComponent,
+    EntityDocumentRunFormComponent,
+    VectorDatabaseFormComponent,
+    EntityRecordDocumentFormComponent,
+    EntityDocumentFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -334,6 +346,12 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    CompanyDetailsComponent,
+    EmployeeDetailsComponent,
+    UserFavoriteDetailsComponent,
+    EmployeeCompanyIntegrationDetailsComponent,
+    EmployeeRoleDetailsComponent,
+    EmployeeSkillDetailsComponent,
     RoleDetailsComponent,
     SkillDetailsComponent,
     IntegrationURLFormatDetailsComponent,
@@ -347,13 +365,7 @@ declarations: [
     EntityDBComponent,
     EntityUIComponent,
     UserDetailsComponent,
-    EntityRelationshipDetailsComponent,
-    UserRecordLogDetailsComponent,
-    UserViewDetailsComponent,
-    CompanyIntegrationRunDetailsComponent,
-    CompanyIntegrationRunDetailDetailsComponent,
-    ErrorLogDetailsComponent,
-    ApplicationDetailsComponent],
+    EntityRelationshipDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -374,6 +386,12 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    UserRecordLogDetailsComponent,
+    UserViewDetailsComponent,
+    CompanyIntegrationRunDetailsComponent,
+    CompanyIntegrationRunDetailDetailsComponent,
+    ErrorLogDetailsComponent,
+    ApplicationDetailsComponent,
     ApplicationEntityDetailsComponent,
     EntityPermissionDetailsComponent,
     UserApplicationEntityDetailsComponent,
@@ -387,13 +405,7 @@ declarations: [
     WorkflowDetailsComponent,
     WorkflowEngineDetailsComponent,
     RecordChangeDetailsComponent,
-    UserRoleDetailsComponent,
-    RowLevelSecurityFilterDetailsComponent,
-    AuditLogDetailsComponent,
-    AuthorizationDetailsComponent,
-    AuthorizationRoleDetailsComponent,
-    AuditLogTypeDetailsComponent,
-    EntityFieldValueDetailsComponent],
+    UserRoleDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -414,6 +426,12 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    RowLevelSecurityFilterDetailsComponent,
+    AuditLogDetailsComponent,
+    AuthorizationDetailsComponent,
+    AuthorizationRoleDetailsComponent,
+    AuditLogTypeDetailsComponent,
+    EntityFieldValueDetailsComponent,
     AIModelDetailsComponent,
     AIActionDetailsComponent,
     AIModelActionDetailsComponent,
@@ -427,13 +445,7 @@ declarations: [
     OutputFormatTypeDetailsComponent,
     OutputDeliveryTypeDetailsComponent,
     ReportDetailsComponent,
-    ReportSnapshotDetailsComponent,
-    ResourceTypeDetailsComponent,
-    TagDetailsComponent,
-    TaggedItemDetailsComponent,
-    WorkspaceDetailsComponent,
-    WorkspaceItemDetailsComponent,
-    DatasetDetailsComponent],
+    ReportSnapshotDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -454,6 +466,12 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    ResourceTypeDetailsComponent,
+    TagDetailsComponent,
+    TaggedItemDetailsComponent,
+    WorkspaceDetailsComponent,
+    WorkspaceItemDetailsComponent,
+    DatasetDetailsComponent,
     DatasetItemDetailsComponent,
     ConversationDetailDetailsComponent,
     ConversationDetailsComponent,
@@ -466,7 +484,8 @@ declarations: [
     QueryFieldDetailsComponent,
     QueryCategoryDetailsComponent,
     QueryDetailsComponent,
-    QueryPermissionDetailsComponent],
+    QueryPermissionDetailsComponent,
+    VectorIndexDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -487,6 +506,31 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    EntityDocumentTypeDetailsComponent,
+    EntityDocumentRunDetailsComponent,
+    VectorDatabaseDetailsComponent,
+    EntityRecordDocumentDetailsComponent,
+    EntityDocumentDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    ExplorerCoreModule,
+    UserViewGridModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_8 { }
+
+
+
+@NgModule({
+declarations: [
 ],
 imports: [
     GeneratedForms_SubModule_0,
@@ -496,7 +540,8 @@ imports: [
     GeneratedForms_SubModule_4,
     GeneratedForms_SubModule_5,
     GeneratedForms_SubModule_6,
-    GeneratedForms_SubModule_7
+    GeneratedForms_SubModule_7,
+    GeneratedForms_SubModule_8
 ]
 })
 export class CoreGeneratedFormsModule { }
@@ -581,6 +626,12 @@ export function LoadCoreGeneratedForms() {
     LoadQueryCategoryFormComponent();
     LoadQueryFormComponent();
     LoadQueryPermissionFormComponent();
+    LoadVectorIndexFormComponent();
+    LoadEntityDocumentTypeFormComponent();
+    LoadEntityDocumentRunFormComponent();
+    LoadVectorDatabaseFormComponent();
+    LoadEntityRecordDocumentFormComponent();
+    LoadEntityDocumentFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -660,4 +711,10 @@ export function LoadCoreGeneratedForms() {
     LoadQueryCategoryDetailsComponent();
     LoadQueryDetailsComponent();
     LoadQueryPermissionDetailsComponent();
+    LoadVectorIndexDetailsComponent();
+    LoadEntityDocumentTypeDetailsComponent();
+    LoadEntityDocumentRunDetailsComponent();
+    LoadVectorDatabaseDetailsComponent();
+    LoadEntityRecordDocumentDetailsComponent();
+    LoadEntityDocumentDetailsComponent();
 }

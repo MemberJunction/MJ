@@ -10053,7 +10053,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get LinkedEntity(): string {  
             return this.Get('LinkedEntity');
@@ -11539,6 +11538,787 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+    
+
+    }
+    
+    /**
+     * Vector Indexes - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: VectorIndex
+     * * Base View: vwVectorIndexes
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Vector Indexes')
+    export class VectorIndexEntity extends BaseEntity {
+        /**
+        * Loads the Vector Indexes record from the database
+        * @param ID: Number - primary key value to load the Vector Indexes record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof VectorIndexEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Vector Indexes - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof VectorIndexEntity
+        * @throws {Error} - Delete is not allowed for Vector Indexes, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Vector Indexes, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: VectorDatabaseID
+        * * Display Name: Vector Database ID
+        * * SQL Data Type: int
+        * * Related Entity: Vector Databases
+        */
+        get VectorDatabaseID(): number {  
+            return this.Get('VectorDatabaseID');
+        }
+        set VectorDatabaseID(value: number) {
+            this.Set('VectorDatabaseID', value);
+        }
+        /**
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model ID
+        * * SQL Data Type: int
+        * * Related Entity: AI Models
+        */
+        get EmbeddingModelID(): number {  
+            return this.Get('EmbeddingModelID');
+        }
+        set EmbeddingModelID(value: number) {
+            this.Set('EmbeddingModelID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: VectorDatabase
+        * * Display Name: Vector Database
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get VectorDatabase(): string {  
+            return this.Get('VectorDatabase');
+        }
+    
+        /**
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: null
+        */
+        get EmbeddingModel(): string {  
+            return this.Get('EmbeddingModel');
+        }
+    
+
+    }
+    
+    /**
+     * Entity Document Types - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: EntityDocumentType
+     * * Base View: vwEntityDocumentTypes
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Document Types')
+    export class EntityDocumentTypeEntity extends BaseEntity {
+        /**
+        * Loads the Entity Document Types record from the database
+        * @param ID: Number - primary key value to load the Entity Document Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityDocumentTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Entity Document Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityDocumentTypeEntity
+        * @throws {Error} - Delete is not allowed for Entity Document Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Document Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+
+    }
+    
+    /**
+     * Entity Document Runs - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: EntityDocumentRun
+     * * Base View: vwEntityDocumentRuns
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Document Runs')
+    export class EntityDocumentRunEntity extends BaseEntity {
+        /**
+        * Loads the Entity Document Runs record from the database
+        * @param ID: Number - primary key value to load the Entity Document Runs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityDocumentRunEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Entity Document Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityDocumentRunEntity
+        * @throws {Error} - Delete is not allowed for Entity Document Runs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Document Runs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: EntityDocumentID
+        * * Display Name: Entity Document ID
+        * * SQL Data Type: int
+        * * Related Entity: Entity Documents
+        */
+        get EntityDocumentID(): number {  
+            return this.Get('EntityDocumentID');
+        }
+        set EntityDocumentID(value: number) {
+            this.Set('EntityDocumentID', value);
+        }
+        /**
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        */
+        get StartedAt(): Date {  
+            return this.Get('StartedAt');
+        }
+        set StartedAt(value: Date) {
+            this.Set('StartedAt', value);
+        }
+        /**
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        */
+        get EndedAt(): Date {  
+            return this.Get('EndedAt');
+        }
+        set EndedAt(value: Date) {
+            this.Set('EndedAt', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(15)
+        * * Default Value: N'Pending'
+        */
+        get Status(): string {  
+            return this.Get('Status');
+        }
+        set Status(value: string) {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: EntityDocument
+        * * Display Name: Entity Document
+        * * SQL Data Type: nvarchar(250)
+        * * Default Value: null
+        */
+        get EntityDocument(): string {  
+            return this.Get('EntityDocument');
+        }
+    
+
+    }
+    
+    /**
+     * Vector Databases - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: VectorDatabase
+     * * Base View: vwVectorDatabases
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Vector Databases')
+    export class VectorDatabaseEntity extends BaseEntity {
+        /**
+        * Loads the Vector Databases record from the database
+        * @param ID: Number - primary key value to load the Vector Databases record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof VectorDatabaseEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Vector Databases - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof VectorDatabaseEntity
+        * @throws {Error} - Delete is not allowed for Vector Databases, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Vector Databases, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: DefaultURL
+        * * Display Name: Default URL
+        * * SQL Data Type: nvarchar(255)
+        */
+        get DefaultURL(): string {  
+            return this.Get('DefaultURL');
+        }
+        set DefaultURL(value: string) {
+            this.Set('DefaultURL', value);
+        }
+        /**
+        * * Field Name: ClassKey
+        * * Display Name: Class Key
+        * * SQL Data Type: nvarchar(100)
+        */
+        get ClassKey(): string {  
+            return this.Get('ClassKey');
+        }
+        set ClassKey(value: string) {
+            this.Set('ClassKey', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+
+    }
+    
+    /**
+     * Entity Record Documents - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: EntityRecordDocument
+     * * Base View: vwEntityRecordDocuments
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Record Documents')
+    export class EntityRecordDocumentEntity extends BaseEntity {
+        /**
+        * Loads the Entity Record Documents record from the database
+        * @param ID: Number - primary key value to load the Entity Record Documents record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityRecordDocumentEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Entity Record Documents - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityRecordDocumentEntity
+        * @throws {Error} - Delete is not allowed for Entity Record Documents, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Record Documents, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(255)
+        */
+        get RecordID(): string {  
+            return this.Get('RecordID');
+        }
+        set RecordID(value: string) {
+            this.Set('RecordID', value);
+        }
+        /**
+        * * Field Name: DocumentText
+        * * Display Name: Document Text
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get DocumentText(): string {  
+            return this.Get('DocumentText');
+        }
+        set DocumentText(value: string) {
+            this.Set('DocumentText', value);
+        }
+        /**
+        * * Field Name: VectorIndexID
+        * * Display Name: Vector Index ID
+        * * SQL Data Type: int
+        */
+        get VectorIndexID(): number {  
+            return this.Get('VectorIndexID');
+        }
+        set VectorIndexID(value: number) {
+            this.Set('VectorIndexID', value);
+        }
+        /**
+        * * Field Name: VectorID
+        * * Display Name: Vector ID
+        * * SQL Data Type: nvarchar(50)
+        */
+        get VectorID(): string {  
+            return this.Get('VectorID');
+        }
+        set VectorID(value: string) {
+            this.Set('VectorID', value);
+        }
+        /**
+        * * Field Name: VectorJSON
+        * * Display Name: Vector JSON
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get VectorJSON(): string {  
+            return this.Get('VectorJSON');
+        }
+        set VectorJSON(value: string) {
+            this.Set('VectorJSON', value);
+        }
+        /**
+        * * Field Name: EntityRecordUpdatedAt
+        * * Display Name: Entity Record Updated At
+        * * SQL Data Type: datetime
+        */
+        get EntityRecordUpdatedAt(): Date {  
+            return this.Get('EntityRecordUpdatedAt');
+        }
+        set EntityRecordUpdatedAt(value: Date) {
+            this.Set('EntityRecordUpdatedAt', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+
+    }
+    
+    /**
+     * Entity Documents - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: EntityDocument
+     * * Base View: vwEntityDocuments
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Documents')
+    export class EntityDocumentEntity extends BaseEntity {
+        /**
+        * Loads the Entity Documents record from the database
+        * @param ID: Number - primary key value to load the Entity Documents record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityDocumentEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Entity Documents - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityDocumentEntity
+        * @throws {Error} - Delete is not allowed for Entity Documents, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Documents, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(250)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity: Entities
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: TypeID
+        * * Display Name: Type ID
+        * * SQL Data Type: int
+        * * Related Entity: Entity Document Types
+        */
+        get TypeID(): number {  
+            return this.Get('TypeID');
+        }
+        set TypeID(value: number) {
+            this.Set('TypeID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(15)
+        * * Default Value: N'Pending'
+        */
+        get Status(): string {  
+            return this.Get('Status');
+        }
+        set Status(value: string) {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: Template
+        * * Display Name: Template
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Template(): string {  
+            return this.Get('Template');
+        }
+        set Template(value: string) {
+            this.Set('Template', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Type(): string {  
+            return this.Get('Type');
         }
     
 
