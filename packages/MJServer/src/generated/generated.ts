@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/8/2024, 8:06:18 PM
+* GENERATED: 2/10/2024, 9:49:33 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -367,12 +367,6 @@ export class Employee_ {
     @Field(() => [EmployeeSkill_])
     EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
 
-    @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
-
-    @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
-
 }
         
 //****************************************************************************
@@ -528,22 +522,6 @@ export class EmployeeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Activities', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Deals', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
     
@@ -2002,18 +1980,6 @@ export class CompanyIntegration_ {
     @Field(() => [CompanyIntegrationRecordMap_])
     CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
 
-    @Field(() => [Activity_])
-    ActivitiesArray: Activity_[]; // Link to Activities
-
-    @Field(() => [Deal_])
-    DealsArray: Deal_[]; // Link to Deals
-
-    @Field(() => [Invoice_])
-    InvoicesArray: Invoice_[]; // Link to Invoices
-
-    @Field(() => [PaymentTermsType_])
-    PaymentTermsTypesArray: PaymentTermsType_[]; // Link to PaymentTermsTypes
-
 }
         
 //****************************************************************************
@@ -2142,38 +2108,6 @@ export class CompanyIntegrationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [Activity_])
-    async ActivitiesArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Activities', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwActivities] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Activities', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [Deal_])
-    async DealsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Deals', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwDeals] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Deals', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [Invoice_])
-    async InvoicesArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Invoices', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwInvoices] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Invoices', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [PaymentTermsType_])
-    async PaymentTermsTypesArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Payment Terms Types', userPayload);
-        const sSQL = `SELECT * FROM [crm].[vwPaymentTermsTypes] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Payment Terms Types', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Payment Terms Types', await dataSource.query(sSQL));
         return result;
     }
     

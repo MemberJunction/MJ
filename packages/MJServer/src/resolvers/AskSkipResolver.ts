@@ -1,12 +1,13 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { SkipAnalyzeData, SkipExplainQuery } from '@memberjunction/aiengine';
-import { Metadata } from '@memberjunction/core';
-import { AppContext } from '../types';
+import { Metadata, UserInfo } from '@memberjunction/core';
+import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SkipDataContext, SkipDataContextItem, SkipAPIRequest, SkipAPIResponse } from '@memberjunction/skip-types';
 import axios from 'axios';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { DataSource } from 'typeorm';
 
 @ObjectType()
 export class AskSkipResultType {
@@ -28,120 +29,6 @@ export class AskSkipResultType {
   @Field(() => Int)
   AIMessageConversationDetailId: number;
 }
-
-class SubProcessResponse {
-  status: "success" | "error";
-  resultType: "data" | "plot" | "html" | null;
-  tableData: any[] | null; // any array of objects
-  plotData: { data: any[]; layout: any } | null; // Compatible with Plotly
-  htmlReport: string | null;
-  analysis: string | null; // analysis of the data from the sub-process
-  errorMessage: string | null;
-}
-class SkipAPIResponse {
-  success: boolean;
-  executionResults: SubProcessResponse | null;
-  userExplanation: string;
-  techExplanation: string;
-  suggestedQuestions: string[] | null;
-  reportTitle: string | null;
-  analysis: string | null;
-  scriptText: string | null;
-}
-
-
-export class SkipDataContextFieldInfo {
-  Name!: string;
-  Type!: string;
-  Description?: string;
-}
-export class SkipDataContextItem {
-  Type!: 'view' | 'query' | 'full_entity';
-  /**
-   * The ID of the view, query, or entity in the system
-   */
-  RecordID!: number;
-  /**
-   * The name of the view, query, or entity in the system
-   */
-  RecordName!: string;
-
-  /**
-   * The name of the entity in the system, only used if type = 'full_entity' or type = 'view' --- for type of 'query' this is not used as query can come from any number of entities in combination
-   */
-  EntityName?: string;
-  /*
-  * The fields in the view, query, or entity
-  */
-  Fields: SkipDataContextFieldInfo[] = [];    
-
-  get Description(): string {
-      switch (this.Type) {
-          case 'view':
-              return `View: ${this.RecordName}, From Entity: ${this.EntityName}`;
-          case 'query':
-              return `Query: ${this.RecordName}`;
-          case 'full_entity':
-              return `Full Entity - All Records: ${this.EntityName}`;
-          default:
-              return `Unknown Type: ${this.Type}`;
-      }
-  }
-
-  /**
-   * Populate the SkipDataContextItem from a UserViewEntity class instance
-   * @param viewEntity 
-   */
-  public static fromViewEntity(viewEntity: UserViewEntityExtended) {
-      const instance = new SkipDataContextItem();
-      // update our data from the viewEntity definition
-      instance.Type= 'view';
-      instance.EntityName = viewEntity.ViewEntityInfo.Name;
-      instance.RecordID = viewEntity.ID;
-      instance.RecordName = viewEntity.Name;
-      instance.Fields = viewEntity.ViewEntityInfo.Fields.map(f => {
-          return {
-              Name: f.Name,
-              Type: f.Type,
-              Description: f.Description
-          }
-      });
-      return instance;
-  }
-
-  Data?: any[];
-
-  public ValidateDataExists(): boolean {
-      return this.Data ? this.Data.length > 0 : false;
-  }
-}
-export class SkipDataContext {
-  Items: SkipDataContextItem[] = [];
-
-  public ValidateDataExists(): boolean {
-      if (this.Items)
-          return !this.Items.some(i => !i.ValidateDataExists()); // if any data item is invalid, return false
-      else    
-          return false;
-  }
-
-  public ConvertToSimpleObject(): any {
-      // Return a simple object that will have a property for each item in our Items array. We will name each item sequentially as data_item_1, data_item_2, etc.
-      const ret: any = {};
-      for (let i = 0; i < this.Items.length; i++) {
-          ret[`data_item_${i}`] = this.Items[i].Data;
-      }
-      return ret;
-  }
-
-  public CreateSimpleObjectTypeDefinition(): string {
-      let sOutput: string = "";
-      for (let i = 0; i < this.Items.length; i++) {
-          sOutput += `data_item_${i}: []; // array of data items\n`;
-      }
-      return `{${sOutput}}`;
-  }
-}   
 
 
 @Resolver(AskSkipResultType)
@@ -196,15 +83,18 @@ export class AskSkipResolver {
     dataContext.Items.push(
       {
         Type: 'view',
-        RecordID: 123,
+        RecordID: 123, //test adding an extra item to the data context
       } as SkipDataContextItem
     );
 
-    const input = { 
+    const input: SkipAPIRequest = { 
                     userInput: UserQuestion, 
-                    conversationID: ConversationId, 
+                    conversationID: ConversationId.toString(), 
                     dataContext: dataContext, 
-                    organizationID: OrganizationId };
+                    organizationID: !isNaN(parseInt(OrganizationId)) ? parseInt(OrganizationId) : 0,
+                    requestPhase: 'initial_request'
+                  };
+
     const url = 'http://localhost:8000' 
     //      const url = process.env.BOT_EXTERNAL_API_URL;
     // TEMP - call the separate server, we'll move this to real skip server soon!!!!!
@@ -214,7 +104,7 @@ export class AskSkipResolver {
       message: JSON.stringify({
         type: 'AskSkip',
         status: 'OK',
-        message: 'Sure, I can help with that, I\'ll get right on it!',
+        message: 'Sure, I can help with that, I will start by analyzing your request...',
       }),
       sessionId: userPayload.sessionId,
     });
@@ -226,63 +116,51 @@ export class AskSkipResolver {
     });
 
     if (response.status === 200) {
+      const apiResponse = <SkipAPIResponse>response.data;
+      let sUserMessage: string = '';
+      switch (apiResponse.responsePhase) {
+        case 'data_request':
+          sUserMessage = 'We need to gather some more data, I will do that next and update you soon.';
+          break;
+        case 'analysis_complete':
+          sUserMessage = 'I have completed the analysis, the results will be available momentarily.';
+          break;
+        case 'clarifying_question':
+          sUserMessage = 'I have a clarifying question for you, please see review our chat so you can provide me a little more info.';
+          break;
+      }
+
+      // update the UI
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
         message: JSON.stringify({
           type: 'AskSkip',
           status: 'OK',
-          message: 'View Analysis successful, updating the conversation...',
+          message: sUserMessage,
         }),
         sessionId: userPayload.sessionId,
       });
-      const apiResponse = <SkipAPIResponse>response.data;
-      const sTitle = apiResponse.reportTitle; 
-      const sResult = JSON.stringify(apiResponse);
 
-      // now, create a conversation detail record for the Skip response
-      const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
-      convoDetailEntityAI.NewRecord();
-      convoDetailEntityAI.ConversationID = ConversationId;
-      convoDetailEntityAI.Message = sResult;
-      convoDetailEntityAI.Role = 'AI';
-      convoDetailEntityAI.Set('Sequence', 2); // using weakly typed here because we're going to get rid of this field soon
-      await convoDetailEntityAI.Save();
-
-      // finally update the convo name if it is still the default
-      if (convoEntity.Name === AskSkipResolver._defaultNewChatName && sTitle) {
-        convoEntity.Name = sTitle; // use the title from the response
-        await convoEntity.Save();
+      // now, based on the result type, we will either wait for the next phase or we will process the results
+      let nextAPIResponse: SkipAPIResponse | null = null;
+      if (apiResponse.responsePhase === 'data_request') {
+        nextAPIResponse = await this.HandleDataRequestPhase(apiResponse, user, dataSource, ConversationId, userPayload, pubSub);
+      }
+      else if (apiResponse.responsePhase === 'clarifying_question') {
+        // need to send the request back to the user for a clarifying question
+        // TO-DO implement this
+      }
+      else if (apiResponse.responsePhase === 'analysis_complete') {
+        nextAPIResponse = apiResponse;        
       }
 
-      // now create a notification for the user
-      const userNotification = <UserNotificationEntity>await md.GetEntityObject('User Notifications', user);
-      userNotification.NewRecord();
-      userNotification.UserID = user.ID;
-      userNotification.Title = 'Report Created: ' + sTitle;
-      userNotification.Message = `Good news! Skip finished creating a report for you, click on this notification to jump back into the conversation.`;
-      userNotification.Unread = true;
-      userNotification.ResourceConfiguration = JSON.stringify({
-        type: 'askskip',
-        conversationId: ConversationId,
-      });
-      await userNotification.Save();
-      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-        message: JSON.stringify({
-          type: 'UserNotifications',
-          status: 'OK',
-          details: {
-            action: 'create',
-            recordId: userNotification.ID,
-          },
-        }),
-        sessionId: userPayload.sessionId,
-      });
+      const {AIMessageConversationDetailID} = await this.FinishConversationAndNotifyUser(apiResponse, md, user, convoEntity, pubSub, userPayload);
 
       return {
         Success: true,
         Status: 'OK',
         ConversationId: ConversationId,
         UserMessageConversationDetailId: convoDetailEntity.ID,
-        AIMessageConversationDetailId: convoDetailEntityAI.ID,
+        AIMessageConversationDetailId: AIMessageConversationDetailID,
         Result: JSON.stringify(response.data)
       };
     }
@@ -307,206 +185,66 @@ export class AskSkipResolver {
     }
   }
 
-  // @Query(() => AskSkipResultType)
-  // async ExecuteAskSkipQuery(
-  //   @Arg('UserQuestion', () => String) UserQuestion: string,
-  //   @Arg('ConversationId', () => Int) ConversationId: number,
-  //   @Ctx() { dataSource, userPayload }: AppContext,
-  //   @PubSub() pubSub: PubSubEngine
-  // ) {
-  //   try {
-  //     const md = new Metadata();
-  //     const user = UserCache.Instance.Users.find((u) => u.Email === userPayload.email);
-  //     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
+  protected async HandleDataRequestPhase(apiResponse: SkipAPIResponse, user: UserInfo, dataSource: DataSource, ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine): Promise<SkipAPIResponse> {
+    throw new Error('Method not implemented.');
+  }
 
-  //     const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', user);
-  //     if (!ConversationId || ConversationId <= 0) {
-  //       // create a new conversation id
-  //       convoEntity.NewRecord();
-  //       if (user) {
-  //         convoEntity.UserID = user.ID;
-  //         convoEntity.Name = AskSkipResolver._defaultNewChatName;
-  //         if (await convoEntity.Save()) ConversationId = convoEntity.ID;
-  //         else throw new Error(`Creating a new conversation failed`);
-  //       } else throw new Error(`User ${userPayload.email} not found in UserCache`);
-  //     } else {
-  //       await convoEntity.Load(ConversationId); // load the existing conversation, will need it later
-  //     }
+  /**
+   * This method will handle the process for an end of request where a user is notified of an AI message. The AI message is either the finished report or a clarifying question.
+   * @param apiResponse 
+   * @param md 
+   * @param user 
+   * @param convoEntity 
+   * @param pubSub 
+   * @param userPayload 
+   * @returns 
+   */
+  protected async FinishConversationAndNotifyUser(apiResponse: SkipAPIResponse, md: Metadata, user: UserInfo, convoEntity: ConversationEntity, pubSub: PubSubEngine, userPayload: UserPayload): Promise<{AIMessageConversationDetailID: number}> {
+    const sTitle = apiResponse.reportTitle; 
+    const sResult = JSON.stringify(apiResponse);
 
-  //     // now, create a conversation detail record for the user message
-  //     const convoDetailEntity = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
-  //     convoDetailEntity.NewRecord();
-  //     convoDetailEntity.ConversationID = ConversationId;
-  //     convoDetailEntity.Message = UserQuestion;
-  //     convoDetailEntity.Role = 'User';
-  //     convoDetailEntity.Set('Sequence', 1); // using weakly typed here because we're going to get rid of this field soon
-  //     await convoDetailEntity.Save();
+    // now, create a conversation detail record for the Skip response
+    const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
+    convoDetailEntityAI.NewRecord();
+    convoDetailEntityAI.ConversationID = convoEntity.ID;
+    convoDetailEntityAI.Message = sResult;
+    convoDetailEntityAI.Role = 'AI';
+    convoDetailEntityAI.Set('Sequence', 2); // using weakly typed here because we're going to get rid of this field soon
+    await convoDetailEntityAI.Save();
 
-  //     //const OrganizationId = 2 //HG 8/1/2023 TODO: Pull this from an environment variable
-  //     const OrganizationId = process.env.BOT_SCHEMA_ORGANIZATION_ID;
+    // finally update the convo name if it is still the default
+    if (convoEntity.Name === AskSkipResolver._defaultNewChatName && sTitle) {
+      convoEntity.Name = sTitle; // use the title from the response
+      await convoEntity.Save();
+    }
 
-  //     const input = { userInput: UserQuestion, conversationID: ConversationId, organizationID: OrganizationId };
-  //     const url = process.env.BOT_EXTERNAL_API_URL;
-
-  //     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-  //       message: JSON.stringify({
-  //         type: 'AskSkip',
-  //         status: 'OK',
-  //         message: 'Sure, I can help with that, just give me a second and I will think about the best way to complete your request.',
-  //       }),
-  //       sessionId: userPayload.sessionId,
-  //     });
-
-  //     const response = await axios({
-  //       method: 'post',
-  //       url: url,
-  //       data: input,
-  //     });
-  //     if (response.status === 200) {
-  //       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-  //         message: JSON.stringify({
-  //           type: 'AskSkip',
-  //           status: 'OK',
-  //           message: 'I created the report structure, now I will get the data for you and analyze the results... Back to ya soon!',
-  //         }),
-  //         sessionId: userPayload.sessionId,
-  //       });
-
-  //       // it worked, run the SQL and return the results
-  //       const sql = response.data.params.sql;
-  //       const [{ result, analysis }, explanation] = await Promise.all([
-  //         this.getSkipDataAndAnalysis(dataSource, UserQuestion, sql),
-  //         this.getReportExplanation(UserQuestion, sql),
-  //       ]);
-
-  //       const sTitle = response.data.params.reportTitle || response.data.params.chartTitle;
-  //       const sResult = JSON.stringify({
-  //         SQLResults: {
-  //           results: result,
-  //           sql: sql,
-  //           columns: response.data.params.columns,
-  //         },
-  //         UserMessage: '',
-  //         ReportExplanation: explanation,
-  //         Analysis: analysis,
-  //         ReportTitle: sTitle,
-  //         DisplayType: response.data.type,
-  //         DrillDownView: response.data.params.drillDownView,
-  //         DrillDownBaseViewField: response.data.params.drillDownBaseViewField,
-  //         DrillDownReportValueField: response.data.params.drillDownReportValueField,
-  //         ChartOptions: {
-  //           xAxis: response.data.params.xAxis,
-  //           xLabel: response.data.params.xLabel,
-  //           yAxis: response.data.params.yAxis,
-  //           yLabel: response.data.params.yLabel,
-  //           color: response.data.params.color,
-  //           yFormat: response.data.params.yFormat,
-  //         },
-  //       });
-
-  //       // now, create a conversation detail record for the Skip response
-  //       const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
-  //       convoDetailEntityAI.NewRecord();
-  //       convoDetailEntityAI.ConversationID = ConversationId;
-  //       convoDetailEntityAI.Message = sResult;
-  //       convoDetailEntityAI.Role = 'AI';
-  //       convoDetailEntityAI.Set('Sequence', 2); // using weakly typed here because we're going to get rid of this field soon
-  //       await convoDetailEntityAI.Save();
-
-  //       // finally update the convo name if it is still the default
-  //       if (convoEntity.Name === AskSkipResolver._defaultNewChatName) {
-  //         convoEntity.Name = response.data.params.reportTitle || response.data.params.chartTitle || AskSkipResolver._defaultNewChatName;
-  //         await convoEntity.Save();
-  //       }
-
-  //       // now create a notification for the user
-  //       const userNotification = <UserNotificationEntity>await md.GetEntityObject('User Notifications', user);
-  //       userNotification.NewRecord();
-  //       userNotification.UserID = user.ID;
-  //       userNotification.Title = 'Report Created: ' + sTitle;
-  //       userNotification.Message = `Good news! Skip finished creating a report for you, click on this notification to jump back into the conversation.`;
-  //       userNotification.Unread = true;
-  //       userNotification.ResourceConfiguration = JSON.stringify({
-  //         type: 'askskip',
-  //         conversationId: ConversationId,
-  //       });
-  //       await userNotification.Save();
-  //       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-  //         message: JSON.stringify({
-  //           type: 'UserNotifications',
-  //           status: 'OK',
-  //           details: {
-  //             action: 'create',
-  //             recordId: userNotification.ID,
-  //           },
-  //         }),
-  //         sessionId: userPayload.sessionId,
-  //       });
-
-  //       return {
-  //         Success: true,
-  //         Status: 'OK',
-  //         ConversationId: ConversationId,
-  //         UserMessageConversationDetailId: convoDetailEntity.ID,
-  //         AIMessageConversationDetailId: convoDetailEntityAI.ID,
-  //         Result: sResult,
-  //       };
-  //     } else return { Success: false, Status: 'Error', Result: `User Question ${UserQuestion} didn't work!` };
-  //   } catch (error) {
-  //     console.error(`Error occurred: ${error}`);
-  //     if (error.response) {
-  //       // The request was made and the server responded with a status code
-  //       // that falls out of the range of 2xx
-  //       console.log(error.response.data);
-  //       console.log(error.response.status);
-  //       console.log(error.response.headers);
-  //     } else if (error.request) {
-  //       // The request was made but no response was received
-  //       // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
-  //       // http.ClientRequest in node.js
-  //       console.log(error.request);
-  //     } else {
-  //       // Something happened in setting up the request that triggered an Error
-  //       console.log('Error', error.message);
-  //     }
-  //     console.log(error.config);
-  //     return {
-  //       Success: false,
-  //       Status: 'Error',
-  //       Result: `User Question ${UserQuestion} didn't work!`,
-  //       ConversationId: ConversationId,
-  //       UserMessageConversationDetailId: 0,
-  //       AIMessageConversationDetailId: 0,
-  //     };
-  //   }
-  // }
-
-  // protected async getSkipDataAndAnalysis(dataSource: any, userQuestion: string, sql: string): Promise<{ result: any[]; analysis: string }> {
-  //   const result = await dataSource.query(sql);
-  //   const stringResult = JSON.stringify(result);
-  //   // next get average string length of each row in result
-  //   const maxStringLength = 2000;
-  //   const avgRowStringLength = stringResult.length / result.length;
-  //   // next get the subset we actually want to use, either entire result
-  //   // of if too long, then a subset of the rows from the result
-  //   let sampleDataJSON = stringResult;
-  //   if (stringResult.length > maxStringLength) {
-  //     const rowsToUse = result.length / (maxStringLength / avgRowStringLength);
-  //     const subsetResult = result.slice(0, rowsToUse);
-  //     sampleDataJSON = JSON.stringify(subsetResult);
-  //   }
-  //   // now get the analysis since we have the sample data
-  //   const analysis = await this.getAnalysis(userQuestion, sql, sampleDataJSON);
-  //   return { result, analysis };
-  // }
-
-  // protected async getAnalysis(userQuestion: string, sql: string, sampleDataJSON: string): Promise<string> {
-  //   return await SkipAnalyzeData(userQuestion, sql, sampleDataJSON);
-  // }
-
-  // protected async getReportExplanation(userQuestion: string, sql: string): Promise<string> {
-  //   return await SkipExplainQuery(userQuestion, sql);
-  // }
+    // now create a notification for the user
+    const userNotification = <UserNotificationEntity>await md.GetEntityObject('User Notifications', user);
+    userNotification.NewRecord();
+    userNotification.UserID = user.ID;
+    userNotification.Title = 'Report Created: ' + sTitle;
+    userNotification.Message = `Good news! Skip finished creating a report for you, click on this notification to jump back into the conversation.`;
+    userNotification.Unread = true;
+    userNotification.ResourceConfiguration = JSON.stringify({
+      type: 'askskip',
+      conversationId: convoEntity.ID,
+    });
+    await userNotification.Save();
+    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+      message: JSON.stringify({
+        type: 'UserNotifications',
+        status: 'OK',
+        details: {
+          action: 'create',
+          recordId: userNotification.ID,
+        },
+      }),
+      sessionId: userPayload.sessionId,
+    });
+    return {
+      AIMessageConversationDetailID: convoDetailEntityAI.ID
+    };
+  }
 }
 
 export default AskSkipResolver;

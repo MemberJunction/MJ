@@ -103,7 +103,7 @@ export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: bo
         if (graphQLCoreResolversOutputDir) {
             // generate the GraphQL server code
             logStatus('Generating CORE Entity GraphQL Resolver Code...')
-            if (! generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities'))
+            if (! generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true))
                 logError('Error generating GraphQL server code');
         }
 
@@ -111,7 +111,7 @@ export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: bo
         if (graphqlOutputDir) {
             // generate the GraphQL server code
             logStatus('Generating GraphQL Resolver Code...')
-            if (! generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, 'mj_generatedentities'))
+            if (! generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, 'mj_generatedentities', false))
                 logError('Error generating GraphQL Resolver code');
         }
         else

@@ -11663,7 +11663,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get VectorDatabase(): string {  
             return this.Get('VectorDatabase');
@@ -11673,7 +11672,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: null
         */
         get EmbeddingModel(): string {  
             return this.Get('EmbeddingModel');
@@ -11897,7 +11895,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)
-        * * Default Value: null
         */
         get EntityDocument(): string {  
             return this.Get('EntityDocument');
@@ -12305,7 +12302,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -12315,7 +12311,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Type(): string {  
             return this.Get('Type');

@@ -3,13 +3,13 @@ import fs from 'fs';
 import path from 'path';
 import { logError } from './logging';
 
-export function generateGraphQLServerCode(entities: EntityInfo[], outputDirectory: string, generatedEntitiesImportLibrary: string): boolean {
+export function generateGraphQLServerCode(entities: EntityInfo[], outputDirectory: string, generatedEntitiesImportLibrary: string, excludeRelatedEntitiesExternalToSchema: boolean): boolean {
     let sRet: string = '';
     try {
         sRet = generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary);
 
         for (let i:number = 0; i < entities.length; ++i) {
-            sRet += generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary);
+            sRet += generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema);
         }
         fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
 
@@ -21,14 +21,15 @@ export function generateGraphQLServerCode(entities: EntityInfo[], outputDirector
 }
 
 const _graphQLTypeSuffix = '_';
-export function generateServerEntityString(entity: EntityInfo, includeFileHeader: boolean, generatedEntitiesImportLibrary: string ) : string { 
+export function generateServerEntityString(entity: EntityInfo, includeFileHeader: boolean, generatedEntitiesImportLibrary: string, excludeRelatedEntitiesExternalToSchema: boolean) : string { 
     let sEntityOutput: string = '';
     try {
+        const md = new Metadata();
         const fields: EntityFieldInfo[] = entity.Fields;
         const serverGraphQLTypeName: string = entity.ClassName + _graphQLTypeSuffix
 
         if (includeFileHeader)
-            sEntityOutput = generateEntitySpecificServerFileHeader(entity, generatedEntitiesImportLibrary);
+            sEntityOutput = generateEntitySpecificServerFileHeader(entity, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema);
 
         sEntityOutput +=  generateServerEntityHeader(entity, serverGraphQLTypeName);
 
@@ -38,13 +39,19 @@ export function generateServerEntityString(entity: EntityInfo, includeFileHeader
         }
 
         for (let j:number = 0; j < entity.RelatedEntities.length; ++j) {
-            sEntityOutput += generateServerRelationship(entity.RelatedEntities[j]);
+            const r = entity.RelatedEntities[j];
+            const re = md.Entities.find(e => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
+            if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+                // only include the relationship if either we are NOT excluding related entities external to the schema
+                // or if the related entity is in the same schema as the current entity
+                sEntityOutput += generateServerRelationship(entity.RelatedEntities[j]);
+            }
         }
 
         // finally, close it up with the footer
         sEntityOutput += generateServerEntityFooter(entity);
 
-        sEntityOutput += generateServerGraphQLResolver(entity, serverGraphQLTypeName);
+        sEntityOutput += generateServerGraphQLResolver(entity, serverGraphQLTypeName, excludeRelatedEntitiesExternalToSchema);
     } catch (err) {
         console.error(err);
     } finally {
@@ -77,7 +84,8 @@ import { ${entities.map(e => `${e.ClassName}Entity`).join(', ')} } from '${impor
     return sRet;    
 }
 
-export function generateEntitySpecificServerFileHeader(entity: EntityInfo, importLibrary: string): string {
+export function generateEntitySpecificServerFileHeader(entity: EntityInfo, importLibrary: string, excludeRelatedEntitiesExternalToSchema: boolean): string {
+    const md = new Metadata();
     let sRet: string = `/********************************************************************************
 * ${entity.Name} TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * 
@@ -93,8 +101,14 @@ import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType } from
 import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
 `
     for (let i:number = 0; i < entity.RelatedEntities.length; ++i) {
-        const tableName = entity.RelatedEntities[i].RelatedEntityBaseTableCodeName;
-        sRet += `\nimport ${tableName} from './${tableName}';`
+        const r = entity.RelatedEntities[i];
+        const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
+        if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+            // we only include entities that are in the same schema as the current entity
+            // OR if we are not excluding related entities external to the schema
+            const tableName = entity.RelatedEntities[i].RelatedEntityBaseTableCodeName;
+            sRet += `\nimport ${tableName} from './${tableName}';`
+        }
     }
     return sRet;
 }
@@ -184,7 +198,8 @@ function generateServerRelationship (r: EntityRelationshipInfo): string {
     }
 }
 
-function generateServerGraphQLResolver(entity: EntityInfo, serverGraphQLTypeName: string): string {
+function generateServerGraphQLResolver(entity: EntityInfo, serverGraphQLTypeName: string, excludeRelatedEntitiesExternalToSchema: boolean): string {
+    const md = new Metadata();
     let sRet = '';
 
         // we only generate resolvers for entities that have a primary key field
@@ -276,10 +291,15 @@ sRet += `
         // now, generate the FieldResolvers for each of the one-to-many relationships
         for (let i = 0; i < entity.RelatedEntities.length; i++) {
             const r = entity.RelatedEntities[i];
-            if (r.Type.toLowerCase().trim() == 'many to many') 
-                sRet += generateManyToManyFieldResolver(entity,r);
-            else 
-                sRet += generateOneToManyFieldResolver(entity,r);
+            const re = md.Entities.find(e => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
+            if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+                // only include the relationship if either we are NOT excluding related entities external to the schema
+                // or if the related entity is in the same schema as the current entity
+                if (r.Type.toLowerCase().trim() == 'many to many') 
+                    sRet += generateManyToManyFieldResolver(entity,r);
+                else 
+                    sRet += generateOneToManyFieldResolver(entity,r);
+            }
         }
         // now do the mutations
         const sInputType: string = generateServerGraphQLInputType(entity);

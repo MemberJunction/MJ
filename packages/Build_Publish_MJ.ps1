@@ -249,6 +249,7 @@ $baseLibraries = @(
     @{Name='MJCoreEntities'},
     @{Name='MJAIEngine'}, 
     @{Name='MJQueue'}, 
+    @{Name='SkipTypes'},
     @{Name='SQLServerDataProvider'}, 
     @{Name='CodeGenLib'}, 
     @{Name='GraphQLDataProvider'}, 
