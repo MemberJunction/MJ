@@ -110,11 +110,15 @@ export class SkipDataRequest {
     /**
      * The type of request, either "sql" or "stored_query". Stored query refers to the name of a query that is stored in the system and can be executed to gather data. SQL refers to a fully executable SQL statement that can be executed to gather data.
      */
-    requestType!: "sql" | "stored_query"
+    type!: "sql" | "stored_query"
     /**
      * The text of the request - either a fully executable SQL statement or the name of a stored query
      */
-    requestText!: string;
+    text!: string;
+    /**
+     * A description of the request, why it was requested, and what it is expected to provide
+     */
+    description?: string;
 }
   
 export class SkipDataContextFieldInfo {
@@ -124,13 +128,16 @@ export class SkipDataContextFieldInfo {
 }
 
 export class SkipDataContextItem {
-    Type!: 'view' | 'query' | 'full_entity';
+    /**
+     * The type of the item, either "view", "query", "full_entity", or "sql"
+     */
+    Type!: 'view' | 'query' | 'full_entity' | 'sql';
     /**
      * The ID of the view, query, or entity in the system
      */
     RecordID!: number;
     /**
-     * The name of the view, query, or entity in the system
+     * The name of the view, query, or entity in the system. If Type = sql, this is the full SQL statement
      */
     RecordName!: string;
   
@@ -155,20 +162,31 @@ export class SkipDataContextItem {
      */
     Entity?: EntityInfo;
 
+    /** Additional Description has any other information that might be useful for someone (or an LLM) intepreting the contents of this data item */
+    AdditionalDescription?: string;
+
     /**
      * Generated description of the item  which is dependent on the type of the item
      */
     get Description(): string {
+        let ret: string = '';
         switch (this.Type) {
             case 'view':
-                return `View: ${this.RecordName}, From Entity: ${this.EntityName}`;
+                ret = `View: ${this.RecordName}, From Entity: ${this.EntityName}`;
+                break;
             case 'query':
-                return `Query: ${this.RecordName}`;
+                ret = `Query: ${this.RecordName}`;
+                break;
             case 'full_entity':
-                return `Full Entity - All Records: ${this.EntityName}`;
+                ret = `Full Entity - All Records: ${this.EntityName}`;
+                break;
             default:
-                return `Unknown Type: ${this.Type}`;
+                ret = `Unknown Type: ${this.Type}`;
+                break;
         }
+        if (this.AdditionalDescription && this.AdditionalDescription.length > 0) 
+            ret += ` (More Info: ${this.AdditionalDescription})`;
+        return ret;
     }
   
     /**
@@ -199,7 +217,7 @@ export class SkipDataContextItem {
     Data?: any[];
   
     public ValidateDataExists(): boolean {
-        return this.Data ? this.Data.length > 0 : false;
+        return this.Data ? this.Data.length >= 0 : false; // can have 0 to many rows, just need to make sure we have a Data object to work with
     }
 }
 

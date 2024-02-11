@@ -1,13 +1,24 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunQuery, RunQueryParams, RunView, UserInfo } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { SkipDataContext, SkipDataContextItem, SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
+import { SkipDataContext, SkipDataContextItem, SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse } from '@memberjunction/skip-types';
 import axios from 'axios';
+import zlib from 'zlib';
+import { promisify } from 'util';
+// Convert zlib.gzip into a promise-returning function
+const gzip = promisify(zlib.gzip);
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, UserNotificationEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
+
+
+const ___skipAPIurl = 'http://localhost:8000' 
+//      const url = process.env.BOT_EXTERNAL_API_URL;
+// TEMP - call the separate server, we'll move this to real skip server soon!!!!!
+
+
 
 @ObjectType()
 export class AskSkipResultType {
@@ -78,14 +89,9 @@ export class AskSkipResolver {
       {
         Type: 'view',
         RecordID: ViewId,
+        Data: await this.getViewData(ViewId, user),
       } as SkipDataContextItem
     );    
-    dataContext.Items.push(
-      {
-        Type: 'view',
-        RecordID: 123, //test adding an extra item to the data context
-      } as SkipDataContextItem
-    );
 
     const messages: SkipMessage[] = [
       {
@@ -102,25 +108,38 @@ export class AskSkipResolver {
                     requestPhase: 'initial_request'
                   };
 
-    const url = 'http://localhost:8000' 
-    //      const url = process.env.BOT_EXTERNAL_API_URL;
-    // TEMP - call the separate server, we'll move this to real skip server soon!!!!!
-
-
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
       message: JSON.stringify({
         type: 'AskSkip',
         status: 'OK',
-        message: 'Sure, I can help with that, I will start by analyzing your request...',
+        message: 'I will be happy to help and will start by analyzing your request...',
       }),
       sessionId: userPayload.sessionId,
     });
 
-    const response = await axios({
-      method: 'post',
-      url: url,
-      data: input,
+    return this.HandleSkipRequest(input, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity);
+  }
+
+
+  protected async HandleSkipRequest(input: SkipAPIRequest, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
+                                    ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, md: Metadata, 
+                                    convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity): Promise<AskSkipResultType> {
+    // Convert JSON payload to a Buffer and compress it
+    const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
+
+    // Send the compressed payload with Axios
+    const response = await axios.post(___skipAPIurl, compressedPayload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Encoding': 'gzip'
+      }
     });
+
+    // const response = await axios({
+    //   method: 'post',
+    //   url: ___skipAPIurl,
+    //   data: input,
+    // });
 
     if (response.status === 200) {
       const apiResponse = <SkipAPIResponse>response.data;
@@ -148,28 +167,28 @@ export class AskSkipResolver {
       });
 
       // now, based on the result type, we will either wait for the next phase or we will process the results
-      let nextAPIResponse: SkipAPIResponse | null = null;
       if (apiResponse.responsePhase === 'data_request') {
-        nextAPIResponse = await this.HandleDataRequestPhase(apiResponse, user, dataSource, ConversationId, userPayload, pubSub);
+        return await this.HandleDataRequestPhase(input, <SkipAPIDataRequestResponse>apiResponse, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, convoEntity, convoDetailEntity);
       }
       else if (apiResponse.responsePhase === 'clarifying_question') {
         // need to send the request back to the user for a clarifying question
         // TO-DO implement this
+        throw new Error('Clarifying question not implemented yet');
       }
-      else if (apiResponse.responsePhase === 'analysis_complete') {
-        nextAPIResponse = apiResponse;        
+      else { // apiResponse.responsePhase === 'analysis_complete'
+        // analysis is complete
+        // all done, wrap things up
+        const {AIMessageConversationDetailID} = await this.FinishConversationAndNotifyUser(apiResponse, md, user, convoEntity, pubSub, userPayload);
+
+        return {
+          Success: true,
+          Status: 'OK',
+          ConversationId: ConversationId,
+          UserMessageConversationDetailId: convoDetailEntity.ID,
+          AIMessageConversationDetailId: AIMessageConversationDetailID,
+          Result: JSON.stringify(response.data)
+        };
       }
-
-      const {AIMessageConversationDetailID} = await this.FinishConversationAndNotifyUser(apiResponse, md, user, convoEntity, pubSub, userPayload);
-
-      return {
-        Success: true,
-        Status: 'OK',
-        ConversationId: ConversationId,
-        UserMessageConversationDetailId: convoDetailEntity.ID,
-        AIMessageConversationDetailId: AIMessageConversationDetailID,
-        Result: JSON.stringify(response.data)
-      };
     }
     else {
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -192,8 +211,58 @@ export class AskSkipResolver {
     }
   }
 
-  protected async HandleDataRequestPhase(apiResponse: SkipAPIResponse, user: UserInfo, dataSource: DataSource, ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine): Promise<SkipAPIResponse> {
-    throw new Error('Method not implemented.');
+  protected async HandleDataRequestPhase(apiRequest: SkipAPIRequest, apiResponse: SkipAPIDataRequestResponse, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
+                                         ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity): Promise<AskSkipResultType> {
+    // our job in this method is to go through each of the data requests from the Skip API, get the data, and then go back to the Skip API again and to the next phase
+    try {  
+      const md = new Metadata();
+      for (const dr of apiResponse.dataRequest) {
+        switch (dr.type) {
+          case "sql":
+            const sql = dr.text;
+            const result = await dataSource.query(sql);
+            if (!result) 
+              throw new Error(`Error running SQL: ${sql}`);
+
+            const item = new SkipDataContextItem();
+            item.Type = 'sql';
+            item.Data = result;
+            item.RecordName = dr.text;
+            item.AdditionalDescription = dr.description;
+            apiRequest.dataContext.Items.push(item);
+            break;
+          case "stored_query":
+            const queryName = dr.text;
+            const query = md.Queries.find((q) => q.Name === queryName);
+            if (query) {
+              const rq = new RunQuery();
+              const result = await rq.RunQuery({QueryID: query.ID}, user)  
+              if (result && result.Success) {
+                const item = new SkipDataContextItem();
+                item.Type = 'query';
+                item.Data = result.Results;
+                item.RecordID = query.ID;
+                item.RecordName = query.Name;
+                item.AdditionalDescription = dr.description;
+                apiRequest.dataContext.Items.push(item);    
+              }
+              else
+                throw new Error(`Error running query ${queryName}`);
+            }
+            else
+              throw new Error(`Query ${queryName} not found.`);
+            break;
+        }
+      }
+
+      // we have all of the data now, add it to the data context and then submit it back to the Skip API
+      apiRequest.requestPhase = 'data_gathering_response';
+      return this.HandleSkipRequest(apiRequest, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity);
+    }
+    catch (e) {
+      LogError(e);
+      throw e;
+    }
   }
 
   /**
@@ -251,6 +320,15 @@ export class AskSkipResolver {
     return {
       AIMessageConversationDetailID: convoDetailEntityAI.ID
     };
+  }
+
+  protected async getViewData(ViewId: number, user: UserInfo): Promise<any> {
+    const rv = new RunView();
+    const result = await rv.RunView({ViewID: ViewId, IgnoreMaxRows: true}, user);
+    if (result && result.Success)
+      return result.Results;
+    else
+      throw new Error(`Error running view ${ViewId}`);
   }
 }
 
