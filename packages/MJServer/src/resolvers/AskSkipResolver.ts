@@ -2,7 +2,7 @@ import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver
 import { Metadata, UserInfo } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { SkipDataContext, SkipDataContextItem, SkipAPIRequest, SkipAPIResponse } from '@memberjunction/skip-types';
+import { SkipDataContext, SkipDataContextItem, SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import axios from 'axios';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
@@ -87,8 +87,15 @@ export class AskSkipResolver {
       } as SkipDataContextItem
     );
 
+    const messages: SkipMessage[] = [
+      {
+        content: UserQuestion,
+        role: 'user'
+      }
+    ];
+
     const input: SkipAPIRequest = { 
-                    userInput: UserQuestion, 
+                    messages: messages, 
                     conversationID: ConversationId.toString(), 
                     dataContext: dataContext, 
                     organizationID: !isNaN(parseInt(OrganizationId)) ? parseInt(OrganizationId) : 0,
@@ -199,7 +206,7 @@ export class AskSkipResolver {
    * @param userPayload 
    * @returns 
    */
-  protected async FinishConversationAndNotifyUser(apiResponse: SkipAPIResponse, md: Metadata, user: UserInfo, convoEntity: ConversationEntity, pubSub: PubSubEngine, userPayload: UserPayload): Promise<{AIMessageConversationDetailID: number}> {
+  protected async FinishConversationAndNotifyUser(apiResponse: SkipAPIAnalysisCompleteResponse, md: Metadata, user: UserInfo, convoEntity: ConversationEntity, pubSub: PubSubEngine, userPayload: UserPayload): Promise<{AIMessageConversationDetailID: number}> {
     const sTitle = apiResponse.reportTitle; 
     const sResult = JSON.stringify(apiResponse);
 

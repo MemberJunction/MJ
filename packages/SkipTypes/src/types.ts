@@ -1,3 +1,4 @@
+import { EntityInfo } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 
 export class SubProcessResponse {
@@ -10,14 +11,31 @@ export class SubProcessResponse {
     errorMessage: string | null;
 }
 
+
+/**
+ * Defines the shape of the individual message that makes up the messages array that is passed back and forth with the Skip API Server
+ */
+export class SkipMessage {
+    /**
+     * The role of the message, either "user" or "system"
+     */
+    role: "user" | "system";
+    /**
+     * The content of the message, either the user's input or the system's response
+     */
+    content: string;
+}
+
 /**
  * Defines the shape of the data that is expected by the Skip API Server when making a request
  */
 export class SkipAPIRequest {
     /**
-     * The user's input
+     * An array of 1 or more messages that are part of the conversation. The Skip API server will use these messages to understand the context of the conversation. 
+     * When Skip responds to a request, he provides a messages array as well that will include the input messages as well as additional messages that he has generated as part of the conversation.
+     * In future requests for the same conversation it is important to include ALL of the messages that have been part of the conversation so far, so that Skip can understand the full context of the conversation.
      */
-    userInput: string;
+    messages: SkipMessage[];
     /**
      * The data context, use this to provide all of the data you have in a data context to Skip. You should provide this from cache or refreshed based on the parameters provided by the user.
      */
@@ -44,17 +62,60 @@ export class SkipAPIRequest {
  * Defines the shape of the data that is returned by the Skip API Server
  */
 export class SkipAPIResponse {
+    /**
+     * Used for all response phases, to indicate if the API request was successful or not
+     */
     success: boolean;
-    executionResults: SubProcessResponse | null;
-    userExplanation: string;
-    techExplanation: string;
-    suggestedQuestions: string[] | null;
-    reportTitle: string | null;
-    analysis: string | null;
-    scriptText: string | null;
+    /**
+     * The response phase indicates if the Skip API server is asking for additional data, a clarifying question, or if the analysis is complete and the information has been provided
+     * * clarifying_question: The Skip API server is asking for a clarifying question to be asked to the user - typecast the response to SkipAPIClarifyingQuestionResponse for all of the additional properties that are available in this response phase
+     * * data_request: The Skip API server is asking for additional data to be gathered - typecast the response to SkipAPIDataRequestResponse for all of the additional properties that are available in this response phase
+     * * analysis_complete: The Skip API server has completed the analysis and is providing the results - typecast the response to SkipAPIAnalysisCompleteResponse for all of the additional properties that are available in this response phase
+     */
     responsePhase: "clarifying_question" | "data_request" | "analysis_complete"
+    messages: SkipMessage[];
+}
+
+/**
+ * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'analysis_complete'
+ */
+export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
+    executionResults?: SubProcessResponse | null;
+    userExplanation?: string;
+    techExplanation?: string;
+    suggestedQuestions?: string[] | null;
+    reportTitle?: string | null;
+    analysis?: string | null;
+    scriptText?: string | null;
+}
+
+/**
+ * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'clarifying_question'
+ */
+export class SkipAPIClarifyingQuestionResponse extends SkipAPIResponse {
+    clarifyingQuestion: string;
+}
+
+/**
+ * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'data_request'
+ */
+export class SkipAPIDataRequestResponse extends SkipAPIResponse {
+    dataRequest: SkipDataRequest[];
 }
   
+/**
+ * This type is used to define the requested data whenever the Skip API server asks for additional data to be gathered
+ */
+export class SkipDataRequest {
+    /**
+     * The type of request, either "sql" or "stored_query". Stored query refers to the name of a query that is stored in the system and can be executed to gather data. SQL refers to a fully executable SQL statement that can be executed to gather data.
+     */
+    requestType!: "sql" | "stored_query"
+    /**
+     * The text of the request - either a fully executable SQL statement or the name of a stored query
+     */
+    requestText!: string;
+}
   
 export class SkipDataContextFieldInfo {
     Name!: string;
@@ -81,7 +142,19 @@ export class SkipDataContextItem {
     * The fields in the view, query, or entity
     */
     Fields: SkipDataContextFieldInfo[] = [];    
-  
+
+    /**
+     * ViewEntity - the object instantiated that contains the metadata for the UserView being used - only populated if the type is 'view', also this is NOT to be sent to/from the API server, it is a placeholder that can be used 
+     *              within a given tier like in the MJAPI server or Skip Server or in the UI.
+     */
+    ViewEntity?: UserViewEntityExtended;
+
+    /**
+     * Entity - the object that contains metadata for the entity being used, only populated if the type is 'full_entity' or 'view' - also this is NOT to be sent to/from the API server, it is a placeholder that can be used
+     *          within a given tier like in the MJAPI server or Skip Server or in the UI.
+     */
+    Entity?: EntityInfo;
+
     /**
      * Generated description of the item  which is dependent on the type of the item
      */
@@ -105,6 +178,8 @@ export class SkipDataContextItem {
     public static FromViewEntity(viewEntity: UserViewEntityExtended) {
         const instance = new SkipDataContextItem();
         // update our data from the viewEntity definition
+        instance.ViewEntity = viewEntity;
+        instance.Entity = viewEntity.ViewEntityInfo;
         instance.Type= 'view';
         instance.EntityName = viewEntity.ViewEntityInfo.Name;
         instance.RecordID = viewEntity.ID;
@@ -118,6 +193,8 @@ export class SkipDataContextItem {
         });
         return instance;
     }
+
+
   
     Data?: any[];
   
