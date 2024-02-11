@@ -48,6 +48,7 @@ type AIModel_ {
   IsActive: Boolean!
   Name: String!
   UpdatedAt: Timestamp!
+  VectorIndexesArray: [VectorIndex_!]!
   Vendor: String
 }
 
@@ -630,6 +631,26 @@ input CreateEmployeeInput {
   Title: String
 }
 
+input CreateEntityDocumentInput {
+  EntityID: Int!
+  Name: String!
+  Status: String!
+  Template: String
+  TypeID: Int!
+}
+
+input CreateEntityDocumentRunInput {
+  EndedAt: Timestamp
+  EntityDocumentID: Int!
+  StartedAt: Timestamp
+  Status: String!
+}
+
+input CreateEntityDocumentTypeInput {
+  Description: String
+  Name: String!
+}
+
 input CreateEntityFieldInput {
   AllowUpdateAPI: Boolean!
   AllowUpdateInView: Boolean!
@@ -706,6 +727,16 @@ input CreateEntityPermissionInput {
   ReadRLSFilterID: Int
   RoleName: String
   UpdateRLSFilterID: Int
+}
+
+input CreateEntityRecordDocumentInput {
+  DocumentText: String
+  EntityID: Int!
+  EntityRecordUpdatedAt: Timestamp!
+  RecordID: String!
+  VectorID: String
+  VectorIndexID: Int!
+  VectorJSON: String
 }
 
 input CreateEntityRelationshipInput {
@@ -989,6 +1020,20 @@ input CreateUserViewRunInput {
   UserViewID: Int!
 }
 
+input CreateVectorDatabaseInput {
+  ClassKey: String
+  DefaultURL: String
+  Description: String
+  Name: String!
+}
+
+input CreateVectorIndexInput {
+  Description: String
+  EmbeddingModelID: Int!
+  Name: String!
+  VectorDatabaseID: Int!
+}
+
 input CreateWorkspaceInput {
   Description: String
   Name: String!
@@ -1206,6 +1251,40 @@ type EntityDependencyResult {
   RelatedEntityName: String!
 }
 
+type EntityDocumentRun_ {
+  CreatedAt: Timestamp!
+  EndedAt: Timestamp
+  EntityDocument: String!
+  EntityDocumentID: Int!
+  ID: Int!
+  StartedAt: Timestamp
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+type EntityDocumentType_ {
+  CreatedAt: Timestamp!
+  Description: String
+  EntityDocumentsArray: [EntityDocument_!]!
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+type EntityDocument_ {
+  CreatedAt: Timestamp!
+  Entity: String!
+  EntityDocumentRunsArray: [EntityDocumentRun_!]!
+  EntityID: Int!
+  ID: Int!
+  Name: String!
+  Status: String!
+  Template: String
+  Type: String!
+  TypeID: Int!
+  UpdatedAt: Timestamp!
+}
+
 type EntityFieldValue_ {
   Code: String
   CreatedAt: Timestamp!
@@ -1293,6 +1372,19 @@ type EntityPermission_ {
   UpdatedAt: Timestamp!
 }
 
+type EntityRecordDocument_ {
+  CreatedAt: Timestamp!
+  DocumentText: String
+  EntityID: Int!
+  EntityRecordUpdatedAt: Timestamp!
+  ID: Int!
+  RecordID: String!
+  UpdatedAt: Timestamp!
+  VectorID: String
+  VectorIndexID: Int!
+  VectorJSON: String
+}
+
 input EntityRecordNameInput {
   EntityName: String!
   PrimaryKeyValues: [PrimaryKeyValueInputType!]!
@@ -1373,6 +1465,7 @@ type Entity_ {
   Description: String
   EntitiesArray: [Entity_!]!
   EntityAIActionsArray: [EntityAIAction_!]!
+  EntityDocumentsArray: [EntityDocument_!]!
   EntityFieldsArray: [EntityField_!]!
 
   """
@@ -1568,8 +1661,12 @@ type Mutation {
   CreateDealType(input: CreateDealTypeInput!): DealType_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
+  CreateEntityDocument(input: CreateEntityDocumentInput!): EntityDocument_!
+  CreateEntityDocumentRun(input: CreateEntityDocumentRunInput!): EntityDocumentRun_!
+  CreateEntityDocumentType(input: CreateEntityDocumentTypeInput!): EntityDocumentType_!
   CreateEntityField(input: CreateEntityFieldInput!): EntityField_!
   CreateEntityPermission(input: CreateEntityPermissionInput!): EntityPermission_!
+  CreateEntityRecordDocument(input: CreateEntityRecordDocumentInput!): EntityRecordDocument_!
   CreateEntityRelationship(input: CreateEntityRelationshipInput!): EntityRelationship_!
   CreateIndustry(input: CreateIndustryInput!): Industry_!
   CreateInvoice(input: CreateInvoiceInput!): Invoice_!
@@ -1598,6 +1695,8 @@ type Mutation {
   CreateUserView(input: CreateUserViewInput!): UserView_!
   CreateUserViewRun(input: CreateUserViewRunInput!): UserViewRun_!
   CreateUserViewRunDetail(input: CreateUserViewRunDetailInput!): UserViewRunDetail_!
+  CreateVectorDatabase(input: CreateVectorDatabaseInput!): VectorDatabase_!
+  CreateVectorIndex(input: CreateVectorIndexInput!): VectorIndex_!
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
@@ -1653,8 +1752,12 @@ type Mutation {
   UpdateEmployeeSkill(input: UpdateEmployeeSkillInput!): EmployeeSkill_!
   UpdateEntity(input: UpdateEntityInput!): Entity_!
   UpdateEntityAIAction(input: UpdateEntityAIActionInput!): EntityAIAction_!
+  UpdateEntityDocument(input: UpdateEntityDocumentInput!): EntityDocument_!
+  UpdateEntityDocumentRun(input: UpdateEntityDocumentRunInput!): EntityDocumentRun_!
+  UpdateEntityDocumentType(input: UpdateEntityDocumentTypeInput!): EntityDocumentType_!
   UpdateEntityField(input: UpdateEntityFieldInput!): EntityField_!
   UpdateEntityPermission(input: UpdateEntityPermissionInput!): EntityPermission_!
+  UpdateEntityRecordDocument(input: UpdateEntityRecordDocumentInput!): EntityRecordDocument_!
   UpdateEntityRelationship(input: UpdateEntityRelationshipInput!): EntityRelationship_!
   UpdateErrorLog(input: UpdateErrorLogInput!): ErrorLog_!
   UpdateIndustry(input: UpdateIndustryInput!): Industry_!
@@ -1687,6 +1790,8 @@ type Mutation {
   UpdateUserView(input: UpdateUserViewInput!): UserView_!
   UpdateUserViewRun(input: UpdateUserViewRunInput!): UserViewRun_!
   UpdateUserViewRunDetail(input: UpdateUserViewRunDetailInput!): UserViewRunDetail_!
+  UpdateVectorDatabase(input: UpdateVectorDatabaseInput!): VectorDatabase_!
+  UpdateVectorIndex(input: UpdateVectorIndexInput!): VectorIndex_!
   UpdateWorkflow(input: UpdateWorkflowInput!): Workflow_!
   UpdateWorkflowEngine(input: UpdateWorkflowEngineInput!): WorkflowEngine_!
   UpdateWorkflowRun(input: UpdateWorkflowRunInput!): WorkflowRun_!
@@ -1813,9 +1918,13 @@ type Query {
   EntitiesBySchemas(ExcludeSchemas: [String!], IncludeSchemas: [String!]): [Entity_!]!
   Entity(ID: Int!): Entity_
   EntityAIAction(ID: Int!): EntityAIAction_
+  EntityDocument(ID: Int!): EntityDocument_
+  EntityDocumentRun(ID: Int!): EntityDocumentRun_
+  EntityDocumentType(ID: Int!): EntityDocumentType_
   EntityField(ID: Int!): EntityField_
   EntityFieldValue(ID: Int!): EntityFieldValue_
   EntityPermission(ID: Int!): EntityPermission_
+  EntityRecordDocument(ID: Int!): EntityRecordDocument_
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, UserQuestion: String!, ViewId: Int!): AskSkipResultType!
@@ -1964,6 +2073,15 @@ type Query {
   RunEntityAIActionDynamicView(input: RunDynamicViewInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByID(input: RunViewByIDInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByName(input: RunViewByNameInput!): RunEntityAIActionViewResult!
+  RunEntityDocumentDynamicView(input: RunDynamicViewInput!): RunEntityDocumentViewResult!
+  RunEntityDocumentRunDynamicView(input: RunDynamicViewInput!): RunEntityDocumentRunViewResult!
+  RunEntityDocumentRunViewByID(input: RunViewByIDInput!): RunEntityDocumentRunViewResult!
+  RunEntityDocumentRunViewByName(input: RunViewByNameInput!): RunEntityDocumentRunViewResult!
+  RunEntityDocumentTypeDynamicView(input: RunDynamicViewInput!): RunEntityDocumentTypeViewResult!
+  RunEntityDocumentTypeViewByID(input: RunViewByIDInput!): RunEntityDocumentTypeViewResult!
+  RunEntityDocumentTypeViewByName(input: RunViewByNameInput!): RunEntityDocumentTypeViewResult!
+  RunEntityDocumentViewByID(input: RunViewByIDInput!): RunEntityDocumentViewResult!
+  RunEntityDocumentViewByName(input: RunViewByNameInput!): RunEntityDocumentViewResult!
   RunEntityDynamicView(input: RunDynamicViewInput!): RunEntityViewResult!
   RunEntityFieldDynamicView(input: RunDynamicViewInput!): RunEntityFieldViewResult!
   RunEntityFieldValueDynamicView(input: RunDynamicViewInput!): RunEntityFieldValueViewResult!
@@ -1974,6 +2092,9 @@ type Query {
   RunEntityPermissionDynamicView(input: RunDynamicViewInput!): RunEntityPermissionViewResult!
   RunEntityPermissionViewByID(input: RunViewByIDInput!): RunEntityPermissionViewResult!
   RunEntityPermissionViewByName(input: RunViewByNameInput!): RunEntityPermissionViewResult!
+  RunEntityRecordDocumentDynamicView(input: RunDynamicViewInput!): RunEntityRecordDocumentViewResult!
+  RunEntityRecordDocumentViewByID(input: RunViewByIDInput!): RunEntityRecordDocumentViewResult!
+  RunEntityRecordDocumentViewByName(input: RunViewByNameInput!): RunEntityRecordDocumentViewResult!
   RunEntityRelationshipDynamicView(input: RunDynamicViewInput!): RunEntityRelationshipViewResult!
   RunEntityRelationshipViewByID(input: RunViewByIDInput!): RunEntityRelationshipViewResult!
   RunEntityRelationshipViewByName(input: RunViewByNameInput!): RunEntityRelationshipViewResult!
@@ -2105,6 +2226,12 @@ type Query {
   RunUserViewRunViewByName(input: RunViewByNameInput!): RunUserViewRunViewResult!
   RunUserViewViewByID(input: RunViewByIDInput!): RunUserViewViewResult!
   RunUserViewViewByName(input: RunViewByNameInput!): RunUserViewViewResult!
+  RunVectorDatabaseDynamicView(input: RunDynamicViewInput!): RunVectorDatabaseViewResult!
+  RunVectorDatabaseViewByID(input: RunViewByIDInput!): RunVectorDatabaseViewResult!
+  RunVectorDatabaseViewByName(input: RunViewByNameInput!): RunVectorDatabaseViewResult!
+  RunVectorIndexDynamicView(input: RunDynamicViewInput!): RunVectorIndexViewResult!
+  RunVectorIndexViewByID(input: RunViewByIDInput!): RunVectorIndexViewResult!
+  RunVectorIndexViewByName(input: RunViewByNameInput!): RunVectorIndexViewResult!
   RunViewByID(input: RunViewByIDInput!): RunViewResult!
   RunViewByName(input: RunViewByNameInput!): RunViewResult!
   RunWorkflowDynamicView(input: RunDynamicViewInput!): RunWorkflowViewResult!
@@ -2143,6 +2270,8 @@ type Query {
   UserViewRun(ID: Int!): UserViewRun_
   UserViewRunDetail(ID: Int!): UserViewRunDetail_
   UserViewsByUserID(UserID: Int!): [UserView_!]!
+  VectorDatabase(ID: Int!): VectorDatabase_
+  VectorIndex(ID: Int!): VectorIndex_
   Workflow(ID: Int!): Workflow_
   WorkflowEngine(ID: Int!): WorkflowEngine_
   WorkflowRun(ID: Int!): WorkflowRun_
@@ -2829,6 +2958,36 @@ type RunEntityAIActionViewResult {
   UserViewRunID: Int
 }
 
+type RunEntityDocumentRunViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityDocumentRun_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityDocumentTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityDocumentType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityDocumentViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityDocument_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunEntityFieldValueViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -2853,6 +3012,16 @@ type RunEntityPermissionViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [EntityPermission_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityRecordDocumentViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityRecordDocument_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3311,6 +3480,26 @@ type RunUserViewViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [UserView_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunVectorDatabaseViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [VectorDatabase_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunVectorIndexViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [VectorIndex_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3896,6 +4085,29 @@ input UpdateEntityAIActionInput {
   UserMessage: String!
 }
 
+input UpdateEntityDocumentInput {
+  EntityID: Int!
+  ID: Int!
+  Name: String!
+  Status: String!
+  Template: String
+  TypeID: Int!
+}
+
+input UpdateEntityDocumentRunInput {
+  EndedAt: Timestamp
+  EntityDocumentID: Int!
+  ID: Int!
+  StartedAt: Timestamp
+  Status: String!
+}
+
+input UpdateEntityDocumentTypeInput {
+  Description: String
+  ID: Int!
+  Name: String!
+}
+
 input UpdateEntityFieldInput {
   AllowUpdateAPI: Boolean!
   AllowUpdateInView: Boolean!
@@ -3973,6 +4185,17 @@ input UpdateEntityPermissionInput {
   ReadRLSFilterID: Int
   RoleName: String
   UpdateRLSFilterID: Int
+}
+
+input UpdateEntityRecordDocumentInput {
+  DocumentText: String
+  EntityID: Int!
+  EntityRecordUpdatedAt: Timestamp!
+  ID: Int!
+  RecordID: String!
+  VectorID: String
+  VectorIndexID: Int!
+  VectorJSON: String
 }
 
 input UpdateEntityRelationshipInput {
@@ -4316,6 +4539,22 @@ input UpdateUserViewRunInput {
   UserViewID: Int!
 }
 
+input UpdateVectorDatabaseInput {
+  ClassKey: String
+  DefaultURL: String
+  Description: String
+  ID: Int!
+  Name: String!
+}
+
+input UpdateVectorIndexInput {
+  Description: String
+  EmbeddingModelID: Int!
+  ID: Int!
+  Name: String!
+  VectorDatabaseID: Int!
+}
+
 input UpdateWorkflowEngineInput {
   Description: String
   DriverClass: String!
@@ -4549,6 +4788,29 @@ type User_ {
   UserViewRunsArray: [UserViewRun_!]!
   UserViewsArray: [UserView_!]!
   WorkspacesArray: [Workspace_!]!
+}
+
+type VectorDatabase_ {
+  ClassKey: String
+  CreatedAt: Timestamp!
+  DefaultURL: String
+  Description: String
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+  VectorIndexesArray: [VectorIndex_!]!
+}
+
+type VectorIndex_ {
+  CreatedAt: Timestamp!
+  Description: String
+  EmbeddingModel: String!
+  EmbeddingModelID: Int!
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+  VectorDatabase: String!
+  VectorDatabaseID: Int!
 }
 
 type WorkflowEngine_ {
