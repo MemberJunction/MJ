@@ -132,10 +132,12 @@ export class SkipDataContextItem {
      * The type of the item, either "view", "query", "full_entity", or "sql"
      */
     Type!: 'view' | 'query' | 'full_entity' | 'sql';
+
     /**
      * The ID of the view, query, or entity in the system
      */
     RecordID!: number;
+
     /**
      * The name of the view, query, or entity in the system. If Type = sql, this is the full SQL statement
      */
@@ -179,6 +181,9 @@ export class SkipDataContextItem {
                 break;
             case 'full_entity':
                 ret = `Full Entity - All Records: ${this.EntityName}`;
+                break;
+            case 'sql':
+                ret = `SQL Statement: ${this.RecordName}`;
                 break;
             default:
                 ret = `Unknown Type: ${this.Type}`;
@@ -243,7 +248,8 @@ export class SkipDataContext {
     public CreateSimpleObjectTypeDefinition(): string {
         let sOutput: string = "";
         for (let i = 0; i < this.Items.length; i++) {
-            sOutput += `data_item_${i}: []; // array of data items\n`;
+            const item = this.Items[i];
+            sOutput += `data_item_${i}: []; // ${item.Description}\n`;
         }
         return `{${sOutput}}`;
     }
