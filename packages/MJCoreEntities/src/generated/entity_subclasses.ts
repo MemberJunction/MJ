@@ -10021,6 +10021,17 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('LinkedRecordID', value);
         }
         /**
+        * * Field Name: DataContextID
+        * * Display Name: Data Context ID
+        * * SQL Data Type: int
+        */
+        get DataContextID(): number {  
+            return this.Get('DataContextID');
+        }
+        set DataContextID(value: number) {
+            this.Set('DataContextID', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
@@ -12314,6 +12325,284 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Type(): string {  
             return this.Get('Type');
+        }
+    
+
+    }
+    
+    /**
+     * Data Context Items - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: DataContextItem
+     * * Base View: vwDataContextItems
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Data Context Items')
+    export class DataContextItemEntity extends BaseEntity {
+        /**
+        * Loads the Data Context Items record from the database
+        * @param ID: Number - primary key value to load the Data Context Items record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof DataContextItemEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Data Context Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof DataContextItemEntity
+        * @throws {Error} - Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: DataContextID
+        * * Display Name: Data Context ID
+        * * SQL Data Type: int
+        * * Related Entity: Data Contexts
+        */
+        get DataContextID(): number {  
+            return this.Get('DataContextID');
+        }
+        set DataContextID(value: number) {
+            this.Set('DataContextID', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Type(): string {  
+            return this.Get('Type');
+        }
+        set Type(value: string) {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: int
+        */
+        get RecordID(): number {  
+            return this.Get('RecordID');
+        }
+        set RecordID(value: number) {
+            this.Set('RecordID', value);
+        }
+        /**
+        * * Field Name: SQL
+        * * Display Name: SQL
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get SQL(): string {  
+            return this.Get('SQL');
+        }
+        set SQL(value: string) {
+            this.Set('SQL', value);
+        }
+        /**
+        * * Field Name: DataJSON
+        * * Display Name: Data JSON
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get DataJSON(): string {  
+            return this.Get('DataJSON');
+        }
+        set DataJSON(value: string) {
+            this.Set('DataJSON', value);
+        }
+        /**
+        * * Field Name: LastRefreshedAt
+        * * Display Name: Last Refreshed At
+        * * SQL Data Type: datetime
+        */
+        get LastRefreshedAt(): Date {  
+            return this.Get('LastRefreshedAt');
+        }
+        set LastRefreshedAt(value: Date) {
+            this.Set('LastRefreshedAt', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: DataContext
+        * * Display Name: Data Context
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get DataContext(): string {  
+            return this.Get('DataContext');
+        }
+    
+
+    }
+    
+    /**
+     * Data Contexts - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: DataContext
+     * * Base View: vwDataContexts
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Data Contexts')
+    export class DataContextEntity extends BaseEntity {
+        /**
+        * Loads the Data Contexts record from the database
+        * @param ID: Number - primary key value to load the Data Contexts record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof DataContextEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Data Contexts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof DataContextEntity
+        * @throws {Error} - Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity: Users
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: LastRefreshedAt
+        * * Display Name: Last Refreshed At
+        * * SQL Data Type: datetime
+        */
+        get LastRefreshedAt(): Date {  
+            return this.Get('LastRefreshedAt');
+        }
+        set LastRefreshedAt(value: Date) {
+            this.Set('LastRefreshedAt', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get User(): string {  
+            return this.Get('User');
         }
     
 

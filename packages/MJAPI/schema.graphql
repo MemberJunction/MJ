@@ -402,6 +402,7 @@ type ConversationDetail_ {
 type Conversation_ {
   ConversationDetailsArray: [ConversationDetail_!]!
   CreatedAt: Timestamp!
+  DataContextID: Int
   Description: String
   ExternalID: String
   ID: Int!
@@ -561,6 +562,7 @@ input CreateConversationDetailInput {
 }
 
 input CreateConversationInput {
+  DataContextID: Int
   Description: String
   ExternalID: String
   LinkedEntityID: Int
@@ -575,6 +577,22 @@ input CreateDashboardInput {
   Name: String!
   UIConfigDetails: String!
   UserID: Int
+}
+
+input CreateDataContextInput {
+  Description: String
+  LastRefreshedAt: Timestamp
+  Name: String!
+  UserID: Int!
+}
+
+input CreateDataContextItemInput {
+  DataContextID: Int!
+  DataJSON: String
+  LastRefreshedAt: Timestamp
+  RecordID: Int!
+  SQL: String
+  Type: String!
 }
 
 input CreateDealForecastCategoryInput {
@@ -1058,6 +1076,31 @@ type Dashboard_ {
   UIConfigDetails: String!
   User: String
   UserID: Int
+}
+
+type DataContextItem_ {
+  CreatedAt: Timestamp!
+  DataContext: String!
+  DataContextID: Int!
+  DataJSON: String
+  ID: Int!
+  LastRefreshedAt: Timestamp
+  RecordID: Int!
+  SQL: String
+  Type: String!
+  UpdatedAt: Timestamp!
+}
+
+type DataContext_ {
+  CreatedAt: Timestamp!
+  DataContextItemsArray: [DataContextItem_!]!
+  Description: String
+  ID: Int!
+  LastRefreshedAt: Timestamp
+  Name: String!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
 }
 
 input DatasetItemFilterTypeGQL {
@@ -1656,6 +1699,8 @@ type Mutation {
   CreateConversation(input: CreateConversationInput!): Conversation_!
   CreateConversationDetail(input: CreateConversationDetailInput!): ConversationDetail_!
   CreateDashboard(input: CreateDashboardInput!): Dashboard_!
+  CreateDataContext(input: CreateDataContextInput!): DataContext_!
+  CreateDataContextItem(input: CreateDataContextItemInput!): DataContextItem_!
   CreateDeal(input: CreateDealInput!): Deal_!
   CreateDealForecastCategory(input: CreateDealForecastCategoryInput!): DealForecastCategory_!
   CreateDealStage(input: CreateDealStageInput!): DealStage_!
@@ -1743,6 +1788,8 @@ type Mutation {
   UpdateConversation(input: UpdateConversationInput!): Conversation_!
   UpdateConversationDetail(input: UpdateConversationDetailInput!): ConversationDetail_!
   UpdateDashboard(input: UpdateDashboardInput!): Dashboard_!
+  UpdateDataContext(input: UpdateDataContextInput!): DataContext_!
+  UpdateDataContextItem(input: UpdateDataContextItemInput!): DataContextItem_!
   UpdateDeal(input: UpdateDealInput!): Deal_!
   UpdateDealForecastCategory(input: UpdateDealForecastCategoryInput!): DealForecastCategory_!
   UpdateDealStage(input: UpdateDealStageInput!): DealStage_!
@@ -1905,6 +1952,8 @@ type Query {
   CurrentUserDefaultViewByEntityID(EntityID: Int!): [UserView_!]!
   CurrentUserUserViewsByEntityID(EntityID: Int!): [UserView_!]!
   Dashboard(ID: Int!): Dashboard_
+  DataContext(ID: Int!): DataContext_
+  DataContextItem(ID: Int!): DataContextItem_
   Dataset(ID: Int!): Dataset_
   DatasetItem(ID: Int!): DatasetItem_
   Deal(ID: Int!): Deal_
@@ -2040,6 +2089,12 @@ type Query {
   RunDashboardDynamicView(input: RunDynamicViewInput!): RunDashboardViewResult!
   RunDashboardViewByID(input: RunViewByIDInput!): RunDashboardViewResult!
   RunDashboardViewByName(input: RunViewByNameInput!): RunDashboardViewResult!
+  RunDataContextDynamicView(input: RunDynamicViewInput!): RunDataContextViewResult!
+  RunDataContextItemDynamicView(input: RunDynamicViewInput!): RunDataContextItemViewResult!
+  RunDataContextItemViewByID(input: RunViewByIDInput!): RunDataContextItemViewResult!
+  RunDataContextItemViewByName(input: RunViewByNameInput!): RunDataContextItemViewResult!
+  RunDataContextViewByID(input: RunViewByIDInput!): RunDataContextViewResult!
+  RunDataContextViewByName(input: RunViewByNameInput!): RunDataContextViewResult!
   RunDatasetDynamicView(input: RunDynamicViewInput!): RunDatasetViewResult!
   RunDatasetItemDynamicView(input: RunDynamicViewInput!): RunDatasetItemViewResult!
   RunDatasetItemViewByID(input: RunViewByIDInput!): RunDatasetItemViewResult!
@@ -2799,6 +2854,26 @@ type RunDashboardViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Dashboard_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDataContextItemViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DataContextItem_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDataContextViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DataContext_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3981,6 +4056,7 @@ input UpdateConversationDetailInput {
 }
 
 input UpdateConversationInput {
+  DataContextID: Int
   Description: String
   ExternalID: String
   ID: Int!
@@ -3997,6 +4073,24 @@ input UpdateDashboardInput {
   Name: String!
   UIConfigDetails: String!
   UserID: Int
+}
+
+input UpdateDataContextInput {
+  Description: String
+  ID: Int!
+  LastRefreshedAt: Timestamp
+  Name: String!
+  UserID: Int!
+}
+
+input UpdateDataContextItemInput {
+  DataContextID: Int!
+  DataJSON: String
+  ID: Int!
+  LastRefreshedAt: Timestamp
+  RecordID: Int!
+  SQL: String
+  Type: String!
 }
 
 input UpdateDealForecastCategoryInput {
@@ -4765,6 +4859,7 @@ type User_ {
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
   DashboardsArray: [Dashboard_!]!
+  DataContextsArray: [DataContext_!]!
   Email: String!
   EmployeeEmail: String
   EmployeeFirstLast: String

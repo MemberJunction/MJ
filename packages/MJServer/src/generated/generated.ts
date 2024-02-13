@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/10/2024, 9:49:33 AM
+* GENERATED: 2/13/2024, 5:19:55 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -17,7 +17,7 @@ import { AppContext } from '@memberjunction/server';
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -3559,6 +3559,9 @@ export class User_ {
     @Field(() => [RecordMergeLog_])
     RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
 
+    @Field(() => [DataContext_])
+    DataContextsArray: DataContext_[]; // Link to DataContexts
+
 }
         
 //****************************************************************************
@@ -3844,6 +3847,14 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [InitiatedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [DataContext_])
+    async DataContextsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Data Contexts', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContexts] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL));
         return result;
     }
     
@@ -12608,6 +12619,9 @@ export class Conversation_ {
     @Field(() => Int, {nullable: true}) 
     LinkedRecordID?: number;
       
+    @Field(() => Int, {nullable: true}) 
+    DataContextID?: number;
+      
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
@@ -12657,6 +12671,9 @@ export class CreateConversationInput {
 
     @Field(() => Int, { nullable: true })
     LinkedRecordID: number;
+
+    @Field(() => Int, { nullable: true })
+    DataContextID: number;
 }
 
         
@@ -12688,6 +12705,9 @@ export class UpdateConversationInput {
 
     @Field(() => Int, { nullable: true })
     LinkedRecordID: number;
+
+    @Field(() => Int, { nullable: true })
+    DataContextID: number;
 }
 
 //****************************************************************************
@@ -16174,6 +16194,417 @@ export class EntityDocumentResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Data Context Items
+//****************************************************************************
+@ObjectType()
+export class DataContextItem_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    DataContextID: number;
+      
+    @Field() 
+    @MaxLength(100)
+    Type: string;
+      
+    @Field(() => Int) 
+    RecordID: number;
+      
+    @Field({nullable: true}) 
+    SQL?: string;
+      
+    @Field({nullable: true}) 
+    DataJSON?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    LastRefreshedAt?: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(510)
+    DataContext: string;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Data Context Items   
+//****************************************************************************
+@InputType()
+export class CreateDataContextItemInput {
+    @Field(() => Int, )
+    DataContextID: number;
+
+    @Field()
+    Type: string;
+
+    @Field(() => Int, )
+    RecordID: number;
+
+    @Field({ nullable: true })
+    SQL: string;
+
+    @Field({ nullable: true })
+    DataJSON: string;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Data Context Items   
+//****************************************************************************
+@InputType()
+export class UpdateDataContextItemInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field(() => Int, )
+    DataContextID: number;
+
+    @Field()
+    Type: string;
+
+    @Field(() => Int, )
+    RecordID: number;
+
+    @Field({ nullable: true })
+    SQL: string;
+
+    @Field({ nullable: true })
+    DataJSON: string;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date;
+}
+
+//****************************************************************************
+// RESOLVER for Data Context Items
+//****************************************************************************
+@ObjectType()
+export class RunDataContextItemViewResult {
+    @Field(() => [DataContextItem_])
+    Results: DataContextItem_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DataContextItem_)
+export class DataContextItemResolver extends ResolverBase {
+    @Query(() => RunDataContextItemViewResult)
+    async RunDataContextItemViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDataContextItemViewResult)
+    async RunDataContextItemViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDataContextItemViewResult)
+    async RunDataContextItemDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Data Context Items';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DataContextItem_, { nullable: true })
+    async DataContextItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContextItem_ | null> {
+        this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => DataContextItem_)
+    async CreateDataContextItem(
+        @Arg('input', () => CreateDataContextItemInput) input: CreateDataContextItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateDataContextItemInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateDataContextItemInput) {
+    }
+    
+    @Mutation(() => DataContextItem_)
+    async UpdateDataContextItem(
+        @Arg('input', () => UpdateDataContextItemInput) input: UpdateDataContextItemInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Data Context Items
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDataContextItemInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextItemInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Data Contexts
+//****************************************************************************
+@ObjectType()
+export class DataContext_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+      
+    @Field(() => Int) 
+    UserID: number;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    LastRefreshedAt?: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(200)
+    User: string;
+    
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Data Contexts   
+//****************************************************************************
+@InputType()
+export class CreateDataContextInput {
+    @Field()
+    Name: string;
+
+    @Field(() => Int, )
+    UserID: number;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Data Contexts   
+//****************************************************************************
+@InputType()
+export class UpdateDataContextInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field(() => Int, )
+    UserID: number;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date;
+}
+
+//****************************************************************************
+// RESOLVER for Data Contexts
+//****************************************************************************
+@ObjectType()
+export class RunDataContextViewResult {
+    @Field(() => [DataContext_])
+    Results: DataContext_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DataContext_)
+export class DataContextResolver extends ResolverBase {
+    @Query(() => RunDataContextViewResult)
+    async RunDataContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDataContextViewResult)
+    async RunDataContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDataContextViewResult)
+    async RunDataContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Data Contexts';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DataContext_, { nullable: true })
+    async DataContext(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContext_ | null> {
+        this.CheckUserReadPermissions('Data Contexts', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContexts] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [DataContextItem_])
+    async DataContextItemsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [DataContextID]=${datacontext_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => DataContext_)
+    async CreateDataContext(
+        @Arg('input', () => CreateDataContextInput) input: CreateDataContextInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateDataContextInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateDataContextInput) {
+    }
+    
+    @Mutation(() => DataContext_)
+    async UpdateDataContext(
+        @Arg('input', () => UpdateDataContextInput) input: UpdateDataContextInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Data Contexts
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDataContextInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextInput) {
         const i = input, d = dataSource; // prevent error
     }
 

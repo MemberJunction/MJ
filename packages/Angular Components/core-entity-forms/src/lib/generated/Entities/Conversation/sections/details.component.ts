@@ -39,6 +39,10 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             <kendo-numerictextbox [(value)]="record.LinkedRecordID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Data Context ID</label>
+            <kendo-numerictextbox [(value)]="record.DataContextID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
             <span >{{FormatValue('CreatedAt', 0)}}</span>   
         </div>               
@@ -84,6 +88,10 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Linked Record ID</label>
             <span >{{FormatValue('LinkedRecordID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Data Context ID</label>
+            <span >{{FormatValue('DataContextID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
