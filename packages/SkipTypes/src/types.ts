@@ -54,8 +54,9 @@ export class SkipAPIRequest {
      * * initial_request: The initial request from the user - when a new conversation gets started or after a report is created, pass in this value
      * * clarify_question_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'clarifying_question' - in this situation, the MJAPI server needs to communicate with the UI to ask the follow up question to the user. When you have that feedback from the user gathered and are providing the response to the clarifying question back to Skip API, use this requestPhase
      * * data_gathering_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'data_request' - in this situation, the MJAPI server needs to process the data request, gather whatever additional data the Skip API has asked for, and then return it in the dataContext property of the SkipAPIRequest object. When you are finished gathering data and returning it to the Skip API server, use this requestPhase
+     * * data_gathering_failure: When you send an API request to the Skip API server saying there was a data_gathering_failure that means that you attempted to retrieve data Skip requested but there was (typically) an error in the SQL statement that Skip generated and it needs to be regenerated. The MJAPI server code handles this scenario automatically.
      */
-    requestPhase: 'initial_request' | 'clarify_question_response' | 'data_gathering_response';
+    requestPhase: 'initial_request' | 'clarify_question_response' | 'data_gathering_response' | 'data_gathering_failure';
 }
 
 /**
