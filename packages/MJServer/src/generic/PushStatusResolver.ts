@@ -28,7 +28,6 @@ export class PushStatusResolver {
   @Subscription(() => PushStatusNotification, {
     topics: PUSH_STATUS_UPDATES_TOPIC,
     filter: ({ payload, args, context }: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, any>) => {
-      console.log('context', context);
       return payload.sessionId === args.sessionId;
     },
   })

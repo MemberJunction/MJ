@@ -130,12 +130,12 @@ export class SkipDataContextFieldInfo {
 
 export class SkipDataContextItem {
     /**
-     * The type of the item, either "view", "query", "full_entity", or "sql"
+     * The type of the item, either "view", "query", "full_entity", or "sql", or "single_record"
      */
-    Type!: 'view' | 'query' | 'full_entity' | 'sql';
+    Type!: 'view' | 'query' | 'full_entity' | 'sql' | 'single_record';
 
     /**
-     * The ID of the view, query, or entity in the system
+     * The ID of the view, query, entity, or single record in the system
      */
     RecordID!: number;
 
@@ -145,9 +145,10 @@ export class SkipDataContextItem {
     RecordName!: string;
   
     /**
-     * The name of the entity in the system, only used if type = 'full_entity' or type = 'view' --- for type of 'query' this is not used as query can come from any number of entities in combination
+     * The name of the entity in the system, only used if type = 'full_entity', 'view', or 'single_record' --- for type of 'query' or 'sql' this property is not used as results can come from any number of entities in combination
      */
     EntityName?: string;
+
     /*
     * The fields in the view, query, or entity
     */

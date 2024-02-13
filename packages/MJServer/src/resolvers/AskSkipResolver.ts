@@ -58,6 +58,7 @@ export class AskSkipResultType {
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
+  private static _maxHistoricalMessages = 8;
 
 
   @Query(() => AskSkipResultType)
@@ -79,9 +80,14 @@ export class AskSkipResolver {
       if (user) {
         convoEntity.UserID = user.ID;
         convoEntity.Name = AskSkipResolver._defaultNewChatName;
-        if (await convoEntity.Save()) ConversationId = convoEntity.ID;
-        else throw new Error(`Creating a new conversation failed`);
-      } else throw new Error(`User ${userPayload.email} not found in UserCache`);
+        if (await convoEntity.Save()) 
+          ConversationId = convoEntity.ID;
+        else 
+          throw new Error(`Creating a new conversation failed`);
+      } 
+      else { 
+        throw new Error(`User ${userPayload.email} not found in UserCache`);
+      }
     } else {
       await convoEntity.Load(ConversationId); // load the existing conversation, will need it later
     }
@@ -106,12 +112,8 @@ export class AskSkipResolver {
       } as SkipDataContextItem
     );    
 
-    const messages: SkipMessage[] = [
-      {
-        content: UserQuestion,
-        role: 'user'
-      }
-    ];
+    // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
+    const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(dataSource, convoEntity.ID, AskSkipResolver._maxHistoricalMessages);
 
     const input: SkipAPIRequest = { 
                     messages: messages, 
@@ -133,10 +135,65 @@ export class AskSkipResolver {
     return this.HandleSkipRequest(input, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity);
   }
 
+  protected async LoadConversationDetailsIntoSkipMessages(dataSource: DataSource, ConversationId: number, maxHistoricalMessages?: number): Promise<SkipMessage[]> {
+    try {
+      // load up all the conversation details from the database server
+      const md = new Metadata();
+      const e = md.Entities.find((e) => e.Name === 'Conversation Details');
+      const sql = `SELECT 
+                      ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} ID, Message, Role, CreatedAt 
+                   FROM 
+                      ${e.SchemaName}.${e.BaseView} 
+                   WHERE 
+                      ConversationID = ${ConversationId} 
+                   ORDER 
+                      BY CreatedAt DESC`;
+      const result = await dataSource.query(sql);
+      if (!result) 
+        throw new Error(`Error running SQL: ${sql}`);
+      else  {
+        // first, let's sort the result array into a local variable called returnData and in that we will sort by CreatedAt in ASCENDING order so we have the right chronological order
+        // the reason we're doing a LOCAL sort here is because in the SQL query above, we're sorting in DESCENDING order so we can use the TOP clause to limit the number of records and get the 
+        // N most recent records. We want to sort in ASCENDING order because we want to send the messages to the Skip API in the order they were created.
+        const returnData = result.sort((a: any, b: any) => {
+          const aDate = new Date(a.CreatedAt);
+          const bDate = new Date(b.CreatedAt);
+          return aDate.getTime() - bDate.getTime();
+        });
+
+        // now, we will map the returnData into an array of SkipMessages
+        return returnData.map((r: ConversationDetailEntity) => {
+          // we want to limit the # of characters in the message to 5000, rough approximation for 1000 words/tokens
+          // but we only do that for system messages
+          const skipRole = this.MapDBRoleToSkipRole(r.Role);
+          const m: SkipMessage = {
+            content: skipRole === 'system' ? (r.Message.length > 5000 ? "PARTIAL CONTENT: " + r.Message.substring(0, 5000) : r.Message) : r.Message,
+            role: skipRole,
+          };
+          return m;
+        });
+      }
+    }
+    catch (e) {
+      LogError(e);
+      throw e;
+    }
+  }
+
+  protected MapDBRoleToSkipRole(role: string): "user" | "system" {
+    switch (role.trim().toLowerCase()) {
+      case 'ai': 
+        return 'system';
+      default: 
+        return 'user';
+    }
+  }
 
   protected async HandleSkipRequest(input: SkipAPIRequest, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
                                     ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, md: Metadata, 
                                     convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity): Promise<AskSkipResultType> {
+    LogStatus(`Sending request to Skip API: ${___skipAPIurl}`)
+
     // Convert JSON payload to a Buffer and compress it
     const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
 
@@ -150,6 +207,7 @@ export class AskSkipResolver {
 
     if (response.status === 200) {
       const apiResponse = <SkipAPIResponse>response.data;
+      LogStatus(`  Skip API response: ${apiResponse.responsePhase}`)
       this.PublishApiResponseUserUpdateMessage(apiResponse, userPayload, pubSub);
 
       // now, based on the result type, we will either wait for the next phase or we will process the results
@@ -260,7 +318,7 @@ export class AskSkipResolver {
         ResponsePhase: SkipResponsePhase.ClarifyingQuestion,
         ConversationId: ConversationId,
         UserMessageConversationDetailId: convoDetailEntity.ID,
-        AIMessageConversationDetailId: 0,
+        AIMessageConversationDetailId: convoDetailEntityAI.ID,
         Result: JSON.stringify(apiResponse)
       };
     }
@@ -274,6 +332,13 @@ export class AskSkipResolver {
       const _dataGatheringFailureHeaderMessage = '***DATA GATHERING FAILURE***';
       const md = new Metadata();
       const executionErrors = [];
+
+      // first, in this situation we want to add a message to our apiRequest so that it is part of the message history with the server
+      apiRequest.messages.push({
+        content: `Skip API Requested Data as shown below
+                  ${JSON.stringify(apiResponse.dataRequest)}`, 
+        role: 'system' // user role of system because this came from Skip, we are simplifying the message for the next round if we need to send it back
+      });
 
       for (const dr of apiResponse.dataRequest) {
         try {

@@ -155,6 +155,7 @@ type Application_ {
 type AskSkipResultType {
   AIMessageConversationDetailId: Int!
   ConversationId: Int!
+  ResponsePhase: SkipResponsePhase!
   Result: String!
   Status: String!
   Success: Boolean!
@@ -3699,6 +3700,15 @@ type Skill_ {
   ParentID: Int
   SkillsArray: [Skill_!]!
   UpdatedAt: Timestamp!
+}
+
+"""
+The phase of the respons: clarifying_question, data_request, or analysis_complete
+"""
+enum SkipResponsePhase {
+  AnalysisComplete
+  ClarifyingQuestion
+  DataRequest
 }
 
 type Subscription {
