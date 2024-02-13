@@ -155,6 +155,11 @@ export class SkipDataContextItem {
     Fields: SkipDataContextFieldInfo[] = [];    
 
     /**
+     * This field can be used at run time to stash the record ID in the database of the Data Context Item, if it was already saved. For items that haven't/won't be saved, this property can be ignored.
+     */
+    DataContextItemID?: number;
+
+    /**
      * ViewEntity - the object instantiated that contains the metadata for the UserView being used - only populated if the type is 'view', also this is NOT to be sent to/from the API server, it is a placeholder that can be used 
      *              within a given tier like in the MJAPI server or Skip Server or in the UI.
      */
