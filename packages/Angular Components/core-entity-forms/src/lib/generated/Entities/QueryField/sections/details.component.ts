@@ -61,10 +61,6 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Query</label>
             <span >{{FormatValue('Query', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Source Entity</label>
-            <span >{{FormatValue('SourceEntity', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -87,7 +83,7 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Source Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="SourceEntityID" >{{FormatValue('SourceEntityID', 0)}}</span>
+            <span >{{FormatValue('SourceEntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Source Field Name</label>
@@ -120,10 +116,6 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Query</label>
             <span >{{FormatValue('Query', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Source Entity</label>
-            <span >{{FormatValue('SourceEntity', 0)}}</span>
         </div>
     </div>
 </div>

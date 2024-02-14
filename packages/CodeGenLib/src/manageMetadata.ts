@@ -390,6 +390,7 @@ function getPendingEntityFieldINSERTSQL(n: any): string {
                                     n.FieldName?.trim().toLowerCase() === 'name' || 
                                     n.Sequence <= configInfo.newEntityDefaults?.IncludeFirstNFieldsAsDefaultInView ||
                                     n.IsNameField ? true : false);
+   const escapedDescription = n.Description ? `'${n.Description.replace(/'/g, "''")}'` : 'NULL';
    return `
    INSERT INTO [${mj_core_schema()}].EntityField
    (
@@ -422,7 +423,7 @@ function getPendingEntityFieldINSERTSQL(n: any): string {
       ${n.Sequence},
       '${n.FieldName}',
       '${convertCamelCaseToHaveSpaces(n.FieldName).trim()}',
-      ${n.Description},
+      ${escapedDescription},
       '${n.Type}',
       ${n.Length},
       ${n.Precision},

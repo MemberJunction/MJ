@@ -33,10 +33,6 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -51,7 +47,7 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
+            <span >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity Record ID</label>
@@ -64,10 +60,6 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>
         </div>
     </div>
 </div>

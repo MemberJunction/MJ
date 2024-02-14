@@ -113,10 +113,11 @@ export function generateDBSchemaJSON(entities: EntityInfo[], excludeEntities: st
 }
 
 function generateEntityJSON(entity: EntityInfo, simpleVersion: boolean) : string {
+    const jsonEscapedDescription = entity.Description ? entity.Description.replace(/"/g, '\\"') : '';
     let sOutput: string = `
     { 
         "Name": "${entity.Name}",
-        "Description": "${entity.Description ? entity.Description : ''}",
+        "Description": "${jsonEscapedDescription}",
         "BaseView": "${entity.BaseView}", 
         "Fields": [`;
 
@@ -142,10 +143,11 @@ function generateEntityJSON(entity: EntityInfo, simpleVersion: boolean) : string
 function generateFieldJSON(field: EntityFieldInfo, simpleVersion: boolean) : string {
     const relEntity = field.RelatedEntity && field.RelatedEntity.length > 0 ? `\n                "RelatedEntity": "${field.RelatedEntity}",` : ''
     const relField = relEntity && field.RelatedEntityFieldName && field.RelatedEntityFieldName.length > 0 ? `\n                "RelatedEntityFieldName": "${field.RelatedEntityFieldName}",` : ''
+    const jsonEscapedDescription = field.Description ? field.Description.replace(/"/g, '\\"') : '';
     let sOutput: string = `         
             {
                 "Name": "${field.Name}", 
-                "Description": "${field.Description ? field.Description : ''}",  
+                "Description": "${jsonEscapedDescription}",  
                 "Type": "${field.Type}",${relEntity}${relField}
                 "AllowsNull": ${field.AllowsNull} 
             }`

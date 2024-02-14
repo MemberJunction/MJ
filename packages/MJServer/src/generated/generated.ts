@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/13/2024, 5:19:55 PM
+* GENERATED: 2/14/2024, 9:00:01 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2169,6 +2169,9 @@ export class EntityField_ {
     @Field({nullable: true}) 
     Description?: string;
       
+    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
+    AutoUpdateDescription: boolean;
+      
     @Field(() => Boolean) 
     IsPrimaryKey: boolean;
       
@@ -2335,6 +2338,9 @@ export class CreateEntityFieldInput {
     Description: string;
 
     @Field(() => Boolean, )
+    AutoUpdateDescription: boolean;
+
+    @Field(() => Boolean, )
     IsPrimaryKey: boolean;
 
     @Field(() => Boolean, )
@@ -2409,6 +2415,9 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Boolean, )
+    AutoUpdateDescription: boolean;
 
     @Field(() => Boolean, )
     IsPrimaryKey: boolean;
@@ -2650,6 +2659,9 @@ export class Entity_ {
     @Field({nullable: true}) 
     Description?: string;
       
+    @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
+    AutoUpdateDescription: boolean;
+      
     @Field() 
     @MaxLength(510)
     BaseTable: string;
@@ -2861,6 +2873,9 @@ export class Entity_ {
     @Field(() => [EntityDocument_])
     EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
 
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
 }
         
 //****************************************************************************
@@ -2882,6 +2897,9 @@ export class CreateEntityInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Boolean, )
+    AutoUpdateDescription: boolean;
 
     @Field()
     BaseView: string;
@@ -2997,6 +3015,9 @@ export class UpdateEntityInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Boolean, )
+    AutoUpdateDescription: boolean;
 
     @Field()
     BaseView: string;
@@ -3333,6 +3354,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [DataContextItem_])
+    async DataContextItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
     
@@ -4532,6 +4561,9 @@ export class UserView_ {
     @Field(() => [UserViewRun_])
     UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
 
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
 }
         
 //****************************************************************************
@@ -4719,6 +4751,14 @@ export class UserViewResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [UserViewID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [DataContextItem_])
+    async DataContextItemsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [ViewID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
     
@@ -6546,10 +6586,6 @@ export class List_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Entity?: string;
-      
     @Field() 
     @MaxLength(200)
     User: string;
@@ -8237,10 +8273,6 @@ export class AuditLog_ {
     @Field() 
     @MaxLength(200)
     User: string;
-      
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    Entity?: string;
     
 }
         
@@ -11640,10 +11672,6 @@ export class TaggedItem_ {
     @Field() 
     @MaxLength(510)
     Tag: string;
-      
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
     
 }
 //****************************************************************************
@@ -13524,10 +13552,6 @@ export class CompanyIntegrationRecordMap_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
-    @Field() 
-    @MaxLength(510)
-    Entity: string;
     
 }
         
@@ -14187,10 +14211,6 @@ export class QueryField_ {
     @Field() 
     @MaxLength(510)
     Query: string;
-      
-    @Field({nullable: true}) 
-    @MaxLength(510)
-    SourceEntity?: string;
     
 }
         
@@ -14640,6 +14660,9 @@ export class Query_ {
     @Field(() => [QueryPermission_])
     QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
 
+    @Field(() => [DataContextItem_])
+    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+
 }
         
 //****************************************************************************
@@ -14771,6 +14794,14 @@ export class QueryResolver extends ResolverBase {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [DataContextItem_])
+    async DataContextItemsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Data Context Items', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
     
@@ -15397,7 +15428,7 @@ export class EntityDocumentRun_ {
     @MaxLength(8)
     EndedAt?: Date;
       
-    @Field() 
+    @Field({description: 'Can be Pending, In Progress, Completed, or Failed'}) 
     @MaxLength(30)
     Status: string;
       
@@ -16018,10 +16049,6 @@ export class EntityDocument_ {
     UpdatedAt: Date;
       
     @Field() 
-    @MaxLength(510)
-    Entity: string;
-      
-    @Field() 
     @MaxLength(200)
     Type: string;
     
@@ -16202,28 +16229,37 @@ export class EntityDocumentResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Data Context Items
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.' })
 export class DataContextItem_ {  
     @Field(() => Int) 
     ID: number;
       
-    @Field(() => Int) 
+    @Field(() => Int, {description: 'Foreign key to the DataContext table'}) 
     DataContextID: number;
       
-    @Field() 
+    @Field({description: 'The type of the item, either "view", "query", "full_entity", "single_record", or "sql"'}) 
     @MaxLength(100)
     Type: string;
       
-    @Field(() => Int) 
-    RecordID: number;
+    @Field(() => Int, {nullable: true, description: 'Only used if Type=\'view\''}) 
+    ViewID?: number;
       
-    @Field({nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Only used if Type=\'query\''}) 
+    QueryID?: number;
+      
+    @Field(() => Int, {nullable: true, description: 'Used if type=\'full_entity\' or type=\'single_record\''}) 
+    EntityID?: number;
+      
+    @Field(() => Int, {nullable: true, description: 'The ID for the record, only used when Type=\'single_record\''}) 
+    RecordID?: number;
+      
+    @Field({nullable: true, description: 'Only used when Type=sql'}) 
     SQL?: string;
       
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.'}) 
     DataJSON?: string;
       
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'If DataJSON is populated, this field will show the date the the data was captured'}) 
     @MaxLength(8)
     LastRefreshedAt?: Date;
       
@@ -16238,6 +16274,14 @@ export class DataContextItem_ {
     @Field() 
     @MaxLength(510)
     DataContext: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    View?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Query?: string;
     
 }
         
@@ -16252,7 +16296,16 @@ export class CreateDataContextItemInput {
     @Field()
     Type: string;
 
-    @Field(() => Int, )
+    @Field(() => Int, { nullable: true })
+    ViewID: number;
+
+    @Field(() => Int, { nullable: true })
+    QueryID: number;
+
+    @Field(() => Int, { nullable: true })
+    EntityID: number;
+
+    @Field(() => Int, { nullable: true })
     RecordID: number;
 
     @Field({ nullable: true })
@@ -16280,7 +16333,16 @@ export class UpdateDataContextItemInput {
     @Field()
     Type: string;
 
-    @Field(() => Int, )
+    @Field(() => Int, { nullable: true })
+    ViewID: number;
+
+    @Field(() => Int, { nullable: true })
+    QueryID: number;
+
+    @Field(() => Int, { nullable: true })
+    EntityID: number;
+
+    @Field(() => Int, { nullable: true })
     RecordID: number;
 
     @Field({ nullable: true })
@@ -16411,7 +16473,7 @@ export class DataContextItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Data Contexts
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.' })
 export class DataContext_ {  
     @Field(() => Int) 
     ID: number;

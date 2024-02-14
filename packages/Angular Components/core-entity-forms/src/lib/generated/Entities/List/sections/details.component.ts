@@ -43,10 +43,6 @@ import { ListEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
         </div>               
         <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>   
         </div> 
@@ -63,7 +59,7 @@ import { ListEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
+            <span >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
@@ -84,10 +80,6 @@ import { ListEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">User</label>

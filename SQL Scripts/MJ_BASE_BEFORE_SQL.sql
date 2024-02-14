@@ -944,7 +944,7 @@ AS
 	UPDATE 
 		[admin].[Entity]
 	SET
-		Description = IIF(e.Description IS NULL OR TRIM(e.Description) = '', CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
+		Description = IIF(e.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
 	FROM
 		[admin].[Entity] e
 	INNER JOIN
@@ -961,7 +961,7 @@ BEGIN
     -- Update Statement
     UPDATE [admin].EntityField
     SET
-		Description = IIF(ef.Description IS NULL OR TRIM(ef.Description)='', CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
+		Description = IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
         Type = fromSQL.Type,
         Length = fromSQL.Length,
         Precision = fromSQL.Precision,

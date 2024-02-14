@@ -12,7 +12,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
                   
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>   
+            <span >{{FormatValue('EntityID', 0)}}</span>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Sequence</label>
@@ -29,6 +29,10 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Description</label>
             <kendo-textbox [(ngModel)]="record.Description"  />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Update Description</label>
+            <input type="checkbox" [(ngModel)]="record.AutoUpdateDescription" kendoCheckBox />   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Is Primary Key</label>
@@ -203,7 +207,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
                   
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
+            <span >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Sequence</label>
@@ -220,6 +224,10 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Description</label>
             <span >{{FormatValue('Description', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Update Description</label>
+            <span >{{FormatValue('AutoUpdateDescription', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Is Primary Key</label>
@@ -319,7 +327,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">RelatedEntity ID</label>
-            <span mjFieldLink [record]="record" fieldName="RelatedEntityID" >{{FormatValue('RelatedEntityID', 0)}}</span>
+            <span >{{FormatValue('RelatedEntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Related Entity Field Name</label>

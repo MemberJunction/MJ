@@ -19,6 +19,18 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Type"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">View ID</label>
+            <kendo-numerictextbox [(value)]="record.ViewID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Query ID</label>
+            <kendo-numerictextbox [(value)]="record.QueryID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity ID</label>
+            <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Record ID</label>
             <kendo-numerictextbox [(value)]="record.RecordID" ></kendo-numerictextbox>   
         </div>               
@@ -45,6 +57,14 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Data Context</label>
             <span >{{FormatValue('DataContext', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">View</label>
+            <span >{{FormatValue('View', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Query</label>
+            <span >{{FormatValue('Query', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -56,6 +76,18 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Type</label>
             <span >{{FormatValue('Type', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">View ID</label>
+            <span mjFieldLink [record]="record" fieldName="ViewID" >{{FormatValue('ViewID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Query ID</label>
+            <span mjFieldLink [record]="record" fieldName="QueryID" >{{FormatValue('QueryID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity ID</label>
+            <span >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Record ID</label>
@@ -84,6 +116,14 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Data Context</label>
             <span >{{FormatValue('DataContext', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">View</label>
+            <span >{{FormatValue('View', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Query</label>
+            <span >{{FormatValue('Query', 0)}}</span>
         </div>
     </div>
 </div>

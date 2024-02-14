@@ -19,6 +19,10 @@ import { EntityEntity } from '@memberjunction/core-entities';
             <kendo-textarea [(ngModel)]="record.NameSuffix" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Auto Update Description</label>
+            <input type="checkbox" [(ngModel)]="record.AutoUpdateDescription" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Base View Generated</label>
             <input type="checkbox" [(ngModel)]="record.BaseViewGenerated" kendoCheckBox />   
         </div>               
@@ -112,6 +116,10 @@ import { EntityEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Name Suffix</label>
             <span >{{FormatValue('NameSuffix', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Update Description</label>
+            <span >{{FormatValue('AutoUpdateDescription', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Base View Generated</label>

@@ -1596,7 +1596,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -1639,6 +1638,19 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Description(value: string) {
             this.Set('Description', value);
+        }
+        /**
+        * * Field Name: AutoUpdateDescription
+        * * Display Name: Auto Update Description
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
+        */
+        get AutoUpdateDescription(): boolean {  
+            return this.Get('AutoUpdateDescription');
+        }
+        set AutoUpdateDescription(value: boolean) {
+            this.Set('AutoUpdateDescription', value);
         }
         /**
         * * Field Name: IsPrimaryKey
@@ -1902,7 +1914,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RelatedEntityID
         * * Display Name: RelatedEntity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get RelatedEntityID(): number {  
             return this.Get('RelatedEntityID');
@@ -2155,6 +2166,19 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Description(value: string) {
             this.Set('Description', value);
+        }
+        /**
+        * * Field Name: AutoUpdateDescription
+        * * Display Name: Auto Update Description
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
+        */
+        get AutoUpdateDescription(): boolean {  
+            return this.Get('AutoUpdateDescription');
+        }
+        set AutoUpdateDescription(value: boolean) {
+            this.Set('AutoUpdateDescription', value);
         }
         /**
         * * Field Name: BaseTable
@@ -3404,7 +3428,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -3851,7 +3874,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4226,7 +4248,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4372,7 +4393,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4617,7 +4637,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4963,7 +4982,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -5024,15 +5042,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
-        }
-    
-        /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
         }
     
         /**
@@ -6216,7 +6225,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -6262,15 +6270,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
-        }
-    
-        /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
         }
     
 
@@ -9220,7 +9219,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -9246,15 +9244,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Tag(): string {  
             return this.Get('Tag');
-        }
-    
-        /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
         }
     
 
@@ -10587,7 +10576,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -10624,15 +10612,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
-        }
-    
-        /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
         }
     
 
@@ -11062,7 +11041,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceEntityID
         * * Display Name: Source Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get SourceEntityID(): number {  
             return this.Get('SourceEntityID');
@@ -11154,15 +11132,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Query(): string {  
             return this.Get('Query');
-        }
-    
-        /**
-        * * Field Name: SourceEntity
-        * * Display Name: Source Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get SourceEntity(): string {  
-            return this.Get('SourceEntity');
         }
     
 
@@ -11875,6 +11844,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
         * * Default Value: N'Pending'
+        * * Description: Can be Pending, In Progress, Completed, or Failed
         */
         get Status(): string {  
             return this.Get('Status');
@@ -12246,7 +12216,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -12310,15 +12279,6 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
-        * * Field Name: Entity
-        * * Display Name: Entity
-        * * SQL Data Type: nvarchar(255)
-        */
-        get Entity(): string {  
-            return this.Get('Entity');
-        }
-    
-        /**
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
@@ -12335,6 +12295,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: DataContextItem
      * * Base View: vwDataContextItems
+     * * @description Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -12385,6 +12346,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Data Context ID
         * * SQL Data Type: int
         * * Related Entity: Data Contexts
+        * * Description: Foreign key to the DataContext table
         */
         get DataContextID(): number {  
             return this.Get('DataContextID');
@@ -12396,6 +12358,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)
+        * * Description: The type of the item, either "view", "query", "full_entity", "single_record", or "sql"
         */
         get Type(): string {  
             return this.Get('Type');
@@ -12404,9 +12367,48 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Type', value);
         }
         /**
+        * * Field Name: ViewID
+        * * Display Name: View ID
+        * * SQL Data Type: int
+        * * Related Entity: User Views
+        * * Description: Only used if Type='view'
+        */
+        get ViewID(): number {  
+            return this.Get('ViewID');
+        }
+        set ViewID(value: number) {
+            this.Set('ViewID', value);
+        }
+        /**
+        * * Field Name: QueryID
+        * * Display Name: Query ID
+        * * SQL Data Type: int
+        * * Related Entity: Queries
+        * * Description: Only used if Type='query'
+        */
+        get QueryID(): number {  
+            return this.Get('QueryID');
+        }
+        set QueryID(value: number) {
+            this.Set('QueryID', value);
+        }
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Description: Used if type='full_entity' or type='single_record'
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
         * * Field Name: RecordID
         * * Display Name: Record ID
         * * SQL Data Type: int
+        * * Description: The ID for the record, only used when Type='single_record'
         */
         get RecordID(): number {  
             return this.Get('RecordID');
@@ -12418,6 +12420,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SQL
         * * Display Name: SQL
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: Only used when Type=sql
         */
         get SQL(): string {  
             return this.Get('SQL');
@@ -12429,6 +12432,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataJSON
         * * Display Name: Data JSON
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.
         */
         get DataJSON(): string {  
             return this.Get('DataJSON');
@@ -12440,6 +12444,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LastRefreshedAt
         * * Display Name: Last Refreshed At
         * * SQL Data Type: datetime
+        * * Description: If DataJSON is populated, this field will show the date the the data was captured
         */
         get LastRefreshedAt(): Date {  
             return this.Get('LastRefreshedAt');
@@ -12471,10 +12476,27 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get DataContext(): string {  
             return this.Get('DataContext');
+        }
+    
+        /**
+        * * Field Name: View
+        * * Display Name: View
+        * * SQL Data Type: nvarchar(100)
+        */
+        get View(): string {  
+            return this.Get('View');
+        }
+    
+        /**
+        * * Field Name: Query
+        * * Display Name: Query
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Query(): string {  
+            return this.Get('Query');
         }
     
 
@@ -12485,6 +12507,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: DataContext
      * * Base View: vwDataContexts
+     * * @description Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -12599,7 +12622,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
