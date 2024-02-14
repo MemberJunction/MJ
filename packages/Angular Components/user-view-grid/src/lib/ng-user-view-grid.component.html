@@ -84,7 +84,8 @@
         <kendo-tabstrip-tab *ngIf="Params?.ViewID">
             <ng-template kendoTabTitle>Analysis</ng-template>
             <ng-template kendoTabContent>
-                <mj-ask-skip mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" [ViewID]="ViewID" [LinkedEntity]="'User Views'" [LinkedEntityRecordID]="ViewID">
+                <mj-ask-skip mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
+                                             [DataContextID]="DataContextID" [LinkedEntity]="'User Views'" [LinkedEntityRecordID]="ViewID">
                 </mj-ask-skip>
             </ng-template>
         </kendo-tabstrip-tab>

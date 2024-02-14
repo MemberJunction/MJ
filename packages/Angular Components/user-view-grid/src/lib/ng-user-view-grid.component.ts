@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -647,6 +647,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         this.virtualLoadData();
         
       }
+      this.DataContextID = await this.GetDataContextID(); // refresh data context id as needed
+
       this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
       this.isLoading = false
     }
@@ -814,6 +816,42 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     else  
       throw new Error("Unable to get export data");    
+  }
+
+  public DataContextID: number = 0;
+  protected async GetDataContextID(): Promise<number> {
+    // temporary hack for now, we will have more functionality to do robust UX around DataCOntext viewing and editing soon
+    // and get rid of this
+    if (!this.DataContextID) {
+      // need to create a data context with a single item for this view
+      if (this._viewEntity?.ID) {
+        const md = new Metadata();
+        const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
+        dc.NewRecord();
+        dc.Name = "Data Context for View: " + this._viewEntity.Name;
+        dc.UserID = md.CurrentUser.ID;
+        if (await dc.Save()) {
+          // now create a single data context item for the new data context
+          const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
+          dci.NewRecord();
+          dci.DataContextID = dc.ID;
+          dci.Type = 'view';
+          dci.ViewID = this._viewEntity.ID;
+          if (await dci.Save()) {
+            this.DataContextID = dc.ID;
+          }
+          else {
+            SharedService.Instance.CreateSimpleNotification("Error creating data context item", 'error', 5000)
+            console.log("UserViewGrid: Error creating data context item")
+          }
+        }
+        else {
+          SharedService.Instance.CreateSimpleNotification("Error creating data context", 'error', 5000)
+          console.log("UserViewGrid: Error creating data context")
+        }  
+      }
+    }
+    return this.DataContextID;
   }
 
   public kendoSVGIcon = kendoSVGIcon;

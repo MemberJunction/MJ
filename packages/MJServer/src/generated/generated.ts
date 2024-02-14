@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/14/2024, 9:00:01 AM
+* GENERATED: 2/14/2024, 10:23:29 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -23,7 +23,7 @@ import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyInteg
 //****************************************************************************
 // ENTITY CLASS for Companies
 //****************************************************************************
-@ObjectType({ description: 'List of Companies/Organizations within the top-level business, used for subsidiaries' })
+@ObjectType()
 export class Company_ {  
     @Field(() => Int) 
     ID: number;
@@ -289,7 +289,7 @@ export class CompanyResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employees
 //****************************************************************************
-@ObjectType({ description: 'Employees' })
+@ObjectType()
 export class Employee_ {  
     @Field(() => Int) 
     ID: number;
@@ -310,7 +310,7 @@ export class Employee_ {
     @MaxLength(100)
     Title?: string;
       
-    @Field({description: '5'}) 
+    @Field() 
     @MaxLength(200)
     Email: string;
       
@@ -1687,7 +1687,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Integrations
 //****************************************************************************
-@ObjectType({ description: 'List of integrations that can be executed using the MemberJunction integration architecture.' })
+@ObjectType()
 export class Integration_ {  
     @Field(() => Int) 
     ID: number;
@@ -2640,12 +2640,12 @@ export class EntityFieldResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entities
 //****************************************************************************
-@ObjectType({ description: 'Metadata about all of the entities in the system. This information is managed by CodeGen, don\'t modify the parts that come from SQL Server' })
+@ObjectType()
 export class Entity_ {  
     @Field(() => Int) 
     ID: number;
       
-    @Field(() => Int, {nullable: true, description: 'Reserved for future use'}) 
+    @Field(() => Int, {nullable: true}) 
     ParentID?: number;
       
     @Field() 
@@ -2673,7 +2673,7 @@ export class Entity_ {
     @Field(() => Boolean) 
     BaseViewGenerated: boolean;
       
-    @Field({description: 'Database Schema Name'}) 
+    @Field() 
     @MaxLength(510)
     SchemaName: string;
       
@@ -2689,13 +2689,13 @@ export class Entity_ {
     @Field(() => Boolean) 
     AuditViewRuns: boolean;
       
-    @Field(() => Boolean, {description: 'Master switch to control if the field is included in the API or not'}) 
+    @Field(() => Boolean) 
     IncludeInAPI: boolean;
       
     @Field(() => Boolean) 
     AllowAllRowsAPI: boolean;
       
-    @Field(() => Boolean, {description: 'If set to 1, allows updates to occur via API. Role based permissions are required in addition to turning this bit on.'}) 
+    @Field(() => Boolean) 
     AllowUpdateAPI: boolean;
       
     @Field(() => Boolean) 
@@ -2707,7 +2707,7 @@ export class Entity_ {
     @Field(() => Boolean) 
     CustomResolverAPI: boolean;
       
-    @Field(() => Boolean, {description: 'If set to 1, allows an end user to add their own search string when running a user view or searching without saving a view'}) 
+    @Field(() => Boolean) 
     AllowUserSearchAPI: boolean;
       
     @Field(() => Boolean) 
@@ -2764,11 +2764,11 @@ export class Entity_ {
     @Field(() => Boolean) 
     UserFormGenerated: boolean;
       
-    @Field({nullable: true, description: 'Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassImport, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassImport with the name of the module to import that contains an exported class of the name you provide in EntityObjectSubclassName.'}) 
+    @Field({nullable: true}) 
     @MaxLength(510)
     EntityObjectSubclassName?: string;
       
-    @Field({nullable: true, description: 'Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassName, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassName with the name of the class itself. This field should have the name of the module  to import that contains an exported class of the name you provide in EntityObjectSubclassName.'}) 
+    @Field({nullable: true}) 
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
       
@@ -4298,7 +4298,7 @@ export class EntityRelationshipResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Record Logs
 //****************************************************************************
-@ObjectType({ description: 'Tracks history of user access to records across the system, tracks reads and writes' })
+@ObjectType()
 export class UserRecordLog_ {  
     @Field(() => Int) 
     ID: number;
@@ -4465,7 +4465,7 @@ export class UserRecordLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Views
 //****************************************************************************
-@ObjectType({ description: 'User Views contain the metadata for the user viewing system of entity data' })
+@ObjectType()
 export class UserView_ {  
     @Field(() => Int) 
     ID: number;
@@ -4854,7 +4854,7 @@ export class UserViewResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integration Runs
 //****************************************************************************
-@ObjectType({ description: 'Audit Trail for each run of a given company integration' })
+@ObjectType()
 export class CompanyIntegrationRun_ {  
     @Field(() => Int) 
     ID: number;
@@ -5033,7 +5033,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integration Run Details
 //****************************************************************************
-@ObjectType({ description: 'Record-level details for the audit trail for each integration run' })
+@ObjectType()
 export class CompanyIntegrationRunDetail_ {  
     @Field(() => Int) 
     ID: number;
@@ -7831,7 +7831,7 @@ export class WorkflowEngineResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Record Changes
 //****************************************************************************
-@ObjectType({ description: 'Tracks history of all pending and complete data changes to records' })
+@ObjectType()
 export class RecordChange_ {  
     @Field(() => Int) 
     ID: number;
@@ -14181,6 +14181,14 @@ export class QueryField_ {
     @Field(() => Int) 
     Sequence: number;
       
+    @Field({description: 'The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn\'t include type parameters. The SQLFullType field provides that information.'}) 
+    @MaxLength(100)
+    SQLBaseType: string;
+      
+    @Field({description: 'The full SQL type for the field, for example datetime or nvarchar(10) etc.'}) 
+    @MaxLength(200)
+    SQLFullType: string;
+      
     @Field(() => Int, {nullable: true}) 
     SourceEntityID?: number;
       
@@ -14231,6 +14239,12 @@ export class CreateQueryFieldInput {
     @Field(() => Int, )
     Sequence: number;
 
+    @Field()
+    SQLBaseType: string;
+
+    @Field()
+    SQLFullType: string;
+
     @Field(() => Int, { nullable: true })
     SourceEntityID: number;
 
@@ -14270,6 +14284,12 @@ export class UpdateQueryFieldInput {
 
     @Field(() => Int, )
     Sequence: number;
+
+    @Field()
+    SQLBaseType: string;
+
+    @Field()
+    SQLFullType: string;
 
     @Field(() => Int, { nullable: true })
     SourceEntityID: number;
@@ -16250,8 +16270,9 @@ export class DataContextItem_ {
     @Field(() => Int, {nullable: true, description: 'Used if type=\'full_entity\' or type=\'single_record\''}) 
     EntityID?: number;
       
-    @Field(() => Int, {nullable: true, description: 'The ID for the record, only used when Type=\'single_record\''}) 
-    RecordID?: number;
+    @Field({nullable: true, description: 'The Primary Key value for the record, only used when Type=\'single_record\''}) 
+    @MaxLength(510)
+    RecordID?: string;
       
     @Field({nullable: true, description: 'Only used when Type=sql'}) 
     SQL?: string;
@@ -16305,8 +16326,8 @@ export class CreateDataContextItemInput {
     @Field(() => Int, { nullable: true })
     EntityID: number;
 
-    @Field(() => Int, { nullable: true })
-    RecordID: number;
+    @Field({ nullable: true })
+    RecordID: string;
 
     @Field({ nullable: true })
     SQL: string;
@@ -16342,8 +16363,8 @@ export class UpdateDataContextItemInput {
     @Field(() => Int, { nullable: true })
     EntityID: number;
 
-    @Field(() => Int, { nullable: true })
-    RecordID: number;
+    @Field({ nullable: true })
+    RecordID: string;
 
     @Field({ nullable: true })
     SQL: string;

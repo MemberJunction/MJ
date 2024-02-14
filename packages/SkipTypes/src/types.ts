@@ -1,5 +1,6 @@
 import { EntityInfo } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { DataContext } from '@memberjunction/data-context';
 
 export class SubProcessResponse {
     status: "success" | "error";
@@ -39,7 +40,7 @@ export class SkipAPIRequest {
     /**
      * The data context, use this to provide all of the data you have in a data context to Skip. You should provide this from cache or refreshed based on the parameters provided by the user.
      */
-    dataContext: SkipDataContext;
+    dataContext: DataContext;
     /**
      * The conversation ID
      */
@@ -121,164 +122,3 @@ export class SkipDataRequest {
      */
     description?: string;
 }
-  
-export class SkipDataContextFieldInfo {
-    Name!: string;
-    Type!: string;
-    Description?: string;
-}
-
-export class SkipDataContextItem {
-    /**
-     * The type of the item, either "view", "query", "full_entity", or "sql", or "single_record"
-     */
-    Type!: 'view' | 'query' | 'full_entity' | 'sql' | 'single_record';
-
-    /**
-     * The ID of the single record in the system, only used if type = 'single_record'
-     */
-    RecordID!: number;
-
-    /**
-     * EntityID - the ID of the entity in the system, only used if type = 'full_entity', 'view', or 'single_record' --- for type of 'query' or 'sql' this property is not used as results can come from any number of entities in combination
-     */
-    EntityID?: number;
-
-    /**
-     * ViewID - the ID of the view in the system, only used if type = 'view' 
-     */
-    ViewID?: number;
-
-    /**
-     * QueryID - the ID of the query in the system, only used if type = 'query'
-     */
-    QueryID?: number;
-
-    /**
-     * The name of the view, query, or entity in the system. Not used with type='single_record' or type='sql'  
-     */
-    RecordName!: string;
-
-    /**
-     * SQL - the SQL statement to execute, only used if type = 'sql'
-     */
-    SQL?: string;
-
-    /**
-     * The name of the entity in the system, only used if type = 'full_entity', 'view', or 'single_record' --- for type of 'query' or 'sql' this property is not used as results can come from any number of entities in combination
-     */
-    EntityName?: string;
-
-    /*
-    * The fields in the view, query, or entity
-    */
-    Fields: SkipDataContextFieldInfo[] = [];    
-
-    /**
-     * This field can be used at run time to stash the record ID in the database of the Data Context Item, if it was already saved. For items that haven't/won't be saved, this property can be ignored.
-     */
-    DataContextItemID?: number;
-
-    /**
-     * ViewEntity - the object instantiated that contains the metadata for the UserView being used - only populated if the type is 'view', also this is NOT to be sent to/from the API server, it is a placeholder that can be used 
-     *              within a given tier like in the MJAPI server or Skip Server or in the UI.
-     */
-    ViewEntity?: UserViewEntityExtended;
-
-    /**
-     * Entity - the object that contains metadata for the entity being used, only populated if the type is 'full_entity' or 'view' - also this is NOT to be sent to/from the API server, it is a placeholder that can be used
-     *          within a given tier like in the MJAPI server or Skip Server or in the UI.
-     */
-    Entity?: EntityInfo;
-
-    /** Additional Description has any other information that might be useful for someone (or an LLM) intepreting the contents of this data item */
-    AdditionalDescription?: string;
-
-    /**
-     * Generated description of the item  which is dependent on the type of the item
-     */
-    get Description(): string {
-        let ret: string = '';
-        switch (this.Type) {
-            case 'view':
-                ret = `View: ${this.RecordName}, From Entity: ${this.EntityName}`;
-                break;
-            case 'query':
-                ret = `Query: ${this.RecordName}`;
-                break;
-            case 'full_entity':
-                ret = `Full Entity - All Records: ${this.EntityName}`;
-                break;
-            case 'sql':
-                ret = `SQL Statement: ${this.RecordName}`;
-                break;
-            default:
-                ret = `Unknown Type: ${this.Type}`;
-                break;
-        }
-        if (this.AdditionalDescription && this.AdditionalDescription.length > 0) 
-            ret += ` (More Info: ${this.AdditionalDescription})`;
-        return ret;
-    }
-  
-    /**
-     * Populate the SkipDataContextItem from a UserViewEntity class instance
-     * @param viewEntity 
-     */
-    public static FromViewEntity(viewEntity: UserViewEntityExtended) {
-        const instance = new SkipDataContextItem();
-        // update our data from the viewEntity definition
-        instance.ViewEntity = viewEntity;
-        instance.Entity = viewEntity.ViewEntityInfo;
-        instance.Type= 'view';
-        instance.EntityName = viewEntity.ViewEntityInfo.Name;
-        instance.RecordID = viewEntity.ID;
-        instance.RecordName = viewEntity.Name;
-        instance.Fields = viewEntity.ViewEntityInfo.Fields.map(f => {
-            return {
-                Name: f.Name,
-                Type: f.Type,
-                Description: f.Description
-            }
-        });
-        return instance;
-    }
-
-
-  
-    Data?: any[];
-  
-    public ValidateDataExists(): boolean {
-        return this.Data ? this.Data.length >= 0 : false; // can have 0 to many rows, just need to make sure we have a Data object to work with
-    }
-}
-
-export class SkipDataContext {
-    Items: SkipDataContextItem[] = [];
-  
-    public ValidateDataExists(): boolean {
-        if (this.Items)
-            return !this.Items.some(i => !i.ValidateDataExists()); // if any data item is invalid, return false
-        else    
-            return false;
-    }
-  
-    public ConvertToSimpleObject(): any {
-        // Return a simple object that will have a property for each item in our Items array. We will name each item sequentially as data_item_1, data_item_2, etc.
-        const ret: any = {};
-        for (let i = 0; i < this.Items.length; i++) {
-            ret[`data_item_${i}`] = this.Items[i].Data;
-        }
-        return ret;
-    }
-  
-    public CreateSimpleObjectTypeDefinition(): string {
-        let sOutput: string = "";
-        for (let i = 0; i < this.Items.length; i++) {
-            const item = this.Items[i];
-            sOutput += `data_item_${i}: []; // ${item.Description}\n`;
-        }
-        return `{${sOutput}}`;
-    }
-}   
-  

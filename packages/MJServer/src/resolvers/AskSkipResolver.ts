@@ -1,8 +1,9 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, RunQuery, RunQueryParams, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, PrimaryKeyValue, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { SkipDataContext, SkipDataContextItem, SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse } from '@memberjunction/skip-types';
+import { DataContext, DataContextItem } from '@memberjunction/data-context'
+import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse } from '@memberjunction/skip-types';
 import axios from 'axios';
 import zlib from 'zlib';
 import { promisify } from 'util';
@@ -110,7 +111,7 @@ export class AskSkipResolver {
                                                  DataContextId: number): Promise<{convoEntity: ConversationEntity, 
                                                                          dataContextEntity: DataContextEntity, 
                                                                          convoDetailEntity: ConversationDetailEntity, 
-                                                                         dataContext: SkipDataContext}> {
+                                                                         dataContext: DataContext}> {
     const convoEntity = <ConversationEntity>await md.GetEntityObject('Conversations', user);
     let dataContextEntity: DataContextEntity;
 
@@ -152,8 +153,14 @@ export class AskSkipResolver {
       dataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', user);
 
       // note - we ignore the parameter DataContextId if it is passed in, we will use the data context from the conversation that is saved. If a user wants to change the data context for a convo, they can do that elsewhere
-      if (DataContextId && DataContextId > 0 && DataContextId !== convoEntity.DataContextID) 
-        console.log(`AskSkipResolver: DataContextId ${DataContextId} was passed in but it was ignored because it was different than the DataContextID in the conversation ${convoEntity.DataContextID}`);
+      if (DataContextId && DataContextId > 0 && DataContextId !== convoEntity.DataContextID) {
+        if (convoEntity.DataContextID === null) {
+          convoEntity.DataContextID = DataContextId;
+          await convoEntity.Save();
+        }
+        else
+          console.warn(`AskSkipResolver: DataContextId ${DataContextId} was passed in but it was ignored because it was different than the DataContextID in the conversation ${convoEntity.DataContextID}`);
+      }
 
       await dataContextEntity.Load(convoEntity.DataContextID);
     }
@@ -168,7 +175,13 @@ export class AskSkipResolver {
     convoDetailEntity.Set('Sequence', 1); // using weakly typed here because we're going to get rid of this field soon
     await convoDetailEntity.Save();
 
-    const dataContext: SkipDataContext = new SkipDataContext();
+    const dataContext = await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
+
+    return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
+  }
+
+  protected async LoadDataContext(md: Metadata, dataSource: DataSource, dataContextEntity: DataContextEntity, user: UserInfo, forceRefresh: boolean): Promise<DataContext> {
+    const dataContext: DataContext = new DataContext();
     const dciEntityInfo = md.Entities.find((e) => e.Name === 'Data Context Items');
     if (!dciEntityInfo)
       throw new Error(`Data Context Items entity not found`);
@@ -179,7 +192,7 @@ export class AskSkipResolver {
       throw new Error(`Error running SQL: ${sql}`);
     else {
       for (const r of result) {
-        const item = new SkipDataContextItem();
+        const item = new DataContextItem();
         item.Type = r.Type;
         switch (item.Type) {
           case 'full_entity':
@@ -216,17 +229,77 @@ export class AskSkipResolver {
           item.RecordName = v.Name;
           item.ViewEntity = v;
         }
-        item.Data = r.Data && r.Data.length > 0 ? JSON.parse(r.Data) : item.Data; // parse the stored data if it was saved, otherwise leave it to whatever the object's default is
+        if (r.Data && r.Data.length > 0 && !forceRefresh) {
+          item.Data = JSON.parse(r.Data);
+        }
+        else {  
+          await this.LoadDataContextItemData(item, md, user, dataSource);  
+        }
         item.AdditionalDescription = r.AdditionalDescription;
         item.DataContextItemID = r.ID;
         dataContext.Items.push(item);
       }
     }
+    return dataContext;
+  }
 
-
-    /// TODO   next up we need to modify MJExplorer to handle the data context stuff and then we can finish this method
-
-    return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
+  protected async LoadDataContextItemData(item: DataContextItem, md: Metadata, user: UserInfo, dataSource: DataSource) {
+    // load the data from the database
+    switch (item.Type) {
+      case 'full_entity':
+      case 'view':
+        const rv = new RunView();
+        const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
+        if (item.Type === 'full_entity') {
+          const e = md.Entities.find((e) => e.ID === item.EntityID);
+          viewParams.EntityName = e.Name;
+        }
+        else {
+          viewParams.ViewID = item.ViewID;
+        }
+        const viewResult = await rv.RunView(viewParams, user);
+        if (viewResult && viewResult.Success)
+          item.Data = viewResult.Results;
+        else
+          throw new Error(`Error running view. View Params: ${JSON.stringify(viewParams)}`);
+        break;
+      case 'single_record':
+        const record = await md.GetEntityObject(item.EntityName, user);
+        const pkeyVals: PrimaryKeyValue[] = [];
+        const ei = md.Entities.find((e) => e.ID === item.EntityID);
+        const rawVals = item.RecordID.split(',');
+        for (let i = 0; i < ei.PrimaryKeys.length; i++) {
+          const pk = ei.PrimaryKeys[i];
+          const v = rawVals[i];
+          pkeyVals.push({FieldName: pk.Name, Value: v});
+        }
+        await record.InnerLoad(pkeyVals);
+        item.Data = await record.GetDataObject({
+          includeRelatedEntityData: false,
+          oldValues: false,
+          omitEmptyStrings: false,
+          omitNullValues: false,
+          relatedEntityList: [],
+          excludeFields: []
+        });             
+        break;
+      case 'query':
+        const rq = new RunQuery();
+        const queryResult = await rq.RunQuery({QueryID: item.QueryID}, user);
+        if (queryResult && queryResult.Success)
+          item.Data = queryResult.Results;
+        else
+          throw new Error(`Error running query ${item.RecordName}`);
+        break;
+      case 'sql':
+        // TO-DO
+        // when we move this to the @memberjucntion/data-context package we need to change this to use a capability within MJCore to retrieve
+        // sql statements, but we need to find a way to do this so that it is not a security risk. Probably only implement the method on the
+        // sql server data provider side and make it throw an exception if called in the graphql-dataprovider implementation???
+        const result = await dataSource.query(item.SQL);
+        item.Data = result;
+        break;
+    }
   }
 
   protected async LoadConversationDetailsIntoSkipMessages(dataSource: DataSource, ConversationId: number, maxHistoricalMessages?: number): Promise<SkipMessage[]> {
@@ -286,7 +359,7 @@ export class AskSkipResolver {
   protected async HandleSkipRequest(input: SkipAPIRequest, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
                                     ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, md: Metadata, 
                                     convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity,
-                                    dataContext: SkipDataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
+                                    dataContext: DataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
     LogStatus(`Sending request to Skip API: ${___skipAPIurl}`)
 
     // Convert JSON payload to a Buffer and compress it
@@ -370,7 +443,7 @@ export class AskSkipResolver {
 
   protected async HandleAnalysisComplete(apiRequest: SkipAPIRequest, apiResponse: SkipAPIAnalysisCompleteResponse, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
                                          ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity,
-                                         dataContext: SkipDataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
+                                         dataContext: DataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
     // analysis is complete
     // all done, wrap things up
     const md = new Metadata();
@@ -422,7 +495,7 @@ export class AskSkipResolver {
 
   protected async HandleDataRequestPhase(apiRequest: SkipAPIRequest, apiResponse: SkipAPIDataRequestResponse, UserQuestion: string, user: UserInfo, dataSource: DataSource, 
                                          ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity,
-                                         dataContext: SkipDataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
+                                         dataContext: DataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
     // our job in this method is to go through each of the data requests from the Skip API, get the data, and then go back to the Skip API again and to the next phase
     try {  
       const _maxDataGatheringRetries = 5;
@@ -446,7 +519,7 @@ export class AskSkipResolver {
               if (!result) 
                 throw new Error(`Error running SQL: ${sql}`);
   
-              const item = new SkipDataContextItem();
+              const item = new DataContextItem();
               item.Type = 'sql';
               item.Data = result;
               item.SQL = dr.text;
@@ -460,7 +533,7 @@ export class AskSkipResolver {
                 const rq = new RunQuery();
                 const result = await rq.RunQuery({QueryID: query.ID}, user)  
                 if (result && result.Success) {
-                  const item = new SkipDataContextItem();
+                  const item = new DataContextItem();
                   item.Type = 'query';
                   item.Data = result.Results;
                   item.QueryID = query.ID;
@@ -530,7 +603,7 @@ export class AskSkipResolver {
    * @param userPayload 
    * @returns 
    */
-  protected async FinishConversationAndNotifyUser(apiResponse: SkipAPIAnalysisCompleteResponse, dataContext: SkipDataContext, dataContextEntity: DataContextEntity, md: Metadata, user: UserInfo, convoEntity: ConversationEntity, pubSub: PubSubEngine, userPayload: UserPayload): Promise<{AIMessageConversationDetailID: number}> {
+  protected async FinishConversationAndNotifyUser(apiResponse: SkipAPIAnalysisCompleteResponse, dataContext: DataContext, dataContextEntity: DataContextEntity, md: Metadata, user: UserInfo, convoEntity: ConversationEntity, pubSub: PubSubEngine, userPayload: UserPayload): Promise<{AIMessageConversationDetailID: number}> {
     const sTitle = apiResponse.reportTitle; 
     const sResult = JSON.stringify(apiResponse);
 

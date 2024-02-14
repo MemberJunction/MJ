@@ -82,6 +82,14 @@ export class QueryFieldInfo extends BaseInfo {
     QueryID: number = null
     Description: string = null
     Sequence: number = null
+    /**
+     * The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
+     */
+    SQLBaseType: string = null
+    /**
+     * The full SQL type for the field, for example datetime or nvarchar(10) etc.
+     */
+    SQLFullType: string = null
     SourceEntityID: number = null
     SourceFieldName: string = null
     IsComputed: boolean = null

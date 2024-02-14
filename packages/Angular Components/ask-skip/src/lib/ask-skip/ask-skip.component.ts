@@ -70,7 +70,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   @Input() public ShowConversationList: boolean = true;
   @Input() public AllowNewConversations: boolean = true;
   @Input() public Title: string = "Ask Skip"
-  @Input() public ViewID: number = 0;
+  @Input() public DataContextID: number = 0;
   @Input() public LinkedEntity: string = '';
   @Input() public LinkedEntityRecordID: number = 0;
 
@@ -316,7 +316,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
       this.askSkipInput.nativeElement.value = '';
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
-      const result = await this.ExecuteAskSkipQuery(val, this.ViewID, this.SelectedConversation);
+      const result = await this.ExecuteAskSkipQuery(val, this.DataContextID, this.SelectedConversation);
       const queryResult = <ExecuteAskSkipAnalysisQueryResult>result?.ExecuteAskSkipAnalysisQuery;
       if (queryResult?.Success) {
         if (convoID !== this.SelectedConversation?.ID) {
@@ -448,10 +448,10 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     return this.sharedService.CurrentUserImage;
   }
 
-  async ExecuteAskSkipQuery(question: string, viewId: number, SelectedConversation: ConversationEntity | undefined) {
+  async ExecuteAskSkipQuery(question: string, dataContextId: number, SelectedConversation: ConversationEntity | undefined) {
     try {
-      const gql = `query ExecuteAskSkipAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
-        ExecuteAskSkipAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
+      const gql = `query ExecuteAskSkipAnalysisQuery($userQuestion: String!, $dataContextId: Int!, $conversationId: Int!) {
+        ExecuteAskSkipAnalysisQuery(UserQuestion: $userQuestion, DataContextId: $dataContextId, ConversationId: $conversationId) {
           Success
           Status
           Result
@@ -463,7 +463,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
           userQuestion: question, 
           conversationId: SelectedConversation ? SelectedConversation.ID : 0,
-          viewId: viewId
+          dataContextId: dataContextId
         });
 
       return result;

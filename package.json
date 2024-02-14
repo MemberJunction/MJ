@@ -8,5 +8,6 @@
   ],
   "scripts": {},
   "dependencies": {
+    "@memberjunction/data-context": "^0.9.1"
   }
 }

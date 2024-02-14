@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/core-entities",
-  "version": "0.9.125",
-  "description": "Entity subclasses for the metadata layer of MemberJunction defined in the MJ_CORE schema (usually 'admin'), distributed as part of each release of MemberJunction",
+  "name": "@memberjunction/data-context",
+  "version": "0.9.3",
+  "description": "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,7 +19,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.142",
-    "@memberjunction/global": "^0.9.132"
+    "@memberjunction/core-entities": "^0.9.125"
   }
 }

@@ -181,7 +181,6 @@ type AuditLog_ {
   CreatedAt: Timestamp!
   Description: String
   Details: String
-  Entity: String
   EntityID: Int
   ID: Int!
   RecordID: String
@@ -229,7 +228,6 @@ type ColorNotification {
 type CompanyIntegrationRecordMap_ {
   CompanyIntegrationID: Int!
   CreatedAt: Timestamp!
-  Entity: String!
   EntityID: Int!
   EntityRecordID: String!
   ExternalSystemRecordID: String!
@@ -247,7 +245,6 @@ type CompanyIntegrationRunAPILog_ {
   URL: String
 }
 
-"""Record-level details for the audit trail for each integration run"""
 type CompanyIntegrationRunDetail_ {
   Action: String!
   CompanyIntegrationRunID: Int!
@@ -262,7 +259,6 @@ type CompanyIntegrationRunDetail_ {
   RunStartedAt: Timestamp
 }
 
-"""Audit Trail for each run of a given company integration"""
 type CompanyIntegrationRun_ {
   Comments: String
   CompanyIntegrationID: Int!
@@ -308,9 +304,6 @@ type CompanyIntegration_ {
   UpdatedAt: Timestamp!
 }
 
-"""
-List of Companies/Organizations within the top-level business, used for subsidiaries
-"""
 type Company_ {
   CompanyIntegrationsArray: [CompanyIntegration_!]!
   CreatedAt: Timestamp!
@@ -589,10 +582,13 @@ input CreateDataContextInput {
 input CreateDataContextItemInput {
   DataContextID: Int!
   DataJSON: String
+  EntityID: Int
   LastRefreshedAt: Timestamp
-  RecordID: Int!
+  QueryID: Int
+  RecordID: String
   SQL: String
   Type: String!
+  ViewID: Int
 }
 
 input CreateDealForecastCategoryInput {
@@ -673,6 +669,7 @@ input CreateEntityDocumentTypeInput {
 input CreateEntityFieldInput {
   AllowUpdateAPI: Boolean!
   AllowUpdateInView: Boolean!
+  AutoUpdateDescription: Boolean!
   Category: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
@@ -703,6 +700,7 @@ input CreateEntityInput {
   AllowUserSearchAPI: Boolean!
   AuditRecordAccess: Boolean!
   AuditViewRuns: Boolean!
+  AutoUpdateDescription: Boolean!
   BaseView: String!
   BaseViewGenerated: Boolean!
   CascadeDeletes: Boolean!
@@ -840,6 +838,8 @@ input CreateQueryFieldInput {
   IsSummary: Boolean!
   Name: String!
   QueryID: Int!
+  SQLBaseType: String!
+  SQLFullType: String!
   Sequence: Int!
   SourceEntityID: Int
   SourceFieldName: String
@@ -1078,19 +1078,56 @@ type Dashboard_ {
   UserID: Int
 }
 
+"""
+Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.
+"""
 type DataContextItem_ {
   CreatedAt: Timestamp!
   DataContext: String!
+
+  """Foreign key to the DataContext table"""
   DataContextID: Int!
+
+  """
+  Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.
+  """
   DataJSON: String
+
+  """Used if type='full_entity' or type='single_record'"""
+  EntityID: Int
   ID: Int!
+
+  """
+  If DataJSON is populated, this field will show the date the the data was captured
+  """
   LastRefreshedAt: Timestamp
-  RecordID: Int!
+  Query: String
+
+  """Only used if Type='query'"""
+  QueryID: Int
+
+  """
+  The Primary Key value for the record, only used when Type='single_record'
+  """
+  RecordID: String
+
+  """Only used when Type=sql"""
   SQL: String
+
+  """
+  The type of the item, either "view", "query", "full_entity", "single_record", or "sql"
+  """
   Type: String!
   UpdatedAt: Timestamp!
+  View: String
+
+  """Only used if Type='view'"""
+  ViewID: Int
 }
 
+"""
+Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.
+"""
 type DataContext_ {
   CreatedAt: Timestamp!
   DataContextItemsArray: [DataContextItem_!]!
@@ -1242,14 +1279,11 @@ type EmployeeSkill_ {
   UpdatedAt: Timestamp!
 }
 
-"""Employees"""
 type Employee_ {
   Active: Boolean!
   BCMID: String!
   CompanyID: Int!
   CreatedAt: Timestamp!
-
-  """5"""
   Email: String!
   EmployeeCompanyIntegrationsArray: [EmployeeCompanyIntegration_!]!
   EmployeeRolesArray: [EmployeeRole_!]!
@@ -1302,6 +1336,8 @@ type EntityDocumentRun_ {
   EntityDocumentID: Int!
   ID: Int!
   StartedAt: Timestamp
+
+  """Can be Pending, In Progress, Completed, or Failed"""
   Status: String!
   UpdatedAt: Timestamp!
 }
@@ -1317,7 +1353,6 @@ type EntityDocumentType_ {
 
 type EntityDocument_ {
   CreatedAt: Timestamp!
-  Entity: String!
   EntityDocumentRunsArray: [EntityDocumentRun_!]!
   EntityID: Int!
   ID: Int!
@@ -1347,6 +1382,11 @@ type EntityField_ {
   AllowUpdateInView: Boolean!
   AllowsNull: Boolean!
   AutoIncrement: Boolean!
+
+  """
+  When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
+  """
+  AutoUpdateDescription: Boolean!
   BaseTable: String!
   BaseView: String!
   Category: String
@@ -1472,27 +1512,21 @@ type EntityRelationship_ {
   UpdatedAt: Timestamp!
 }
 
-"""
-Metadata about all of the entities in the system. This information is managed by CodeGen, don't modify the parts that come from SQL Server
-"""
 type Entity_ {
   AllowAllRowsAPI: Boolean!
   AllowCreateAPI: Boolean!
   AllowDeleteAPI: Boolean!
-
-  """
-  If set to 1, allows updates to occur via API. Role based permissions are required in addition to turning this bit on.
-  """
   AllowUpdateAPI: Boolean!
-
-  """
-  If set to 1, allows an end user to add their own search string when running a user view or searching without saving a view
-  """
   AllowUserSearchAPI: Boolean!
   ApplicationEntitiesArray: [ApplicationEntity_!]!
   AuditLogsArray: [AuditLog_!]!
   AuditRecordAccess: Boolean!
   AuditViewRuns: Boolean!
+
+  """
+  When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
+  """
+  AutoUpdateDescription: Boolean!
   BaseTable: String!
   BaseTableCodeName: String
   BaseView: String!
@@ -1505,21 +1539,14 @@ type Entity_ {
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
   CustomResolverAPI: Boolean!
+  DataContextItemsArray: [DataContextItem_!]!
   DatasetItemsArray: [DatasetItem_!]!
   Description: String
   EntitiesArray: [Entity_!]!
   EntityAIActionsArray: [EntityAIAction_!]!
   EntityDocumentsArray: [EntityDocument_!]!
   EntityFieldsArray: [EntityField_!]!
-
-  """
-  Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassName, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassName with the name of the class itself. This field should have the name of the module  to import that contains an exported class of the name you provide in EntityObjectSubclassName.
-  """
   EntityObjectSubclassImport: String
-
-  """
-  Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassImport, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassImport with the name of the module to import that contains an exported class of the name you provide in EntityObjectSubclassName.
-  """
   EntityObjectSubclassName: String
   EntityPermissionsArray: [EntityPermission_!]!
   EntityRelationshipsArray: [EntityRelationship_!]!
@@ -1531,8 +1558,6 @@ type Entity_ {
   FullTextSearchFunction: String
   FullTextSearchFunctionGenerated: Boolean!
   ID: Int!
-
-  """Master switch to control if the field is included in the API or not"""
   IncludeInAPI: Boolean!
   IntegrationURLFormatsArray: [IntegrationURLFormat_!]!
   ListsArray: [List_!]!
@@ -1541,15 +1566,11 @@ type Entity_ {
   ParentBaseTable: String
   ParentBaseView: String
   ParentEntity: String
-
-  """Reserved for future use"""
   ParentID: Int
   QueryFieldsArray: [QueryField_!]!
   RecordChangesArray: [RecordChange_!]!
   RecordMergeLogsArray: [RecordMergeLog_!]!
   ResourceTypesArray: [ResourceType_!]!
-
-  """Database Schema Name"""
   SchemaName: String!
   TaggedItemsArray: [TaggedItem_!]!
   TrackRecordChanges: Boolean!
@@ -1613,9 +1634,6 @@ type IntegrationURLFormat_ {
   URLFormat: String!
 }
 
-"""
-List of integrations that can be executed using the MemberJunction integration architecture.
-"""
 type Integration_ {
   BatchMaxRequestCount: Int!
   BatchRequestWaitTime: Int!
@@ -1674,7 +1692,6 @@ type List_ {
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
-  Entity: String
   EntityID: Int
   ExternalSystemRecordID: String
   ID: Int!
@@ -1977,7 +1994,7 @@ type Query {
   EntityRecordDocument(ID: Int!): EntityRecordDocument_
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
-  ExecuteAskSkipAnalysisQuery(ConversationId: Int!, UserQuestion: String!, ViewId: Int!): AskSkipResultType!
+  ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
@@ -2358,8 +2375,17 @@ type QueryField_ {
   Name: String!
   Query: String!
   QueryID: Int!
+
+  """
+  The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
+  """
+  SQLBaseType: String!
+
+  """
+  The full SQL type for the field, for example datetime or nvarchar(10) etc.
+  """
+  SQLFullType: String!
   Sequence: Int!
-  SourceEntity: String
   SourceEntityID: Int
   SourceFieldName: String
   SummaryDescription: String
@@ -2378,6 +2404,7 @@ type Query_ {
   Category: String!
   CategoryID: Int!
   CreatedAt: Timestamp!
+  DataContextItemsArray: [DataContextItem_!]!
   Description: String
   Feedback: String
   ID: Int!
@@ -2438,7 +2465,6 @@ type Queue_ {
   UpdatedAt: Timestamp!
 }
 
-"""Tracks history of all pending and complete data changes to records"""
 type RecordChange_ {
   ChangedAt: Timestamp!
   ChangesDescription: String!
@@ -3803,7 +3829,6 @@ type Tag_ {
 }
 
 type TaggedItem_ {
-  Entity: String!
   EntityID: Int!
   ID: Int!
   RecordID: String!
@@ -4086,11 +4111,14 @@ input UpdateDataContextInput {
 input UpdateDataContextItemInput {
   DataContextID: Int!
   DataJSON: String
+  EntityID: Int
   ID: Int!
   LastRefreshedAt: Timestamp
-  RecordID: Int!
+  QueryID: Int
+  RecordID: String
   SQL: String
   Type: String!
+  ViewID: Int
 }
 
 input UpdateDealForecastCategoryInput {
@@ -4215,6 +4243,7 @@ input UpdateEntityDocumentTypeInput {
 input UpdateEntityFieldInput {
   AllowUpdateAPI: Boolean!
   AllowUpdateInView: Boolean!
+  AutoUpdateDescription: Boolean!
   Category: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
@@ -4246,6 +4275,7 @@ input UpdateEntityInput {
   AllowUserSearchAPI: Boolean!
   AuditRecordAccess: Boolean!
   AuditViewRuns: Boolean!
+  AutoUpdateDescription: Boolean!
   BaseView: String!
   BaseViewGenerated: Boolean!
   CascadeDeletes: Boolean!
@@ -4421,6 +4451,8 @@ input UpdateQueryFieldInput {
   IsSummary: Boolean!
   Name: String!
   QueryID: Int!
+  SQLBaseType: String!
+  SQLFullType: String!
   Sequence: Int!
   SourceEntityID: Int
   SourceFieldName: String
@@ -4773,9 +4805,6 @@ type UserNotification_ {
   UserID: Int!
 }
 
-"""
-Tracks history of user access to records across the system, tracks reads and writes
-"""
 type UserRecordLog_ {
   EarliestAt: Timestamp!
   Entity: String!
@@ -4819,13 +4848,11 @@ type UserViewRun_ {
   UserViewRunDetailsArray: [UserViewRunDetail_!]!
 }
 
-"""
-User Views contain the metadata for the user viewing system of entity data
-"""
 type UserView_ {
   CreatedAt: Timestamp
   CustomFilterState: Boolean!
   CustomWhereClause: Boolean!
+  DataContextItemsArray: [DataContextItem_!]!
   Description: String
   Entity: String!
   EntityBaseView: String!

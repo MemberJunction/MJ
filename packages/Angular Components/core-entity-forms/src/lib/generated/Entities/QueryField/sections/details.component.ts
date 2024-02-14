@@ -27,6 +27,14 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
             <kendo-numerictextbox [(value)]="record.Sequence" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">SQLBase Type</label>
+            <kendo-textbox [(ngModel)]="record.SQLBaseType"  />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">SQLFull Type</label>
+            <kendo-textbox [(ngModel)]="record.SQLFullType"  />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Source Entity ID</label>
             <kendo-numerictextbox [(value)]="record.SourceEntityID" ></kendo-numerictextbox>   
         </div>               
@@ -80,6 +88,14 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Sequence</label>
             <span >{{FormatValue('Sequence', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">SQLBase Type</label>
+            <span >{{FormatValue('SQLBaseType', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">SQLFull Type</label>
+            <span >{{FormatValue('SQLFullType', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Source Entity ID</label>

@@ -6,7 +6,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: Company
      * * Base View: vwCompanies
-     * * @description List of Companies/Organizations within the top-level business, used for subsidiaries
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -119,7 +118,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: Employee
      * * Base View: vwEmployees
-     * * @description Employees
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -197,7 +195,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Email
         * * SQL Data Type: nvarchar(100)
-        * * Description: 5
         */
         get Email(): string {  
             return this.Get('Email');
@@ -1125,7 +1122,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: Integration
      * * Base View: vwIntegrations
-     * * @description List of integrations that can be executed using the MemberJunction integration architecture.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -2090,7 +2086,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: Entity
      * * Base View: vwEntities
-     * * @description Metadata about all of the entities in the system. This information is managed by CodeGen, don't modify the parts that come from SQL Server
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -2128,7 +2123,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Parent ID
         * * SQL Data Type: int
         * * Related Entity: Entities
-        * * Description: Reserved for future use
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -2217,7 +2211,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Schema Name
         * * SQL Data Type: nvarchar(255)
         * * Default Value: N'dbo'
-        * * Description: Database Schema Name
         */
         get SchemaName(): string {  
             return this.Get('SchemaName');
@@ -2276,7 +2269,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Include In API
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: Master switch to control if the field is included in the API or not
         */
         get IncludeInAPI(): boolean {  
             return this.Get('IncludeInAPI');
@@ -2301,7 +2293,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: If set to 1, allows updates to occur via API. Role based permissions are required in addition to turning this bit on.
         */
         get AllowUpdateAPI(): boolean {  
             return this.Get('AllowUpdateAPI');
@@ -2350,7 +2341,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow User Search API
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: If set to 1, allows an end user to add their own search string when running a user view or searching without saving a view
         */
         get AllowUserSearchAPI(): boolean {  
             return this.Get('AllowUserSearchAPI');
@@ -2548,7 +2538,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityObjectSubclassName
         * * Display Name: Entity Object Subclass Name
         * * SQL Data Type: nvarchar(255)
-        * * Description: Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassImport, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassImport with the name of the module to import that contains an exported class of the name you provide in EntityObjectSubclassName.
         */
         get EntityObjectSubclassName(): string {  
             return this.Get('EntityObjectSubclassName');
@@ -2560,7 +2549,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityObjectSubclassImport
         * * Display Name: Entity Object Subclass Import
         * * SQL Data Type: nvarchar(255)
-        * * Description: Normally, CodeGen will sub-class BaseEntity to create a strongly-typed sub-class for each entity. If you provide a value here and in EntityObjectSubclassName, CodeGen will sub-class the provided class instead of BaseEntity. Also make sure to provide a value for EntityObjectSubclassName with the name of the class itself. This field should have the name of the module  to import that contains an exported class of the name you provide in EntityObjectSubclassName.
         */
         get EntityObjectSubclassImport(): string {  
             return this.Get('EntityObjectSubclassImport');
@@ -3201,7 +3189,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: UserRecordLog
      * * Base View: vwUserRecordLogs
-     * * @description Tracks history of user access to records across the system, tracks reads and writes
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -3379,7 +3366,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: UserView
      * * Base View: vwUserViews
-     * * @description User Views contain the metadata for the user viewing system of entity data
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -3684,7 +3670,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: CompanyIntegrationRun
      * * Base View: vwCompanyIntegrationRuns
-     * * @description Audit Trail for each run of a given company integration
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -3813,7 +3798,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: CompanyIntegrationRunDetail
      * * Base View: vwCompanyIntegrationRunDetails
-     * * @description Record-level details for the audit trail for each integration run
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -5710,7 +5694,6 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: admin
      * * Base Table: RecordChange
      * * Base View: vwRecordChanges
-     * * @description Tracks history of all pending and complete data changes to records
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -11038,6 +11021,30 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Sequence', value);
         }
         /**
+        * * Field Name: SQLBaseType
+        * * Display Name: SQLBase Type
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
+        */
+        get SQLBaseType(): string {  
+            return this.Get('SQLBaseType');
+        }
+        set SQLBaseType(value: string) {
+            this.Set('SQLBaseType', value);
+        }
+        /**
+        * * Field Name: SQLFullType
+        * * Display Name: SQLFull Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The full SQL type for the field, for example datetime or nvarchar(10) etc.
+        */
+        get SQLFullType(): string {  
+            return this.Get('SQLFullType');
+        }
+        set SQLFullType(value: string) {
+            this.Set('SQLFullType', value);
+        }
+        /**
         * * Field Name: SourceEntityID
         * * Display Name: Source Entity ID
         * * SQL Data Type: int
@@ -12407,13 +12414,13 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RecordID
         * * Display Name: Record ID
-        * * SQL Data Type: int
-        * * Description: The ID for the record, only used when Type='single_record'
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The Primary Key value for the record, only used when Type='single_record'
         */
-        get RecordID(): number {  
+        get RecordID(): string {  
             return this.Get('RecordID');
         }
-        set RecordID(value: number) {
+        set RecordID(value: string) {
             this.Set('RecordID', value);
         }
         /**
