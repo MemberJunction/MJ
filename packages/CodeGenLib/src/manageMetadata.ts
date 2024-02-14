@@ -21,6 +21,10 @@ export async function manageMetadata(ds: DataSource): Promise<boolean> {
       logError('Error creating new entities');
       bSuccess = false;
    }  
+   if (! await updateExistingEntitiesFromSchema(ds)) {
+      logError('Error updating existing entities');
+      bSuccess = false;
+   }  
    if (! await recompileAllBaseViews(ds)) {
       logError('Error recompiling base views');
       // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
@@ -316,6 +320,7 @@ SELECT
    sf.EntityID,
    sf.Sequence,
    sf.FieldName,
+   sf.Description,
    sf.Type,
    sf.Length,
    sf.Precision,
@@ -392,6 +397,7 @@ function getPendingEntityFieldINSERTSQL(n: any): string {
       Sequence,
       Name,
       DisplayName,
+      Description,
       Type,
       Length,
       Precision,
@@ -416,6 +422,7 @@ function getPendingEntityFieldINSERTSQL(n: any): string {
       ${n.Sequence},
       '${n.FieldName}',
       '${convertCamelCaseToHaveSpaces(n.FieldName).trim()}',
+      ${n.Description},
       '${n.Type}',
       ${n.Length},
       ${n.Precision},
@@ -488,6 +495,16 @@ export async function updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource,
       @RelatedEntityNameFieldMap='${relatedEntityNameFieldMap}'`
       
       await ds.query(sSQL)
+      return true;
+   }
+   catch (e) {
+      logError(e);
+      return false;
+   }
+}
+async function updateExistingEntitiesFromSchema(ds: DataSource): Promise<boolean> {
+   try   {
+      await ds.query(`EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema`)
       return true;
    }
    catch (e) {
@@ -740,10 +757,11 @@ async function getApplicationIDForSchema(ds: DataSource, schemaName: string): Pr
 
 function createNewEntityInsertSQL(newEntityID: number, newEntityName: string, newEntity: any, newEntitySuffix: string): string {
    const newEntityDefaults = configInfo.newEntityDefaults;
-
+   const newEntityDescriptionEscaped = newEntity.Description ? `'${newEntity.Description.replace(/'/g, "''")}` : null;
    const sSQLInsert = `INSERT INTO [${mj_core_schema()}].Entity (
       ID, 
       Name, 
+      Description,
       NameSuffix,
       BaseTable, 
       BaseView, 
@@ -762,6 +780,7 @@ function createNewEntityInsertSQL(newEntityID: number, newEntityName: string, ne
      VALUES (
       ${newEntityID},
       '${newEntityName}', 
+      ${newEntityDescriptionEscaped ? newEntityDescriptionEscaped : 'NULL' /*if no description, then null*/},
       ${newEntitySuffix && newEntitySuffix.length > 0 ? `'${newEntitySuffix}'` : 'NULL'},
       '${newEntity.TableName}', 
       'vw${generatePluralName(newEntity.TableName) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}', 

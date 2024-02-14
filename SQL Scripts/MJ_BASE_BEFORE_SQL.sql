@@ -755,7 +755,10 @@ SELECT
 	s.name SchemaName,
 	t.*,
 	v.object_id view_object_id,
-	v.name ViewName
+	v.name ViewName,
+    EP_Table.value AS TableDescription, -- Join with sys.extended_properties to get the table description
+    EP_View.value AS ViewDescription, -- Join with sys.extended_properties to get the view description
+	COALESCE(EP_View.value, EP_Table.value) AS EntityDescription -- grab the view description first and if that doesn't exist, grab the table description and we'll use this as the description for the entity
 FROM 
 	sys.all_objects t
 INNER JOIN
@@ -776,6 +779,18 @@ LEFT OUTER JOIN
     sys.schemas s_v
 ON   
     v.schema_id = s_v.schema_id
+LEFT OUTER JOIN
+    sys.extended_properties EP_Table
+ON
+    EP_Table.major_id = t.object_id
+    AND EP_Table.minor_id = 0
+    AND EP_Table.name = 'MS_Description'
+LEFT OUTER JOIN
+    sys.extended_properties EP_View
+ON
+    EP_View.major_id = v.object_id
+    AND EP_View.minor_id = 0
+    AND EP_View.name = 'MS_Description'
 WHERE   
     (s_v.name = e.SchemaName OR s_v.name IS NULL) AND
 	( t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1)) -- TABLE - non-virtual entities 
@@ -807,7 +822,10 @@ SELECT
 	basetable_columns.object_id,
 	dc.name AS DefaultConstraintName,
     dc.definition AS DefaultValue,
-	cc.definition ComputedColumnDefinition
+	cc.definition ComputedColumnDefinition,
+	COALESCE(EP_View.value, EP_Table.value) AS [Description], -- Dynamically choose description - first look at view level if a description was defined there (rare) and then go to table if it was defined there (often not there either)
+	EP_View.value AS ViewColumnDescription,
+	EP_Table.value AS TableColumnDescription
 FROM
 	sys.all_columns c
 INNER JOIN
@@ -846,6 +864,18 @@ LEFT OUTER JOIN
 ON 
     e.object_id = dc.parent_object_id AND
 	c.column_id = dc.parent_column_id
+LEFT OUTER JOIN 
+    sys.extended_properties EP_Table 
+ON 
+	EP_Table.major_id = basetable_columns.object_id AND 
+	EP_Table.minor_id = basetable_columns.column_id AND 
+	EP_Table.name = 'MS_Description'
+LEFT OUTER JOIN 
+    sys.extended_properties EP_View 
+ON 
+	EP_View.major_id = c.object_id AND 
+	EP_View.minor_id = c.column_id AND 
+	EP_View.name = 'MS_Description'
 WHERE 
 	c.default_object_id IS NOT NULL
 GO
@@ -907,6 +937,21 @@ DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
 GO
 
+DROP PROC IF EXISTS [admin].[spUpdateExistingEntitiesFromSchema]
+GO
+CREATE PROC [admin].spUpdateExistingEntitiesFromSchema
+AS
+	UPDATE 
+		[admin].[Entity]
+	SET
+		Description = IIF(e.Description IS NULL OR TRIM(e.Description) = '', CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
+	FROM
+		[admin].[Entity] e
+	INNER JOIN
+		[admin].[vwSQLTablesAndEntities] fromSQL
+	ON
+		e.ID = fromSQL.EntityID
+GO
 
 DROP PROC IF EXISTS [admin].[spUpdateExistingEntityFieldsFromSchema]
 GO
@@ -916,6 +961,7 @@ BEGIN
     -- Update Statement
     UPDATE [admin].EntityField
     SET
+		Description = IIF(ef.Description IS NULL OR TRIM(ef.Description)='', CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
         Type = fromSQL.Type,
         Length = fromSQL.Length,
         Precision = fromSQL.Precision,
