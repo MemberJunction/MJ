@@ -10,7 +10,7 @@ import { promisify } from 'util';
 const gzip = promisify(zlib.gzip);
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
 import { ___skipAPIOrgId, ___skipAPIurl } from '../config';
 
@@ -181,8 +181,41 @@ export class AskSkipResolver {
       for (const r of result) {
         const item = new SkipDataContextItem();
         item.Type = r.Type;
-        item.RecordID = r.RecordID;
-        item.RecordName = r.RecordName;
+        switch (item.Type) {
+          case 'full_entity':
+            item.EntityID = r.EntityID;  
+            break;
+          case 'single_record':
+            item.RecordID = r.RecordID;  
+            item.EntityID = r.EntityID;  
+            break;
+          case 'query':
+            item.QueryID = r.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
+            break;
+          case 'sql':
+            item.SQL = r.SQL;  
+            break;
+          case 'view':
+            item.ViewID = r.ViewID;
+            item.EntityID = r.EntityID;
+            break;
+        }
+        if (item.EntityID) {
+          item.Entity = md.Entities.find((e) => e.ID === item.EntityID);
+          item.EntityName = item.Entity.Name;
+          if (item.Type === 'full_entity')
+            item.RecordName = item.EntityName;
+        }
+        if (item.Type === 'query' && item.QueryID) {
+          const q = md.Queries.find((q) => q.ID === item.QueryID);
+          item.RecordName = q?.Name;
+        }
+        if (item.Type === 'view' && item.ViewID) {
+          const v = await md.GetEntityObject<UserViewEntityExtended>('User Views', user);
+          await v.Load(item.ViewID);
+          item.RecordName = v.Name;
+          item.ViewEntity = v;
+        }
         item.Data = r.Data && r.Data.length > 0 ? JSON.parse(r.Data) : item.Data; // parse the stored data if it was saved, otherwise leave it to whatever the object's default is
         item.AdditionalDescription = r.AdditionalDescription;
         item.DataContextItemID = r.ID;
@@ -190,15 +223,8 @@ export class AskSkipResolver {
       }
     }
 
-    // // now if we don't already have this view in our data context, we will add it
-    // if (ViewId && !dataContext.Items.find(i => i.Type === 'view' && i.RecordID === ViewId))
-    //   dataContext.Items.push(
-    //     {
-    //       Type: 'view',
-    //       RecordID: ViewId,
-    //       Data: await this.getViewData(ViewId, user),
-    //     } as SkipDataContextItem
-    //   );    
+
+    /// TODO   next up we need to modify MJExplorer to handle the data context stuff and then we can finish this method
 
     return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
   }
@@ -423,7 +449,7 @@ export class AskSkipResolver {
               const item = new SkipDataContextItem();
               item.Type = 'sql';
               item.Data = result;
-              item.RecordName = dr.text;
+              item.SQL = dr.text;
               item.AdditionalDescription = dr.description;
               dataContext.Items.push(item);
               break;
@@ -437,7 +463,7 @@ export class AskSkipResolver {
                   const item = new SkipDataContextItem();
                   item.Type = 'query';
                   item.Data = result.Results;
-                  item.RecordID = query.ID;
+                  item.QueryID = query.ID;
                   item.RecordName = query.Name;
                   item.AdditionalDescription = dr.description;
                   dataContext.Items.push(item);    
@@ -545,9 +571,24 @@ export class AskSkipResolver {
         dciEntity.NewRecord();
       dciEntity.DataContextID = dataContextEntity.ID;
       dciEntity.Type = item.Type;
-      dciEntity.RecordID = item.RecordID;
-      if (item.Type === 'sql')
-        dciEntity.SQL = item.RecordName; // the SQL field in the database is where we store the SQL, in the object model it ends up in the RecordName property, mapping it here
+      switch (item.Type) {
+        case 'full_entity':
+        case 'single_record':
+          const e = item.Entity || md.Entities.find((e) => e.Name === item.EntityName);
+          dciEntity.EntityID = e.ID;
+          if (item.Type === 'single_record')
+            dciEntity.RecordID = item.RecordID;
+          break;
+        case 'view':
+          dciEntity.ViewID = item.ViewID;  
+          break;
+        case 'query':
+          dciEntity.QueryID = item.QueryID;  
+          break;
+        case 'sql':
+          dciEntity.SQL = item.SQL;  
+          break;
+      }
       dciEntity.DataJSON = JSON.stringify(item.Data);
       await dciEntity.Save();
     }

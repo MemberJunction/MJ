@@ -135,15 +135,35 @@ export class SkipDataContextItem {
     Type!: 'view' | 'query' | 'full_entity' | 'sql' | 'single_record';
 
     /**
-     * The ID of the view, query, entity, or single record in the system
+     * The ID of the single record in the system, only used if type = 'single_record'
      */
     RecordID!: number;
 
     /**
-     * The name of the view, query, or entity in the system. If Type = sql, this is the full SQL statement
+     * EntityID - the ID of the entity in the system, only used if type = 'full_entity', 'view', or 'single_record' --- for type of 'query' or 'sql' this property is not used as results can come from any number of entities in combination
+     */
+    EntityID?: number;
+
+    /**
+     * ViewID - the ID of the view in the system, only used if type = 'view' 
+     */
+    ViewID?: number;
+
+    /**
+     * QueryID - the ID of the query in the system, only used if type = 'query'
+     */
+    QueryID?: number;
+
+    /**
+     * The name of the view, query, or entity in the system. Not used with type='single_record' or type='sql'  
      */
     RecordName!: string;
-  
+
+    /**
+     * SQL - the SQL statement to execute, only used if type = 'sql'
+     */
+    SQL?: string;
+
     /**
      * The name of the entity in the system, only used if type = 'full_entity', 'view', or 'single_record' --- for type of 'query' or 'sql' this property is not used as results can come from any number of entities in combination
      */
