@@ -255,6 +255,7 @@ export class AskSkipResolver {
           viewParams.EntityName = e.Name;
         }
         else {
+          viewParams.Fields = item.ViewEntity.ViewEntityInfo.Fields.map((f) => f.Name); // include all fields
           viewParams.ViewID = item.ViewID;
         }
         const viewResult = await rv.RunView(viewParams, user);
