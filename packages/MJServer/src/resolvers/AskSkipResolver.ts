@@ -503,38 +503,10 @@ export class AskSkipResolver {
     });
     await userNotification.Save();
     
-    // now, persist the data context items, first let's get 
-    for (const item of dataContext.Items) {
-      const dciEntity = <DataContextItemEntity>await md.GetEntityObject('Data Context Items', user);
-      if (item.DataContextItemID > 0) 
-        await dciEntity.Load(item.DataContextItemID);
-      else
-        dciEntity.NewRecord();
-      dciEntity.DataContextID = dataContextEntity.ID;
-      dciEntity.Type = item.Type;
-      switch (item.Type) {
-        case 'full_entity':
-        case 'single_record':
-          const e = item.Entity || md.Entities.find((e) => e.Name === item.EntityName);
-          dciEntity.EntityID = e.ID;
-          if (item.Type === 'single_record')
-            dciEntity.RecordID = item.RecordID;
-          break;
-        case 'view':
-          dciEntity.ViewID = item.ViewID;  
-          break;
-        case 'query':
-          dciEntity.QueryID = item.QueryID;  
-          break;
-        case 'sql':
-          dciEntity.SQL = item.SQL;  
-          break;
-      }
-      // FOR NOW, we don't want to store the data in the database, we will just load it from the data context when we need it 
-      // we need a better strategy to persist because the cost of storage and retrieval/parsing is higher than just running the query again in many/most cases
-      dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
-      await dciEntity.Save();
-    }
+    // Save the data context items...
+    // FOR NOW, we don't want to store the data in the database, we will just load it from the data context when we need it 
+    // we need a better strategy to persist because the cost of storage and retrieval/parsing is higher than just running the query again in many/most cases
+    dataContext.SaveItems(user, false);
 
     // send a UI update trhough pub-sub
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {

@@ -500,6 +500,60 @@ export class DataContext {
     }
 
     /**
+     * Saves the data context items to the database. For each data context item, if it has an existing ID in the database, that database record will be updated. 
+     * For data context items that don't have an ID (meaning they've not yet been saved), a new record will be created in the database.
+     * This method will return a promise that will resolve to true if the data was saved successfully, and false if it was not.
+     * IMPORTANT: This method will not save if the ID property of the object is not set to a valid value.
+     * @param contextUser - optional, the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     * @param persistItemData - optional, if true, the data for each item will be saved to the database, if false, the data will not be saved to the database. The default is false.
+     * @returns 
+     */
+    public async SaveItems(contextUser?: UserInfo, persistItemData: boolean = false): Promise<boolean> {
+        try {
+            if (!this.ID || this.ID <= 0)
+                throw new Error(`Data Context ID not set or invalid`);
+
+            const md = new Metadata();
+            for (const item of this.Items) {
+                const dciEntity = <DataContextItemEntity>await md.GetEntityObject('Data Context Items', contextUser);
+                if (item.DataContextItemID > 0) 
+                  await dciEntity.Load(item.DataContextItemID);
+                else
+                  dciEntity.NewRecord();
+                dciEntity.DataContextID = this.ID;
+                dciEntity.Type = item.Type;
+                switch (item.Type) {
+                  case 'full_entity':
+                  case 'single_record':
+                    const e = item.Entity || md.Entities.find((e) => e.Name === item.EntityName);
+                    dciEntity.EntityID = e.ID;
+                    if (item.Type === 'single_record')
+                      dciEntity.RecordID = item.RecordID;
+                    break;
+                  case 'view':
+                    dciEntity.ViewID = item.ViewID;  
+                    break;
+                  case 'query':
+                    dciEntity.QueryID = item.QueryID;  
+                    break;
+                  case 'sql':
+                    dciEntity.SQL = item.SQL;  
+                    break;
+                }
+                if (persistItemData && item.Data && item.Data.length > 0 )
+                    dciEntity.DataJSON = JSON.stringify(item.Data); 
+                else
+                    dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
+                await dciEntity.Save();
+            }          
+        }   
+        catch (e) {
+            LogError(`Error in DataContext.SaveItems: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
      * This method will create a new DataContextItem object and add it to the data context. This method will return the newly created DataContextItem object.
      * @returns 
      */
