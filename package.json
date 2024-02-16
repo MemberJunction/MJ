@@ -8,6 +8,7 @@
   ],
   "scripts": {},
   "dependencies": {
-    "@memberjunction/data-context": "^0.9.1"
+    "@memberjunction/data-context": "^0.9.1",
+    "@memberjunction/data-context-server": "^0.9.1"
   }
 }

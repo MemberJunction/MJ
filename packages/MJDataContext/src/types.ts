@@ -1,5 +1,6 @@
-import { BaseEntity, EntityInfo, QueryInfo } from "@memberjunction/core";
-import { UserViewEntityExtended } from "@memberjunction/core-entities";
+import { BaseEntity, EntityInfo, LogError, Metadata, PrimaryKeyValue, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
+import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
+import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
 export class DataContextFieldInfo {
     Name!: string;
@@ -7,6 +8,7 @@ export class DataContextFieldInfo {
     Description?: string;
 }
 
+@RegisterClass(DataContextItem) // this is the base class and the default implementation for the DataContextItem object, other implementations can be registered as well with higher priorities
 export class DataContextItem {
     /**
      * The type of the item, either "view", "query", "full_entity", or "sql", or "single_record"
@@ -79,6 +81,12 @@ export class DataContextItem {
     AdditionalDescription?: string;
 
     /**
+     * This property contains the loaded data for the DataContextItem, if it was loaded successfully. The data will be in the form of an array of objects, where each object is a row of data. 
+     */
+    Data?: any[];
+  
+
+    /**
      * Generated description of the item  which is dependent on the type of the item
      */
     get Description(): string {
@@ -110,7 +118,7 @@ export class DataContextItem {
      * @param viewEntity 
      */
     public static FromViewEntity(viewEntity: UserViewEntityExtended) {
-        const instance = new DataContextItem();
+        const instance = DataContext.CreateDataContextItem();
         // update our data from the viewEntity definition
         instance.Type= 'view';
         instance.ViewEntity = viewEntity;
@@ -134,7 +142,7 @@ export class DataContextItem {
      * @returns 
      */
     public static FromSingleRecord(singleRecord: BaseEntity) {
-        const instance = new DataContextItem();
+        const instance = DataContext.CreateDataContextItem();
         instance.Type = 'single_record';
         instance.RecordID = singleRecord.PrimaryKey.Value;
         instance.EntityID = singleRecord.EntityInfo.ID;
@@ -149,7 +157,7 @@ export class DataContextItem {
      * @returns 
      */
     public static FromQuery(query: QueryInfo) {
-        const instance = new DataContextItem();
+        const instance = DataContext.CreateDataContextItem();
         instance.Type = 'query';
         instance.QueryID = query.ID;
         instance.RecordName = query.Name;
@@ -169,7 +177,7 @@ export class DataContextItem {
      * @returns 
      */
     public static FromFullEntity(entity: EntityInfo) {
-        const instance = new DataContextItem();
+        const instance = DataContext.CreateDataContextItem();
         instance.Type = 'full_entity';
         instance.EntityID = entity.ID;
         instance.EntityName = entity.Name;
@@ -185,9 +193,171 @@ export class DataContextItem {
         return instance;
     }
 
+    /**
+     * This method should only be called after this Item has been fully initialized. That can be done by calling LoadMetadata() on the DataContext object, 
+     * or by calling the static methods FromViewEntity, FromSingleRecord, FromQuery, or FromFullEntity, or finally by manually setting the individual properties of the DataContextItem object.
+     * A helper method, Load() at the DataContext level can be called to load the metadata and then all of the data for all items in the data context at once.
+     * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only. For client side use of this method, you can leave this as undefined and the Load will work so long as the Data Context Items you are loading are NOT of type 'sql'
+     * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
+     * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     * @returns 
+     */
+    public async LoadData(dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+        try {
+            if (this.Data && this.Data.length > 0 && !forceRefresh) // if we already have data and we aren't forcing a refresh, then we are done
+                return true;
+            else {
+                switch (this.Type) {
+                    case 'full_entity':
+                        return this.LoadFromFullEntity(contextUser);
+                    case 'view':
+                        return this.LoadFromView(contextUser);
+                    case 'single_record':
+                        return this.LoadFromSingleRecord(contextUser);
+                    case 'query':
+                        return this.LoadFromQuery(contextUser);
+                    case 'sql':
+                        return this.LoadFromSQL(dataSource, contextUser);
+                }    
+            }
+        }
+        catch (e) {
+            LogError(`Error in DataContextItem.Load: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
 
-  
-    Data?: any[];
+    /**
+     * Loads the data context item data from a view. This method is called by the LoadData method if the type of the data context item is 'view'
+     * @param contextUser 
+     * @returns 
+     */
+    protected async LoadFromView(contextUser: UserInfo): Promise<boolean> {
+        try {
+            const rv = new RunView();
+            const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
+            viewParams.Fields = this.ViewEntity.ViewEntityInfo.Fields.map((f) => f.Name); // include all fields
+            viewParams.ViewID = this.ViewID;
+            const viewResult = await rv.RunView(viewParams, contextUser);
+            if (viewResult && viewResult.Success) {
+                this.Data = viewResult.Results;
+                return true;
+            }
+            else {
+                LogError(`Error running view. View Params: ${JSON.stringify(viewParams)}`);
+                return false;
+            }
+        }
+        catch (e) {
+            LogError(`Error in DataContextItem.LoadFromView: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
+     * Loads the data context item data from a full entity (meaning all rows in a given entity). This method is called by the LoadData method if the type of the data context item is 'full_entity'
+     * @param contextUser 
+     * @returns 
+     */
+    protected async LoadFromFullEntity(contextUser: UserInfo): Promise<boolean> {
+        try {
+            const md = new Metadata();
+            const rv = new RunView();
+            const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
+            const e = md.Entities.find((e) => e.ID === this.EntityID);
+
+            viewParams.EntityName = e.Name;
+            const viewResult = await rv.RunView(viewParams, contextUser);
+            if (viewResult && viewResult.Success) {
+                this.Data = viewResult.Results;
+                return true;
+            }
+            else {
+                LogError(`Error running view. View Params: ${JSON.stringify(viewParams)}`);
+                return false;
+            }
+        }
+        catch (e) {
+            LogError(`Error in DataContextItem.LoadFromFullEntity: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
+     * Loads the data context item data from a query. This method is called by the LoadData method if the type of the data context item is 'query' 
+     * @param contextUser 
+     * @returns 
+     */
+    protected async LoadFromSingleRecord(contextUser: UserInfo): Promise<boolean> {
+        try {
+            const md = new Metadata();
+            const record = await md.GetEntityObject(this.EntityName, contextUser);
+            const pkeyVals: PrimaryKeyValue[] = [];
+            const ei = md.Entities.find((e) => e.ID === this.EntityID);
+            const rawVals = this.RecordID.split(',');
+            for (let i = 0; i < ei.PrimaryKeys.length; i++) {
+                const pk = ei.PrimaryKeys[i];
+                const v = rawVals[i];
+                pkeyVals.push({FieldName: pk.Name, Value: v});
+            }
+            if (await record.InnerLoad(pkeyVals)) {
+                this.Data = await record.GetDataObject({
+                    includeRelatedEntityData: false,
+                    oldValues: false,
+                    omitEmptyStrings: false,
+                    omitNullValues: false,
+                    relatedEntityList: [],
+                    excludeFields: []
+                });             
+        
+                return true;                    
+            }
+            else {
+                LogError(`Error loading single record: ${this.RecordName}`);
+                return false;
+            }
+        }
+        catch (e) {
+            LogError(`Error in DataContextItem.LoadFromSingleRecord: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+
+    /**
+     * Loads the data context item data from a query. This method is called by the LoadData method if the type of the data context item is 'query' 
+     * @param contextUser 
+     * @returns 
+     */
+    protected async LoadFromQuery(contextUser: UserInfo): Promise<boolean> {
+        try {
+            const rq = new RunQuery();
+            const queryResult = await rq.RunQuery({QueryID: this.QueryID}, contextUser);
+            if (queryResult && queryResult.Success) {
+                this.Data = queryResult.Results;
+                return true;
+            }
+            else {
+                LogError(`Error running query ${this.RecordName}`);
+                return false;
+            }    
+        }
+        catch (e) {
+            LogError(`Error in DataContextItem.LoadFromQuery: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
+     * Overrideable in sub-classes, the default implementation will throw an error because we don't have the ability to execute random SQL on the client side
+     * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
+     * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     */
+    protected async LoadFromSQL(dataSource: any, contextUser: UserInfo): Promise<boolean> {
+        throw new Error(`Not implemented in the base DataContextItem object. The server-side only sub-class of the DataContextItem object implements this method. 
+                         Make sure you include @memberjunction/data-context-server in your project and use the DataContextItemServer class instead of DataContextItem. 
+                         This happens automatically if you use the DataContext.Load() or DataContext.LoadMetadata() methods to load the data context.`);
+    }
   
     /**
      * Validates that the Data property is set. Valid states include a zero length array, or an array with one or more elements. If the Data property is not set, this method will return false
@@ -198,7 +368,21 @@ export class DataContextItem {
     }
 }
 
+@RegisterClass(DataContext) // this is the base class and the default implementation for the DataContext object, other implementations can be registered as well with higher priorities
 export class DataContext {
+    /**
+     * The ID of the data context in the system
+     */
+    ID!: number;
+
+    /**
+     * The object holding all the metadata for the data context - this only is in place automatically if you called the `LoadMetadata` method
+     */
+    DataContextEntity: DataContextEntity;
+
+    /**
+     * The items in the data context
+     */
     Items: DataContextItem[] = [];
   
     /**
@@ -238,6 +422,135 @@ export class DataContext {
             sOutput += `${itemPrefix}${i}: []; // ${item.Description}\n`;
         }
         return `{${sOutput}}`;
+    }
+
+    /**
+     * This method will load ONLY the metadata for the data context and data context items associated with the data context. This method will not load any data for the data context items. This method will return a promise that will resolve to true if the metadata was loaded successfully, and false if it was not.
+     * @param DataContextID - the ID of the data context to load
+     * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     */
+    public async LoadMetadata(DataContextID: number, contextUser?: UserInfo): Promise<boolean> {
+        try {
+            const md = new Metadata();
+            const rv = new RunView();
+            const dciEntityInfo = md.Entities.find((e) => e.Name === 'Data Context Items');
+            if (!dciEntityInfo)
+              throw new Error(`Data Context Items entity not found`);
+        
+            this.DataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
+            await this.DataContextEntity.Load(DataContextID);
+            this.ID = this.DataContextEntity.ID; // do it this way to make sure it loaded properly
+            if (!this.ID)
+                throw new Error(`Data Context ID: ${DataContextID} not found`);
+
+            const result = await rv.RunView({EntityName: 'Data Context Items', IgnoreMaxRows: true, ExtraFilter: `DataContextID = ${DataContextID}`}, contextUser);
+            if (!result || !result.Success) 
+              throw new Error(`Error running view to retrieve data context items for data context ID: ${DataContextID}`);
+            else { 
+                const items = result.Results;
+                for (let i = 0; i < items.length; i++) {
+                    const r = <DataContextItemEntity>items[i];
+                    const item = this.AddDataContextItem();
+                    item.DataContextItemID = r.ID;
+                    item.Type = <"view" | "query" | "full_entity" | "sql" | "single_record">r.Type;
+                    switch (item.Type) {
+                        case 'full_entity':
+                            item.EntityID = r.EntityID;  
+                            break;
+                        case 'single_record':
+                            item.RecordID = r.RecordID;  
+                            item.EntityID = r.EntityID;  
+                            break;
+                        case 'query':
+                            item.QueryID = r.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
+                            const q = md.Queries.find((q) => q.ID === item.QueryID);
+                            item.RecordName = q?.Name;
+                            break;
+                        case 'sql':
+                            item.SQL = r.SQL;  
+                            break;
+                        case 'view':
+                            item.ViewID = r.ViewID;
+                            item.EntityID = r.EntityID;
+                            if (item.ViewID) {
+                                const v = await md.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
+                                await v.Load(item.ViewID);
+                                item.RecordName = v.Name;
+                                item.ViewEntity = v;
+                            }
+                            break;
+                    }
+                    if (item.EntityID) {
+                        item.Entity = md.Entities.find((e) => e.ID === item.EntityID);
+                        item.EntityName = item.Entity.Name;
+                        if (item.Type === 'full_entity')
+                            item.RecordName = item.EntityName;
+                    }
+                    if (r.DataJSON && r.DataJSON.length > 0) {
+                        item.Data = JSON.parse(r.DataJSON);
+                    }
+                }
+            }
+            return true;
+        }
+        catch (ex) {
+            LogError(`Error in DataContext.LoadMetadata: ${ex && ex.message ? ex.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
+     * This method will create a new DataContextItem object and add it to the data context. This method will return the newly created DataContextItem object.
+     * @returns 
+     */
+    public AddDataContextItem(): DataContextItem {
+        // get a new data context item. Using class factory instead of directly instantiating the class so that we can use the class factory 
+        // to override the default class with a custom class if another package registers a higher priority sub-class than our default impleemtnation - for example - server side implementations...
+        const item = DataContext.CreateDataContextItem();
+        this.Items.push(item);
+        return item;
+    }
+
+    /**
+     * This method will create a new DataContextItem object. This method is used internally by the AddDataContextItem method, but can also be called directly if you need to create a DataContextItem object for some other purpose. 
+     * NOTE: this method does NOT add the newly created DataContextItem to the data context, you must do that yourself if you use this method directly.
+     */
+    public static CreateDataContextItem(): DataContextItem {
+        const item = <DataContextItem>MJGlobal.Instance.ClassFactory.CreateInstance(DataContextItem); 
+        return item;
+    }
+
+    /**
+     * This method will load the data for the data context items associated with the data context. This method must be called ONLY after the . This method will return a promise that will resolve to true if the data was loaded successfully, and false if it was not.
+     * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
+     * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
+     * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     */
+    public async LoadData(dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+        try {
+            for (const item of this.Items) {
+                if (!await item.LoadData(dataSource, forceRefresh, contextUser))
+                    return false;
+            }
+            return true;
+        }
+        catch (e) {
+            LogError(`Error in DataContext.LoadData: ${e && e.message ? e.message : ''}`);
+            return false;
+        }
+    }
+
+    /**
+     * This method will load both the metadata and the data for the data context items associated with the data context. This method will return a promise that will resolve to true if the data was loaded successfully, and false if it was not.
+     * @param DataContextID - the ID of the data context to load
+     * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
+     * @param forceRefresh - (defaults to false) for the LoadData() portion of this routine --- if this param is set to true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
+     * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
+     * @returns 
+     */
+    public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+        // load the metadata and THEN the data afterwards
+        return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, contextUser);
     }
 }   
   

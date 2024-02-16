@@ -250,6 +250,7 @@ $baseLibraries = @(
     @{Name='MJAIEngine'}, 
     @{Name='MJQueue'}, 
     @{Name='MJDataContext'},
+    @{Name='MJDataContextServer'},
     @{Name='SkipTypes'},
     @{Name='SQLServerDataProvider'}, 
     @{Name='CodeGenLib'}, 

@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/data-context",
-  "version": "0.9.4",
-  "description": "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
+  "name": "@memberjunction/data-context-server",
+  "version": "0.9.2",
+  "description": "This library provides a server-side implementation of the DataContextItem class from @memberjunction/data-context that can handle the server-side only use case of loading data into a context using raw SQL statements.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,7 +19,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@memberjunction/data-context": "^0.9.4",
     "@memberjunction/global": "^0.9.132",
-    "@memberjunction/core-entities": "^0.9.125"
+    "typeorm": "^0.3.20"
   }
 }

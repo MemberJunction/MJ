@@ -1,8 +1,11 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, PrimaryKeyValue, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { DataContext, DataContextItem } from '@memberjunction/data-context'
+import { DataContext } from '@memberjunction/data-context'
+import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
+LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
+
 import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse } from '@memberjunction/skip-types';
 import axios from 'axios';
 import zlib from 'zlib';
@@ -11,12 +14,13 @@ import { promisify } from 'util';
 const gzip = promisify(zlib.gzip);
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
 import { ___skipAPIOrgId, ___skipAPIurl } from '../config';
 
 
 import { registerEnumType } from "type-graphql";
+import { MJGlobal } from '@memberjunction/global';
 
 
 enum SkipResponsePhase {
@@ -175,132 +179,9 @@ export class AskSkipResolver {
     convoDetailEntity.Set('Sequence', 1); // using weakly typed here because we're going to get rid of this field soon
     await convoDetailEntity.Save();
 
-    const dataContext = await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
-
+    const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext); // await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
+    await dataContext.Load(dataContextEntity.ID, dataSource, false, user);
     return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
-  }
-
-  protected async LoadDataContext(md: Metadata, dataSource: DataSource, dataContextEntity: DataContextEntity, user: UserInfo, forceRefresh: boolean): Promise<DataContext> {
-    const dataContext: DataContext = new DataContext();
-    const dciEntityInfo = md.Entities.find((e) => e.Name === 'Data Context Items');
-    if (!dciEntityInfo)
-      throw new Error(`Data Context Items entity not found`);
-
-    const sql = `SELECT * FROM ${dciEntityInfo.SchemaName}.${dciEntityInfo.BaseView} WHERE DataContextID = ${dataContextEntity.ID}`;
-    const result = await dataSource.query(sql);
-    if (!result) 
-      throw new Error(`Error running SQL: ${sql}`);
-    else {
-      for (const r of result) {
-        const item = new DataContextItem();
-        item.Type = r.Type;
-        switch (item.Type) {
-          case 'full_entity':
-            item.EntityID = r.EntityID;  
-            break;
-          case 'single_record':
-            item.RecordID = r.RecordID;  
-            item.EntityID = r.EntityID;  
-            break;
-          case 'query':
-            item.QueryID = r.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
-            break;
-          case 'sql':
-            item.SQL = r.SQL;  
-            break;
-          case 'view':
-            item.ViewID = r.ViewID;
-            item.EntityID = r.EntityID;
-            break;
-        }
-        if (item.EntityID) {
-          item.Entity = md.Entities.find((e) => e.ID === item.EntityID);
-          item.EntityName = item.Entity.Name;
-          if (item.Type === 'full_entity')
-            item.RecordName = item.EntityName;
-        }
-        if (item.Type === 'query' && item.QueryID) {
-          const q = md.Queries.find((q) => q.ID === item.QueryID);
-          item.RecordName = q?.Name;
-        }
-        if (item.Type === 'view' && item.ViewID) {
-          const v = await md.GetEntityObject<UserViewEntityExtended>('User Views', user);
-          await v.Load(item.ViewID);
-          item.RecordName = v.Name;
-          item.ViewEntity = v;
-        }
-        if (r.Data && r.Data.length > 0 && !forceRefresh) {
-          item.Data = JSON.parse(r.Data);
-        }
-        else {  
-          await this.LoadDataContextItemData(item, md, user, dataSource);  
-        }
-        item.AdditionalDescription = r.AdditionalDescription;
-        item.DataContextItemID = r.ID;
-        dataContext.Items.push(item);
-      }
-    }
-    return dataContext;
-  }
-
-  protected async LoadDataContextItemData(item: DataContextItem, md: Metadata, user: UserInfo, dataSource: DataSource) {
-    // load the data from the database
-    switch (item.Type) {
-      case 'full_entity':
-      case 'view':
-        const rv = new RunView();
-        const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
-        if (item.Type === 'full_entity') {
-          const e = md.Entities.find((e) => e.ID === item.EntityID);
-          viewParams.EntityName = e.Name;
-        }
-        else {
-          viewParams.Fields = item.ViewEntity.ViewEntityInfo.Fields.map((f) => f.Name); // include all fields
-          viewParams.ViewID = item.ViewID;
-        }
-        const viewResult = await rv.RunView(viewParams, user);
-        if (viewResult && viewResult.Success)
-          item.Data = viewResult.Results;
-        else
-          throw new Error(`Error running view. View Params: ${JSON.stringify(viewParams)}`);
-        break;
-      case 'single_record':
-        const record = await md.GetEntityObject(item.EntityName, user);
-        const pkeyVals: PrimaryKeyValue[] = [];
-        const ei = md.Entities.find((e) => e.ID === item.EntityID);
-        const rawVals = item.RecordID.split(',');
-        for (let i = 0; i < ei.PrimaryKeys.length; i++) {
-          const pk = ei.PrimaryKeys[i];
-          const v = rawVals[i];
-          pkeyVals.push({FieldName: pk.Name, Value: v});
-        }
-        await record.InnerLoad(pkeyVals);
-        item.Data = await record.GetDataObject({
-          includeRelatedEntityData: false,
-          oldValues: false,
-          omitEmptyStrings: false,
-          omitNullValues: false,
-          relatedEntityList: [],
-          excludeFields: []
-        });             
-        break;
-      case 'query':
-        const rq = new RunQuery();
-        const queryResult = await rq.RunQuery({QueryID: item.QueryID}, user);
-        if (queryResult && queryResult.Success)
-          item.Data = queryResult.Results;
-        else
-          throw new Error(`Error running query ${item.RecordName}`);
-        break;
-      case 'sql':
-        // TO-DO
-        // when we move this to the @memberjucntion/data-context package we need to change this to use a capability within MJCore to retrieve
-        // sql statements, but we need to find a way to do this so that it is not a security risk. Probably only implement the method on the
-        // sql server data provider side and make it throw an exception if called in the graphql-dataprovider implementation???
-        const result = await dataSource.query(item.SQL);
-        item.Data = result;
-        break;
-    }
   }
 
   protected async LoadConversationDetailsIntoSkipMessages(dataSource: DataSource, ConversationId: number, maxHistoricalMessages?: number): Promise<SkipMessage[]> {
@@ -513,37 +394,23 @@ export class AskSkipResolver {
 
       for (const dr of apiResponse.dataRequest) {
         try {
+          const item = dataContext.AddDataContextItem();
           switch (dr.type) {
             case "sql":
-              const sql = dr.text;
-              const result = await dataSource.query(sql);
-              if (!result) 
-                throw new Error(`Error running SQL: ${sql}`);
-  
-              const item = new DataContextItem();
               item.Type = 'sql';
-              item.Data = result;
               item.SQL = dr.text;
               item.AdditionalDescription = dr.description;
-              dataContext.Items.push(item);
+              await item.LoadData(dataSource, false, user);
               break;
             case "stored_query":
               const queryName = dr.text;
               const query = md.Queries.find((q) => q.Name === queryName);
               if (query) {
-                const rq = new RunQuery();
-                const result = await rq.RunQuery({QueryID: query.ID}, user)  
-                if (result && result.Success) {
-                  const item = new DataContextItem();
-                  item.Type = 'query';
-                  item.Data = result.Results;
-                  item.QueryID = query.ID;
-                  item.RecordName = query.Name;
-                  item.AdditionalDescription = dr.description;
-                  dataContext.Items.push(item);    
-                }
-                else
-                  throw new Error(`Error running query ${queryName}`);
+                item.Type = 'query';
+                item.QueryID = query.ID;
+                item.RecordName = query.Name;
+                item.AdditionalDescription = dr.description;
+                await item.LoadData(dataSource, false, user);
               }
               else
                 throw new Error(`Query ${queryName} not found.`);
@@ -663,7 +530,9 @@ export class AskSkipResolver {
           dciEntity.SQL = item.SQL;  
           break;
       }
-      dciEntity.DataJSON = JSON.stringify(item.Data);
+      // FOR NOW, we don't want to store the data in the database, we will just load it from the data context when we need it 
+      // we need a better strategy to persist because the cost of storage and retrieval/parsing is higher than just running the query again in many/most cases
+      dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
       await dciEntity.Save();
     }
 
