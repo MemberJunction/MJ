@@ -1,6 +1,6 @@
 import { Component, Input, ViewChild } from '@angular/core';
 import { DynamicReportComponent } from './dynamic-report';
-import { SkipData } from '../ask-skip/ask-skip.component';
+import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 
 @Component({
   selector: 'mj-skip-dynamic-report',
@@ -26,7 +26,7 @@ import { SkipData } from '../ask-skip/ask-skip.component';
 export class SkipDynamicReportComponent {
    @ViewChild('theReport', { static: false }) theReport!: DynamicReportComponent;
 
-    @Input() SkipData: SkipData | undefined;
+    @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() ConversationID: number | null = null;
     @Input() ConversationName: string | null = null;    
     @Input() ConversationDetailID: number | null = null;

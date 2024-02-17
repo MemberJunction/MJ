@@ -35,6 +35,7 @@
   "dependencies": {
     "@memberjunction/global": "^0.9.132",
     "@memberjunction/core": "^0.9.142",
+    "@memberjunction/skip-types": "^0.9.20",
     "@memberjunction/ng-container-directives": "^0.9.110",
     "@memberjunction/ng-shared": "^0.9.8",
     "tslib": "^2.3.0",

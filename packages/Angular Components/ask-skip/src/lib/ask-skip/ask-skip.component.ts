@@ -10,51 +10,8 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { SkipDynamicReportComponent } from '../misc/skip-dynamic-report-wrapper';
 import { Subscription } from 'rxjs';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
-
-export class SkipMessage {
-  Type: string='user'
-  Message: string= ''
-  ID: number = 0
-}
-
-export class SkipColumnInfo {
-  FieldName!: string
-  DisplayName?: string
-  DataType!: string
-  Description?: string
-}
-
-export class SkipExecutionResult {
-  analysis?: string
-  errorMessage?: string | null;
-  htmlReport?: string | null;
-  plotData?: { data: any[]; layout: any } | null; // Compatible with Plotly
-  resultType!: "data" | "plot" | "html" | null;
-  status!: "success" | "error";
-  tableData?: any[] | null; // any array of objects
-  tableDataColumns: SkipColumnInfo[] = [];
-}
-
-export class SkipData {
-  executionResults?: SkipExecutionResult
-  reportTitle!: string
-  scriptText!: string;
-  success!: boolean;
-  suggestedQuestions?: string[] | null;
-  techExplanation?: string
-  userExplanation?: string
-}
-
-export class ExecuteAskSkipAnalysisQueryResult {
-  Success!: boolean
-  Status!: string
-  Result!: string
-  ResultObject!: SkipData;
-  ConversationId!: number
-  UserMessageConversationDetailId!: number
-  AIMessageConversationDetailId!: number
-}
-
+import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
+  
 
 @Component({
   selector: 'mj-ask-skip',
@@ -88,8 +45,6 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   constructor(
     public sharedService: SharedService,
     private renderer: Renderer2,
-    private injector: Injector,
-    private router: Router,
     private route: ActivatedRoute,
     private location: Location
   ) {}
@@ -244,7 +199,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   }
   
   onEnter(event: any) {
-    this.sendSkipQuestion();
+    this.sendSkipMessage();
   }
 
   public async SelectConversation(conversation: ConversationEntity) {
@@ -299,7 +254,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   }
 
 
-  async sendSkipQuestion() {
+  async sendSkipMessage() {
     const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
     if (this.SelectedConversation)
       this._processingStatus[this.SelectedConversation?.ID] = true;
@@ -316,27 +271,39 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
       this.askSkipInput.nativeElement.value = '';
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
-      const result = await this.ExecuteAskSkipQuery(val, this.DataContextID, this.SelectedConversation);
-      const queryResult = <ExecuteAskSkipAnalysisQueryResult>result?.ExecuteAskSkipAnalysisQuery;
-      if (queryResult?.Success) {
+      const graphQLRawResult = await this.ExecuteAskSkipQuery(val, this.DataContextID, this.SelectedConversation);
+      const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
+      if (skipResult?.Success) {
         if (convoID !== this.SelectedConversation?.ID) {
           // this scenario arises when we have a selected convo change after we submitted our request to skip
           // so we do nothing here other than update the status. 
           this._processingStatus[convoID] = false;
         }
         else {
-          queryResult.ResultObject = <SkipData>JSON.parse(queryResult.Result)
+          this._processingStatus[convoID] = false;
+          // switch (skipResult.ResponsePhase) {
+          //   case SkipResponsePhase.clarifying_question:
+          //     this.handleSkipClarifyingQuestion(skipResult, convoID, convoDetail, md);
+          //     break;
+          //   case SkipResponsePhase.analysis_complete:
+          //     this.handleSkipAnalysisComplete(skipResult, convoID, convoDetail, md);
+          //     break;
+          //   default:
+          //     // the UI doesn't handle otehr response phases like data_request, so we just ignore them
+          //     break;
+          // }
+          const innerResult = <SkipAPIResponse>JSON.parse(skipResult.Result)
 
           if (!this.SelectedConversation) {
             const convo = <ConversationEntity>await md.GetEntityObject('Conversations');
-            await convo.Load(queryResult.ConversationId);
-            this._processingStatus[queryResult.ConversationId] = true;
+            await convo.Load(skipResult.ConversationId);
+            this._processingStatus[skipResult.ConversationId] = true;
             this.Conversations.push(convo)
             this.SelectedConversation = convo;
           }
-          else if (this.Messages.length === 1) {
+          else if (this.Messages.length === 1 && skipResult.ResponsePhase === SkipResponsePhase.analysis_complete) {
             // we are on the first message so skip renamed the convo, use that 
-            this.SelectedConversation.Name = queryResult.ResultObject.reportTitle; // this will update the UI
+            this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
 
             // the below LOOKS redundant to just updating this.SelectedConversation.Name, but it is needed to ensure that the list box is updated
             // otherwise Angular binding doesn't pick up the change without the below.
@@ -346,12 +313,11 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
               this.Conversations[idx].Name = this.SelectedConversation.Name;
             }
           }
-          await convoDetail.Load(queryResult.UserMessageConversationDetailId); // update the object to load from DB
+          await convoDetail.Load(skipResult.UserMessageConversationDetailId); // update the object to load from DB
           const aiDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
-          await aiDetail.Load(queryResult.AIMessageConversationDetailId) // get record from the database
+          await aiDetail.Load(skipResult.AIMessageConversationDetailId) // get record from the database
           this.Messages.push(aiDetail);  
-
-          // we don't create a user notification here in the client, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
+          // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }
       else {
@@ -372,6 +338,11 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     }
   } 
 
+  // protected handleSkipClarifyingQuestion(skipResult: MJAPISkipResult, convoID: number, convoDetail: ConversationDetailEntity, md: Metadata) {
+  // }
+  // protected async handleSkipAnalysisComplete(skipResult: MJAPISkipResult, convoID: number, convoDetail: ConversationDetailEntity, md: Metadata) { 
+  // }
+
   private _detailHtml: any = {};
   public createDetailHtml(detail: ConversationDetailEntity) {
     if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0 && this._detailHtml[detail.ID]) {
@@ -383,18 +354,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       let sMessage = '';
 
       if (detail.Role.trim().toLowerCase() === 'ai') {
-        const resultObject = <SkipData>JSON.parse(detail.Message);
-        const newId = this.Messages.length;
-    
-        if (resultObject?.success) {
-          sMessage = "Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
-          this.addReportToConversation(detail, resultObject, detail.ID);
-        }
-        else {
-          sMessage = `<div class="alert alert-warning" role="alert">
-                      <strong>No data returned.</strong>
-                      </div>`;
-        }
+        sMessage = this.createSkipResponseHtml(detail);
       }
       else {
         sMessage = detail.Message;
@@ -406,6 +366,31 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     }
   }      
 
+  protected createSkipResponseHtml(detail: ConversationDetailEntity): string {
+    let sMessage = '';
+    const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
+
+    if (resultObject.success) {
+      switch (resultObject.responsePhase) {
+        case SkipResponsePhase.clarifying_question:
+          const clarifyingQuestion = <SkipAPIClarifyingQuestionResponse>resultObject;
+          sMessage = clarifyingQuestion.clarifyingQuestion;
+          break;
+        case SkipResponsePhase.analysis_complete:
+          sMessage = "Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+          const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
+          this.addReportToConversation(detail, analysisResult, detail.ID);
+          break;
+      }
+    }
+    else {
+      sMessage = `<div class="alert alert-warning" role="alert">
+                  <strong>No data returned.</strong>
+                  </div>`;
+    }
+    return sMessage;
+  }
+
   scrollToBottom(): void {
     try {
       this.askSkipPanel.nativeElement.scrollTop = this.askSkipPanel.nativeElement.scrollHeight;
@@ -414,15 +399,14 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     }
   }
 
-
-  protected addReportToConversation(detail: ConversationDetailEntity, result: SkipData, messageId: number) {
+  protected addReportToConversation(detail: ConversationDetailEntity, analysisResult: SkipAPIAnalysisCompleteResponse, messageId: number) {
     // set a short timeout to allow Angular to render as the div we want to add the grid to won't exist yet otherwise
     setTimeout(() => {
       const componentRef = this.askSkip.viewContainerRef.createComponent(SkipDynamicReportComponent);
 
       // Pass the data to the new chart
       const report = componentRef.instance;
-      report.SkipData = result;
+      report.SkipData = analysisResult;
       report.ConversationID = detail.ConversationID
       report.ConversationDetailID = detail.ID;
       if (this.SelectedConversation)

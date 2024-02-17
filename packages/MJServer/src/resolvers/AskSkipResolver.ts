@@ -349,7 +349,7 @@ export class AskSkipResolver {
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
     convoDetailEntityAI.NewRecord();
     convoDetailEntityAI.ConversationID = ConversationId; 
-    convoDetailEntityAI.Message = apiResponse.clarifyingQuestion;
+    convoDetailEntityAI.Message = JSON.stringify(apiResponse);//.clarifyingQuestion;
     convoDetailEntityAI.Role = 'AI';
     if (await convoDetailEntityAI.Save()) {
       return {

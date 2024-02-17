@@ -1,11 +1,6 @@
 import { Component, Input } from '@angular/core';
-import { SeriesType, CategoryAxisTitle } from '@progress/kendo-angular-charts';
-import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
-import { EntityFieldTSType, LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { SeriesClickEvent } from '@progress/kendo-angular-charts';
-import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { ResourceData } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-dynamic-chart',
@@ -17,11 +12,11 @@ export class DynamicChartComponent {
     @Input() plotData: any;
     @Input() plotLayout: any;
 
-    private _skipData: SkipData | undefined;
-    @Input() get SkipData(): SkipData | undefined {
+    private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
+    @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
         return this._skipData ? this._skipData : undefined;   
     }
-    set SkipData(d: SkipData | undefined){
+    set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
         this._skipData = d;
         if (d) {
             this.plotData = d.executionResults?.plotData?.data;
@@ -30,7 +25,10 @@ export class DynamicChartComponent {
     }
 
    
-    public onChartSeriesClick(e: SeriesClickEvent): void {
+    // TO DO
+    // below was used with Kendo charts, but we are now using Plotly
+    // we should wire this type of behavior up to Plotly too if we have the drill down info from Skip
+    //public onChartSeriesClick(e: SeriesClickEvent): void {
         // try {
         //     const drillDownValue = e.category; // contains the category for the clicked series item
         //     const ddBaseViewField = this.SkipData?.DrillDownBaseViewField ;
@@ -77,5 +75,5 @@ export class DynamicChartComponent {
         // catch (e) {
         //     LogError(e);
         // }
-    }
+    //}
 }

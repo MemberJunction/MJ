@@ -40,7 +40,7 @@
                     (keyup.enter)="onEnter($event)" 
                     type="text" 
                     placeholder="Type your message..."></textarea>
-            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipQuestion()" [primary]="true">Send</button>
+            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()" [primary]="true">Send</button>
         </div>
         <div #AskSkipPanel class="messages" mjContainer mjFillContainer [bottomMargin]="1" [fillWidth]="false" [fillHeight]="true">
             <div *ngFor="let message of Messages">  

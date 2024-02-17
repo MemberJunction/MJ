@@ -1,8 +1,8 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { LogError, Metadata, RunReport } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
-import { SkipColumnInfo, SkipData, DynamicReportComponent } from '@memberjunction/ng-ask-skip';
-
+import { DynamicReportComponent } from '@memberjunction/ng-ask-skip';
+import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types'; 
 @Component({
   selector: 'app-single-report',
   templateUrl: './single-report.component.html',
@@ -19,7 +19,7 @@ export class SingleReportComponent implements OnInit {
 
   public reportData!: any[];
 
-  public ReportConfiguration: SkipData | undefined;
+  public ReportConfiguration: SkipAPIAnalysisCompleteResponse | undefined;
 
   public get IsChart(): boolean {
     return this.theReport.IsChart

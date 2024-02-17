@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
-import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
+import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
 import { LogStatus } from '@memberjunction/core';
@@ -19,11 +19,11 @@ import { LogStatus } from '@memberjunction/core';
                 [navigable]="true">
         <ng-container *ngFor="let col of columns">
             <kendo-grid-column 
-                field="{{col.FieldName}}" 
-                title="{{col.DisplayName}}"
+                field="{{col.fieldName}}" 
+                title="{{col.displayName}}"
                 [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#cyan' }">
                 <ng-template kendoGridCellTemplate let-dataItem>
-                    {{ formatData(col.DataType, dataItem[col.FieldName]) }}
+                    {{ formatData(col.simpleDataType, dataItem[col.fieldName]) }}
                 </ng-template>
             </kendo-grid-column>
         </ng-container>
@@ -37,15 +37,15 @@ export class DynamicGridComponent implements AfterViewInit {
   @Input() public pageSize = 30;
   @Input() public startingRow = 0;
 
-  private _skipData: SkipData | undefined;
-  @Input() get SkipData(): SkipData | undefined {
+  private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
+  @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
       return this._skipData ? this._skipData : undefined;
   }
-  set SkipData(d: SkipData | undefined){
+  set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
       this._skipData = d;
       if (d) {
         this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
-        this.columns = d.executionResults?.tableDataColumns ? d.executionResults?.tableDataColumns : [];
+        this.columns = d.tableDataColumns ? d.tableDataColumns : [];
         this.loadGridView();
       }
   }

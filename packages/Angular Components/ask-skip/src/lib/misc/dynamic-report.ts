@@ -1,6 +1,6 @@
 import { Component, Input, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { SkipColumnInfo, SkipData } from '../ask-skip/ask-skip.component';
+import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { SharedService, HtmlListType, EventCodes } from '@memberjunction/ng-shared';
 import { DynamicGridComponent } from './dynamic-grid';
 import { DynamicChartComponent } from './dynamic-chart';
@@ -22,7 +22,7 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
         margin-top: 10px;
       }`,
       `.report-link {
-        margin-top: 10px;
+        margin-top: 10px; 
         margin-bottom: 10px;
         cursor: pointer;
         color: blue;
@@ -97,11 +97,11 @@ export class DynamicReportComponent {
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: number | null = null;
 
-  private _skipData!: SkipData | undefined;
-  @Input() get SkipData(): SkipData | undefined{ 
+  private _skipData!: SkipAPIAnalysisCompleteResponse | undefined;
+  @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined{ 
       return this._skipData;   
   }
-  set SkipData(d: SkipData | undefined){
+  set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
       this._skipData = d;
       if (d && !this._loaded)
         this.ngAfterViewInit();
@@ -158,7 +158,7 @@ export class DynamicReportComponent {
   }
 
   public get Columns(): SkipColumnInfo[] {
-    return this.SkipData?.executionResults?.tableDataColumns || [];
+    return this.SkipData?.tableDataColumns || [];
   }
 
   public get IsChart(): boolean {
@@ -175,7 +175,7 @@ export class DynamicReportComponent {
   }
 
   public createAnalysisHtml(): string {
-    const analysis = this.SkipData?.executionResults?.analysis;
+    const analysis = this.SkipData?.analysis;
     if (analysis && analysis.length > 0) {
       return this.sharedService.ConvertMarkdownStringToHtmlList(HtmlListType.Unordered, analysis);
     }
@@ -192,7 +192,7 @@ export class DynamicReportComponent {
         const md = new Metadata();
         const report = await md.GetEntityObject<ReportEntity>('Reports');
         report.NewRecord();
-        report.Name = this.SkipData.reportTitle;
+        report.Name = this.SkipData.reportTitle ? this.SkipData.reportTitle : 'Untitled Report';
         report.Description = this.SkipData.userExplanation ? this.SkipData.userExplanation : '';
         report.ConversationID = this.ConversationID;
         report.ConversationDetailID = this.ConversationDetailID;
