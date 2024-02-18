@@ -32,17 +32,9 @@
         </kendo-listview>
     </div>
     <div class="conversation-wrapper" mjFillContainer>
-        <div class="skip-title">{{Title}}</div>
-        <div class="input-area">
-            <textarea
-                    #AskSkipInput 
-                    [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
-                    (keyup.enter)="onEnter($event)" 
-                    type="text" 
-                    placeholder="Type your message..."></textarea>
-            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()" [primary]="true">Send</button>
-        </div>
-        <div #AskSkipPanel class="messages" mjContainer mjFillContainer [bottomMargin]="1" [fillWidth]="false" [fillHeight]="true">
+        <div #AskSkipPanel class="messages" mjContainer 
+             mjFillContainer [bottomMargin]="80" 
+             [fillWidth]="false" [fillHeight]="true">
             <div *ngFor="let message of Messages">  
                 <div class="message-row" [ngClass]="message.Role.trim().toLowerCase() === 'ai' ? 'ai-message' : message.Role.trim().toLowerCase() === 'error' ? 'error-message' : 'user-message'" >
                     <div class="message-image">
@@ -56,6 +48,16 @@
             <div *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
                 <kendo-loader></kendo-loader>
             </div>
+        </div>
+        <div class="skip-title">{{Title}}</div>
+        <div class="input-area">
+            <textarea
+                    #AskSkipInput 
+                    [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
+                    (keyup.enter)="onEnter($event)" 
+                    type="text" 
+                    placeholder="Type your message..."></textarea>
+            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()" [primary]="true">Send</button>
         </div>
     </div>
 </div>     

@@ -6,7 +6,7 @@ import { DataContext } from '@memberjunction/data-context'
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
-import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse } from '@memberjunction/skip-types';
+import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo } from '@memberjunction/skip-types';
 import axios from 'axios';
 import zlib from 'zlib';
 import { promisify } from 'util';
@@ -63,7 +63,7 @@ export class AskSkipResultType {
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
-  private static _maxHistoricalMessages = 8;
+  private static _maxHistoricalMessages = 20;
 
 
   @Query(() => AskSkipResultType)
@@ -90,7 +90,8 @@ export class AskSkipResolver {
                     conversationID: ConversationId.toString(), 
                     dataContext: dataContext, 
                     organizationID: !isNaN(parseInt(OrganizationId)) ? parseInt(OrganizationId) : 0,
-                    requestPhase: 'initial_request'
+                    requestPhase: 'initial_request',
+                    entityInfo: this.BuildSkipEntityInfo()
                   };
 
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -105,6 +106,69 @@ export class AskSkipResolver {
     return this.HandleSkipRequest(input, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity, dataContext, dataContextEntity);
   }
 
+  protected BuildSkipEntityInfo(): SkipEntityInfo[] {
+    // build the entity info for skip in its format which is 
+    // narrower in scope than our native MJ metadata
+    const md = new Metadata();
+    return md.Entities.map((e) => {
+      const ret: SkipEntityInfo = {
+        id: e.ID,        
+        name: e.Name,
+        schemaName: e.SchemaName,
+        baseView: e.BaseView,
+        description: e.Description,
+        fields: e.Fields.map((f) => {
+          return {
+            id: f.ID,
+            entityID: f.EntityID,
+            sequence: f.Sequence,
+            name: f.Name,
+            displayName: f.DisplayName,
+            category: f.Category,
+            type: f.Type,
+            description: f.Description,
+            isPrimaryKey: f.IsPrimaryKey,
+            allowsNull: f.AllowsNull,
+            isUnique: f.IsUnique,
+            length: f.Length,
+            precision: f.Precision,
+            scale: f.Scale,
+            defaultValue: f.DefaultValue,
+            autoIncrement: f.AutoIncrement,
+            valueListType: f.ValueListType,
+            extendedType: f.ExtendedType,
+            defaultInView: f.DefaultInView,
+            defaultColumnWidth: f.DefaultColumnWidth,
+            isVirtual: f.IsVirtual,
+            isNameField: f.IsNameField,
+            relatedEntityID: f.RelatedEntityID,
+            relatedEntityFieldName: f.RelatedEntityFieldName,
+            relatedEntity: f.RelatedEntity,
+            relatedEntitySchemaName: f.RelatedEntitySchemaName,
+            relatedEntityBaseView: f.RelatedEntityBaseView,
+          };
+          }
+        ),
+        relatedEntities: e.RelatedEntities.map((r) => {
+          return {
+            entityID: r.EntityID,
+            relatedEntityID: r.RelatedEntityID,
+            type: r.Type,
+            entityKeyField: r.EntityKeyField,
+            relatedEntityJoinField: r.RelatedEntityJoinField,
+            joinView: r.JoinView,
+            joinEntityJoinField: r.JoinEntityJoinField,
+            joinEntityInverseJoinField: r.JoinEntityInverseJoinField,
+            entity: r.Entity,
+            entityBaseView: r.EntityBaseView,
+            relatedEntity: r.RelatedEntity,
+            relatedEntityBaseView: r.RelatedEntityBaseView,
+          }
+        })
+      };
+      return ret;
+    });
+  }
 
   protected async HandleSkipInitialObjectLoading(dataSource: DataSource, 
                                                  ConversationId: number, 
@@ -215,8 +279,34 @@ export class AskSkipResolver {
           // we want to limit the # of characters in the message to 5000, rough approximation for 1000 words/tokens
           // but we only do that for system messages
           const skipRole = this.MapDBRoleToSkipRole(r.Role);
+          let outputMessage; // will be populated below for system messages
+          if (skipRole === 'system') {
+            const detail = <SkipAPIResponse>JSON.parse(r.Message);
+            if (detail.responsePhase === SkipResponsePhase.AnalysisComplete) {
+              const analysisDetail = <SkipAPIAnalysisCompleteResponse>detail;
+              outputMessage = JSON.stringify({
+                responsePhase: SkipResponsePhase.AnalysisComplete,
+                techExplanation: analysisDetail.techExplanation,
+                userExplanation: analysisDetail.userExplanation,
+                scriptText: analysisDetail.scriptText,
+                tableDataColumns: analysisDetail.tableDataColumns
+              });
+            }
+            else if (detail.responsePhase === SkipResponsePhase.ClarifyingQuestion) {
+              const clarifyingQuestionDetail = <SkipAPIClarifyingQuestionResponse>detail;
+              outputMessage = JSON.stringify({
+                responsePhase: SkipResponsePhase.ClarifyingQuestion,
+                clarifyingQuestion: clarifyingQuestionDetail.clarifyingQuestion
+              });
+            }
+            else {
+              // we should never get here, AI responses only fit the above
+              // don't throw an exception, but log an error
+              LogError(`Unknown response phase: ${detail.responsePhase}`);
+            }
+          }
           const m: SkipMessage = {
-            content: skipRole === 'system' ? (r.Message.length > 5000 ? "PARTIAL CONTENT: " + r.Message.substring(0, 5000) : r.Message) : r.Message,
+            content: skipRole === 'system' ? outputMessage : r.Message,
             role: skipRole,
           };
           return m;
@@ -232,6 +322,8 @@ export class AskSkipResolver {
   protected MapDBRoleToSkipRole(role: string): "user" | "system" {
     switch (role.trim().toLowerCase()) {
       case 'ai': 
+      case 'system':
+      case 'assistant':
         return 'system';
       default: 
         return 'user';

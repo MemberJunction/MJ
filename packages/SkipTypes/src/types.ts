@@ -1,4 +1,4 @@
-import { EntityInfo } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { DataContext } from '@memberjunction/data-context';
 
@@ -115,7 +115,59 @@ export const SkipRequestPhase = {
 } as const;
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
+export class SkipFieldInfo {
+    entityID: number;
+    sequence: number;
+    name: string;
+    displayName?: string;
+    description?: string;
+    isPrimaryKey: boolean;
+    isUnique: boolean;
+    category?: string;
+    type: string;
+    length: number;
+    precision: number;
+    scale: number;
+    allowsNull: boolean;
+    defaultValue: string;
+    autoIncrement: boolean;
+    valueListType?: string;
+    extendedType?: string;
+    defaultInView: boolean;
+    defaultColumnWidth: number;
+    isVirtual: boolean;
+    isNameField: boolean;
+    relatedEntityID?: number;
+    relatedEntityFieldName?: string;
+    relatedEntity?: string;
+    relatedEntitySchemaName?: string;
+    relatedEntityBaseView?: string;
+}
 
+export class SkipEntityRelationshipInfo {
+    entityID: number;
+    relatedEntityID: number;
+    type: string;
+    entityKeyField: string;
+    relatedEntityJoinField: string;
+    joinView: string;
+    joinEntityJoinField: string;
+    joinEntityInverseJoinField: string;
+    entity: string;
+    entityBaseView: string;
+    relatedEntity: string;
+    relatedEntityBaseView: string;
+}
+
+export class SkipEntityInfo {
+    id: number;
+    name!: string;
+    description?: string;
+    schemaName!: string;
+    baseView!: string;
+    fields: SkipFieldInfo[] =[];
+    relatedEntities: SkipEntityRelationshipInfo[] = [];
+}
 /**
  * Defines the shape of the data that is expected by the Skip API Server when making a request
  */
@@ -130,6 +182,10 @@ export class SkipAPIRequest {
      * The data context, use this to provide all of the data you have in a data context to Skip. You should provide this from cache or refreshed based on the parameters provided by the user.
      */
     dataContext: DataContext;
+    /**
+     * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
+     */
+    entityInfo: SkipEntityInfo[];
     /**
      * The conversation ID
      */

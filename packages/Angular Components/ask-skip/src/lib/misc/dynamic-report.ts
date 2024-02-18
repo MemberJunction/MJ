@@ -30,10 +30,10 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
       }`,
     ],
   template: `
-<div mjFillContainer> 
+<div> 
   <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
   <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
-  <kendo-tabstrip mjFillContainer [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip>
+  <kendo-tabstrip [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip>
       <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)">
           <ng-template kendoTabTitle>
             <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
