@@ -366,6 +366,36 @@ export class DataContextItem {
     public ValidateDataExists(): boolean {
         return this.Data ? this.Data.length >= 0 : false; // can have 0 to many rows, just need to make sure we have a Data object to work with
     }
+
+    /**
+     * Creates a new DataContextItem object from a raw data object. This method will return a new DataContextItem object if the raw data was successfully converted, and will return null if the raw data was not successfully converted.
+     * @param rawItem 
+     * @returns 
+     */
+    public static FromRawItem(rawItem: any): DataContextItem {
+        const item = DataContext.CreateDataContextItem();
+        item.Type = rawItem.Type;
+        item.RecordID = rawItem.RecordID;
+        item.EntityID = rawItem.EntityID;
+        item.ViewID = rawItem.ViewID;
+        item.QueryID = rawItem.QueryID;
+        item.SQL = rawItem.SQL;
+        item.EntityName = rawItem.EntityName;
+        item.RecordName = rawItem.RecordName;
+        item.AdditionalDescription = rawItem.AdditionalDescription;
+        item.DataContextItemID = rawItem.DataContextItemID;
+        item.Data = rawItem.Data;
+        if (rawItem.Fields && rawItem.Fields.length > 0) {
+            item.Fields = rawItem.Fields.map((f: any) => {
+                return {
+                    Name: f.Name,
+                    Type: f.Type,
+                    Description: f.Description
+                }
+            });
+        }
+        return item;
+    }
 }
 
 @RegisterClass(DataContext) // this is the base class and the default implementation for the DataContext object, other implementations can be registered as well with higher priorities
@@ -483,6 +513,7 @@ export class DataContext {
                     if (item.EntityID) {
                         item.Entity = md.Entities.find((e) => e.ID === item.EntityID);
                         item.EntityName = item.Entity.Name;
+                        item.Fields = this.MapEntityFieldsToDataContextFields(item.Entity);
                         if (item.Type === 'full_entity')
                             item.RecordName = item.EntityName;
                     }
@@ -497,6 +528,16 @@ export class DataContext {
             LogError(`Error in DataContext.LoadMetadata: ${ex && ex.message ? ex.message : ''}`);
             return false;
         }
+    }
+
+    protected MapEntityFieldsToDataContextFields(entity: EntityInfo): DataContextFieldInfo[] {
+        return entity.Fields.map(f => {
+            return {
+                Name: f.Name,
+                Type: f.Type,
+                Description: f.Description
+            }
+        });
     }
 
     /**
@@ -605,6 +646,25 @@ export class DataContext {
     public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
         // load the metadata and THEN the data afterwards
         return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, contextUser);
+    }
+
+    /**
+     * Utility method to create a new DataContext object from a raw data object. This method will return a promise that will resolve to a new DataContext object if the raw data was successfully converted, and will reject if the raw data was not successfully converted.
+     * @param rawData 
+     */
+    public static async FromRawData(rawData: any): Promise<DataContext> {
+        const newContext = new DataContext();
+        if (rawData) {
+            newContext.ID = rawData.ID;
+            if (rawData.Items && rawData.Items.length > 0) {
+                for (const rawItem of rawData.Items) {
+                    const item = DataContextItem.FromRawItem(rawItem); 
+                    if (item)
+                        newContext.Items.push(item);
+                }
+            }
+        }
+        return newContext;
     }
 }   
   

@@ -16,7 +16,7 @@ const gzip = promisify(zlib.gzip);
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipAPIurl } from '../config';
+import { ___skipAPIOrgId, ___skipAPIurl, mj_core_schema } from '../config';
 
 
 import { registerEnumType } from "type-graphql";
@@ -91,7 +91,7 @@ export class AskSkipResolver {
                     dataContext: dataContext, 
                     organizationID: !isNaN(parseInt(OrganizationId)) ? parseInt(OrganizationId) : 0,
                     requestPhase: 'initial_request',
-                    entityInfo: this.BuildSkipEntityInfo()
+                    entities: this.BuildSkipEntityInfo()
                   };
 
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -109,8 +109,9 @@ export class AskSkipResolver {
   protected BuildSkipEntityInfo(): SkipEntityInfo[] {
     // build the entity info for skip in its format which is 
     // narrower in scope than our native MJ metadata
+    // don't pass the mj_core_schema entities
     const md = new Metadata();
-    return md.Entities.map((e) => {
+    return md.Entities.filter(e => e.SchemaName !== mj_core_schema ).map((e) => {
       const ret: SkipEntityInfo = {
         id: e.ID,        
         name: e.Name,
@@ -133,6 +134,7 @@ export class AskSkipResolver {
             length: f.Length,
             precision: f.Precision,
             scale: f.Scale,
+            sqlFullType: f.SQLFullType,
             defaultValue: f.DefaultValue,
             autoIncrement: f.AutoIncrement,
             valueListType: f.ValueListType,

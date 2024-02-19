@@ -128,6 +128,7 @@ export class SkipFieldInfo {
     length: number;
     precision: number;
     scale: number;
+    sqlFullType: string;
     allowsNull: boolean;
     defaultValue: string;
     autoIncrement: boolean;
@@ -185,7 +186,7 @@ export class SkipAPIRequest {
     /**
      * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
      */
-    entityInfo: SkipEntityInfo[];
+    entities: SkipEntityInfo[];
     /**
      * The conversation ID
      */
