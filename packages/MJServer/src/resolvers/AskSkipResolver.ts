@@ -20,7 +20,7 @@ import { ___skipAPIOrgId, ___skipAPIurl, mj_core_schema } from '../config';
 
 
 import { registerEnumType } from "type-graphql";
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 
 
 enum SkipResponsePhase {
@@ -88,7 +88,7 @@ export class AskSkipResolver {
     const input: SkipAPIRequest = { 
                     messages: messages, 
                     conversationID: ConversationId.toString(), 
-                    dataContext: dataContext, 
+                    dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
                     organizationID: !isNaN(parseInt(OrganizationId)) ? parseInt(OrganizationId) : 0,
                     requestPhase: 'initial_request',
                     entities: this.BuildSkipEntityInfo()
@@ -544,8 +544,8 @@ export class AskSkipResolver {
         }
       }
       else {
-          apiRequest.requestPhase = 'data_gathering_response';
-        }
+        apiRequest.requestPhase = 'data_gathering_response';
+      }
       // we have all of the data now, add it to the data context and then submit it back to the Skip API
       return this.HandleSkipRequest(apiRequest, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity, dataContext, dataContextEntity);
     }

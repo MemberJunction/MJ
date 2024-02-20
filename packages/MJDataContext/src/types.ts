@@ -83,8 +83,28 @@ export class DataContextItem {
     /**
      * This property contains the loaded data for the DataContextItem, if it was loaded successfully. The data will be in the form of an array of objects, where each object is a row of data. 
      */
-    Data?: any[];
+    public get Data(): any[] {
+        return this._Data;
+    }
+    public set Data(value: any[]) {
+        this._Data = value;
+        this.DataLoaded = value !== null && value !== undefined;
+        if (this.DataLoaded)
+            this.DataLoadingError = null;
+    }
+
+    private _Data?: any[];
+
+    /**
+     * This property is set to true if the data has been loaded for this DataContextItem, and false if it has not been loaded or if there was an error loading the data.  
+     */
+    DataLoaded: boolean = false;
   
+    /**
+     * This property contains an error message if there was an error loading the data for this DataContextItem. If there was no error, this property will be null;
+     */
+    DataLoadingError?: string;
+
 
     /**
      * Generated description of the item  which is dependent on the type of the item
@@ -244,7 +264,8 @@ export class DataContextItem {
                 return true;
             }
             else {
-                LogError(`Error running view. View Params: ${JSON.stringify(viewParams)}`);
+                this.DataLoadingError = `Error running view. View Params: ${JSON.stringify(viewParams)}`;
+                LogError(this.DataLoadingError);
                 return false;
             }
         }
@@ -273,7 +294,8 @@ export class DataContextItem {
                 return true;
             }
             else {
-                LogError(`Error running view. View Params: ${JSON.stringify(viewParams)}`);
+                this.DataLoadingError = `Error running view. View Params: ${JSON.stringify(viewParams)}`;
+                LogError(this.DataLoadingError);
                 return false;
             }
         }
@@ -309,16 +331,18 @@ export class DataContextItem {
                     relatedEntityList: [],
                     excludeFields: []
                 });             
-        
+
                 return true;                    
             }
             else {
-                LogError(`Error loading single record: ${this.RecordName}`);
+                this.DataLoadingError = `Error loading single record: ${this.RecordName}`;
+                LogError(this.DataLoadingError);
                 return false;
             }
         }
         catch (e) {
-            LogError(`Error in DataContextItem.LoadFromSingleRecord: ${e && e.message ? e.message : ''}`);
+            this.DataLoadingError = `Error in DataContextItem.LoadFromSingleRecord: ${e && e.message ? e.message : ''}`;
+            LogError(this.DataLoadingError);
             return false;
         }
     }
@@ -335,15 +359,18 @@ export class DataContextItem {
             const queryResult = await rq.RunQuery({QueryID: this.QueryID}, contextUser);
             if (queryResult && queryResult.Success) {
                 this.Data = queryResult.Results;
+
                 return true;
             }
             else {
-                LogError(`Error running query ${this.RecordName}`);
+                this.DataLoadingError = `Error running query ${this.RecordName}`;
+                LogError(this.DataLoadingError);
                 return false;
             }    
         }
         catch (e) {
-            LogError(`Error in DataContextItem.LoadFromQuery: ${e && e.message ? e.message : ''}`);
+            this.DataLoadingError = `Error in DataContextItem.LoadFromQuery: ${e && e.message ? e.message : ''}`;
+            LogError(this.DataLoadingError);
             return false;
         }
     }
@@ -361,10 +388,14 @@ export class DataContextItem {
   
     /**
      * Validates that the Data property is set. Valid states include a zero length array, or an array with one or more elements. If the Data property is not set, this method will return false
+     * @param ignoreFailedLoad - if true, we will not validate the data if the DataLoaded property is false, if false, we will validate the data regardless of the DataLoaded property
      * @returns 
      */
-    public ValidateDataExists(): boolean {
-        return this.Data ? this.Data.length >= 0 : false; // can have 0 to many rows, just need to make sure we have a Data object to work with
+    public ValidateDataExists(ignoreFailedLoad: boolean = false): boolean {
+        if (ignoreFailedLoad && !this.DataLoaded)
+            return true;
+        else
+            return this.Data ? this.Data.length >= 0 : false; // can have 0 to many rows, just need to make sure we have a Data object to work with
     }
 
     /**
@@ -384,7 +415,9 @@ export class DataContextItem {
         item.RecordName = rawItem.RecordName;
         item.AdditionalDescription = rawItem.AdditionalDescription;
         item.DataContextItemID = rawItem.DataContextItemID;
-        item.Data = rawItem.Data;
+        item._Data = rawItem._Data;
+        item.DataLoaded = rawItem.DataLoaded;
+        item.DataLoadingError = rawItem.DataLoadingError;
         if (rawItem.Fields && rawItem.Fields.length > 0) {
             item.Fields = rawItem.Fields.map((f: any) => {
                 return {
@@ -394,6 +427,7 @@ export class DataContextItem {
                 }
             });
         }
+
         return item;
     }
 }
@@ -417,11 +451,12 @@ export class DataContext {
   
     /**
      * Simple validation method that determines if all of the items in the data context have data set. This doesn't mean the items have data in them as zero-length data is consider valid, it is checking to see if the Data property is set on each item or not
+     * @param ignoreFailedLoadItems - if set to true, we will ignore individual items that have not been loaded due to loading errors and only validate the data exists in the items that have been loaded. If set to false, we will validate all items regardless of their load state
      * @returns 
      */
-    public ValidateDataExists(): boolean {
+    public ValidateDataExists(ignoreFailedLoadItems: boolean = false): boolean {
         if (this.Items)
-            return !this.Items.some(i => !i.ValidateDataExists()); // if any data item is invalid, return false
+            return !this.Items.some(i => !i.ValidateDataExists(ignoreFailedLoadItems)); // if any data item is invalid, return false
         else    
             return false;
     }
@@ -429,13 +464,15 @@ export class DataContext {
     /**
      * Return a simple object that will have a property for each item in our Items array. We will name each item sequentially as data_item_1, data_item_2, etc, using the itemPrefix parameter
      * @param itemPrefix defaults to 'data_item_' and can be set to anything desired
+     * @param includeFailedLoadItems - if true, we will include items that have not been loaded due to loading errors in the output object, if false, we will only include items that have been loaded successfully
      * @returns 
      */
-    public ConvertToSimpleObject(itemPrefix: string = 'data_item_'): any {
-        // 
+    public ConvertToSimpleObject(itemPrefix: string = 'data_item_', includeFailedLoadItems: boolean = false): any {
         const ret: any = {};
-        for (let i = 0; i < this.Items.length; i++) {
-            ret[`${itemPrefix}${i}`] = this.Items[i].Data;
+        const items = includeFailedLoadItems ? this.Items : this.Items.filter(i => i.DataLoaded);
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            ret[`${itemPrefix}${i}`] = item.Data;
         }
         return ret;
     }
@@ -443,12 +480,14 @@ export class DataContext {
     /**
      * Return a string that contains a type definition for a simple object for this data context. The object will have a property for each item in our Items array. We will name each item sequentially as data_item_1, data_item_2, etc, using the itemPrefix parameter
      * @param itemPrefix defaults to 'data_item_' and can be set to anything desired
+     * @param includeFailedLoadItems - if true, we will include items that have not been loaded due to loading errors in the output object, if false, we will only include items that have been loaded successfully
      * @returns 
      */
-    public CreateSimpleObjectTypeDefinition(itemPrefix: string = 'data_item_'): string {
+    public CreateSimpleObjectTypeDefinition(itemPrefix: string = 'data_item_', includeFailedLoadItems: boolean = false): string {
         let sOutput: string = "";
-        for (let i = 0; i < this.Items.length; i++) {
-            const item = this.Items[i];
+        const items = includeFailedLoadItems ? this.Items : this.Items.filter(i => i.DataLoaded);
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
             sOutput += `${itemPrefix}${i}: []; // ${item.Description}\n`;
         }
         return `{${sOutput}}`;
@@ -501,11 +540,12 @@ export class DataContext {
                             break;
                         case 'view':
                             item.ViewID = r.ViewID;
-                            item.EntityID = r.EntityID;
+                            item.EntityID = r.EntityID; // attempt to get this from the database, often will be null though
                             if (item.ViewID) {
                                 const v = await md.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
                                 await v.Load(item.ViewID);
                                 item.RecordName = v.Name;
+                                item.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
                                 item.ViewEntity = v;
                             }
                             break;

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/aiengine",
-  "version": "0.9.23",
+  "version": "0.9.25",
   "description": "MemberJunction: AI Engine Module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,9 +15,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "^0.9.142",
-    "@memberjunction/global": "^0.9.132",
-    "@memberjunction/core-entities": "^0.9.125",
+    "@memberjunction/core": "^0.9.144",
+    "@memberjunction/global": "^0.9.134",
+    "@memberjunction/core-entities": "^0.9.127",
     "@memberjunction/ai": "^0.9.136",
     "dotenv": "^16.0.3",
     "openai": "^3.2.1",

@@ -1,3 +1,8 @@
+/**
+ * The Global Object Store is a place to store global objects that need to be shared across the application. Depending on the execution environment, this could be the window object in a browser, or the global object in a node environment. 
+ * This function will return the appropriate object based on the environment.
+ * @returns 
+ */
 export function GetGlobalObjectStore() {
     try    {
         // we might be running in a browser, in that case, we use the window object for our global stuff
@@ -26,4 +31,28 @@ export function GetGlobalObjectStore() {
             return null;
         }
     }
+}
+
+/**
+ * This utility function will copy all scalar and array properties from an object to a new object and return the new object. This function will NOT copy functions or non-plain objects.
+ * @param input 
+ * @returns 
+ */
+export function CopyScalarsAndArrays<T extends object>(input: T): Partial<T> {
+    const result: Partial<T> = {};
+    Object.keys(input).forEach((key) => {
+        const value = input[key as keyof T];
+        // Check for null or scalar types directly
+        if (value === null || typeof value !== 'object') {
+            result[key as keyof T] = value;
+        } else if (Array.isArray(value)) {
+            // Handle arrays by creating a new array with the same elements
+            result[key as keyof T] = [...value] as any;
+        } else if (typeof value === 'object' && value.constructor === Object) {
+            // Recursively copy plain objects
+            result[key as keyof T] = CopyScalarsAndArrays(value) as any;
+        }
+        // Functions and non-plain objects are intentionally ignored
+    });
+    return result;
 }
