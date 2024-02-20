@@ -6,7 +6,7 @@ import { DataContext } from '@memberjunction/data-context'
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
-import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo } from '@memberjunction/skip-types';
+import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo } from '@memberjunction/skip-types';
 import axios from 'axios';
 import zlib from 'zlib';
 import { promisify } from 'util';
@@ -91,7 +91,8 @@ export class AskSkipResolver {
                     dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
                     organizationID: !isNaN(parseInt(OrganizationId)) ? parseInt(OrganizationId) : 0,
                     requestPhase: 'initial_request',
-                    entities: this.BuildSkipEntityInfo()
+                    entities: this.BuildSkipEntities(),
+                    queries: this.BuildSkipQueries(),
                   };
 
     pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
@@ -106,7 +107,48 @@ export class AskSkipResolver {
     return this.HandleSkipRequest(input, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity, dataContext, dataContextEntity);
   }
 
-  protected BuildSkipEntityInfo(): SkipEntityInfo[] {
+  protected BuildSkipQueries(): SkipQueryInfo[] {
+    const md = new Metadata();
+    return md.Queries.map((q) => {
+      return {
+        id: q.ID,
+        name: q.Name,
+        description: q.Description,
+        category: q.Category,
+        sql: q.SQL,
+        originalSQL: q.OriginalSQL,
+        feedback: q.Feedback,
+        status: q.Status,
+        qualityRank: q.QualityRank,
+        createdAt: q.CreatedAt,
+        updatedAt: q.UpdatedAt,
+        categoryID: q.CategoryID, 
+        fields: q.Fields.map((f) => {
+          return {
+            id: f.ID,
+            queryID: f.QueryID,
+            sequence: f.Sequence,
+            name: f.Name,
+            description: f.Description,
+            sqlBaseType: f.SQLBaseType,
+            sqlFullType: f.SQLFullType,
+            sourceEntityID: f.SourceEntityID,
+            sourceEntity: f.SourceEntity,
+            sourceFieldName: f.SourceFieldName,
+            isComputed: f.IsComputed,
+            computationDescription: f.ComputationDescription,
+            isSummary: f.IsSummary,
+            summaryDescription: f.SummaryDescription,
+            createdAt: f.CreatedAt,
+            updatedAt: f.UpdatedAt,
+          }
+        })
+      }
+    }
+    );
+  }
+
+  protected BuildSkipEntities(): SkipEntityInfo[] {
     // build the entity info for skip in its format which is 
     // narrower in scope than our native MJ metadata
     // don't pass the mj_core_schema entities

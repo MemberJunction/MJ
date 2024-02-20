@@ -534,6 +534,7 @@ export class DataContext {
                             item.QueryID = r.QueryID; // map the QueryID in our database to the RecordID field in the object model for runtime use
                             const q = md.Queries.find((q) => q.ID === item.QueryID);
                             item.RecordName = q?.Name;
+                            item.SQL = q.SQL;
                             break;
                         case 'sql':
                             item.SQL = r.SQL;  
@@ -547,6 +548,7 @@ export class DataContext {
                                 item.RecordName = v.Name;
                                 item.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
                                 item.ViewEntity = v;
+                                item.SQL =  `SELECT * FROM ${v.ViewEntityInfo.SchemaName}.${v.ViewEntityInfo.BaseView}${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
                             }
                             break;
                     }
@@ -663,11 +665,12 @@ export class DataContext {
      */
     public async LoadData(dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
         try {
+            let bSuccess: boolean = true;
             for (const item of this.Items) {
                 if (!await item.LoadData(dataSource, forceRefresh, contextUser))
-                    return false;
+                    bSuccess = false;
             }
-            return true;
+            return bSuccess;
         }
         catch (e) {
             LogError(`Error in DataContext.LoadData: ${e && e.message ? e.message : ''}`);

@@ -1,5 +1,3 @@
-import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { DataContext } from '@memberjunction/data-context';
 
 /**
@@ -115,7 +113,7 @@ export const SkipRequestPhase = {
 } as const;
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
-export class SkipFieldInfo {
+export class SkipEntityFieldInfo {
     entityID: number;
     sequence: number;
     name: string;
@@ -166,9 +164,48 @@ export class SkipEntityInfo {
     description?: string;
     schemaName!: string;
     baseView!: string;
-    fields: SkipFieldInfo[] =[];
+    fields: SkipEntityFieldInfo[] =[];
     relatedEntities: SkipEntityRelationshipInfo[] = [];
 }
+
+export class SkipQueryInfo {
+    name: string;
+    description: string;
+    categoryID: number;
+    sql: string;
+    originalSQL: string;
+    feedback: string;
+    status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    qualityRank: number;
+    createdAt: Date;
+    updatedAt: Date;
+    category: string;
+    fields: SkipQueryFieldInfo[];
+}
+export class SkipQueryFieldInfo {
+    name: string;
+    queryID: number;
+    description: string;
+    sequence: number;
+    /**
+     * The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
+     */
+    sqlBaseType: string;
+    /**
+     * The full SQL type for the field, for example datetime or nvarchar(10) etc.
+     */
+    sqlFullType: string;
+    sourceEntityID: number;
+    sourceFieldName: string;
+    isComputed: boolean;
+    computationDescription: string;
+    isSummary: boolean;
+    summaryDescription: string;
+    createdAt: Date;
+    updatedAt: Date;
+    sourceEntity: string;
+}
+
 /**
  * Defines the shape of the data that is expected by the Skip API Server when making a request
  */
@@ -187,6 +224,11 @@ export class SkipAPIRequest {
      * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
      */
     entities: SkipEntityInfo[];
+    /**
+     * 
+     */
+    queries: SkipQueryInfo[];
+
     /**
      * The conversation ID
      */
