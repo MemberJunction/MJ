@@ -565,7 +565,15 @@ input CreateConversationInput {
   UserID: Int!
 }
 
+input CreateDashboardCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+}
+
 input CreateDashboardInput {
+  CategoryID: Int
   Description: String
   Name: String!
   UIConfigDetails: String!
@@ -925,9 +933,18 @@ input CreateRecordMergeLogInput {
   SurvivingRecordID: String!
 }
 
+input CreateReportCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int!
+}
+
 input CreateReportInput {
+  CategoryID: Int
+  Configuration: String
   ConversationDetailID: Int
   ConversationID: Int
+  DataContextID: Int
   Description: String
   Name: String!
   OutputDeliveryTypeID: Int
@@ -937,8 +954,6 @@ input CreateReportInput {
   OutputTargetEmail: String
   OutputTriggerTypeID: Int
   OutputWorkflowID: Int
-  ReportConfiguration: String
-  ReportSQL: String
   SharingScope: String!
   UserID: Int!
 }
@@ -947,14 +962,6 @@ input CreateReportSnapshotInput {
   ReportID: Int!
   ResultSet: String!
   UserID: Int
-}
-
-input CreateResourceFolderInput {
-  Description: String
-  Name: String!
-  ParentID: Int
-  ResourceTypeName: String!
-  UserID: Int!
 }
 
 input CreateSchemaInfoInput {
@@ -1007,7 +1014,14 @@ input CreateUserRoleInput {
   UserID: Int!
 }
 
+input CreateUserViewCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+}
+
 input CreateUserViewInput {
+  CategoryID: Int
   CustomFilterState: Boolean!
   CustomWhereClause: Boolean!
   Description: String
@@ -1069,7 +1083,21 @@ input CreateWorkspaceItemInput {
   WorkSpaceID: Int!
 }
 
+type DashboardCategory_ {
+  CreatedAt: Timestamp!
+  DashboardCategoriesArray: [DashboardCategory_!]!
+  DashboardsArray: [Dashboard_!]!
+  Description: String
+  ID: Int!
+  Name: String!
+  Parent: String
+  ParentID: Int
+  UpdatedAt: Timestamp!
+}
+
 type Dashboard_ {
+  Category: String
+  CategoryID: Int
   Description: String
   ID: Int!
   Name: String!
@@ -1135,6 +1163,7 @@ type DataContext_ {
   ID: Int!
   LastRefreshedAt: Timestamp
   Name: String!
+  ReportsArray: [Report_!]!
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -1716,6 +1745,7 @@ type Mutation {
   CreateConversation(input: CreateConversationInput!): Conversation_!
   CreateConversationDetail(input: CreateConversationDetailInput!): ConversationDetail_!
   CreateDashboard(input: CreateDashboardInput!): Dashboard_!
+  CreateDashboardCategory(input: CreateDashboardCategoryInput!): DashboardCategory_!
   CreateDataContext(input: CreateDataContextInput!): DataContext_!
   CreateDataContextItem(input: CreateDataContextItemInput!): DataContextItem_!
   CreateDeal(input: CreateDealInput!): Deal_!
@@ -1747,8 +1777,8 @@ type Mutation {
   CreateRecordMergeDeletionLog(input: CreateRecordMergeDeletionLogInput!): RecordMergeDeletionLog_!
   CreateRecordMergeLog(input: CreateRecordMergeLogInput!): RecordMergeLog_!
   CreateReport(input: CreateReportInput!): Report_!
+  CreateReportCategory(input: CreateReportCategoryInput!): ReportCategory_!
   CreateReportSnapshot(input: CreateReportSnapshotInput!): ReportSnapshot_!
-  CreateResourceFolder(input: CreateResourceFolderInput!): ResourceFolder_!
   CreateSchemaInfo(input: CreateSchemaInfoInput!): SchemaInfo_!
   CreateUser(input: CreateUserInput!): User_!
   CreateUserApplicationEntity(input: CreateUserApplicationEntityInput!): UserApplicationEntity_!
@@ -1756,6 +1786,7 @@ type Mutation {
   CreateUserNotification(input: CreateUserNotificationInput!): UserNotification_!
   CreateUserRole(input: CreateUserRoleInput!): UserRole_!
   CreateUserView(input: CreateUserViewInput!): UserView_!
+  CreateUserViewCategory(input: CreateUserViewCategoryInput!): UserViewCategory_!
   CreateUserViewRun(input: CreateUserViewRunInput!): UserViewRun_!
   CreateUserViewRunDetail(input: CreateUserViewRunDetailInput!): UserViewRunDetail_!
   CreateVectorDatabase(input: CreateVectorDatabaseInput!): VectorDatabase_!
@@ -1805,6 +1836,7 @@ type Mutation {
   UpdateConversation(input: UpdateConversationInput!): Conversation_!
   UpdateConversationDetail(input: UpdateConversationDetailInput!): ConversationDetail_!
   UpdateDashboard(input: UpdateDashboardInput!): Dashboard_!
+  UpdateDashboardCategory(input: UpdateDashboardCategoryInput!): DashboardCategory_!
   UpdateDataContext(input: UpdateDataContextInput!): DataContext_!
   UpdateDataContextItem(input: UpdateDataContextItemInput!): DataContextItem_!
   UpdateDeal(input: UpdateDealInput!): Deal_!
@@ -1842,8 +1874,8 @@ type Mutation {
   UpdateRecordMergeDeletionLog(input: UpdateRecordMergeDeletionLogInput!): RecordMergeDeletionLog_!
   UpdateRecordMergeLog(input: UpdateRecordMergeLogInput!): RecordMergeLog_!
   UpdateReport(input: UpdateReportInput!): Report_!
+  UpdateReportCategory(input: UpdateReportCategoryInput!): ReportCategory_!
   UpdateReportSnapshot(input: UpdateReportSnapshotInput!): ReportSnapshot_!
-  UpdateResourceFolder(input: UpdateResourceFolderInput!): ResourceFolder_!
   UpdateRole(input: UpdateRoleInput!): Role_!
   UpdateSchemaInfo(input: UpdateSchemaInfoInput!): SchemaInfo_!
   UpdateUser(input: UpdateUserInput!): User_!
@@ -1853,6 +1885,7 @@ type Mutation {
   UpdateUserNotification(input: UpdateUserNotificationInput!): UserNotification_!
   UpdateUserRecordLog(input: UpdateUserRecordLogInput!): UserRecordLog_!
   UpdateUserView(input: UpdateUserViewInput!): UserView_!
+  UpdateUserViewCategory(input: UpdateUserViewCategoryInput!): UserViewCategory_!
   UpdateUserViewRun(input: UpdateUserViewRunInput!): UserViewRun_!
   UpdateUserViewRunDetail(input: UpdateUserViewRunDetailInput!): UserViewRunDetail_!
   UpdateVectorDatabase(input: UpdateVectorDatabaseInput!): VectorDatabase_!
@@ -1969,6 +2002,7 @@ type Query {
   CurrentUserDefaultViewByEntityID(EntityID: Int!): [UserView_!]!
   CurrentUserUserViewsByEntityID(EntityID: Int!): [UserView_!]!
   Dashboard(ID: Int!): Dashboard_
+  DashboardCategory(ID: Int!): DashboardCategory_
   DataContext(ID: Int!): DataContext_
   DataContextItem(ID: Int!): DataContextItem_
   Dataset(ID: Int!): Dataset_
@@ -2026,8 +2060,8 @@ type Query {
   RecordMergeDeletionLog(ID: Int!): RecordMergeDeletionLog_
   RecordMergeLog(ID: Int!): RecordMergeLog_
   Report(ID: Int!): Report_
+  ReportCategory(ID: Int!): ReportCategory_
   ReportSnapshot(ID: Int!): ReportSnapshot_
-  ResourceFolder(ID: Int!): ResourceFolder_
   ResourceType(ID: Int!): ResourceType_
   Role(ID: Int!): Role_
   RowLevelSecurityFilter(ID: Int!): RowLevelSecurityFilter_
@@ -2103,6 +2137,9 @@ type Query {
   RunConversationDynamicView(input: RunDynamicViewInput!): RunConversationViewResult!
   RunConversationViewByID(input: RunViewByIDInput!): RunConversationViewResult!
   RunConversationViewByName(input: RunViewByNameInput!): RunConversationViewResult!
+  RunDashboardCategoryDynamicView(input: RunDynamicViewInput!): RunDashboardCategoryViewResult!
+  RunDashboardCategoryViewByID(input: RunViewByIDInput!): RunDashboardCategoryViewResult!
+  RunDashboardCategoryViewByName(input: RunViewByNameInput!): RunDashboardCategoryViewResult!
   RunDashboardDynamicView(input: RunDynamicViewInput!): RunDashboardViewResult!
   RunDashboardViewByID(input: RunViewByIDInput!): RunDashboardViewResult!
   RunDashboardViewByName(input: RunViewByNameInput!): RunDashboardViewResult!
@@ -2239,15 +2276,15 @@ type Query {
   RunRecordMergeLogDynamicView(input: RunDynamicViewInput!): RunRecordMergeLogViewResult!
   RunRecordMergeLogViewByID(input: RunViewByIDInput!): RunRecordMergeLogViewResult!
   RunRecordMergeLogViewByName(input: RunViewByNameInput!): RunRecordMergeLogViewResult!
+  RunReportCategoryDynamicView(input: RunDynamicViewInput!): RunReportCategoryViewResult!
+  RunReportCategoryViewByID(input: RunViewByIDInput!): RunReportCategoryViewResult!
+  RunReportCategoryViewByName(input: RunViewByNameInput!): RunReportCategoryViewResult!
   RunReportDynamicView(input: RunDynamicViewInput!): RunReportViewResult!
   RunReportSnapshotDynamicView(input: RunDynamicViewInput!): RunReportSnapshotViewResult!
   RunReportSnapshotViewByID(input: RunViewByIDInput!): RunReportSnapshotViewResult!
   RunReportSnapshotViewByName(input: RunViewByNameInput!): RunReportSnapshotViewResult!
   RunReportViewByID(input: RunViewByIDInput!): RunReportViewResult!
   RunReportViewByName(input: RunViewByNameInput!): RunReportViewResult!
-  RunResourceFolderDynamicView(input: RunDynamicViewInput!): RunResourceFolderViewResult!
-  RunResourceFolderViewByID(input: RunViewByIDInput!): RunResourceFolderViewResult!
-  RunResourceFolderViewByName(input: RunViewByNameInput!): RunResourceFolderViewResult!
   RunResourceTypeDynamicView(input: RunDynamicViewInput!): RunResourceTypeViewResult!
   RunResourceTypeViewByID(input: RunViewByIDInput!): RunResourceTypeViewResult!
   RunResourceTypeViewByName(input: RunViewByNameInput!): RunResourceTypeViewResult!
@@ -2290,6 +2327,9 @@ type Query {
   RunUserRoleViewByName(input: RunViewByNameInput!): RunUserRoleViewResult!
   RunUserViewByID(input: RunViewByIDInput!): RunUserViewResult!
   RunUserViewByName(input: RunViewByNameInput!): RunUserViewResult!
+  RunUserViewCategoryDynamicView(input: RunDynamicViewInput!): RunUserViewCategoryViewResult!
+  RunUserViewCategoryViewByID(input: RunViewByIDInput!): RunUserViewCategoryViewResult!
+  RunUserViewCategoryViewByName(input: RunViewByNameInput!): RunUserViewCategoryViewResult!
   RunUserViewDynamicView(input: RunDynamicViewInput!): RunUserViewViewResult!
   RunUserViewRunDetailDynamicView(input: RunDynamicViewInput!): RunUserViewRunDetailViewResult!
   RunUserViewRunDetailViewByID(input: RunViewByIDInput!): RunUserViewRunDetailViewResult!
@@ -2340,6 +2380,7 @@ type Query {
   UserRecordLog(ID: Int!): UserRecordLog_
   UserRole(ID: Int!): UserRole_
   UserView(ID: Int!): UserView_
+  UserViewCategory(ID: Int!): UserViewCategory_
   UserViewRun(ID: Int!): UserViewRun_
   UserViewRunDetail(ID: Int!): UserViewRunDetail_
   UserViewsByUserID(UserID: Int!): [UserView_!]!
@@ -2545,6 +2586,18 @@ type RecordMergeResult {
   Success: Boolean!
 }
 
+type ReportCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+  Parent: String!
+  ParentID: Int!
+  ReportCategoriesArray: [ReportCategory_!]!
+  ReportsArray: [Report_!]!
+  UpdatedAt: Timestamp!
+}
+
 type ReportSnapshot_ {
   CreatedAt: Timestamp!
   ID: Int!
@@ -2556,10 +2609,15 @@ type ReportSnapshot_ {
 }
 
 type Report_ {
+  Category: String
+  CategoryID: Int
+  Configuration: String
   Conversation: String
   ConversationDetailID: Int
   ConversationID: Int
   CreatedAt: Timestamp!
+  DataContext: String
+  DataContextID: Int
   Description: String
   ID: Int!
   Name: String!
@@ -2574,24 +2632,8 @@ type Report_ {
   OutputTriggerType: String
   OutputTriggerTypeID: Int
   OutputWorkflowID: Int
-  ReportConfiguration: String
-  ReportSQL: String
   ReportSnapshotsArray: [ReportSnapshot_!]!
   SharingScope: String!
-  UpdatedAt: Timestamp!
-  User: String!
-  UserID: Int!
-}
-
-type ResourceFolder_ {
-  CreatedAt: Timestamp!
-  Description: String
-  ID: Int!
-  Name: String!
-  Parent: String
-  ParentID: Int
-  ResourceFoldersArray: [ResourceFolder_!]!
-  ResourceTypeName: String!
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -2606,7 +2648,6 @@ type ResourceType_ {
   ID: Int!
   Icon: String
   Name: String!
-  ResourceFoldersArray: [ResourceFolder_!]!
   UpdatedAt: Timestamp!
   WorkspaceItemsArray: [WorkspaceItem_!]!
 }
@@ -2870,6 +2911,16 @@ type RunConversationViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Conversation_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDashboardCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DashboardCategory_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3379,6 +3430,16 @@ type RunRecordMergeLogViewResult {
   UserViewRunID: Int
 }
 
+type RunReportCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ReportCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunReportResultType {
   ErrorMessage: String!
   ExecutionTime: Float!
@@ -3402,16 +3463,6 @@ type RunReportViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Report_!]!
-  RowCount: Int
-  Success: Boolean!
-  TotalRowCount: Int
-  UserViewRunID: Int
-}
-
-type RunResourceFolderViewResult {
-  ErrorMessage: String
-  ExecutionTime: Int
-  Results: [ResourceFolder_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3542,6 +3593,16 @@ type RunUserRoleViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [UserRole_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunUserViewCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [UserViewCategory_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -4092,7 +4153,15 @@ input UpdateConversationInput {
   UserID: Int!
 }
 
+input UpdateDashboardCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+}
+
 input UpdateDashboardInput {
+  CategoryID: Int
   Description: String
   ID: Int!
   Name: String!
@@ -4532,9 +4601,19 @@ input UpdateRecordMergeLogInput {
   SurvivingRecordID: String!
 }
 
+input UpdateReportCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int!
+}
+
 input UpdateReportInput {
+  CategoryID: Int
+  Configuration: String
   ConversationDetailID: Int
   ConversationID: Int
+  DataContextID: Int
   Description: String
   ID: Int!
   Name: String!
@@ -4545,8 +4624,6 @@ input UpdateReportInput {
   OutputTargetEmail: String
   OutputTriggerTypeID: Int
   OutputWorkflowID: Int
-  ReportConfiguration: String
-  ReportSQL: String
   SharingScope: String!
   UserID: Int!
 }
@@ -4556,15 +4633,6 @@ input UpdateReportSnapshotInput {
   ReportID: Int!
   ResultSet: String!
   UserID: Int
-}
-
-input UpdateResourceFolderInput {
-  Description: String
-  ID: Int!
-  Name: String!
-  ParentID: Int
-  ResourceTypeName: String!
-  UserID: Int!
 }
 
 input UpdateRoleInput {
@@ -4642,7 +4710,15 @@ input UpdateUserRecordLogInput {
   UserID: Int!
 }
 
+input UpdateUserViewCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+}
+
 input UpdateUserViewInput {
+  CategoryID: Int
   CustomFilterState: Boolean!
   CustomWhereClause: Boolean!
   Description: String
@@ -4830,6 +4906,18 @@ type UserRole_ {
   UserID: Int!
 }
 
+type UserViewCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+  Parent: String
+  ParentID: Int
+  UpdatedAt: Timestamp!
+  UserViewCategoriesArray: [UserViewCategory_!]!
+  UserViewsArray: [UserView_!]!
+}
+
 type UserViewRunDetail_ {
   EntityID: Int!
   ID: Int!
@@ -4849,6 +4937,7 @@ type UserViewRun_ {
 }
 
 type UserView_ {
+  CategoryID: Int
   CreatedAt: Timestamp
   CustomFilterState: Boolean!
   CustomWhereClause: Boolean!
@@ -4908,7 +4997,6 @@ type User_ {
   RecordMergeLogsArray: [RecordMergeLog_!]!
   ReportSnapshotsArray: [ReportSnapshot_!]!
   ReportsArray: [Report_!]!
-  ResourceFoldersArray: [ResourceFolder_!]!
   Title: String
   Type: String!
   UpdatedAt: Timestamp!

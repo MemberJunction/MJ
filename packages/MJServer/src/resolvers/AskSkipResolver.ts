@@ -586,6 +586,9 @@ export class AskSkipResolver {
         }
       }
       else {
+        await dataContext.SaveItems(user, false); // save the data context items
+        // replace the data context copy that is in the apiRequest.
+        apiRequest.dataContext = <DataContext>CopyScalarsAndArrays(dataContext); // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
         apiRequest.requestPhase = 'data_gathering_response';
       }
       // we have all of the data now, add it to the data context and then submit it back to the Skip API

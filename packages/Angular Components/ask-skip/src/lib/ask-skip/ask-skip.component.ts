@@ -422,67 +422,66 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     // temporary hack for now, we will have more functionality to do robust UX around DataCOntext viewing and editing soon
     // and get rid of this
     if (!this.DataContextID && this.SelectedConversation) {
-      // need to create a data context with a single item for the passed in linked record, which could be a query, view, or something else
-      if (this.LinkedEntity && this.LinkedEntityRecordID > 0) {
-        const md = new Metadata();
-        const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
-        dc.NewRecord();
-        const e = md.Entities.find(e => e.Name === this.LinkedEntity);
-        if (e) {
-          dc.Name = "Data Context for " + e.Name + " - Record ID: " + this.LinkedEntityRecordID;
-          dc.UserID = md.CurrentUser.ID;
-          if (await dc.Save()) {
-            this.DataContextID = dc.ID;
+      // need to create a data context 
+      // add to the new data context a single item for the passed in linked record, which could be a query, view, or something else
+      const md = new Metadata();
+      const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
+      dc.NewRecord();
+      const e = md.Entities.find(e => e.Name === this.LinkedEntity);
+      dc.Name = "Data Context for Skip Conversation " + (e ? ' for ' + e.Name + " - Record ID: " + this.LinkedEntityRecordID : '');
+      dc.UserID = md.CurrentUser.ID;
+      if (await dc.Save()) {
+        this.DataContextID = dc.ID;
 
-            // update the conversation with the data context id
-            const convo = await md.GetEntityObject<ConversationEntity>('Conversations');
-            await convo.Load(this.SelectedConversation.ID);
-            await convo.Save(); // save to the database
-            this.SelectedConversation.DataContextID = dc.ID; // update the in-memory object
+        // update the conversation with the data context id
+        const convo = await md.GetEntityObject<ConversationEntity>('Conversations');
+        await convo.Load(this.SelectedConversation.ID);
+        await convo.Save(); // save to the database
+        this.SelectedConversation.DataContextID = dc.ID; // update the in-memory object
 
-            // now create a single data context item for the new data context 
-            let type: string = "";
-            switch (e.Name.trim().toLowerCase()) {
-              case "user views":
-                type='view';
-                break;
-              case "queries":
-                type='query';
-                break;
-              default: 
-                if (this.LinkedEntityRecordID > 0) {
-                  type='single_record'
-                }
-                else
-                  type='full_entity'
-                break;
-            }
-            const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
-            dci.NewRecord();
-            dci.DataContextID = dc.ID;
-            dci.Type = type;
-            if (type==='view')
-              dci.ViewID = this.LinkedEntityRecordID;
-            else if (type==='query')
-              dci.QueryID = this.LinkedEntityRecordID;
-            else if (type==='single_record') {
-              dci.RecordID = this.LinkedEntityRecordID.toString();
-              dci.EntityID = e.ID;
-            }
-            else if (type==='full_entity')
-              dci.EntityID = e.ID;
-
-            if (!await dci.Save()) {
-              SharedService.Instance.CreateSimpleNotification("Error creating data context item", 'error', 5000)
-              console.log("AskSkipComponent: Error creating data context item")
-            }  
+        if (this.LinkedEntity && this.LinkedEntityRecordID > 0 && e) {
+          // now create a single data context item for the new data context 
+          let type: string = "";
+          switch (e.Name.trim().toLowerCase()) {
+            case "user views":
+              type='view';
+              break;
+            case "queries":
+              type='query';
+              break;
+            default: 
+              if (this.LinkedEntityRecordID > 0) {
+                type='single_record'
+              }
+              else
+                type='full_entity'
+              break;
           }
-          else {
-            SharedService.Instance.CreateSimpleNotification("Error creating data context", 'error', 5000)
-            console.log("AskSkipComponent: Error creating data context")
+          const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
+          dci.NewRecord();
+          dci.DataContextID = dc.ID;
+          dci.Type = type;
+          if (type==='view')
+            dci.ViewID = this.LinkedEntityRecordID;
+          else if (type==='query')
+            dci.QueryID = this.LinkedEntityRecordID;
+          else if (type==='single_record') {
+            dci.RecordID = this.LinkedEntityRecordID.toString();
+            dci.EntityID = e.ID;
+          }
+          else if (type==='full_entity')
+            dci.EntityID = e.ID;
+
+          if (!await dci.Save()) {
+            SharedService.Instance.CreateSimpleNotification("Error creating data context item", 'error', 5000)
+            console.log("AskSkipComponent: Error creating data context item")
           }  
         }
       }
+      else {
+        SharedService.Instance.CreateSimpleNotification("Error creating data context", 'error', 5000)
+        console.log("AskSkipComponent: Error creating data context")
+      }  
     }
     if (!this.DataContext) {
       // load the actual data context object
