@@ -1,0 +1,15 @@
+<div #recordChangesWrapper>
+    <div class="k-overlay"></div>
+    <kendo-window 
+        class="kendo-window-custom"
+        [width]="700"
+        [height]="525"
+        [minHeight]="300"
+        [minWidth]="400"
+        [resizable]="true"
+        title="Data Context"
+        (close)="closePropertiesDialog()"
+    >
+        <mj-data-context [dataContextId]="dataContextId" ></mj-data-context>
+    </kendo-window>
+</div>

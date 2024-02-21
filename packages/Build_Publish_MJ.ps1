@@ -282,6 +282,7 @@ $angularLibraries = @(
     @{Name='link-directives'}, 
     @{Name='compare-records'}, 
     @{Name='record-changes'}, 
+    @{Name='data-context'}, 
     @{Name='query-grid'}, 
     @{Name='ask-skip'}, 
     @{Name='user-view-grid'}, 

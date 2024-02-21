@@ -709,5 +709,53 @@ export class DataContext {
         }
         return newContext;
     }
+
+    /**
+     * This method will clone the data context and all of its items. This method will return a promise that will resolve to a new DataContext object if the cloning was successful, and will reject if the cloning was not successful.
+     * @param context 
+     */
+    public static async Clone(context: DataContext, includeData: boolean = false, contextUser: UserInfo = undefined): Promise<DataContext> {
+        try {
+            const md = new Metadata();
+
+            // first, clone the data context itself at the top level
+            const currentContext = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
+            await currentContext.Load(context.ID);
+
+            const newContext = await md.GetEntityObject<DataContextEntity>('Data Contexts', contextUser);
+            newContext.NewRecord();
+            newContext.CopyFrom(currentContext, false);
+            if (await newContext.Save()) {
+                // we've saved our new data context, now we need to save all of the items
+                for (let item of context.Items) {
+                    const currentItem = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser);
+                    await currentItem.Load(item.DataContextItemID);
+
+                    const newItem = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', contextUser); 
+                    newItem.NewRecord();
+
+                    newItem.CopyFrom(currentItem, false);
+                    newItem.DataContextID = newContext.ID; // overwrite the data context ID with the new data context ID
+                    if (!includeData)
+                        newItem.DataJSON = null; // if we aren't including the data, we need to clear it out
+
+                    if (!await newItem.Save()) {
+                        throw new Error(`Error saving new data context item`);
+                    }
+                }
+                // if we get here we've succeeded, so return the new data context
+                const newContextObject = new DataContext();
+                newContextObject.LoadMetadata(newContext.ID, contextUser);
+                return newContextObject;
+            }
+            else {
+                throw new Error(`Error saving new data context`);
+            }
+        }
+        catch (e) {
+            LogError(`Error in DataContext.Clone: ${e && e.message ? e.message : ''}`);
+            return null;
+        }
+    }
 }   
   

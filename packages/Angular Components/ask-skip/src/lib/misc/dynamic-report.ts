@@ -7,6 +7,7 @@ import { DynamicChartComponent } from './dynamic-chart';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
 import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
+import { DataContext } from '@memberjunction/data-context';
 
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
@@ -96,6 +97,7 @@ export class DynamicReportComponent {
   @Input() ConversationID: number | null = null; 
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: number | null = null;
+  @Input() DataContext!: DataContext;
 
   private _skipData!: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined{ 
@@ -196,8 +198,18 @@ export class DynamicReportComponent {
         report.Description = this.SkipData.userExplanation ? this.SkipData.userExplanation : '';
         report.ConversationID = this.ConversationID;
         report.ConversationDetailID = this.ConversationDetailID;
-        //TO-DO FIX UP REPORT SCHEMA TO PROPERLY MAP TO SKIP DATA FORMAT AS IT IS NOW ----- report.ReportSQL = this.SkipData.SQLResults.sql;
-        report.ReportConfiguration = JSON.stringify(this.SkipData) 
+
+        const newDataContext = await DataContext.Clone(this.DataContext);
+        if (!newDataContext)
+          throw new Error('Error cloning data context')
+        report.DataContextID = newDataContext.ID;
+
+        // next, strip out the messags from the SkipData object to put them into our Report Configuration as we dont need to store that information as we have a 
+        // link back to the conversation and conversation detail
+        const newSkipData : SkipAPIAnalysisCompleteResponse = JSON.parse(JSON.stringify(this.SkipData));
+        newSkipData.messages = [];
+        report.Configuration = JSON.stringify(newSkipData) 
+
         report.SharingScope = 'None'
         report.UserID = md.CurrentUser.ID
 

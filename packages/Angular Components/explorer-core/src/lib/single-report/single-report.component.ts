@@ -19,7 +19,7 @@ export class SingleReportComponent implements OnInit {
 
   public reportData!: any[];
 
-  public ReportConfiguration: SkipAPIAnalysisCompleteResponse | undefined;
+  public Configuration: SkipAPIAnalysisCompleteResponse | undefined;
 
   public get IsChart(): boolean {
     return this.theReport.IsChart
@@ -45,18 +45,18 @@ export class SingleReportComponent implements OnInit {
       const md = new Metadata();
       this.ReportEntity = <ReportEntity>await md.GetEntityObject('Reports');
       await this.ReportEntity.Load(this.reportId);
-      this.ReportConfiguration = JSON.parse(this.ReportEntity.ReportConfiguration);
+      this.Configuration = JSON.parse(this.ReportEntity.Configuration);
 
       const runReport = new RunReport();
       const result = await runReport.RunReport({ReportID: this.reportId});
       if (result && result.Success && result.Results.length > 0) {
         this.reportData = result.Results;
-      if (this.ReportConfiguration?.executionResults)
-          this.ReportConfiguration.executionResults.tableData = this.reportData // put the report data into the right spot so the dynamic report knows where to get it
+      if (this.Configuration?.executionResults)
+          this.Configuration.executionResults.tableData = this.reportData // put the report data into the right spot so the dynamic report knows where to get it
       }
       else {
         // report has an invalid configuration
-        throw new Error('Error running report: invalid value from ReportConfiguration field ');
+        throw new Error('Error running report: invalid value from Configuration field ');
       }
 
       this.loadComplete.emit();

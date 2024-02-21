@@ -58,6 +58,11 @@
                     type="text" 
                     placeholder="Type your message..."></textarea>
             <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()" [primary]="true">Send</button>
+            <kendo-svgicon *ngIf="ShowDataContextButton" [icon]="sharedService.kendoSVGIcon('gearIcon')" name="gear" svgIcon="gear-icon" (click)="showDataContext()"></kendo-svgicon>
         </div>
     </div>
 </div>     
+
+<div *ngIf="isDataContextDialogVisible">
+    <mj-data-context-dialog [dataContextId]="DataContextID" (dialogClosed)="closeDataContextDialog()"></mj-data-context-dialog>
+</div>

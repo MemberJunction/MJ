@@ -60,6 +60,7 @@ export class ViewInfo extends BaseInfo {
     EntityID: number = null
     Name: string = null
     Description: string = null
+    CategoryID: number = null
     IsShared: boolean = null
     IsDefault: boolean = null
     GridState: string = null

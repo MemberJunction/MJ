@@ -28,6 +28,7 @@ import { DynamicChartComponent } from './lib/misc/dynamic-chart';
 import { DynamicGridComponent } from './lib/misc/dynamic-grid';
 
 import { PlotlyViaCDNModule } from 'angular-plotly.js';
+import { DataContextModule } from '@memberjunction/ng-data-context';
 
 
 PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
@@ -66,7 +67,8 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
     DropDownsModule,
     MemberJunctionSharedModule,
     GridModule,
-    PlotlyViaCDNModule
+    PlotlyViaCDNModule,
+    DataContextModule
   ],
   exports: [
     SkipDynamicReportComponent,

@@ -227,7 +227,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyID
         * * Display Name: Company ID
         * * SQL Data Type: int
-        * * Related Entity: Companies
+        * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
         */
         get CompanyID(): number {  
             return this.Get('CompanyID');
@@ -239,7 +239,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SupervisorID
         * * Display Name: Supervisor ID
         * * SQL Data Type: int
-        * * Related Entity: Employees
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get SupervisorID(): number {  
             return this.Get('SupervisorID');
@@ -356,7 +356,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -368,7 +368,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -489,7 +489,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity: Employees
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number {  
             return this.Get('EmployeeID');
@@ -501,7 +501,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -609,7 +609,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity: Employees
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number {  
             return this.Get('EmployeeID');
@@ -621,7 +621,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleID
         * * Display Name: Role ID
         * * SQL Data Type: int
-        * * Related Entity: Roles
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
         */
         get RoleID(): number {  
             return this.Get('RoleID');
@@ -715,7 +715,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity: Employees
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number {  
             return this.Get('EmployeeID');
@@ -727,7 +727,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SkillID
         * * Display Name: Skill ID
         * * SQL Data Type: int
-        * * Related Entity: Skills
+        * * Related Entity/Foreign Key: Skills (vwSkills.ID)
         */
         get SkillID(): number {  
             return this.Get('SkillID');
@@ -955,7 +955,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ParentID
         * * Display Name: Parent
         * * SQL Data Type: int
-        * * Related Entity: Skills
+        * * Related Entity/Foreign Key: Skills (vwSkills.ID)
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -1048,7 +1048,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IntegrationName
         * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Integrations
+        * * Related Entity/Foreign Key: Integrations (vwIntegrations.Name)
         */
         get IntegrationName(): string {  
             return this.Get('IntegrationName');
@@ -1060,7 +1060,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -1319,7 +1319,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyName
         * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Companies
+        * * Related Entity/Foreign Key: Companies (vwCompanies.Name)
         */
         get CompanyName(): string {  
             return this.Get('CompanyName');
@@ -1331,7 +1331,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IntegrationName
         * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Integrations
+        * * Related Entity/Foreign Key: Integrations (vwIntegrations.Name)
         */
         get IntegrationName(): string {  
             return this.Get('IntegrationName');
@@ -2122,7 +2122,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -2920,7 +2920,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -2932,7 +2932,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RelatedEntityID
         * * Display Name: Related Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get RelatedEntityID(): number {  
             return this.Get('RelatedEntityID');
@@ -3057,7 +3057,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplayUserViewGUID
         * * Display Name: Display User View GUID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity: User Views
+        * * Related Entity/Foreign Key: User Views (vwUserViews.GUID)
         */
         get DisplayUserViewGUID(): string {  
             return this.Get('DisplayUserViewGUID');
@@ -3237,7 +3237,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -3249,7 +3249,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -3402,7 +3402,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -3450,6 +3450,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Description(value: string) {
             this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
+        */
+        get CategoryID(): number {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number) {
+            this.Set('CategoryID', value);
         }
         /**
         * * Field Name: IsShared
@@ -3718,7 +3730,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: CompanyIntegration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -3730,7 +3742,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUserID
         * * Display Name: RunByUser ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get RunByUserID(): number {  
             return this.Get('RunByUserID');
@@ -3846,7 +3858,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integration Runs
+        * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
         */
         get CompanyIntegrationRunID(): number {  
             return this.Get('CompanyIntegrationRunID');
@@ -3992,7 +4004,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integration Runs
+        * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
         */
         get CompanyIntegrationRunID(): number {  
             return this.Get('CompanyIntegrationRunID');
@@ -4004,7 +4016,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationRunDetailID
         * * Display Name: CompanyIntegrationRunDetail ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integration Run Details
+        * * Related Entity/Foreign Key: Company Integration Run Details (vwCompanyIntegrationRunDetails.ID)
         */
         get CompanyIntegrationRunDetailID(): number {  
             return this.Get('CompanyIntegrationRunDetailID');
@@ -4220,7 +4232,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApplicationName
         * * Display Name: Application Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Applications
+        * * Related Entity/Foreign Key: Applications (vwApplications.Name)
         */
         get ApplicationName(): string {  
             return this.Get('ApplicationName');
@@ -4388,7 +4400,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleName
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Roles
+        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
         */
         get RoleName(): string {  
             return this.Get('RoleName');
@@ -4448,7 +4460,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ReadRLSFilterID
         * * Display Name: Read RLSFilter ID
         * * SQL Data Type: int
-        * * Related Entity: Row Level Security Filters
+        * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
         get ReadRLSFilterID(): number {  
             return this.Get('ReadRLSFilterID');
@@ -4460,7 +4472,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreateRLSFilterID
         * * Display Name: Create RLSFilter ID
         * * SQL Data Type: int
-        * * Related Entity: Row Level Security Filters
+        * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
         get CreateRLSFilterID(): number {  
             return this.Get('CreateRLSFilterID');
@@ -4472,7 +4484,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdateRLSFilterID
         * * Display Name: Update RLSFilter ID
         * * SQL Data Type: int
-        * * Related Entity: Row Level Security Filters
+        * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
         get UpdateRLSFilterID(): number {  
             return this.Get('UpdateRLSFilterID');
@@ -4484,7 +4496,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DeleteRLSFilterID
         * * Display Name: Delete RLSFilter ID
         * * SQL Data Type: int
-        * * Related Entity: Row Level Security Filters
+        * * Related Entity/Foreign Key: Row Level Security Filters (vwRowLevelSecurityFilters.ID)
         */
         get DeleteRLSFilterID(): number {  
             return this.Get('DeleteRLSFilterID');
@@ -4609,7 +4621,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserApplicationID
         * * Display Name: UserApplication ID
         * * SQL Data Type: int
-        * * Related Entity: User Applications
+        * * Related Entity/Foreign Key: User Applications (vwUserApplications.ID)
         */
         get UserApplicationID(): number {  
             return this.Get('UserApplicationID');
@@ -4722,7 +4734,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -4734,7 +4746,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApplicationID
         * * Display Name: Application ID
         * * SQL Data Type: int
-        * * Related Entity: Applications
+        * * Related Entity/Foreign Key: Applications (vwApplications.ID)
         */
         get ApplicationID(): number {  
             return this.Get('ApplicationID');
@@ -4839,7 +4851,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: Company Integration Run ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integration Runs
+        * * Related Entity/Foreign Key: Company Integration Runs (vwCompanyIntegrationRuns.ID)
         */
         get CompanyIntegrationRunID(): number {  
             return this.Get('CompanyIntegrationRunID');
@@ -4977,7 +4989,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -5000,7 +5012,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -5081,7 +5093,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ListID
         * * Display Name: List ID
         * * SQL Data Type: int
-        * * Related Entity: Lists
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
         */
         get ListID(): number {  
             return this.Get('ListID');
@@ -5167,7 +5179,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserViewID
         * * Display Name: User View ID
         * * SQL Data Type: int
-        * * Related Entity: User Views
+        * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
         */
         get UserViewID(): number {  
             return this.Get('UserViewID');
@@ -5190,7 +5202,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUserID
         * * Display Name: Run By User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get RunByUserID(): number {  
             return this.Get('RunByUserID');
@@ -5272,7 +5284,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserViewRunID
         * * Display Name: User View Run ID
         * * SQL Data Type: int
-        * * Related Entity: User View Runs
+        * * Related Entity/Foreign Key: User View Runs (vwUserViewRuns.ID)
         */
         get UserViewRunID(): number {  
             return this.Get('UserViewRunID');
@@ -5365,7 +5377,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: WorkflowName
         * * Display Name: Workflow Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Workflows
+        * * Related Entity/Foreign Key: Workflows (vwWorkflows.Name)
         */
         get WorkflowName(): string {  
             return this.Get('WorkflowName');
@@ -5521,7 +5533,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: WorkflowEngineName
         * * Display Name: Workflow Engine Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Workflow Engines
+        * * Related Entity/Foreign Key: Workflow Engines (vwWorkflowEngines.Name)
         */
         get WorkflowEngineName(): string {  
             return this.Get('WorkflowEngineName');
@@ -5533,7 +5545,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyName
         * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Companies
+        * * Related Entity/Foreign Key: Companies (vwCompanies.Name)
         */
         get CompanyName(): string {  
             return this.Get('CompanyName');
@@ -5742,7 +5754,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -5765,7 +5777,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -5914,7 +5926,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -5926,7 +5938,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleName
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Roles
+        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
         */
         get RoleName(): string {  
             return this.Get('RoleName');
@@ -6138,7 +6150,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuditLogTypeName
         * * Display Name: Audit Log Type Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Audit Log Types
+        * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.Name)
         */
         get AuditLogTypeName(): string {  
             return this.Get('AuditLogTypeName');
@@ -6150,7 +6162,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -6162,7 +6174,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuthorizationName
         * * Display Name: Authorization Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Authorizations
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
         */
         get AuthorizationName(): string {  
             return this.Get('AuthorizationName');
@@ -6324,7 +6336,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: int
-        * * Related Entity: Authorizations
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -6467,7 +6479,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuthorizationName
         * * Display Name: Authorization Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Authorizations
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
         */
         get AuthorizationName(): string {  
             return this.Get('AuthorizationName');
@@ -6479,7 +6491,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleName
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Roles
+        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
         */
         get RoleName(): string {  
             return this.Get('RoleName');
@@ -6602,7 +6614,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: int
-        * * Related Entity: Audit Log Types
+        * * Related Entity/Foreign Key: Audit Log Types (vwAuditLogTypes.ID)
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -6636,7 +6648,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuthorizationName
         * * Display Name: Authorization Name
         * * SQL Data Type: nvarchar(100)
-        * * Related Entity: Authorizations
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
         */
         get AuthorizationName(): string {  
             return this.Get('AuthorizationName');
@@ -6742,7 +6754,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entity Fields
+        * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.EntityID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -6754,7 +6766,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityFieldName
         * * Display Name: Entity Field Name
         * * SQL Data Type: nvarchar(255)
-        * * Related Entity: Entity Fields
+        * * Related Entity/Foreign Key: Entity Fields (vwEntityFields.Name)
         */
         get EntityFieldName(): string {  
             return this.Get('EntityFieldName');
@@ -6914,7 +6926,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIModelTypeID
         * * Display Name: AI Model Type ID
         * * SQL Data Type: int
-        * * Related Entity: AI Model Types
+        * * Related Entity/Foreign Key: AI Model Types (vwAIModelTypes.ID)
         */
         get AIModelTypeID(): number {  
             return this.Get('AIModelTypeID');
@@ -7066,7 +7078,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultModelID
         * * Display Name: Default Model ID
         * * SQL Data Type: int
-        * * Related Entity: AI Models
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
         get DefaultModelID(): number {  
             return this.Get('DefaultModelID');
@@ -7183,7 +7195,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIModelID
         * * Display Name: AI Model ID
         * * SQL Data Type: int
-        * * Related Entity: AI Models
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
         get AIModelID(): number {  
             return this.Get('AIModelID');
@@ -7195,7 +7207,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIActionID
         * * Display Name: AI Action ID
         * * SQL Data Type: int
-        * * Related Entity: AI Actions
+        * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
         */
         get AIActionID(): number {  
             return this.Get('AIActionID');
@@ -7310,7 +7322,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -7322,7 +7334,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIActionID
         * * Display Name: AI Action ID
         * * SQL Data Type: int
-        * * Related Entity: AI Actions
+        * * Related Entity/Foreign Key: AI Actions (vwAIActions.ID)
         */
         get AIActionID(): number {  
             return this.Get('AIActionID');
@@ -7334,7 +7346,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AIModelID
         * * Display Name: AI Model ID
         * * SQL Data Type: int
-        * * Related Entity: AI Models
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
         get AIModelID(): number {  
             return this.Get('AIModelID');
@@ -7426,7 +7438,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputEntityID
         * * Display Name: Output Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get OutputEntityID(): number {  
             return this.Get('OutputEntityID');
@@ -7756,7 +7768,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QueueTypeID
         * * Display Name: Queue Type ID
         * * SQL Data Type: int
-        * * Related Entity: Queue Types
+        * * Related Entity/Foreign Key: Queue Types (vwQueueTypes.ID)
         */
         get QueueTypeID(): number {  
             return this.Get('QueueTypeID');
@@ -7995,7 +8007,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QueueID
         * * Display Name: Queue ID
         * * SQL Data Type: int
-        * * Related Entity: Queues
+        * * Related Entity/Foreign Key: Queues (vwQueues.ID)
         */
         get QueueID(): number {  
             return this.Get('QueueID');
@@ -8156,6 +8168,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+        */
+        get CategoryID(): number {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number) {
+            this.Set('CategoryID', value);
+        }
+        /**
         * * Field Name: UIConfigDetails
         * * Display Name: UIConfig Details
         * * SQL Data Type: nvarchar(MAX)
@@ -8170,7 +8194,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -8178,6 +8202,16 @@ import { RegisterClass } from "@memberjunction/global";
         set UserID(value: number) {
             this.Set('UserID', value);
         }
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Category(): string {  
+            return this.Get('Category');
+        }
+    
         /**
         * * Field Name: User
         * * Display Name: User
@@ -8523,10 +8557,22 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
+        */
+        get CategoryID(): number {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number) {
+            this.Set('CategoryID', value);
+        }
+        /**
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -8550,7 +8596,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ConversationID
         * * Display Name: Conversation ID
         * * SQL Data Type: int
-        * * Related Entity: Conversations
+        * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         */
         get ConversationID(): number {  
             return this.Get('ConversationID');
@@ -8562,7 +8608,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ConversationDetailID
         * * Display Name: Conversation Detail ID
         * * SQL Data Type: int
-        * * Related Entity: Conversation Details
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         */
         get ConversationDetailID(): number {  
             return this.Get('ConversationDetailID');
@@ -8571,32 +8617,33 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ConversationDetailID', value);
         }
         /**
-        * * Field Name: ReportSQL
-        * * Display Name: Report SQL
-        * * SQL Data Type: nvarchar(MAX)
+        * * Field Name: DataContextID
+        * * Display Name: Data Context ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
         */
-        get ReportSQL(): string {  
-            return this.Get('ReportSQL');
+        get DataContextID(): number {  
+            return this.Get('DataContextID');
         }
-        set ReportSQL(value: string) {
-            this.Set('ReportSQL', value);
+        set DataContextID(value: number) {
+            this.Set('DataContextID', value);
         }
         /**
-        * * Field Name: ReportConfiguration
-        * * Display Name: Report Configuration
+        * * Field Name: Configuration
+        * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         */
-        get ReportConfiguration(): string {  
-            return this.Get('ReportConfiguration');
+        get Configuration(): string {  
+            return this.Get('Configuration');
         }
-        set ReportConfiguration(value: string) {
-            this.Set('ReportConfiguration', value);
+        set Configuration(value: string) {
+            this.Set('Configuration', value);
         }
         /**
         * * Field Name: OutputTriggerTypeID
         * * Display Name: Output Trigger Type ID
         * * SQL Data Type: int
-        * * Related Entity: Output Trigger Types
+        * * Related Entity/Foreign Key: Output Trigger Types (vwOutputTriggerTypes.ID)
         */
         get OutputTriggerTypeID(): number {  
             return this.Get('OutputTriggerTypeID');
@@ -8608,7 +8655,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputFormatTypeID
         * * Display Name: Output Format Type ID
         * * SQL Data Type: int
-        * * Related Entity: Output Format Types
+        * * Related Entity/Foreign Key: Output Format Types (vwOutputFormatTypes.ID)
         */
         get OutputFormatTypeID(): number {  
             return this.Get('OutputFormatTypeID');
@@ -8620,7 +8667,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputDeliveryTypeID
         * * Display Name: Output Delivery Type ID
         * * SQL Data Type: int
-        * * Related Entity: Output Delivery Types
+        * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
         */
         get OutputDeliveryTypeID(): number {  
             return this.Get('OutputDeliveryTypeID');
@@ -8632,7 +8679,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputEventID
         * * Display Name: Output Event ID
         * * SQL Data Type: int
-        * * Related Entity: Output Delivery Types
+        * * Related Entity/Foreign Key: Output Delivery Types (vwOutputDeliveryTypes.ID)
         */
         get OutputEventID(): number {  
             return this.Get('OutputEventID');
@@ -8666,7 +8713,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputWorkflowID
         * * Display Name: Output Workflow ID
         * * SQL Data Type: int
-        * * Related Entity: Workflows
+        * * Related Entity/Foreign Key: Workflows (vwWorkflows.ID)
         */
         get OutputWorkflowID(): number {  
             return this.Get('OutputWorkflowID');
@@ -8695,6 +8742,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Category(): string {  
+            return this.Get('Category');
+        }
+    
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -8710,6 +8767,16 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Conversation(): string {  
             return this.Get('Conversation');
+        }
+    
+        /**
+        * * Field Name: DataContext
+        * * Display Name: Data Context
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get DataContext(): string {  
+            return this.Get('DataContext');
         }
     
         /**
@@ -8793,7 +8860,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ReportID
         * * Display Name: Report ID
         * * SQL Data Type: int
-        * * Related Entity: Reports
+        * * Related Entity/Foreign Key: Reports (vwReports.ID)
         */
         get ReportID(): number {  
             return this.Get('ReportID');
@@ -8826,7 +8893,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -8965,7 +9032,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -9104,7 +9171,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: int
-        * * Related Entity: Tags
+        * * Related Entity/Foreign Key: Tags (vwTags.ID)
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -9190,7 +9257,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TagID
         * * Display Name: Tag ID
         * * SQL Data Type: int
-        * * Related Entity: Tags
+        * * Related Entity/Foreign Key: Tags (vwTags.ID)
         */
         get TagID(): number {  
             return this.Get('TagID');
@@ -9296,7 +9363,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -9380,7 +9447,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: WorkSpaceID
         * * Display Name: Work Space ID
         * * SQL Data Type: int
-        * * Related Entity: Workspaces
+        * * Related Entity/Foreign Key: Workspaces (vwWorkspaces.ID)
         */
         get WorkSpaceID(): number {  
             return this.Get('WorkSpaceID');
@@ -9392,7 +9459,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ResourceTypeID
         * * Display Name: Resource Type ID
         * * SQL Data Type: int
-        * * Related Entity: Resource Types
+        * * Related Entity/Foreign Key: Resource Types (vwResourceTypes.ID)
         */
         get ResourceTypeID(): number {  
             return this.Get('ResourceTypeID');
@@ -9638,7 +9705,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DatasetName
         * * Display Name: Dataset Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Datasets
+        * * Related Entity/Foreign Key: Datasets (vwDatasets.Name)
         */
         get DatasetName(): string {  
             return this.Get('DatasetName');
@@ -9662,7 +9729,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -9777,7 +9844,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ConversationID
         * * Display Name: Conversation ID
         * * SQL Data Type: int
-        * * Related Entity: Conversations
+        * * Related Entity/Foreign Key: Conversations (vwConversations.ID)
         */
         get ConversationID(): number {  
             return this.Get('ConversationID');
@@ -9916,7 +9983,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -9973,7 +10040,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get LinkedEntityID(): number {  
             return this.Get('LinkedEntityID');
@@ -10098,7 +10165,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -10202,155 +10269,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
-        }
-    
-        /**
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)
-        */
-        get User(): string {  
-            return this.Get('User');
-        }
-    
-
-    }
-    
-    /**
-     * Resource Folders - strongly typed entity sub-class
-     * * Schema: admin
-     * * Base Table: ResourceFolder
-     * * Base View: vwResourceFolders
-     * * Primary Key: ID
-     * @extends {BaseEntity}
-     * @class
-     * @public
-     */
-    @RegisterClass(BaseEntity, 'Resource Folders')
-    export class ResourceFolderEntity extends BaseEntity {
-        /**
-        * Loads the Resource Folders record from the database
-        * @param ID: Number - primary key value to load the Resource Folders record.
-        * @param EntityRelationshipsToLoad - (optional) the relationships to load
-        * @returns {Promise<boolean>} - true if successful, false otherwise
-        * @public
-        * @async
-        * @memberof ResourceFolderEntity
-        * @method
-        * @override
-        */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
-        }
-        
-        /**
-        * Resource Folders - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ResourceFolderEntity
-        * @throws {Error} - Delete is not allowed for Resource Folders, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Resource Folders, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
-            /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-    
-        /**
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
-        * * SQL Data Type: int
-        * * Related Entity: Resource Folders
-        */
-        get ParentID(): number {  
-            return this.Get('ParentID');
-        }
-        set ParentID(value: number) {
-            this.Set('ParentID', value);
-        }
-        /**
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(50)
-        */
-        get Name(): string {  
-            return this.Get('Name');
-        }
-        set Name(value: string) {
-            this.Set('Name', value);
-        }
-        /**
-        * * Field Name: ResourceTypeName
-        * * Display Name: Resource Type Name
-        * * SQL Data Type: nvarchar(255)
-        * * Related Entity: Resource Types
-        */
-        get ResourceTypeName(): string {  
-            return this.Get('ResourceTypeName');
-        }
-        set ResourceTypeName(value: string) {
-            this.Set('ResourceTypeName', value);
-        }
-        /**
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        */
-        get Description(): string {  
-            return this.Get('Description');
-        }
-        set Description(value: string) {
-            this.Set('Description', value);
-        }
-        /**
-        * * Field Name: UserID
-        * * Display Name: User ID
-        * * SQL Data Type: int
-        * * Related Entity: Users
-        */
-        get UserID(): number {  
-            return this.Get('UserID');
-        }
-        set UserID(value: number) {
-            this.Set('UserID', value);
-        }
-        /**
-        * * Field Name: CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get CreatedAt(): Date {  
-            return this.Get('CreatedAt');
-        }
-    
-        /**
-        * * Field Name: UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get UpdatedAt(): Date {  
-            return this.Get('UpdatedAt');
-        }
-    
-        /**
-        * * Field Name: Parent
-        * * Display Name: Parent
-        * * SQL Data Type: nvarchar(50)
-        */
-        get Parent(): string {  
-            return this.Get('Parent');
         }
     
         /**
@@ -10536,7 +10454,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -10654,7 +10572,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
-        * * Related Entity: Entities
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -10677,7 +10595,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: InitiatedByUserID
         * * Display Name: Initiated By User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get InitiatedByUserID(): number {  
             return this.Get('InitiatedByUserID');
@@ -10860,7 +10778,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RecordMergeLogID
         * * Display Name: Record Merge Log ID
         * * SQL Data Type: int
-        * * Related Entity: Record Merge Logs
+        * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
         */
         get RecordMergeLogID(): number {  
             return this.Get('RecordMergeLogID');
@@ -10979,7 +10897,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QueryID
         * * Display Name: Query ID
         * * SQL Data Type: int
-        * * Related Entity: Queries
+        * * Related Entity/Foreign Key: Queries (vwQueries.ID)
         */
         get QueryID(): number {  
             return this.Get('QueryID');
@@ -11209,7 +11127,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ParentID
         * * Display Name: Parent ID
         * * SQL Data Type: int
-        * * Related Entity: Query Categories
+        * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
         */
         get ParentID(): number {  
             return this.Get('ParentID');
@@ -11336,7 +11254,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CategoryID
         * * Display Name: Category ID
         * * SQL Data Type: int
-        * * Related Entity: Query Categories
+        * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
         */
         get CategoryID(): number {  
             return this.Get('CategoryID');
@@ -11487,7 +11405,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QueryID
         * * Display Name: Query ID
         * * SQL Data Type: int
-        * * Related Entity: Queries
+        * * Related Entity/Foreign Key: Queries (vwQueries.ID)
         */
         get QueryID(): number {  
             return this.Get('QueryID');
@@ -11499,7 +11417,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleName
         * * Display Name: Role Name
         * * SQL Data Type: nvarchar(50)
-        * * Related Entity: Roles
+        * * Related Entity/Foreign Key: Roles (vwRoles.Name)
         */
         get RoleName(): string {  
             return this.Get('RoleName');
@@ -11606,7 +11524,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: VectorDatabaseID
         * * Display Name: Vector Database ID
         * * SQL Data Type: int
-        * * Related Entity: Vector Databases
+        * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
         */
         get VectorDatabaseID(): number {  
             return this.Get('VectorDatabaseID');
@@ -11618,7 +11536,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmbeddingModelID
         * * Display Name: Embedding Model ID
         * * SQL Data Type: int
-        * * Related Entity: AI Models
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
         */
         get EmbeddingModelID(): number {  
             return this.Get('EmbeddingModelID');
@@ -11816,7 +11734,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityDocumentID
         * * Display Name: Entity Document ID
         * * SQL Data Type: int
-        * * Related Entity: Entity Documents
+        * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
         */
         get EntityDocumentID(): number {  
             return this.Get('EntityDocumentID');
@@ -12234,7 +12152,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TypeID
         * * Display Name: Type ID
         * * SQL Data Type: int
-        * * Related Entity: Entity Document Types
+        * * Related Entity/Foreign Key: Entity Document Types (vwEntityDocumentTypes.ID)
         */
         get TypeID(): number {  
             return this.Get('TypeID');
@@ -12352,7 +12270,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
         * * SQL Data Type: int
-        * * Related Entity: Data Contexts
+        * * Related Entity/Foreign Key: Data Contexts (vwDataContexts.ID)
         * * Description: Foreign key to the DataContext table
         */
         get DataContextID(): number {  
@@ -12377,7 +12295,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ViewID
         * * Display Name: View ID
         * * SQL Data Type: int
-        * * Related Entity: User Views
+        * * Related Entity/Foreign Key: User Views (vwUserViews.ID)
         * * Description: Only used if Type='view'
         */
         get ViewID(): number {  
@@ -12390,7 +12308,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QueryID
         * * Display Name: Query ID
         * * SQL Data Type: int
-        * * Related Entity: Queries
+        * * Related Entity/Foreign Key: Queries (vwQueries.ID)
         * * Description: Only used if Type='query'
         */
         get QueryID(): number {  
@@ -12575,7 +12493,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserID
         * * Display Name: User ID
         * * SQL Data Type: int
-        * * Related Entity: Users
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
         */
         get UserID(): number {  
             return this.Get('UserID');
@@ -12632,6 +12550,357 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+    
+
+    }
+    
+    /**
+     * User View Categories - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: UserViewCategory
+     * * Base View: vwUserViewCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'User View Categories')
+    export class UserViewCategoryEntity extends BaseEntity {
+        /**
+        * Loads the User View Categories record from the database
+        * @param ID: Number - primary key value to load the User View Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof UserViewCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * User View Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof UserViewCategoryEntity
+        * @throws {Error} - Delete is not allowed for User View Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for User View Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: User View Categories (vwUserViewCategories.ID)
+        */
+        get ParentID(): number {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Parent(): string {  
+            return this.Get('Parent');
+        }
+    
+
+    }
+    
+    /**
+     * Dashboard Categories - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: DashboardCategory
+     * * Base View: vwDashboardCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Dashboard Categories')
+    export class DashboardCategoryEntity extends BaseEntity {
+        /**
+        * Loads the Dashboard Categories record from the database
+        * @param ID: Number - primary key value to load the Dashboard Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof DashboardCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Dashboard Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof DashboardCategoryEntity
+        * @throws {Error} - Delete is not allowed for Dashboard Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Dashboard Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Dashboard Categories (vwDashboardCategories.ID)
+        */
+        get ParentID(): number {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Parent(): string {  
+            return this.Get('Parent');
+        }
+    
+
+    }
+    
+    /**
+     * Report Categories - strongly typed entity sub-class
+     * * Schema: admin
+     * * Base Table: ReportCategory
+     * * Base View: vwReportCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Report Categories')
+    export class ReportCategoryEntity extends BaseEntity {
+        /**
+        * Loads the Report Categories record from the database
+        * @param ID: Number - primary key value to load the Report Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ReportCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Report Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ReportCategoryEntity
+        * @throws {Error} - Delete is not allowed for Report Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Report Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
+        */
+        get ParentID(): number {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Parent(): string {  
+            return this.Get('Parent');
         }
     
 

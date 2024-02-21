@@ -31,6 +31,10 @@ import { UserViewEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Description"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Category ID</label>
+            <kendo-numerictextbox [(value)]="record.CategoryID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Is Shared</label>
             <input type="checkbox" [(ngModel)]="record.IsShared" kendoCheckBox />   
         </div>               
@@ -132,6 +136,10 @@ import { UserViewEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Description</label>
             <span >{{FormatValue('Description', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Category ID</label>
+            <span mjFieldLink [record]="record" fieldName="CategoryID" >{{FormatValue('CategoryID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Is Shared</label>

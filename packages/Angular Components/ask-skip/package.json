@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ask-skip",
-  "version": "0.9.17",
+  "version": "0.9.22",
   "description": "MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -34,10 +34,11 @@
   },
   "dependencies": {
     "@memberjunction/global": "^0.9.135",
-    "@memberjunction/core": "^0.9.145",
-    "@memberjunction/skip-types": "^0.9.28",
-    "@memberjunction/ng-container-directives": "^0.9.112",
+    "@memberjunction/core": "^0.9.147",
+    "@memberjunction/skip-types": "^0.9.31",
+    "@memberjunction/ng-container-directives": "^0.9.114",
     "@memberjunction/ng-shared": "^0.9.8",
+    "@memberjunction/ng-data-context": "^0.9.5",
     "tslib": "^2.3.0",
     "angular-plotly.js": "^5.2.2",
     "@types/plotly.js-dist-min": "^2.3.4"

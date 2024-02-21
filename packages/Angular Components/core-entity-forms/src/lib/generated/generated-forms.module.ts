@@ -82,7 +82,6 @@ import { DatasetItemFormComponent, LoadDatasetItemFormComponent } from "./Entiti
 import { ConversationDetailFormComponent, LoadConversationDetailFormComponent } from "./Entities/ConversationDetail/conversationdetail.form.component";
 import { ConversationFormComponent, LoadConversationFormComponent } from "./Entities/Conversation/conversation.form.component";
 import { UserNotificationFormComponent, LoadUserNotificationFormComponent } from "./Entities/UserNotification/usernotification.form.component";
-import { ResourceFolderFormComponent, LoadResourceFolderFormComponent } from "./Entities/ResourceFolder/resourcefolder.form.component";
 import { SchemaInfoFormComponent, LoadSchemaInfoFormComponent } from "./Entities/SchemaInfo/schemainfo.form.component";
 import { CompanyIntegrationRecordMapFormComponent, LoadCompanyIntegrationRecordMapFormComponent } from "./Entities/CompanyIntegrationRecordMap/companyintegrationrecordmap.form.component";
 import { RecordMergeLogFormComponent, LoadRecordMergeLogFormComponent } from "./Entities/RecordMergeLog/recordmergelog.form.component";
@@ -99,6 +98,9 @@ import { EntityRecordDocumentFormComponent, LoadEntityRecordDocumentFormComponen
 import { EntityDocumentFormComponent, LoadEntityDocumentFormComponent } from "./Entities/EntityDocument/entitydocument.form.component";
 import { DataContextItemFormComponent, LoadDataContextItemFormComponent } from "./Entities/DataContextItem/datacontextitem.form.component";
 import { DataContextFormComponent, LoadDataContextFormComponent } from "./Entities/DataContext/datacontext.form.component";
+import { UserViewCategoryFormComponent, LoadUserViewCategoryFormComponent } from "./Entities/UserViewCategory/userviewcategory.form.component";
+import { DashboardCategoryFormComponent, LoadDashboardCategoryFormComponent } from "./Entities/DashboardCategory/dashboardcategory.form.component";
+import { ReportCategoryFormComponent, LoadReportCategoryFormComponent } from "./Entities/ReportCategory/reportcategory.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -169,7 +171,6 @@ import { DatasetItemDetailsComponent, LoadDatasetItemDetailsComponent } from "./
 import { ConversationDetailDetailsComponent, LoadConversationDetailDetailsComponent } from "./Entities/ConversationDetail/sections/details.component"
 import { ConversationDetailsComponent, LoadConversationDetailsComponent } from "./Entities/Conversation/sections/details.component"
 import { UserNotificationDetailsComponent, LoadUserNotificationDetailsComponent } from "./Entities/UserNotification/sections/details.component"
-import { ResourceFolderDetailsComponent, LoadResourceFolderDetailsComponent } from "./Entities/ResourceFolder/sections/details.component"
 import { SchemaInfoDetailsComponent, LoadSchemaInfoDetailsComponent } from "./Entities/SchemaInfo/sections/details.component"
 import { CompanyIntegrationRecordMapDetailsComponent, LoadCompanyIntegrationRecordMapDetailsComponent } from "./Entities/CompanyIntegrationRecordMap/sections/details.component"
 import { RecordMergeLogDetailsComponent, LoadRecordMergeLogDetailsComponent } from "./Entities/RecordMergeLog/sections/details.component"
@@ -186,6 +187,9 @@ import { EntityRecordDocumentDetailsComponent, LoadEntityRecordDocumentDetailsCo
 import { EntityDocumentDetailsComponent, LoadEntityDocumentDetailsComponent } from "./Entities/EntityDocument/sections/details.component"
 import { DataContextItemDetailsComponent, LoadDataContextItemDetailsComponent } from "./Entities/DataContextItem/sections/details.component"
 import { DataContextDetailsComponent, LoadDataContextDetailsComponent } from "./Entities/DataContext/sections/details.component"
+import { UserViewCategoryDetailsComponent, LoadUserViewCategoryDetailsComponent } from "./Entities/UserViewCategory/sections/details.component"
+import { DashboardCategoryDetailsComponent, LoadDashboardCategoryDetailsComponent } from "./Entities/DashboardCategory/sections/details.component"
+import { ReportCategoryDetailsComponent, LoadReportCategoryDetailsComponent } from "./Entities/ReportCategory/sections/details.component"
 
 
 @NgModule({
@@ -315,7 +319,6 @@ declarations: [
     ConversationDetailFormComponent,
     ConversationFormComponent,
     UserNotificationFormComponent,
-    ResourceFolderFormComponent,
     SchemaInfoFormComponent,
     CompanyIntegrationRecordMapFormComponent,
     RecordMergeLogFormComponent,
@@ -329,7 +332,8 @@ declarations: [
     EntityDocumentRunFormComponent,
     VectorDatabaseFormComponent,
     EntityRecordDocumentFormComponent,
-    EntityDocumentFormComponent],
+    EntityDocumentFormComponent,
+    DataContextItemFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -350,8 +354,10 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
-    DataContextItemFormComponent,
     DataContextFormComponent,
+    UserViewCategoryFormComponent,
+    DashboardCategoryFormComponent,
+    ReportCategoryFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
@@ -367,9 +373,7 @@ declarations: [
     EntityDetailsComponent,
     EntityTopComponent,
     EntityAuditComponent,
-    EntityAPIComponent,
-    EntityDBComponent,
-    EntityUIComponent],
+    EntityAPIComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -390,6 +394,8 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    EntityDBComponent,
+    EntityUIComponent,
     UserDetailsComponent,
     EntityRelationshipDetailsComponent,
     UserRecordLogDetailsComponent,
@@ -407,9 +413,7 @@ declarations: [
     ListDetailDetailsComponent,
     UserViewRunDetailsComponent,
     UserViewRunDetailDetailsComponent,
-    WorkflowRunDetailsComponent,
-    WorkflowDetailsComponent,
-    WorkflowEngineDetailsComponent],
+    WorkflowRunDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -430,6 +434,8 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    WorkflowDetailsComponent,
+    WorkflowEngineDetailsComponent,
     RecordChangeDetailsComponent,
     UserRoleDetailsComponent,
     RowLevelSecurityFilterDetailsComponent,
@@ -447,9 +453,7 @@ declarations: [
     QueueDetailsComponent,
     QueueTaskDetailsComponent,
     DashboardDetailsComponent,
-    OutputTriggerTypeDetailsComponent,
-    OutputFormatTypeDetailsComponent,
-    OutputDeliveryTypeDetailsComponent],
+    OutputTriggerTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -470,6 +474,8 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    OutputFormatTypeDetailsComponent,
+    OutputDeliveryTypeDetailsComponent,
     ReportDetailsComponent,
     ReportSnapshotDetailsComponent,
     ResourceTypeDetailsComponent,
@@ -482,14 +488,12 @@ declarations: [
     ConversationDetailDetailsComponent,
     ConversationDetailsComponent,
     UserNotificationDetailsComponent,
-    ResourceFolderDetailsComponent,
     SchemaInfoDetailsComponent,
     CompanyIntegrationRecordMapDetailsComponent,
     RecordMergeLogDetailsComponent,
     RecordMergeDeletionLogDetailsComponent,
     QueryFieldDetailsComponent,
-    QueryCategoryDetailsComponent,
-    QueryDetailsComponent],
+    QueryCategoryDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -510,6 +514,7 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    QueryDetailsComponent,
     QueryPermissionDetailsComponent,
     VectorIndexDetailsComponent,
     EntityDocumentTypeDetailsComponent,
@@ -518,7 +523,10 @@ declarations: [
     EntityRecordDocumentDetailsComponent,
     EntityDocumentDetailsComponent,
     DataContextItemDetailsComponent,
-    DataContextDetailsComponent],
+    DataContextDetailsComponent,
+    UserViewCategoryDetailsComponent,
+    DashboardCategoryDetailsComponent,
+    ReportCategoryDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -625,7 +633,6 @@ export function LoadCoreGeneratedForms() {
     LoadConversationDetailFormComponent();
     LoadConversationFormComponent();
     LoadUserNotificationFormComponent();
-    LoadResourceFolderFormComponent();
     LoadSchemaInfoFormComponent();
     LoadCompanyIntegrationRecordMapFormComponent();
     LoadRecordMergeLogFormComponent();
@@ -642,6 +649,9 @@ export function LoadCoreGeneratedForms() {
     LoadEntityDocumentFormComponent();
     LoadDataContextItemFormComponent();
     LoadDataContextFormComponent();
+    LoadUserViewCategoryFormComponent();
+    LoadDashboardCategoryFormComponent();
+    LoadReportCategoryFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -712,7 +722,6 @@ export function LoadCoreGeneratedForms() {
     LoadConversationDetailDetailsComponent();
     LoadConversationDetailsComponent();
     LoadUserNotificationDetailsComponent();
-    LoadResourceFolderDetailsComponent();
     LoadSchemaInfoDetailsComponent();
     LoadCompanyIntegrationRecordMapDetailsComponent();
     LoadRecordMergeLogDetailsComponent();
@@ -729,4 +738,7 @@ export function LoadCoreGeneratedForms() {
     LoadEntityDocumentDetailsComponent();
     LoadDataContextItemDetailsComponent();
     LoadDataContextDetailsComponent();
+    LoadUserViewCategoryDetailsComponent();
+    LoadDashboardCategoryDetailsComponent();
+    LoadReportCategoryDetailsComponent();
 }

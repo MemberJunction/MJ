@@ -659,7 +659,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IndustryID
         * * Display Name: Industry ID
         * * SQL Data Type: int
-        * * Related Entity: Industries
+        * * Related Entity/Foreign Key: Industries (vwIndustries.ID)
         */
         get IndustryID(): number {  
             return this.Get('IndustryID');
@@ -854,7 +854,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AccountID
         * * Display Name: Account ID
         * * SQL Data Type: int
-        * * Related Entity: Accounts
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
         get AccountID(): number {  
             return this.Get('AccountID');
@@ -998,7 +998,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RoleID
         * * Display Name: Role ID
         * * SQL Data Type: int
-        * * Related Entity: Contact Roles
+        * * Related Entity/Foreign Key: Contact Roles (vwContactRoles.ID)
         */
         get RoleID(): number {  
             return this.Get('RoleID');
@@ -1010,7 +1010,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LevelID
         * * Display Name: Level ID
         * * SQL Data Type: int
-        * * Related Entity: Contact Levels
+        * * Related Entity/Foreign Key: Contact Levels (vwContactLevels.ID)
         */
         get LevelID(): number {  
             return this.Get('LevelID');
@@ -1309,7 +1309,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity: Employees
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number {  
             return this.Get('EmployeeID');
@@ -1321,7 +1321,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ContactID
         * * Display Name: Contact ID
         * * SQL Data Type: int
-        * * Related Entity: Contacts
+        * * Related Entity/Foreign Key: Contacts (vwContacts.ID)
         */
         get ContactID(): number {  
             return this.Get('ContactID');
@@ -1333,7 +1333,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AccountID
         * * Display Name: Account ID
         * * SQL Data Type: int
-        * * Related Entity: Accounts
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
         get AccountID(): number {  
             return this.Get('AccountID');
@@ -1345,7 +1345,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DealID
         * * Display Name: Deal ID
         * * SQL Data Type: int
-        * * Related Entity: Deals
+        * * Related Entity/Foreign Key: Deals (vwDeals.ID)
         */
         get DealID(): number {  
             return this.Get('DealID');
@@ -1413,7 +1413,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -1456,7 +1456,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AttachmentID
         * * Display Name: Attachment ID
         * * SQL Data Type: int
-        * * Related Entity: Activity Attachments
+        * * Related Entity/Foreign Key: Activity Attachments (vwActivityAttachments.ID)
         */
         get AttachmentID(): number {  
             return this.Get('AttachmentID');
@@ -1712,7 +1712,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -1724,7 +1724,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AccountID
         * * Display Name: Account ID
         * * SQL Data Type: int
-        * * Related Entity: Accounts
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
         get AccountID(): number {  
             return this.Get('AccountID');
@@ -1736,7 +1736,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ContactID
         * * Display Name: Contact ID
         * * SQL Data Type: int
-        * * Related Entity: Contacts
+        * * Related Entity/Foreign Key: Contacts (vwContacts.ID)
         */
         get ContactID(): number {  
             return this.Get('ContactID');
@@ -1814,7 +1814,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
         * * SQL Data Type: int
-        * * Related Entity: Employees
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number {  
             return this.Get('EmployeeID');
@@ -1901,7 +1901,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DealTypeID
         * * Display Name: Deal Type ID
         * * SQL Data Type: int
-        * * Related Entity: Deal Types
+        * * Related Entity/Foreign Key: Deal Types (vwDealTypes.ID)
         */
         get DealTypeID(): number {  
             return this.Get('DealTypeID');
@@ -1913,7 +1913,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DealStageID
         * * Display Name: Deal Stage ID
         * * SQL Data Type: int
-        * * Related Entity: Deal Stages
+        * * Related Entity/Foreign Key: Deal Stages (vwDealStages.ID)
         */
         get DealStageID(): number {  
             return this.Get('DealStageID');
@@ -1925,7 +1925,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DealForecastCategoryID
         * * Display Name: Deal Forecast Category ID
         * * SQL Data Type: int
-        * * Related Entity: Deal Forecast Categories
+        * * Related Entity/Foreign Key: Deal Forecast Categories (vwDealForecastCategories.ID)
         */
         get DealForecastCategoryID(): number {  
             return this.Get('DealForecastCategoryID');
@@ -2212,7 +2212,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AccountID
         * * Display Name: Account ID
         * * SQL Data Type: int
-        * * Related Entity: Accounts
+        * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
         get AccountID(): number {  
             return this.Get('AccountID');
@@ -2224,7 +2224,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ContactID
         * * Display Name: Contact ID
         * * SQL Data Type: int
-        * * Related Entity: Contacts
+        * * Related Entity/Foreign Key: Contacts (vwContacts.ID)
         */
         get ContactID(): number {  
             return this.Get('ContactID');
@@ -2272,7 +2272,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');
@@ -2328,7 +2328,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: StatusID
         * * Display Name: Status ID
         * * SQL Data Type: int
-        * * Related Entity: Invoice Status Types
+        * * Related Entity/Foreign Key: Invoice Status Types (vwInvoiceStatusTypes.ID)
         */
         get StatusID(): number {  
             return this.Get('StatusID');
@@ -2340,7 +2340,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: PaymentTermsID
         * * Display Name: Payment Terms ID
         * * SQL Data Type: int
-        * * Related Entity: Payment Terms Types
+        * * Related Entity/Foreign Key: Payment Terms Types (vwPaymentTermsTypes.ID)
         */
         get PaymentTermsID(): number {  
             return this.Get('PaymentTermsID');
@@ -2611,7 +2611,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
         * * SQL Data Type: int
-        * * Related Entity: Company Integrations
+        * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
         get CompanyIntegrationID(): number {  
             return this.Get('CompanyIntegrationID');

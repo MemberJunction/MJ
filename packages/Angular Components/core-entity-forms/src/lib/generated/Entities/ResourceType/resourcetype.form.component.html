@@ -22,16 +22,6 @@
                                                [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
                         </ng-template>
                     </kendo-tabstrip-tab>
-          
-                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Resource Folders')">
-                        <ng-template kendoTabTitle>Resource Folders</ng-template>
-                        <ng-template kendoTabContent >
-                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Resource Folders')"  
-                                               [AllowLoad]="this.IsCurrentTab('Resource Folders')"  
-                                               [EditMode]="this.GridEditMode()"  
-                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
-                        </ng-template>
-                    </kendo-tabstrip-tab>
                             </kendo-tabstrip>
     </form>
   </div>

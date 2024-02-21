@@ -104,12 +104,14 @@ export class SkipColumnInfo {
  * * clarify_question_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'clarifying_question' - in this situation, the MJAPI server needs to communicate with the UI to ask the follow up question to the user. When you have that feedback from the user gathered and are providing the response to the clarifying question back to Skip API, use this requestPhase
  * * data_gathering_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'data_request' - in this situation, the MJAPI server needs to process the data request, gather whatever additional data the Skip API has asked for, and then return it in the dataContext property of the SkipAPIRequest object. When you are finished gathering data and returning it to the Skip API server, use this requestPhase
  * * data_gathering_failure: When you send an API request to the Skip API server saying there was a data_gathering_failure that means that you attempted to retrieve data Skip requested but there was (typically) an error in the SQL statement that Skip generated and it needs to be regenerated. The MJAPI server code handles this scenario automatically.
+ * * run_existing_script: Use this to run an existing script that was already processed. When this option is used, the script provided is run and the results are provided in the response.
  */
 export const SkipRequestPhase = {
     initial_request: 'initial_request',
     clarify_question_response: 'clarify_question_response',
     data_gathering_response: 'data_gathering_response',
-    data_gathering_failure: 'data_gathering_failure'
+    data_gathering_failure: 'data_gathering_failure',
+    run_existing_script: 'run_existing_script'
 } as const;
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
@@ -169,6 +171,7 @@ export class SkipEntityInfo {
 }
 
 export class SkipQueryInfo {
+    id: number;
     name: string;
     description: string;
     categoryID: number;
