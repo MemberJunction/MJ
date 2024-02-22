@@ -1,5 +1,4 @@
-import { Component, Input, ViewChild } from '@angular/core';
-import { DynamicReportComponent } from './dynamic-report';
+import { Component, Input } from '@angular/core';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 
@@ -21,13 +20,13 @@ import { DataContext } from '@memberjunction/data-context';
         [ConversationDetailID]="ConversationDetailID"
         [DataContext]="DataContext"
         [ShowCreateReportButton]="true"
+        [LayoutMode]="'linear'"
+        [LinearExpandAll]="true"
     ></mj-dynamic-report>
 </div>
 ` 
 })
 export class SkipDynamicReportComponent {
-   @ViewChild('theReport', { static: false }) theReport!: DynamicReportComponent;
-
     @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() ConversationID: number | null = null;
     @Input() ConversationName: string | null = null;    

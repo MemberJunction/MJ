@@ -16,7 +16,8 @@ import { LogStatus } from '@memberjunction/core';
                 [resizable]="true"
                 (pageChange)="pageChange($event)"
                 (cellClick)="cellClick($event)"
-                [navigable]="true">
+                [navigable]="true"
+                >
         <ng-container *ngFor="let col of columns">
             <kendo-grid-column 
                 field="{{col.fieldName}}" 
@@ -36,6 +37,7 @@ export class DynamicGridComponent implements AfterViewInit {
   @Input() columns: SkipColumnInfo[] = [];
   @Input() public pageSize = 30;
   @Input() public startingRow = 0;
+  @Input() public fillContainer: boolean = true;
 
   private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
@@ -89,10 +91,12 @@ export class DynamicGridComponent implements AfterViewInit {
   }
 
   private loadGridView(): void {
-    this.gridView = {
-      data: this.data.slice(this.startingRow, this.startingRow + this.pageSize),
-      total: this.data.length,
-    };
+    Promise.resolve().then(() => {
+      this.gridView = {
+        data: this.data.slice(this.startingRow, this.startingRow + this.pageSize),
+        total: this.data.length,
+      };  
+    });
   }  
 
   cellClick(event: any): void {

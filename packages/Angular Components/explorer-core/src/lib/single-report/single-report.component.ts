@@ -15,7 +15,7 @@ export class SingleReportComponent implements OnInit {
 
   @ViewChild('theReport', { static: true }) theReport!: DynamicReportComponent;
 
-  public ReportEntity!: ReportEntity;
+  public ReportEntity: ReportEntity | undefined;
 
   public reportData!: any[];
 
@@ -35,8 +35,8 @@ export class SingleReportComponent implements OnInit {
   }
 
  
-  ngOnInit(): void {
-    this.doLoad();
+  async ngOnInit() {
+    await this.doLoad();
   }
   async doLoad(): Promise<void> {
     try {
@@ -46,18 +46,6 @@ export class SingleReportComponent implements OnInit {
       this.ReportEntity = <ReportEntity>await md.GetEntityObject('Reports');
       await this.ReportEntity.Load(this.reportId);
       this.Configuration = JSON.parse(this.ReportEntity.Configuration);
-
-      const runReport = new RunReport();
-      const result = await runReport.RunReport({ReportID: this.reportId});
-      if (result && result.Success && result.Results.length > 0) {
-        this.reportData = result.Results;
-      if (this.Configuration?.executionResults)
-          this.Configuration.executionResults.tableData = this.reportData // put the report data into the right spot so the dynamic report knows where to get it
-      }
-      else {
-        // report has an invalid configuration
-        throw new Error('Error running report: invalid value from Configuration field ');
-      }
 
       this.loadComplete.emit();
     }

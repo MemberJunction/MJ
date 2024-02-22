@@ -1,0 +1,102 @@
+<div mjFillContainer  *ngIf="LayoutMode === 'tabs'"> 
+    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
+    <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
+    <kendo-tabstrip [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip mjFillContainer [bottomMargin]="25">
+        <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)" mjFillContainer>
+            <ng-template kendoTabTitle mjFillContainer>
+              <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
+              <span class="report-tab-title">Chart</span>
+            </ng-template>
+            <ng-template kendoTabContent class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
+                <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
+                <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
+                </mj-dynamic-chart>
+            </ng-template>
+        </kendo-tabstrip-tab>  
+        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
+            <ng-template kendoTabTitle>
+              <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
+              <span class="report-tab-title">Table</span>
+            </ng-template>
+            <ng-template kendoTabContent class="report-tab-contents">
+                <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
+                <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
+                </mj-dynamic-grid>
+            </ng-template>
+        </kendo-tabstrip-tab>  
+        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(2)">
+            <ng-template kendoTabTitle>
+                <i class="fa-light fa-flask"></i>
+                <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" />
+              <span class="report-tab-title">Analysis</span>
+            </ng-template>
+            <ng-template kendoTabContent class="report-tab-contents">
+              <div>
+                  <markdown [data]="SkipData?.analysis"></markdown>
+              </div>
+            </ng-template>
+        </kendo-tabstrip-tab>  
+        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(3)">
+            <ng-template kendoTabTitle>
+              <kendo-svgicon [icon]="sharedService.kendoSVGIcon('file')"></kendo-svgicon>
+              <span class="report-tab-title">Explanation</span>
+            </ng-template>
+            <ng-template kendoTabContent class="report-tab-contents">
+              {{SkipData?.userExplanation || 'No Explanation Provided'}}
+            </ng-template>
+        </kendo-tabstrip-tab>  
+        <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(4)">
+            <ng-template kendoTabTitle>
+              <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('code')" name="page-properties"></kendo-svgicon>
+              <span class="report-tab-title">Details</span>
+            </ng-template>
+            <ng-template kendoTabContent class="report-tab-contents">
+              <div *ngIf="ConversationID!==null"><b>Skip Conversation ID:</b><span>{{ConversationID}}</span></div>
+              <div *ngIf="ConversationDetailID!==null"><b>Skip Conversation Detail ID:</b><span>{{ConversationDetailID}}</span></div>
+              <div *ngIf="SkipData?.techExplanation">
+                <span><b>Technical Explanation</b></span>
+                <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData?.techExplanation}}</textarea></span>
+              </div>
+              <div *ngIf="SkipData?.scriptText" mjFillContainer>
+                <span><b>Script</b></span>
+                <span><textarea mjFillContainer [disabled]="true" [bottomMargin]="20">{{SkipData?.scriptText}}</textarea></span>
+              </div>
+            </ng-template>
+        </kendo-tabstrip-tab>  
+    </kendo-tabstrip>
+  </div> 
+<div mjFillContainer *ngIf="LayoutMode === 'linear'"> 
+    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
+    <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
+    <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
+        <h3>Explanation</h3>
+        <div>
+            {{SkipData?.userExplanation || 'No Explanation Provided'}}
+        </div>
+    </div>
+    <kendo-expansionpanel
+        *ngIf="IsChart"
+        [title]="'Chart'"
+        [expanded]="LinearExpandAll"
+        >
+        <mj-dynamic-chart *ngIf="IsChart" 
+            #theChart [SkipData]="SkipData" style="display:block;">
+        </mj-dynamic-chart>
+    </kendo-expansionpanel>                     
+    <kendo-expansionpanel
+        *ngIf="!IsChart"
+        [title]="'Table'"
+        [expanded]="LinearExpandAll"
+    >
+        <mj-dynamic-grid *ngIf="!IsChart" 
+                        #theGrid [SkipData]="SkipData"
+                        [fillContainer]="false"></mj-dynamic-grid>  
+    </kendo-expansionpanel>
+    <kendo-expansionpanel
+        *ngIf="SkipData?.analysis" 
+        [title]="'Analysis'"
+        [expanded]="LinearExpandAll"
+        >
+        <markdown [data]="SkipData?.analysis"></markdown>
+    </kendo-expansionpanel>                     
+</div> 

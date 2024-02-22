@@ -276,7 +276,7 @@ export type RunViewResult = {
     /**
      * The array of records returned by the view, only valid if Success is true
      */
-    Results: [];
+    Results: any[];
     /**
      * The newly created UserViews.ID value - only provided if RunViewParams.SaveViewResults=true
      */

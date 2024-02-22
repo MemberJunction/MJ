@@ -22,8 +22,8 @@
                         <textarea *ngIf="dataItem.ID === SelectedConversation?.ID && ConversationEditMode" [(ngModel)]="dataItem.Name" maxlength="100"></textarea>
                     </div>
                     <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
-                        <kendo-svgicon *ngIf="!ConversationEditMode" [icon]="sharedService.kendoSVGIcon('edit')" name="edit" class="edit-icon" (click)="editConvo(dataItem)"></kendo-svgicon>
-                        <kendo-svgicon *ngIf="!ConversationEditMode" [icon]="sharedService.kendoSVGIcon('delete')" name="delete" class="delete-icon" (click)="deleteConvo(dataItem)"></kendo-svgicon>    
+                        <kendo-svgicon *ngIf="!ConversationEditMode" [icon]="sharedService.kendoSVGIcon('pencil')" name="edit" class="edit-icon" (click)="editConvo(dataItem)"></kendo-svgicon>
+                        <kendo-svgicon *ngIf="!ConversationEditMode" [icon]="sharedService.kendoSVGIcon('trash')" name="delete" class="delete-icon" (click)="deleteConvo(dataItem)"></kendo-svgicon>    
                         <kendo-svgicon *ngIf="ConversationEditMode" [icon]="sharedService.kendoSVGIcon('check')" name="check" class="save-icon" (click)="saveConvoName(dataItem)" ></kendo-svgicon>
                         <kendo-svgicon *ngIf="ConversationEditMode" [icon]="sharedService.kendoSVGIcon('close')" name="close" class="cancel-edit-icon" (click)="cancelConvoEdit(dataItem)"></kendo-svgicon>
                     </div>
@@ -32,32 +32,32 @@
         </kendo-listview>
     </div>
     <div class="conversation-wrapper" mjFillContainer>
-        <div #AskSkipPanel class="messages" mjContainer 
-             mjFillContainer [bottomMargin]="80" 
-             [fillWidth]="false" [fillHeight]="true">
+        <div #AskSkipPanel class="messages" mjContainer>
             <div *ngFor="let message of Messages">  
                 <div class="message-row" [ngClass]="message.Role.trim().toLowerCase() === 'ai' ? 'ai-message' : message.Role.trim().toLowerCase() === 'error' ? 'error-message' : 'user-message'" >
                     <div class="message-image">
                         <img src="{{message.Role.trim().toLowerCase() === 'ai' || message.Role.trim().toLowerCase() === 'error' ? 'assets/Skip - Mark Only - Small.png' : userImage()}}" class="avatar" />
                     </div>
                     <div class="message" mjContainer [id]="'skip_message_' + message.ID">
+                        <div class="message-user-name">{{message.Role.trim().toLowerCase() === 'ai' ? 'Skip' : (this.SelectedConversationUser ? this.SelectedConversationUser.FirstName + ' ' + this.SelectedConversationUser.LastName : 'You')}}</div>
                         <div>{{this.createDetailHtml(message)}}</div> 
                     </div>
                 </div>
             </div>
-            <div *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
+            <div class="waiting-for-ai" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
+                <div class="waiting-for-ai-message">{{this.WaitingMessage}}</div>
                 <kendo-loader></kendo-loader>
             </div>
         </div>
-        <div class="skip-title">{{Title}}</div>
         <div class="input-area">
             <textarea
                     #AskSkipInput 
                     [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
                     (keyup.enter)="onEnter($event)" 
+                    (input)="onInputChange($event)"
                     type="text" 
-                    placeholder="Type your message..."></textarea>
-            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()" [primary]="true">Send</button>
+                    placeholder="Ask Skip a question"></textarea>
+            <button [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()"><i class="fas fa-solid fa-arrow-up"></i></button>
             <kendo-svgicon *ngIf="ShowDataContextButton" [icon]="sharedService.kendoSVGIcon('gearIcon')" name="gear" svgIcon="gear-icon" (click)="showDataContext()"></kendo-svgicon>
         </div>
     </div>

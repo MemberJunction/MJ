@@ -1,7 +1,7 @@
 import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
-import { Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { LogError, Metadata, RunQuery, RunView, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -12,14 +12,15 @@ import { Subscription } from 'rxjs';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
   
 
 @Component({
-  selector: 'mj-ask-skip',
-  templateUrl: './ask-skip.component.html',
-  styleUrls: ['./ask-skip.component.css']
+  selector: 'mj-skip-chat',
+  templateUrl: './skip-chat.component.html',
+  styleUrls: ['./skip-chat.component.css']
 })
-export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
+export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() AllowSend: boolean = true;
   @Input() public Messages: ConversationDetailEntity[] = [];
   @Input() public Conversations: ConversationEntity[] = [];
@@ -33,7 +34,44 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   @Input() public LinkedEntityRecordID: number = 0;
   @Input() public ShowDataContextButton: boolean = true;
   
+  public SelectedConversationUser: UserInfo | undefined;
   public DataContext!: DataContext;
+
+  public WaitingMessage: string = "";
+
+  protected SubscribeToNotifications() {
+    try {
+      MJGlobal.Instance.GetEventListener().subscribe( (event: MJEvent) => {
+        if (event.event === MJEventType.ComponentEvent) {
+          const obj = event.args;
+          if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
+            this.WaitingMessage = obj.message;
+          }
+          console.log(obj);
+        }
+      });
+    }
+    catch (e) {
+      LogError(e);
+    }
+  }
+  
+  protected async SetSelectedConversationUser() {
+    if (this.SelectedConversation?.UserID) {
+      const md = new Metadata();
+      if (md.CurrentUser.ID !== this.SelectedConversation.UserID) {
+        const rv = new RunView(); // inefficient, cache this later
+        const result = await rv.RunView({
+          EntityName: 'Users',
+          ExtraFilter: 'ID=' + this.SelectedConversation.UserID
+        })
+        this.SelectedConversationUser = result && result.Success ? <UserInfo>result.Results[0] : undefined;  
+      }
+      else
+        this.SelectedConversationUser = md.CurrentUser; // current user is the one for this convo, just use that to avoid the extra query
+    }
+  }
+ 
 
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
@@ -55,6 +93,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
   private paramsSubscription!: Subscription;
   ngOnInit() {
+      this.SubscribeToNotifications();
   }
 
   public get LinkedEntityID(): number | null {
@@ -93,10 +132,13 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
   private _scrollToBottom: boolean = false;
   ngAfterViewChecked(): void {
-    if (this._scrollToBottom) {
-      this.scrollToBottom();
-    }
-    this._scrollToBottom = false;    
+    // have a short delay to make sure view is fully rendered via event cycle going through its queue
+    setTimeout(() => {
+      if (this._scrollToBottom) {
+        this.scrollToBottom();
+      }
+      this._scrollToBottom = false;      
+    },50);
   }
 
   protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
@@ -213,6 +255,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       const oldStatus = this._processingStatus[conversation.ID];
       this._processingStatus[conversation.ID] = true;
       this.SelectedConversation = conversation;
+      this.SetSelectedConversationUser();
       this.DataContextID = conversation.DataContextID;
       this.DataContext = new DataContext();
       await this.DataContext.LoadMetadata(this.DataContextID);
@@ -261,14 +304,31 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
     }
   }
 
+  onInputChange(event: any) {
+    const val = this.askSkipInput.nativeElement.value;
+    this.AllowSend = val && val.length > 0;
+    this.resizeTextInput();
+  }
+
+  resizeTextInput() {
+    try {
+      const textarea = this.askSkipInput.nativeElement;
+      textarea.style.height = 'auto'; // Reset height to recalculate
+      textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight  
+    }
+    catch (e) {
+      LogError(e);
+    }
+  }
 
   async sendSkipMessage() {
-    const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
-    if (this.SelectedConversation)
-      this._processingStatus[this.SelectedConversation?.ID] = true;
-
     const val = this.askSkipInput.nativeElement.value;
     if (val && val.length > 0) {
+      this.WaitingMessage = "Please wait while I process your request...";
+      const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
+      if (this.SelectedConversation)
+        this._processingStatus[this.SelectedConversation?.ID] = true;
+  
       this.AllowSend = false;
       const md = new Metadata();
       const convoDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
@@ -278,6 +338,8 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       this.Messages.push(convoDetail); // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server
 
       this.askSkipInput.nativeElement.value = '';
+      this.resizeTextInput();
+
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       const graphQLRawResult = await this.ExecuteAskSkipQuery(val, await this.GetCreateDataContextID(), this.SelectedConversation);
       const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
@@ -297,6 +359,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
             this._processingStatus[skipResult.ConversationId] = true;
             this.Conversations.push(convo)
             this.SelectedConversation = convo;
+            this.SetSelectedConversationUser();
           }
           else if (this.Messages.length === 1 && skipResult.ResponsePhase === SkipResponsePhase.analysis_complete) {
             // we are on the first message so skip renamed the convo, use that 
@@ -337,7 +400,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
 
   private _detailHtml: any = {};
   public createDetailHtml(detail: ConversationDetailEntity) {
-    if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0 && this._detailHtml[detail.ID]) {
+    if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0 && this._detailHtml[detail.ID] !== undefined && this._detailHtml[detail.ID] !== null) {
       // use cached HTML details for SAVED conversation details, don't do for NEW ONes where ID is null
       return this._detailHtml[detail.ID];
     }
@@ -369,16 +432,14 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
           sMessage = clarifyingQuestion.clarifyingQuestion;
           break;
         case SkipResponsePhase.analysis_complete:
-          sMessage = "Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+          sMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
           const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
           this.addReportToConversation(detail, analysisResult, detail.ID);
           break;
       }
     }
     else {
-      sMessage = `<div class="alert alert-warning" role="alert">
-                  <strong>No data returned.</strong>
-                  </div>`;
+      sMessage = `I'm having a problem handling the request. If you'd like to try again, please let me know. Also, if this problem persists, please let your administrator know.`;
     }
     return sMessage;
   }
@@ -394,6 +455,7 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
   protected addReportToConversation(detail: ConversationDetailEntity, analysisResult: SkipAPIAnalysisCompleteResponse, messageId: number) {
     // set a short timeout to allow Angular to render as the div we want to add the grid to won't exist yet otherwise
     setTimeout(() => {
+      console.log('Adding report to conversation' + detail.ConversationID);
       const componentRef = this.askSkip.viewContainerRef.createComponent(SkipDynamicReportComponent);
 
       // Pass the data to the new chart

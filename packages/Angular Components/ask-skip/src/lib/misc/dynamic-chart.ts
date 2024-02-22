@@ -1,16 +1,52 @@
-import { Component, Input } from '@angular/core';
+import { Component, ElementRef, Input, OnDestroy, OnInit } from '@angular/core';
+import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
-import { SeriesClickEvent } from '@progress/kendo-angular-charts';
 
 @Component({
   selector: 'mj-dynamic-chart',
   template: `
-    <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" ></plotly-plot>
+    <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" mjFillContainer [useResizeHandler]="true"></plotly-plot>
   ` 
 })
-export class DynamicChartComponent {
+export class DynamicChartComponent implements OnInit, OnDestroy {
     @Input() plotData: any;
     @Input() plotLayout: any;
+    @Input() defaultPlotHeight: number = 550;
+
+    private resizeObserver: ResizeObserver | undefined;
+
+    constructor(private el: ElementRef) { }
+  
+    ngOnInit() {
+      this.setupResizeObserver();
+    }
+  
+    ngOnDestroy() {
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+      }
+    }
+
+    setupResizeObserver() {
+      return;
+        // Invoke manual resize from SharedService.Instance to ensure the chart is sized correctly
+        SharedService.Instance.InvokeManualResize();
+        // now wait 1ms - which really just results in the event loop being processed and the manual resize being invoked
+        setTimeout(() => {
+            this.resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    const { height } = entry.contentRect;
+                    this.updateChartHeight(height);
+                }
+            });
+            this.resizeObserver.observe(this.el.nativeElement);
+        }, 1);
+    }
+
+    updateChartHeight(newHeight: number) {
+        if (this.plotLayout)
+            this.plotLayout.height = newHeight;
+    }
 
     private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
     @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
@@ -21,6 +57,10 @@ export class DynamicChartComponent {
         if (d) {
             this.plotData = d.executionResults?.plotData?.data;
             this.plotLayout = d.executionResults?.plotData?.layout;
+            if (this.plotLayout) {
+              if (this.plotLayout.height === undefined || this.plotLayout.height === null || this.plotLayout.height === 0)
+                this.plotLayout.height = this.defaultPlotHeight;
+            }
         }
     }
 
