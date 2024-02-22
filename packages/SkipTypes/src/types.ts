@@ -247,6 +247,12 @@ export class SkipAPIRequest {
     requestPhase: SkipRequestPhase;
 }
 
+export class SkipAPIRunScriptRequest extends SkipAPIRequest {
+    /**
+     * The script text to run
+     */
+    scriptText: string;
+}
 
 /**
  * Describes the different response phases that are used by the Skip API Server to respond back to the caller (usually the MJAPI server but can be anyone)

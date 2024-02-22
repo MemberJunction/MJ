@@ -2029,6 +2029,7 @@ type Query {
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!

@@ -1,6 +1,6 @@
 import { Component, Input, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
+import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse, SkipAPIResponse, MJAPISkipResult } from '@memberjunction/skip-types';
 import { SharedService, HtmlListType, EventCodes } from '@memberjunction/ng-shared';
 import { DynamicGridComponent } from './dynamic-grid';
 import { DynamicChartComponent } from './dynamic-chart';
@@ -8,6 +8,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
 import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
 import { DataContext } from '@memberjunction/data-context';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
@@ -41,6 +42,7 @@ import { DataContext } from '@memberjunction/data-context';
             <span class="report-tab-title">Chart</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
+              <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
               <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData">
               </mj-dynamic-chart>
           </ng-template>
@@ -51,6 +53,7 @@ import { DataContext } from '@memberjunction/data-context';
             <span class="report-tab-title">Table</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
+              <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
               <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
               </mj-dynamic-grid>
           </ng-template>
@@ -98,6 +101,7 @@ export class DynamicReportComponent {
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: number | null = null;
   @Input() DataContext!: DataContext;
+  @Input() ReportEntity?: ReportEntity;
 
   private _skipData!: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined{ 
@@ -224,5 +228,37 @@ export class DynamicReportComponent {
     } 
   }
 
-
+  public async doRefreshReport() {
+    try {
+      if (this.ReportEntity && this.ReportEntity.ID > 0) {
+        const gql = `query ExecuteAskSkipRunScript($dataContextId: Int!, $scriptText: String!) {
+          ExecuteAskSkipRunScript(DataContextId: $dataContextId, ScriptText: $scriptText) {
+            Success
+            Status
+            Result
+            ConversationId 
+            UserMessageConversationDetailId
+            AIMessageConversationDetailId
+          }
+        }`
+        const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
+            dataContextId: this.ReportEntity.DataContextID,
+            scriptText: this.SkipData?.scriptText
+          });
+  
+        const resultObj = <MJAPISkipResult>result.ExecuteAskSkipRunScript;
+        if (resultObj.Success) {
+          // it worked, refresh the report here 
+          const newSkipData : SkipAPIAnalysisCompleteResponse = JSON.parse(resultObj.Result);
+          this.ReportEntity.Configuration = JSON.stringify(newSkipData);
+          await this.ReportEntity.Save();
+          this.SkipData = newSkipData; // this drives binding to chart and table and so forth for a refresh
+        }
+        return result;          
+      }
+    }
+    catch (err) {
+      console.error(err);          
+    }
+  }
 }

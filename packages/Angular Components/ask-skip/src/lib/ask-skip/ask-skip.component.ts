@@ -214,6 +214,8 @@ export class AskSkipComponent implements OnInit, AfterViewInit, AfterViewChecked
       this._processingStatus[conversation.ID] = true;
       this.SelectedConversation = conversation;
       this.DataContextID = conversation.DataContextID;
+      this.DataContext = new DataContext();
+      await this.DataContext.LoadMetadata(this.DataContextID);
 
       const md = new Metadata();
       const rv = new RunView();

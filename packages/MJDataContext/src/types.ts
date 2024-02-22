@@ -745,7 +745,7 @@ export class DataContext {
                 }
                 // if we get here we've succeeded, so return the new data context
                 const newContextObject = new DataContext();
-                newContextObject.LoadMetadata(newContext.ID, contextUser);
+                await newContextObject.LoadMetadata(newContext.ID, contextUser);
                 return newContextObject;
             }
             else {
