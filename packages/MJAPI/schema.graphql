@@ -399,6 +399,7 @@ type Conversation_ {
   Description: String
   ExternalID: String
   ID: Int!
+  IsArchived: Boolean!
   LinkedEntity: String
   LinkedEntityID: Int
   LinkedRecordID: Int
@@ -558,6 +559,7 @@ input CreateConversationInput {
   DataContextID: Int
   Description: String
   ExternalID: String
+  IsArchived: Boolean!
   LinkedEntityID: Int
   LinkedRecordID: Int
   Name: String
@@ -4147,6 +4149,7 @@ input UpdateConversationInput {
   Description: String
   ExternalID: String
   ID: Int!
+  IsArchived: Boolean!
   LinkedEntityID: Int
   LinkedRecordID: Int
   Name: String

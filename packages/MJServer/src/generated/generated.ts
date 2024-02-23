@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/20/2024, 5:28:54 PM
+* GENERATED: 2/23/2024, 4:06:00 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -12658,6 +12658,9 @@ export class Conversation_ {
     @MaxLength(100)
     Type: string;
       
+    @Field(() => Boolean) 
+    IsArchived: boolean;
+      
     @Field(() => Int, {nullable: true}) 
     LinkedEntityID?: number;
       
@@ -12711,6 +12714,9 @@ export class CreateConversationInput {
     @Field()
     Type: string;
 
+    @Field(() => Boolean, )
+    IsArchived: boolean;
+
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
 
@@ -12744,6 +12750,9 @@ export class UpdateConversationInput {
 
     @Field()
     Type: string;
+
+    @Field(() => Boolean, )
+    IsArchived: boolean;
 
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;

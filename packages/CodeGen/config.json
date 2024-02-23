@@ -191,6 +191,15 @@
     ],
     "commands": [
         {
+            "workingDirectory": "../MJServer",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
             "workingDirectory": "../MJCoreEntities",
             "command": "npm",
             "args": [

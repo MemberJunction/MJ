@@ -8206,7 +8206,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Category(): string {  
             return this.Get('Category');
@@ -8745,7 +8744,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Category(): string {  
             return this.Get('Category');
@@ -8773,7 +8771,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get DataContext(): string {  
             return this.Get('DataContext');
@@ -10035,6 +10032,18 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set Type(value: string) {
             this.Set('Type', value);
+        }
+        /**
+        * * Field Name: IsArchived
+        * * Display Name: Is Archived
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get IsArchived(): boolean {  
+            return this.Get('IsArchived');
+        }
+        set IsArchived(value: boolean) {
+            this.Set('IsArchived', value);
         }
         /**
         * * Field Name: LinkedEntityID
@@ -12663,7 +12672,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Parent(): string {  
             return this.Get('Parent');
@@ -12780,7 +12788,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Parent(): string {  
             return this.Get('Parent');
@@ -12897,7 +12904,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Parent(): string {  
             return this.Get('Parent');
