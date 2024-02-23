@@ -1,26 +1,24 @@
-import { OpenAIEmbedding } from '@memberjunction/vectors';
-import { IndexModel, Pinecone, IndexList, Index, RecordMetadata, PineconeRecord, UpdateOptions, FetchResponse, CreateIndexOptions } from '@pinecone-database/pinecone';
-import { pineconeAPIKey, pineconeDefaultIndex } from '../config';
-import { Customer } from '../Types/Customer';
-import * as fs from 'fs';
-import { Account } from '../Types/Accounts';
+import { IndexModel, Pinecone, IndexList, Index, RecordMetadata, 
+    PineconeRecord, UpdateOptions, FetchResponse, CreateIndexOptions } from '@pinecone-database/pinecone';
+import { pineconeDefaultIndex } from '../config';
+import { IVectorDatabaseBase, IVectorIndexBase } from '@memberjunction/vectors';
+import { error } from 'console';
+import { RegisterClass } from '@memberjunction/global'
 
-export class PineconeDatabse extends OpenAIEmbedding {
+@RegisterClass(PineconeDatabase)
+export class PineconeDatabase implements IVectorDatabaseBase, IVectorIndexBase {
 
     static _pinecone: Pinecone;
-    static _indexCache: Map<string, Index<RecordMetadata>>;
-
-    constructor(){
-        super();
-        if(!PineconeDatabse._pinecone){
-            PineconeDatabse._pinecone = new Pinecone({
-                apiKey: pineconeAPIKey
+    
+    constructor(apiKey: string){
+        if(!PineconeDatabase._pinecone){
+            PineconeDatabase._pinecone = new Pinecone({
+                apiKey: apiKey
             });
         }
     }
 
-    get pinecone(): Pinecone { return PineconeDatabse._pinecone; }
-    get indexCache(): Map<string, Index<RecordMetadata>> {return PineconeDatabse._indexCache }
+    get pinecone(): Pinecone { return PineconeDatabase._pinecone; }
 
     public async getIndexDescription(indexName: string): Promise<IndexModel> {
         const description: IndexModel = await this.pinecone.describeIndex(indexName);
@@ -29,7 +27,10 @@ export class PineconeDatabse extends OpenAIEmbedding {
 
     public async getDefaultIndex(): Promise<Index<RecordMetadata>> {
         if(pineconeDefaultIndex){
-            return this.pinecone.Index(pineconeDefaultIndex);
+            let defaultIndex = this.pinecone.Index(pineconeDefaultIndex);
+            if(defaultIndex){
+                return defaultIndex;
+            }
         }
 
         const indexList = await this.listIndexes();
@@ -41,6 +42,8 @@ export class PineconeDatabse extends OpenAIEmbedding {
 
         return null;
     }
+
+    // Begin IVectorDatabaseBase implementation
 
     public async listIndexes(): Promise<IndexList> {
         const indexes: IndexList = await this.pinecone.listIndexes();
@@ -56,31 +59,6 @@ export class PineconeDatabse extends OpenAIEmbedding {
         return this.pinecone.Index<T>(name);
     }
 
-    public async UpsertRecord<T extends RecordMetadata>(record: PineconeRecord<T>): Promise<void> {
-        let records: PineconeRecord<T>[] = [record];
-        await this.UpsertRecords(records);
-    }
-
-    public async UpsertRecords<T extends RecordMetadata>(records: PineconeRecord<T>[]): Promise<void> {
-        const index = this.getIndex<T>();
-        await index.upsert(records);
-    }
-
-    public async UpdateRecord<T extends RecordMetadata>(data: UpdateOptions<T>): Promise<void> {
-        const index = this.getIndex();
-        index.update(data)
-    }
-
-    public async fetchRecord<T extends RecordMetadata>(id: string) {
-        return await this.fetchRecords<T>([id]);
-    }
-
-    public async fetchRecords<T extends RecordMetadata>(Ids: string[]) {
-        const index = this.getIndex<T>();
-        const fetchResult: FetchResponse<T> = await index.fetch(Ids);
-        return fetchResult;
-    }
-
     /**
      * @example
      * The minimum required configuration to create an index is the index `name`, `dimension`, and `spec`.
@@ -92,37 +70,61 @@ export class PineconeDatabse extends OpenAIEmbedding {
         await this.pinecone.createIndex(options);
     }
 
-    public async createIndexFromIndex(newIndexName: string, existingIndex: string, options?: CreateIndexOptions): Promise<void> {
-        const description: IndexModel = await this.getIndexDescription(existingIndex);
-
-        if(!description){
-            console.log("PineconeDatabse.createIndexFromIndex: No index return for name", existingIndex);
-            return;
-        }
-
-        const config: CreateIndexOptions = {
-            name: newIndexName,
-            dimension: options?.dimension || description.dimension,
-            spec: options?.spec || description.spec,
-            metric: options?.metric || description.metric,
-            waitUntilReady: options?.waitUntilReady || false,
-            suppressConflicts: options?.suppressConflicts || false,
-        };
-
-        await this.createIndex(config);
-    }
-
     public async deleteIndex(indexName: string): Promise<void> {
         await this.pinecone.deleteIndex(indexName);
     }
 
-    public getCustomerJSONData(): Customer[] {
-        const sampleData: Customer[] = JSON.parse(fs.readFileSync("./SampleData/Customers.json", "utf-8"));
-        return sampleData;
+    public async editIndex(indexID: any, options?: any): Promise<void> {
+       throw new error("Method not implemented");
     }
 
-    public getAccountJSONData(): Account[] {
-        const sampleData: Account[] = JSON.parse(fs.readFileSync("./SampleData/Accounts.json", "utf-8"));
-        return sampleData;
+    // End IVectorDatabaseBase implementation
+
+    // Begin IVectorIndexBase implementation
+
+    public async createRecord<T extends RecordMetadata>(record: PineconeRecord<T>, options?: any): Promise<void> {
+        let records: PineconeRecord<T>[] = [record];
+        await this.createRecords(records);
     }
+
+    public async createRecords<T extends RecordMetadata>(records: PineconeRecord<T>[], options?: any): Promise<void> {
+        const index = this.getIndex<T>();
+        await index.upsert(records);
+    }
+
+    public async getRecord<T extends RecordMetadata>(id: string, options?: any) {
+        return await this.getRecords<T>([id]);
+    }
+
+    public async getRecords<T extends RecordMetadata>(Ids: string[], options?: any) {
+        const index = this.getIndex<T>();
+        const fetchResult: FetchResponse<T> = await index.fetch(Ids);
+        return fetchResult;
+    }
+
+    public async updateRecord<T extends RecordMetadata>(data: UpdateOptions<T>, options?: any): Promise<void> {
+        const index = this.getIndex();
+        index.update(data)
+    }
+
+    public async updateRecords<T extends RecordMetadata>(data: UpdateOptions<T>[], options?: any): Promise<void> {
+        throw new Error("Method not implemented");
+    }
+
+    public async deleteRecord<T extends RecordMetadata>(id: string, options?: any): Promise<void> {
+        const index = this.getIndex<T>();
+        index.deleteOne(id);
+    }
+
+    public async deleteRecords<T extends RecordMetadata>(ids?: string[], options?: any): Promise<void> {
+        const index = this.getIndex<T>();
+        if(ids){
+            await index.deleteMany(ids);
+        }
+        else if(options){
+            index.deleteMany(options);
+        }
+    }
+
+    // End IVectorIndexBase implementation
 }

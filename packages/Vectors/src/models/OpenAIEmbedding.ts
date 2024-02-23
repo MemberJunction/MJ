@@ -1,10 +1,12 @@
 import OpenAI, { Configuration, OpenAIApi } from "openai";
-import { openAIAPIKey } from "../config";
-import { EmbeddingBase } from "../generic/EmbeddingBase";
+import { IEmbeddingBase } from "../generic/IEmbeddingBase";
+import { RegisterClass } from '@memberjunction/global'
 
-export class OpenAIEmbedding implements EmbeddingBase {
+@RegisterClass(OpenAIEmbedding)
+export class OpenAIEmbedding implements IEmbeddingBase {
     static _openAI: OpenAIApi;
-    constructor(){
+
+    constructor(openAIAPIKey: string){
         if(!OpenAIEmbedding._openAI){
             const config: OpenAI.Configuration = new Configuration({
                 apiKey: openAIAPIKey
@@ -13,12 +15,16 @@ export class OpenAIEmbedding implements EmbeddingBase {
         }
     }
 
-    get openAI(): OpenAIApi { return OpenAIEmbedding._openAI };
+    private get openAI(): OpenAIApi { return OpenAIEmbedding._openAI };
 
-    public async createEmbedding(text: string): Promise<OpenAI.CreateEmbeddingResponse> {
+    createBatchEmbedding(text: string[], options?: any) {
+        throw new Error("Method not implemented.");
+    }
+
+    public async createEmbedding(text: string, options?: any): Promise<OpenAI.CreateEmbeddingResponse> {
         try{
             const request: OpenAI.CreateEmbeddingRequest = {
-                model: EmbeddingModels.Ada002,
+                model: options?.model || EmbeddingModels.Ada002,
                 input: text
             }
 
@@ -27,7 +33,7 @@ export class OpenAIEmbedding implements EmbeddingBase {
             return data;
         }
         catch(error){
-            console.log("error creating embedding:", error);
+            console.log("error creating embedding:", error.response.data);
             return null;
         }
     }

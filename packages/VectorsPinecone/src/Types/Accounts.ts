@@ -1,6 +1,6 @@
 import { RecordMetadata } from "@pinecone-database/pinecone";
 
-export type Account = RecordMetadata & {
+export type Account = {
     ID: string;
     BCMID: string;
     Name: string;
