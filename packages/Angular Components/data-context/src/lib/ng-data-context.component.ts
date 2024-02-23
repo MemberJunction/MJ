@@ -32,7 +32,7 @@ export class DataContextComponent implements OnInit {
         { 
           EntityName: "Data Context Items", 
           ExtraFilter: `DataContextID=${dataContextId}`,
-          Fields: ["Type", "ViewID", "QueryID", "EntityID", "RecordID", "SQL"]
+          Fields: ["Type", "SQL", "ViewID", "QueryID", "EntityID", "RecordID"]
         });
       if(response.Success){
         this.dataContextItems = response.Results;

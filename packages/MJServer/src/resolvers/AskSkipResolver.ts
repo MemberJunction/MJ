@@ -7,11 +7,11 @@ import { LoadDataContextItemsServer } from '@memberjunction/data-context-server'
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
 import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo, SkipAPIRunScriptRequest } from '@memberjunction/skip-types';
-import axios from 'axios';
-import zlib from 'zlib';
-import { promisify } from 'util';
-// Convert zlib.gzip into a promise-returning function
-const gzip = promisify(zlib.gzip);
+// import axios from 'axios';
+// import zlib from 'zlib';
+// import { promisify } from 'util';
+// // Convert zlib.gzip into a promise-returning function
+// const gzip = promisify(zlib.gzip);
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
@@ -21,6 +21,7 @@ import { ___skipAPIOrgId, ___skipAPIurl, mj_core_schema } from '../config';
 
 import { registerEnumType } from "type-graphql";
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
+import { sendPostRequest } from '../util';
 
 
 enum SkipResponsePhase {
@@ -92,21 +93,25 @@ export class AskSkipResolver {
       queries: [], // not needed for this request
     };
 
-    LogStatus(`Sending request to Skip API: ${___skipAPIurl}`)
+    LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
 
-    // Convert JSON payload to a Buffer and compress it
-    const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
+    const response = await sendPostRequest(___skipAPIurl, input, true, null);
+    // // Convert JSON payload to a Buffer and compress it
+    // const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
 
     // Send the compressed payload with Axios
-    const response = await axios.post(___skipAPIurl, compressedPayload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Encoding': 'gzip'
-      }
-    });
+    // const response = await axios.post(___skipAPIurl, compressedPayload, {
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //     'Content-Encoding': 'gzip'
+    //   }
+    // });
 
-    if (response.status === 200) {
-      const apiResponse = <SkipAPIResponse>response.data;
+
+    if (response && response.length > 0) {
+      // the last object in the response array is the final response from the Skip API
+      const apiResponse = <SkipAPIResponse>response[response.length - 1];
+//      const apiResponse = <SkipAPIResponse>response.data;
       LogStatus(`  Skip API response: ${apiResponse.responsePhase}`)
       return {
         Success: true,
@@ -157,15 +162,6 @@ export class AskSkipResolver {
                     entities: this.BuildSkipEntities(),
                     queries: this.BuildSkipQueries(),
                   };
-
-    pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-      message: JSON.stringify({
-        type: 'AskSkip',
-        status: 'OK',
-        message: 'I will be happy to help and will start by analyzing your request...',
-      }),
-      sessionId: userPayload.sessionId,
-    });
 
     return this.HandleSkipRequest(input, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity, dataContext, dataContextEntity);
   }
@@ -441,21 +437,35 @@ export class AskSkipResolver {
                                     ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, md: Metadata, 
                                     convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity,
                                     dataContext: DataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
-    LogStatus(`Sending request to Skip API: ${___skipAPIurl}`)
+    LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
 
-    // Convert JSON payload to a Buffer and compress it
-    const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
-
-    // Send the compressed payload with Axios
-    const response = await axios.post(___skipAPIurl, compressedPayload, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Encoding': 'gzip'
-      }
+    const response = await sendPostRequest(___skipAPIurl, input, true, null, (message) => {
+      if (message.type==='status_update')
+        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+          message: JSON.stringify({
+            type: 'AskSkip',
+            status: 'OK',
+            message: message.value.messages[0].content
+          }),
+          sessionId: userPayload.sessionId,
+        });
     });
 
-    if (response.status === 200) {
-      const apiResponse = <SkipAPIResponse>response.data;
+    // // Convert JSON payload to a Buffer and compress it
+    // const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
+
+    // // Send the compressed payload with Axios
+    // const response = await axios.post(___skipAPIurl, compressedPayload, {
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //     'Content-Encoding': 'gzip'
+    //   }
+    // });
+
+    if (response && response.length > 0) { // response.status === 200) {
+      // the last object in the response array is the final response from the Skip API
+      const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
+      //const apiResponse = <SkipAPIResponse>response.data;
       LogStatus(`  Skip API response: ${apiResponse.responsePhase}`)
       this.PublishApiResponseUserUpdateMessage(apiResponse, userPayload, pubSub);
 
@@ -507,7 +517,8 @@ export class AskSkipResolver {
         sUserMessage = 'I have completed the analysis, the results will be available momentarily.';
         break;
       case 'clarifying_question':
-        sUserMessage = 'I have a clarifying question for you, please see review our chat so you can provide me a little more info.';
+        // don't send an update because the actual message will happen and show up in the UI, so this is redundant
+        //sUserMessage = 'I have a clarifying question for you, please see review our chat so you can provide me a little more info.';
         break;
     }
 

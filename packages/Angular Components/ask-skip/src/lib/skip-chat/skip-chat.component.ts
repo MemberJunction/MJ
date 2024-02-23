@@ -1,4 +1,4 @@
-import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input } from '@angular/core';
+import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { LogError, Metadata, RunQuery, RunView, UserInfo } from '@memberjunction/core';
@@ -37,15 +37,46 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   public SelectedConversationUser: UserInfo | undefined;
   public DataContext!: DataContext;
 
-  public WaitingMessage: string = "";
+  private _messageInProgress: boolean = false;
+  private _temporaryMessage: ConversationDetailEntity | undefined;
 
+  /**
+   * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
+   */
+  @Input() public UpdateAppRoute: boolean = true;
+
+  @ViewChild(Container, { static: true }) askSkip!: Container;
+  @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
+  @ViewChild('conversationList', { static: false }) conversationList!: ListViewComponent ;
+
+  @ViewChild('AskSkipInput') askSkipInput: any;
+  @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
+  showScrollToBottomIcon = false;
+
+  constructor(
+    public sharedService: SharedService,
+    private renderer: Renderer2,
+    private route: ActivatedRoute,
+    private location: Location,
+    private cdRef: ChangeDetectorRef
+  ) {}
+
+  private paramsSubscription!: Subscription;
+  ngOnInit() {
+      this.SubscribeToNotifications();
+  }
+
+  
   protected SubscribeToNotifications() {
     try {
       MJGlobal.Instance.GetEventListener().subscribe( (event: MJEvent) => {
         if (event.event === MJEventType.ComponentEvent) {
           const obj = event.args;
           if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
-            this.WaitingMessage = obj.message;
+            if (this._messageInProgress) {
+              // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
+              this.SetSkipStatusMessage(obj.message);
+            }
           }
           console.log(obj);
         }
@@ -53,6 +84,39 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
     catch (e) {
       LogError(e);
+    }
+  }
+
+  public getMessageRowCssClass(detail: ConversationDetailEntity): string {
+    if (detail.Role.trim().toLowerCase() === 'ai') {
+      if (detail.ID > 0)
+        return 'ai-message';
+      else
+        return 'ai-message-in-progress';
+    }
+    else if (detail.Role.trim().toLowerCase() === 'error') {
+      return 'error-message';
+    }
+    else 
+      return 'user-message';
+  }
+
+  protected SetSkipStatusMessage(message: string) {
+    if (message && message.length > 0) {
+      if (!this._temporaryMessage)  {
+        this._temporaryMessage = <ConversationDetailEntity><any>{ID: -1, Message: message, Role: 'ai'}; // create a new object
+        this.Messages.push(this._temporaryMessage);
+      }
+      else {
+        this._temporaryMessage.Message = message;
+      }  
+    }
+    else {
+      if (this._temporaryMessage) {
+        // get rid of the temporary message
+        this.Messages = this.Messages.filter(m => m.ID !== this._temporaryMessage?.ID);
+        this._temporaryMessage = undefined;
+      }
     }
   }
   
@@ -73,30 +137,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
  
 
-  /**
-   * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
-   */
-  @Input() public UpdateAppRoute: boolean = true;
-
-  @ViewChild(Container, { static: true }) askSkip!: Container;
-  @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
-  @ViewChild('conversationList', { static: false }) conversationList!: ListViewComponent ;
-
-  @ViewChild('AskSkipInput') askSkipInput: any;
-  @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
-  showScrollToBottomIcon = false;
-
-  constructor(
-    public sharedService: SharedService,
-    private renderer: Renderer2,
-    private route: ActivatedRoute,
-    private location: Location
-  ) {}
-
-  private paramsSubscription!: Subscription;
-  ngOnInit() {
-      this.SubscribeToNotifications();
-  }
 
   public get LinkedEntityID(): number | null {
     if (this.LinkedEntity && this.LinkedEntity.length > 0) {
@@ -324,14 +364,36 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
+  private static _startMessages = [
+    "On it, let me get back to you in a moment with the results!🤖",
+    "I'm on it, just a moment! 🙂",
+    "I'll get started in a jiffy!",
+    "You betcha, I'd love to help, give me a moment!",
+    "I understand, I'll start running in that direction 👟",
+    "No problem, I'll get started right away!",
+    "Ok, heard loud and clear, I'll jump right on it! 👂",
+    "Aye aye captain, I'll get started right away! ⚓"      
+  ]
+  private _usedStartMessages: string[] = [];
+  private pickSkipStartMessage() {
+    // goal here is to randomly select one of the above _startMessages, however we want to track for our instance of the class the ones we use so that we don't reuse any of them until we use them all
+    if (this._usedStartMessages.length === SkipChatComponent._startMessages.length) {
+      this._usedStartMessages = []; // reset the used messages
+    }
+    let idx = -1;
+    do {
+      idx = Math.floor(Math.random() * SkipChatComponent._startMessages.length);
+    } while (this._usedStartMessages.indexOf(SkipChatComponent._startMessages[idx]) >= 0);
+    this._usedStartMessages.push(SkipChatComponent._startMessages[idx]);
+    return SkipChatComponent._startMessages[idx];
+  }
   async sendSkipMessage() {
     const val = this.askSkipInput.nativeElement.value;
     if (val && val.length > 0) {
-      this.WaitingMessage = "Please wait while I process your request...";
       const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
       if (this.SelectedConversation)
         this._processingStatus[this.SelectedConversation?.ID] = true;
-  
+      this._messageInProgress = true;
       this.AllowSend = false;
       const md = new Metadata();
       const convoDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
@@ -340,13 +402,18 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       convoDetail.Role = 'user';
       this.Messages.push(convoDetail); // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server
 
+      this.SetSkipStatusMessage(this.pickSkipStartMessage());
+
       this.askSkipInput.nativeElement.value = '';
       this.resizeTextInput();
 
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       const graphQLRawResult = await this.ExecuteAskSkipQuery(val, await this.GetCreateDataContextID(), this.SelectedConversation);
       const skipResult = <MJAPISkipResult>graphQLRawResult?.ExecuteAskSkipAnalysisQuery;
+      // temporarily ask Angular to stop its change detection as many of the ops below are slow and async, we don't want flicker in the UI as stuff happens
+      this.cdRef.detach();
       if (skipResult?.Success) {
+
         if (convoID !== this.SelectedConversation?.ID) {
           // this scenario arises when we have a selected convo change after we submitted our request to skip
           // so we do nothing here other than update the status. 
@@ -389,15 +456,20 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         errorMessage.Role = 'error';
         errorMessage.Message = 'Error took place';
         this.Messages.push(errorMessage);
-        this.AllowSend = true;
       }
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       if (this.SelectedConversation)
         this._processingStatus[this.SelectedConversation?.ID] = false;
-      this.AllowSend = true;
 
+      this.AllowSend = true;
+      this._messageInProgress =false;
+
+      this.SetSkipStatusMessage('');
+      // now tell Angular to resume its change detection
+      this.cdRef.reattach();
+      this.cdRef.detectChanges();
       // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
-      this.sharedService.InvokeManualResize(500);
+      this.sharedService.InvokeManualResize(15);      
     }
   } 
 
@@ -426,23 +498,29 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   protected createSkipResponseHtml(detail: ConversationDetailEntity): string {
     let sMessage = '';
-    const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
+    if (detail.ID > 0) {
+      const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
 
-    if (resultObject.success) {
-      switch (resultObject.responsePhase) {
-        case SkipResponsePhase.clarifying_question:
-          const clarifyingQuestion = <SkipAPIClarifyingQuestionResponse>resultObject;
-          sMessage = clarifyingQuestion.clarifyingQuestion;
-          break;
-        case SkipResponsePhase.analysis_complete:
-          sMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
-          const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
-          this.addReportToConversation(detail, analysisResult, detail.ID);
-          break;
+      if (resultObject.success) {
+        switch (resultObject.responsePhase) {
+          case SkipResponsePhase.clarifying_question:
+            const clarifyingQuestion = <SkipAPIClarifyingQuestionResponse>resultObject;
+            sMessage = clarifyingQuestion.clarifyingQuestion;
+            break;
+          case SkipResponsePhase.analysis_complete:
+            sMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
+            const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
+            this.addReportToConversation(detail, analysisResult, detail.ID);
+            break;
+        }
       }
+      else {
+        sMessage = `I'm having a problem handling the request. If you'd like to try again, please let me know. Also, if this problem persists, please let your administrator know.`;
+      }  
     }
     else {
-      sMessage = `I'm having a problem handling the request. If you'd like to try again, please let me know. Also, if this problem persists, please let your administrator know.`;
+      // this is a temporary message with just a string in it, don't attempt to JSON parse it
+      return detail.Message;
     }
     return sMessage;
   }

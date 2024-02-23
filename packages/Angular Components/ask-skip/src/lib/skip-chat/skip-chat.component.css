@@ -94,9 +94,13 @@
 .error-message {
     background-color:lightpink;
 }
-/* .ai-message {
-  background-color:rgba(0, 0, 0, 0.05);
-} */
+.ai-message {
+  background-color: white;
+}
+.ai-message-in-progress {
+    font-style: italic;
+}
+
 .message-user-name {
     font-weight: 600;
     margin-top: 0px;
@@ -216,15 +220,8 @@
     position: absolute;
     display: flex; /* Use flexbox layout */
     bottom: 100px;
-    height: 60px; /* Specify a height, or it will be as tall as its content */
-    width: 24rem;
-    border: solid 1px olivedrab;
-    @media (min-width: 1280px) {
-        max-width: 48rem;
-    }
     z-index: 999;
-    left: 50%; /* Start at the exact horizontal center */
-    transform: translateX(-50%); /* Shift it back by half its width to center it */
+    left: 10px; 
 }
   
 .scroll-to-bottom-icon {

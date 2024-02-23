@@ -62,8 +62,10 @@ export class SharedService {
               }
             }
             else {
-              // otherwise just post it as a simple notification
-              this.CreateSimpleNotification(statusObj.message, "success", 2500)
+              // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
+              if (statusObj.type?.trim().toLowerCase() !== 'askskip')  {
+                this.CreateSimpleNotification(statusObj.message, "success", 2500)
+              }
             }
           });
           break;

@@ -627,7 +627,10 @@ export class DataContext {
                     dciEntity.DataJSON = JSON.stringify(item.Data); 
                 else
                     dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
-                await dciEntity.Save();
+
+                if (await dciEntity.Save()) {
+                    item.DataContextItemID = dciEntity.ID;
+                }
             }          
         }   
         catch (e) {

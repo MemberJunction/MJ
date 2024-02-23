@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-query-grid",
-  "version": "0.9.25",
+  "version": "0.9.26",
   "description": "MemberJunction: Angular Grid to display any MemberJunction Query",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -32,7 +32,7 @@
     "@memberjunction/global": "^0.9.135",
     "@memberjunction/core": "^0.9.148",
     "@memberjunction/ng-container-directives": "^0.9.115",
-    "@memberjunction/ng-shared": "^0.9.8",
+    "@memberjunction/ng-shared": "^0.9.9",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

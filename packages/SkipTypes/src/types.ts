@@ -262,6 +262,7 @@ export class SkipAPIRunScriptRequest extends SkipAPIRequest {
  * * analysis_complete: The Skip API server has completed the analysis and is providing the results - typecast the response to SkipAPIAnalysisCompleteResponse for all of the additional properties that are available in this response phase
  */
 export const SkipResponsePhase = {
+    status_update: "status_update",
     clarifying_question: "clarifying_question",
     data_request: "data_request",
     analysis_complete: "analysis_complete"
