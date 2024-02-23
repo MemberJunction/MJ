@@ -68,7 +68,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   private _pendingRecords: GridPendingRecordItem[] = [];
 
-  public viewData: [] = [];
+  public viewData: any[] = [];
   public totalRowCount: number = 0;
   public formattedData: { [key: string]: any }[] = [];
   public viewColumns: ViewColumnInfo[] = [];

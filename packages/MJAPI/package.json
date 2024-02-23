@@ -25,10 +25,10 @@
   },
   "dependencies": {
     "@memberjunction/ai": "^0.9.136",
-    "@memberjunction/core": "^0.9.147",
+    "@memberjunction/core": "^0.9.148",
     "@memberjunction/global": "^0.9.135",
-    "@memberjunction/server": "^0.9.183",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.158",
+    "@memberjunction/server": "^0.9.184",
+    "@memberjunction/sqlserver-dataprovider": "^0.9.159",
     "axios": "^1.5.1",
     "class-validator": "^0.14.0",
     "mj_generatedentities": "file:../GeneratedEntities",

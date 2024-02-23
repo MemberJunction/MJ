@@ -10,6 +10,7 @@
 .conversation-wrapper {
     display: flex;
     flex-direction: column;
+    position: relative; /* Add this line if the wrapper needs to be a reference point */
 }
 
 .new-conversation {
@@ -212,18 +213,34 @@
 }
 
 .waiting-for-ai {
+    position: absolute;
     display: flex; /* Use flexbox layout */
-    justify-content: center; /* Center align horizontally */
-    align-items: center; /* Center align vertically if needed */
-    margin-top: 5px;
-    margin-bottom: 5px;
+    bottom: 100px;
     height: 60px; /* Specify a height, or it will be as tall as its content */
     width: 24rem;
     border: solid 1px olivedrab;
-    background-color: lightblue;
     @media (min-width: 1280px) {
         max-width: 48rem;
     }
-    border-radius: 10%;
+    z-index: 999;
+    left: 50%; /* Start at the exact horizontal center */
+    transform: translateX(-50%); /* Shift it back by half its width to center it */
 }
   
+.scroll-to-bottom-icon {
+    position: absolute;
+    bottom: 100px; /* Adjust as needed to position away from the bottom edge */
+    left: 50%; /* Start at the exact horizontal center */
+    transform: translateX(-50%); /* Shift it back by half its width to center it */
+    z-index: 1000; /* Ensure it stays on top */
+    background-color: white; /* Circle background color - adjust as needed */
+    color: black; /* Icon color - adjust as needed */
+    border-radius: 50%; /* Makes the background a circle */
+    width: 40px; /* Circle size - adjust as needed */
+    height: 40px; /* Circle size - adjust as needed */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Optional: Adds a subtle shadow for better visibility */
+    cursor: pointer;
+}

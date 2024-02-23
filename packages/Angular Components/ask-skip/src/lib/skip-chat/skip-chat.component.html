@@ -32,7 +32,7 @@
         </kendo-listview>
     </div>
     <div class="conversation-wrapper" mjFillContainer>
-        <div #AskSkipPanel class="messages" mjContainer>
+        <div #AskSkipPanel class="messages" mjContainer #scrollContainer (scroll)="checkScroll()">
             <div *ngFor="let message of Messages">  
                 <div class="message-row" [ngClass]="message.Role.trim().toLowerCase() === 'ai' ? 'ai-message' : message.Role.trim().toLowerCase() === 'error' ? 'error-message' : 'user-message'" >
                     <div class="message-image">
@@ -44,7 +44,8 @@
                     </div>
                 </div>
             </div>
-            <div class="waiting-for-ai" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
+            <span class="scroll-to-bottom-icon" *ngIf="showScrollToBottomIcon" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
+            <div class="waiting-for-ai message-row" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
                 <div class="waiting-for-ai-message">{{this.WaitingMessage}}</div>
                 <kendo-loader></kendo-loader>
             </div>

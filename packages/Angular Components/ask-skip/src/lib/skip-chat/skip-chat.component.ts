@@ -83,6 +83,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @ViewChild('conversationList', { static: false }) conversationList!: ListViewComponent ;
 
   @ViewChild('AskSkipInput') askSkipInput: any;
+  @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
+  showScrollToBottomIcon = false;
 
   constructor(
     public sharedService: SharedService,
@@ -128,6 +130,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         }
       }
     });
+    this.checkScroll();
   } 
 
   private _scrollToBottom: boolean = false;
@@ -159,7 +162,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
       this.CreateNewConversation();
-      this.sharedService.InvokeManualResize();
+      this.sharedService.InvokeManualResize(1);
     }
     else if (conversationIdToLoad) {
       // we have > 0 convos and we were asked to load a specific one
@@ -444,6 +447,15 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     return sMessage;
   }
 
+  checkScroll() {
+    if (this.scrollContainer) {
+      const element = this.scrollContainer.nativeElement;
+      const atBottom = element.scrollHeight - element.scrollTop === element.clientHeight;
+      
+      this.showScrollToBottomIcon = !atBottom;  
+    }
+  }
+
   scrollToBottom(): void {
     try {
       this.askSkipPanel.nativeElement.scrollTop = this.askSkipPanel.nativeElement.scrollHeight;
@@ -451,6 +463,13 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
     }
   }
+
+  scrollToBottomAnimate() {
+    if (this.scrollContainer) {
+      const element = this.scrollContainer.nativeElement;
+      element.scroll({ top: element.scrollHeight, behavior: 'smooth' });  
+    }
+  }  
 
   protected addReportToConversation(detail: ConversationDetailEntity, analysisResult: SkipAPIAnalysisCompleteResponse, messageId: number) {
     // set a short timeout to allow Angular to render as the div we want to add the grid to won't exist yet otherwise

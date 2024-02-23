@@ -90,7 +90,9 @@
     >
         <mj-dynamic-grid *ngIf="!IsChart" 
                         #theGrid [SkipData]="SkipData"
-                        [fillContainer]="false"></mj-dynamic-grid>  
+                        [fillContainer]="false"
+                        style="max-height: 500px;"
+                        ></mj-dynamic-grid>  
     </kendo-expansionpanel>
     <kendo-expansionpanel
         *ngIf="SkipData?.analysis" 
