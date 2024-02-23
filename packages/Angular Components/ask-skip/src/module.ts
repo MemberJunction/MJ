@@ -1,8 +1,22 @@
+/*********************************************/
+// ANGULAR
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { OverlayModule } from '@angular/cdk/overlay';
 
+/*********************************************/
+// Plotly
+import { PlotlyViaCDNModule } from 'angular-plotly.js';
+PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
+PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
+
+/*********************************************/
+// Markdown
+import { MarkdownModule } from 'ngx-markdown';
+
+/*********************************************/
 // Kendo UI Angular imports
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
@@ -16,28 +30,29 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { GridModule } from '@progress/kendo-angular-grid';
 
+/*********************************************/
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-
-// Local Components 
-import { AskSkipComponent } from './lib/ask-skip/ask-skip.component' 
-import { SkipDynamicReportComponent } from './lib/misc/skip-dynamic-report-wrapper'; 
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared'; 
+import { DataContextModule } from '@memberjunction/ng-data-context';
+
+/*********************************************/
+// Local Components 
+import { SkipChatComponent } from './lib/skip-chat/skip-chat.component' 
+import { SkipDynamicReportComponent } from './lib/misc/skip-dynamic-report-wrapper'; 
 import { DynamicReportComponent } from './lib/misc/dynamic-report';
 import { DynamicChartComponent } from './lib/misc/dynamic-chart';
 import { DynamicGridComponent } from './lib/misc/dynamic-grid';
-
-import { PlotlyViaCDNModule } from 'angular-plotly.js';
-
-
-PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
-PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or 'basic', 'cartesian', 'geo', 'gl3d', 'gl2d', 'mapbox' or 'finance'
+import { SkipButtonComponent } from './lib/skip-button/skip-button.component';
+import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
 
 
 @NgModule({
   declarations: [ 
     SkipDynamicReportComponent,
-    AskSkipComponent,
+    SkipChatComponent,
+    SkipButtonComponent,
+    SkipWindowComponent,
     DynamicReportComponent,
     DynamicChartComponent,
     DynamicGridComponent
@@ -66,11 +81,16 @@ PlotlyViaCDNModule.setPlotlyBundle(null); // optional: can be null (for full) or
     DropDownsModule,
     MemberJunctionSharedModule,
     GridModule,
-    PlotlyViaCDNModule
+    PlotlyViaCDNModule,
+    DataContextModule,
+    OverlayModule,
+    MarkdownModule.forRoot(),
   ],
   exports: [
     SkipDynamicReportComponent,
-    AskSkipComponent,
+    SkipChatComponent,
+    SkipButtonComponent,
+    SkipWindowComponent,
     DynamicChartComponent,
     DynamicGridComponent,
     DynamicReportComponent 

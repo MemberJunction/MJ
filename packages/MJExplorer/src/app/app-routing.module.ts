@@ -12,7 +12,7 @@ import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponen
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core';
-import { AskSkipComponent} from '@memberjunction/ng-ask-skip'
+import { SkipChatComponent} from '@memberjunction/ng-ask-skip'
 import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared'
 
 
@@ -87,8 +87,8 @@ export class ResourceResolver implements Resolve<void> {
 const routes: Routes = [
   { path: '', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },  
-  { path: 'askskip', component: AskSkipComponent, canActivate: [AuthGuard] },
-  { path: 'askskip/:conversationId', component: AskSkipComponent, canActivate: [AuthGuard] },
+  { path: 'askskip', component: SkipChatComponent, canActivate: [AuthGuard] },
+  { path: 'askskip/:conversationId', component: SkipChatComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  

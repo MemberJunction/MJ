@@ -1,5 +1,3 @@
-import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { DataContext } from '@memberjunction/data-context';
 
 /**
@@ -106,16 +104,18 @@ export class SkipColumnInfo {
  * * clarify_question_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'clarifying_question' - in this situation, the MJAPI server needs to communicate with the UI to ask the follow up question to the user. When you have that feedback from the user gathered and are providing the response to the clarifying question back to Skip API, use this requestPhase
  * * data_gathering_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'data_request' - in this situation, the MJAPI server needs to process the data request, gather whatever additional data the Skip API has asked for, and then return it in the dataContext property of the SkipAPIRequest object. When you are finished gathering data and returning it to the Skip API server, use this requestPhase
  * * data_gathering_failure: When you send an API request to the Skip API server saying there was a data_gathering_failure that means that you attempted to retrieve data Skip requested but there was (typically) an error in the SQL statement that Skip generated and it needs to be regenerated. The MJAPI server code handles this scenario automatically.
+ * * run_existing_script: Use this to run an existing script that was already processed. When this option is used, the script provided is run and the results are provided in the response.
  */
 export const SkipRequestPhase = {
     initial_request: 'initial_request',
     clarify_question_response: 'clarify_question_response',
     data_gathering_response: 'data_gathering_response',
-    data_gathering_failure: 'data_gathering_failure'
+    data_gathering_failure: 'data_gathering_failure',
+    run_existing_script: 'run_existing_script'
 } as const;
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
-export class SkipFieldInfo {
+export class SkipEntityFieldInfo {
     entityID: number;
     sequence: number;
     name: string;
@@ -166,9 +166,49 @@ export class SkipEntityInfo {
     description?: string;
     schemaName!: string;
     baseView!: string;
-    fields: SkipFieldInfo[] =[];
+    fields: SkipEntityFieldInfo[] =[];
     relatedEntities: SkipEntityRelationshipInfo[] = [];
 }
+
+export class SkipQueryInfo {
+    id: number;
+    name: string;
+    description: string;
+    categoryID: number;
+    sql: string;
+    originalSQL: string;
+    feedback: string;
+    status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    qualityRank: number;
+    createdAt: Date;
+    updatedAt: Date;
+    category: string;
+    fields: SkipQueryFieldInfo[];
+}
+export class SkipQueryFieldInfo {
+    name: string;
+    queryID: number;
+    description: string;
+    sequence: number;
+    /**
+     * The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn't include type parameters. The SQLFullType field provides that information.
+     */
+    sqlBaseType: string;
+    /**
+     * The full SQL type for the field, for example datetime or nvarchar(10) etc.
+     */
+    sqlFullType: string;
+    sourceEntityID: number;
+    sourceFieldName: string;
+    isComputed: boolean;
+    computationDescription: string;
+    isSummary: boolean;
+    summaryDescription: string;
+    createdAt: Date;
+    updatedAt: Date;
+    sourceEntity: string;
+}
+
 /**
  * Defines the shape of the data that is expected by the Skip API Server when making a request
  */
@@ -188,6 +228,11 @@ export class SkipAPIRequest {
      */
     entities: SkipEntityInfo[];
     /**
+     * 
+     */
+    queries: SkipQueryInfo[];
+
+    /**
      * The conversation ID
      */
     conversationID: string;
@@ -202,6 +247,12 @@ export class SkipAPIRequest {
     requestPhase: SkipRequestPhase;
 }
 
+export class SkipAPIRunScriptRequest extends SkipAPIRequest {
+    /**
+     * The script text to run
+     */
+    scriptText: string;
+}
 
 /**
  * Describes the different response phases that are used by the Skip API Server to respond back to the caller (usually the MJAPI server but can be anyone)

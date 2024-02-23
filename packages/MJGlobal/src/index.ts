@@ -5,6 +5,7 @@ import { ClassFactory, ClassRegistration } from './ClassFactory'
 
 export { ClassFactory, ClassRegistration } from './ClassFactory'
 export * from './interface'
+export * from './util'
 
 /**
  * Global class used for coordinating events and components across MemberJunction

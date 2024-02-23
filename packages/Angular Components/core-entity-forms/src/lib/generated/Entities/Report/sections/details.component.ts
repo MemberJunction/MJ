@@ -19,6 +19,10 @@ import { ReportEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Description"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Category ID</label>
+            <kendo-numerictextbox [(value)]="record.CategoryID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
             <kendo-numerictextbox [(value)]="record.UserID" ></kendo-numerictextbox>   
         </div>               
@@ -35,12 +39,12 @@ import { ReportEntity } from '@memberjunction/core-entities';
             <kendo-numerictextbox [(value)]="record.ConversationDetailID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
-            <label class="fieldLabel">Report SQL</label>
-            <kendo-textbox [(ngModel)]="record.ReportSQL"  />   
+            <label class="fieldLabel">Data Context ID</label>
+            <kendo-numerictextbox [(value)]="record.DataContextID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
-            <label class="fieldLabel">Report Configuration</label>
-            <kendo-textbox [(ngModel)]="record.ReportConfiguration"  />   
+            <label class="fieldLabel">Configuration</label>
+            <kendo-textbox [(ngModel)]="record.Configuration"  />   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Trigger Type ID</label>
@@ -79,12 +83,20 @@ import { ReportEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Category</label>
+            <span >{{FormatValue('Category', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Conversation</label>
             <span >{{FormatValue('Conversation', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Data Context</label>
+            <span >{{FormatValue('DataContext', 0)}}</span>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Trigger Type</label>
@@ -114,6 +126,10 @@ import { ReportEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('Description', 0)}}</span>
         </div>              
         <div class="record-form-row">
+            <label class="fieldLabel">Category ID</label>
+            <span mjFieldLink [record]="record" fieldName="CategoryID" >{{FormatValue('CategoryID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
             <span mjFieldLink [record]="record" fieldName="UserID" >{{FormatValue('UserID', 0)}}</span>
         </div>              
@@ -130,12 +146,12 @@ import { ReportEntity } from '@memberjunction/core-entities';
             <span mjFieldLink [record]="record" fieldName="ConversationDetailID" >{{FormatValue('ConversationDetailID', 0)}}</span>
         </div>              
         <div class="record-form-row">
-            <label class="fieldLabel">Report SQL</label>
-            <span >{{FormatValue('ReportSQL', 0)}}</span>
+            <label class="fieldLabel">Data Context ID</label>
+            <span mjFieldLink [record]="record" fieldName="DataContextID" >{{FormatValue('DataContextID', 0)}}</span>
         </div>              
         <div class="record-form-row">
-            <label class="fieldLabel">Report Configuration</label>
-            <span >{{FormatValue('ReportConfiguration', 0)}}</span>
+            <label class="fieldLabel">Configuration</label>
+            <span >{{FormatValue('Configuration', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Output Trigger Type ID</label>
@@ -174,12 +190,20 @@ import { ReportEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
         </div>              
         <div class="record-form-row">
+            <label class="fieldLabel">Category</label>
+            <span >{{FormatValue('Category', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Conversation</label>
             <span >{{FormatValue('Conversation', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Data Context</label>
+            <span >{{FormatValue('DataContext', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Output Trigger Type</label>

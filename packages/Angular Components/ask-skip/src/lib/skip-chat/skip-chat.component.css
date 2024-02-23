@@ -3,6 +3,14 @@
     display: flex;
     flex-direction: row;
     height: 100%;
+    font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-size: 1rem;
+}
+
+.conversation-wrapper {
+    display: flex;
+    flex-direction: column;
+    position: relative; /* Add this line if the wrapper needs to be a reference point */
 }
 
 .new-conversation {
@@ -47,26 +55,31 @@
     margin-bottom: 5px;
 
     margin-top: 2px; /* align it with the top of converation history exactly*/
+
+    flex: 1;
 }
 
 .message-row {
     display: flex;
     align-items: start; /* if you want to align them at the top */
-    border-bottom: solid 1px rgba(0, 0, 0, 0.08);
+    /* border-bottom: solid 1px rgba(0, 0, 0, 0.08); */
+    justify-content: center; /* Center align horizontally */
+   
     padding: 10px;
-    overflow-y: hidden;
-    overflow-y: auto;
-    max-height: 300px;
 }
 
 .message {
     word-wrap: break-word;
     width: 100%;
     margin-right: 20px;
+    padding-bottom: 25px;
+    @media (min-width: 1280px) {
+        max-width: 48rem;
+    }
 }
 .message-image {
-    max-width: 45px;
-    max-height: 45px;
+    max-width: 24px;
+    max-height: 24px;
     margin-right: 10px;
     margin-left: 5px;
     margin-bottom: 10px;
@@ -77,14 +90,19 @@
 }
 .user-message {
   background-color: white;
-  align-self: flex-start; /* align user messages to the left */
 }
 .error-message {
     background-color:lightpink;
 }
-.ai-message {
+/* .ai-message {
   background-color:rgba(0, 0, 0, 0.05);
-  align-self: flex-end; /* align AI messages to the right */
+} */
+.message-user-name {
+    font-weight: 600;
+    margin-top: 0px;
+    margin-bottom: 10px;
+    padding-bottom: 7px;
+    height: .5rem;
 }
 
 
@@ -157,7 +175,7 @@
 
 
 .input-area {
-    height: 49px;
+    min-height: 35px;
     display: flex;
     align-items: center;
     margin-bottom: 20px;
@@ -165,25 +183,64 @@
 
 .input-area > button {
     vertical-align: top;
-    width: 100px;
-    height: 40px;
-    font-size: large;
+    width: 30px;
+    height: 30px;
     margin-top: 3px;
-    margin-left: 1px;
+    margin-left: -45px;
 }
 
 .input-area > textarea {
     padding: 3px;
     border: solid 1px rgba(0, 0, 0, 0.08) ;
     margin-top: 4px;
-    margin-right: 5px;
+    margin-right: -1px;
     height: 42px;
-    font-size: large;
     resize: none;
-    flex: 1;  /* Take up remaining space */
+
+    min-height: 20px; /* Initial height */
+    max-height: 100%; /* Prevent it from growing beyond the container */
+    overflow-y: hidden; /* Hide scrollbar */
+
+    width: 100%;    
+
+    font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-size: 1rem;
 } 
 
 .input-wrapper {
     flex-grow: 1; /* This will make the input-wrapper take the remaining space */
     height: 100%;
+}
+
+.waiting-for-ai {
+    position: absolute;
+    display: flex; /* Use flexbox layout */
+    bottom: 100px;
+    height: 60px; /* Specify a height, or it will be as tall as its content */
+    width: 24rem;
+    border: solid 1px olivedrab;
+    @media (min-width: 1280px) {
+        max-width: 48rem;
+    }
+    z-index: 999;
+    left: 50%; /* Start at the exact horizontal center */
+    transform: translateX(-50%); /* Shift it back by half its width to center it */
+}
+  
+.scroll-to-bottom-icon {
+    position: absolute;
+    bottom: 100px; /* Adjust as needed to position away from the bottom edge */
+    left: 50%; /* Start at the exact horizontal center */
+    transform: translateX(-50%); /* Shift it back by half its width to center it */
+    z-index: 1000; /* Ensure it stays on top */
+    background-color: white; /* Circle background color - adjust as needed */
+    color: black; /* Icon color - adjust as needed */
+    border-radius: 50%; /* Makes the background a circle */
+    width: 40px; /* Circle size - adjust as needed */
+    height: 40px; /* Circle size - adjust as needed */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Optional: Adds a subtle shadow for better visibility */
+    cursor: pointer;
 }

@@ -68,7 +68,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   private _pendingRecords: GridPendingRecordItem[] = [];
 
-  public viewData: [] = [];
+  public viewData: any[] = [];
   public totalRowCount: number = 0;
   public formattedData: { [key: string]: any }[] = [];
   public viewColumns: ViewColumnInfo[] = [];
@@ -647,7 +647,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         this.virtualLoadData();
         
       }
-      this.DataContextID = await this.GetDataContextID(); // refresh data context id as needed
 
       this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
       this.isLoading = false
@@ -817,105 +816,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     else  
       throw new Error("Unable to get export data");    
   }
-
-  public DataContextID: number = 0;
-  protected async GetDataContextID(): Promise<number> {
-    // temporary hack for now, we will have more functionality to do robust UX around DataCOntext viewing and editing soon
-    // and get rid of this
-    if (!this.DataContextID) {
-      // need to create a data context with a single item for this view
-      if (this._viewEntity?.ID) {
-        const md = new Metadata();
-        const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
-        dc.NewRecord();
-        dc.Name = "Data Context for View: " + this._viewEntity.Name;
-        dc.UserID = md.CurrentUser.ID;
-        if (await dc.Save()) {
-          // now create a single data context item for the new data context
-          const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
-          dci.NewRecord();
-          dci.DataContextID = dc.ID;
-          dci.Type = 'view';
-          dci.ViewID = this._viewEntity.ID;
-          if (await dci.Save()) {
-            this.DataContextID = dc.ID;
-          }
-          else {
-            SharedService.Instance.CreateSimpleNotification("Error creating data context item", 'error', 5000)
-            console.log("UserViewGrid: Error creating data context item")
-          }
-        }
-        else {
-          SharedService.Instance.CreateSimpleNotification("Error creating data context", 'error', 5000)
-          console.log("UserViewGrid: Error creating data context")
-        }  
-      }
-    }
-    return this.DataContextID;
-  }
-
+ 
   public kendoSVGIcon = kendoSVGIcon;
 
   public selectTabHandler() {
     SharedService.Instance.InvokeManualResize(100); // resize when the tab is clicked
   }
-
-  // public submitAnalysis() {
-  //   // submit the analysis request...
-  //   const val = this.analysisQuestion?.value
-  //   console.log(val);
-  //   if (val)
-  //    this.ExecuteAskSkipViewAnalysisQuery(val, this._viewEntity!.ID, 0);
-  // }
-
-  // private _resultSequence: number = 1;
-  // async ExecuteAskSkipViewAnalysisQuery(question: string, viewId: number, conversationId: number) {
-  //   try {
-  //     const gql = `query ExecuteAskSkipViewAnalysisQuery($userQuestion: String!, $viewId: Int!, $conversationId: Int!) {
-  //       ExecuteAskSkipViewAnalysisQuery(UserQuestion: $userQuestion, ViewId: $viewId, ConversationId: $conversationId) {
-  //         Success
-  //         Status
-  //         Result
-  //         ConversationId 
-  //         UserMessageConversationDetailId
-  //         AIMessageConversationDetailId
-  //       }
-  //     }`
-  
-  //     const result = await GraphQLDataProvider.ExecuteGQL(gql, { userQuestion: question, 
-  //                                                                 conversationId: conversationId,
-  //                                                                 viewId: viewId});
-  //     if (result && result.ExecuteAskSkipViewAnalysisQuery) {
-  //       // it worked, get the bits we care about
-  //       const resultRaw = result.ExecuteAskSkipViewAnalysisQuery.Result;
-  //       const resultObj = JSON.parse(resultRaw);
-  //       if (resultObj.success) {
-  //         const plotData = resultObj.executionResults.plotData
-
-  //         this.addPlotlyComponent(plotData.data, plotData.layout);  
-  //       }
-  //       else {
-  //         console.error(resultObj.error);
-  //         SharedService.Instance.CreateSimpleNotification("Error executing analysis request.", 'error', 5000)
-  //       }
-  //     }
-  //   }
-  //   catch (err) {
-  //     console.error(err);          
-  //   }
-  //}
-
-  // addPlotlyComponent(data: any, layout: any): void {
-  //   try {
-  //     const plotlyComponentRef = this.container.createComponent(PlotlyComponent);
-  //     plotlyComponentRef.instance.data = data;
-  //     plotlyComponentRef.instance.layout = layout;
-  //     plotlyComponentRef.instance.useResizeHandler = true;  
-  //     plotlyComponentRef.instance.style = {position: 'relative', width: '100%', height: '100%', marginBottom: '20px', border: '1px solid #ccc'};
-  //   }
-  //   catch (e) {
-  //     console.log(e);
-  //   }
-  // }
 }
  

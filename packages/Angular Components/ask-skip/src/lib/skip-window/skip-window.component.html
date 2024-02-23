@@ -1,0 +1,24 @@
+<div *ngIf="WindowOpened">
+  <kendo-window
+    [title]="Title"
+    (close)="CloseWindow()"
+    (resizeEnd)="ResizeWindow($event)"
+    (stateChange)="ResizeWindow($event)"
+    [width]="Width"
+    [height]="Height">
+    
+    <mj-skip-chat
+      mjFillContainer
+      [AllowSend]="AllowSend"
+      [ConversationEditMode]="ConversationEditMode"
+      [ShowConversationList]="ShowConversationList"
+      [AllowNewConversations]="AllowNewConversations"
+      [Title]="Title"
+      [DataContextID]="DataContextID"
+      [LinkedEntity]="LinkedEntity"
+      [LinkedEntityRecordID]="LinkedEntityRecordID"
+      [ShowDataContextButton]="ShowDataContextButton"
+      [UpdateAppRoute]="false"
+    ></mj-skip-chat>
+  </kendo-window>
+</div>

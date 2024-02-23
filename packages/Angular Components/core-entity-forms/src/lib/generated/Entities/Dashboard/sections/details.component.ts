@@ -19,12 +19,20 @@ import { DashboardEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Description"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Category ID</label>
+            <kendo-numerictextbox [(value)]="record.CategoryID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">UIConfig Details</label>
             <kendo-textbox [(ngModel)]="record.UIConfigDetails"  />   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
             <kendo-numerictextbox [(value)]="record.UserID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Category</label>
+            <span >{{FormatValue('Category', 0)}}</span>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">User</label>
@@ -42,12 +50,20 @@ import { DashboardEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('Description', 0)}}</span>
         </div>              
         <div class="record-form-row">
+            <label class="fieldLabel">Category ID</label>
+            <span mjFieldLink [record]="record" fieldName="CategoryID" >{{FormatValue('CategoryID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
             <label class="fieldLabel">UIConfig Details</label>
             <span >{{FormatValue('UIConfigDetails', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
             <span mjFieldLink [record]="record" fieldName="UserID" >{{FormatValue('UserID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Category</label>
+            <span >{{FormatValue('Category', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">User</label>

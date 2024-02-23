@@ -8,7 +8,10 @@
   ],
   "scripts": {},
   "dependencies": {
+    "@angular/cdk": "^17.2.0",
     "@memberjunction/data-context": "^0.9.1",
-    "@memberjunction/data-context-server": "^0.9.1"
+    "@memberjunction/data-context-server": "^0.9.1",
+    "@memberjunction/ng-data-context": "^0.9.2",
+    "ngx-markdown": "^17.1.1"
   }
 }

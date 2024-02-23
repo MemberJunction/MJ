@@ -18,7 +18,8 @@ export class DataContextItemServer extends DataContextItem {
             return true; // if we get here the above query didn't fail by throwing an exception which would get caught below
         }
         catch (e) {
-            LogError(`Error loading data context item from SQL: ${e && e.message ? e.message : e}`);
+            this.DataLoadingError = `Error loading data context item from SQL: ${e && e.message ? e.message : e}`
+            LogError(this.DataLoadingError);
             return false;
         }
     }

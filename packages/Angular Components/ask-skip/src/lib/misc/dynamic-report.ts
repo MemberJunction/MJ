@@ -1,12 +1,12 @@
-import { Component, Input, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, Input } from '@angular/core';
 import { Router } from '@angular/router';
-import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
-import { SharedService, HtmlListType, EventCodes } from '@memberjunction/ng-shared';
-import { DynamicGridComponent } from './dynamic-grid';
-import { DynamicChartComponent } from './dynamic-chart';
+import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse, MJAPISkipResult } from '@memberjunction/skip-types';
+import { SharedService, HtmlListType } from '@memberjunction/ng-shared';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
-import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
+import { SelectEvent } from '@progress/kendo-angular-layout';
+import { DataContext } from '@memberjunction/data-context';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
@@ -29,112 +29,59 @@ import { SelectEvent, TabStripComponent } from '@progress/kendo-angular-layout';
         font-weight: bold;
       }`,
     ],
-  template: `
-<div> 
-  <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
-  <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
-  <kendo-tabstrip [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip>
-      <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)">
-          <ng-template kendoTabTitle>
-            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
-            <span class="report-tab-title">Chart</span>
-          </ng-template>
-          <ng-template kendoTabContent class="report-tab-contents">
-              <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData">
-              </mj-dynamic-chart>
-          </ng-template>
-      </kendo-tabstrip-tab>  
-      <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
-          <ng-template kendoTabTitle>
-            <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
-            <span class="report-tab-title">Table</span>
-          </ng-template>
-          <ng-template kendoTabContent class="report-tab-contents">
-              <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
-              </mj-dynamic-grid>
-          </ng-template>
-      </kendo-tabstrip-tab>  
-      <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(2)">
-          <ng-template kendoTabTitle>
-              <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" />
-              <span class="report-tab-title">Analysis</span>
-          </ng-template>
-          <ng-template kendoTabContent class="report-tab-contents">
-              <div mjFillContainer [innerHTML]="createAnalysisHtml()"></div>
-          </ng-template>
-      </kendo-tabstrip-tab>  
-      <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(3)">
-          <ng-template kendoTabTitle>
-            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('file')"></kendo-svgicon>
-            <span class="report-tab-title">Explanation</span>
-          </ng-template>
-          <ng-template kendoTabContent class="report-tab-contents">
-            <label>Explanation:</label>
-              <div mjFillContainer>{{SkipData?.userExplanation || 'No Explanation Provided'}}</div>
-              <label>Technical Details:</label>
-              <div mjFillContainer>{{SkipData?.techExplanation || 'No Technical Details Provided'}}</div>
-          </ng-template>
-      </kendo-tabstrip-tab>  
-      <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(4)">
-          <ng-template kendoTabTitle>
-            <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('pageProperties')" name="page-properties"></kendo-svgicon>
-            <span class="report-tab-title">Details</span>
-          </ng-template>
-          <ng-template kendoTabContent class="report-tab-contents">
-              <div><span><b>Script: </b></span><span><textarea [disabled]="true" mjFillContainer [fillHeight]="false">{{SkipData?.scriptText}}</textarea></span></div>
-              <div *ngIf="ConversationID!==null"><span>Skip Conversation ID:</span><span>{{ConversationID}}</span></div>
-              <div *ngIf="ConversationDetailID!==null"><span>Skip Conversation Detail ID:</span><span>{{ConversationDetailID}}</span></div>
-          </ng-template>
-      </kendo-tabstrip-tab>  
-  </kendo-tabstrip>
-</div>
-` 
-})
-export class DynamicReportComponent {
+    templateUrl: './dynamic-report.html',
+  })
+export class DynamicReportComponent implements AfterViewInit {
   @Input() ShowDetailsTab: boolean = false;
   @Input() ShowCreateReportButton: boolean = false;
   @Input() ConversationID: number | null = null; 
   @Input() ConversationName: string | null = null;
   @Input() ConversationDetailID: number | null = null;
+  @Input() DataContext!: DataContext;
+  @Input() ReportEntity?: ReportEntity;
+  @Input() LayoutMode: 'linear' | 'tabs' = 'tabs';
+  @Input() LinearExpandAll: boolean = true;
+  @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
 
-  private _skipData!: SkipAPIAnalysisCompleteResponse | undefined;
-  @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined{ 
-      return this._skipData;   
-  }
-  set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
-      this._skipData = d;
-      if (d && !this._loaded)
-        this.ngAfterViewInit();
-  }
-
-  @ViewChild('theGrid', { static: false }) theGrid!: DynamicGridComponent;
-  @ViewChild('theChart', { static: false }) theChart!: DynamicChartComponent;
-  @ViewChild('tabStrip', { static: false }) tabStrip!: TabStripComponent;
 
   constructor (public sharedService: SharedService, private router: Router) {}
 
   public matchingReportID: number | null = null;
   public matchingReportName: string | null = null;
-
+  private static _reportCache: {reportId: number, conversationId: number, reportName: string, conversationDetailId: number}[] = [];
   private _loaded: boolean = false;
-  async ngAfterViewInit() {
-    if (this.SkipData) {
+  async RefreshMatchingReport() {
+    if (this.SkipData && !this._loaded && this.ConversationDetailID && this.ConversationID) {
         this._loaded = true;
         if (this.ShowCreateReportButton) {
           // check to see if a report has been created that is linked to this ConvoID/ConvoDetailID
           // if so don't allow the user to create another report, show a link to the existing one 
-          const rv = new RunView();
-          const matchingReports = await rv.RunView({
-            EntityName: 'Reports',
-            ExtraFilter: 'ConversationID = ' + this.ConversationID + ' AND ConversationDetailID = ' + this.ConversationDetailID
-          })
-          if (matchingReports && matchingReports.Success && matchingReports.RowCount > 0) {
-            const item = <any>matchingReports.Results.at(0);
-            this.matchingReportID = item?.ID;
-            this.matchingReportName = item?.Name;
+          console.log('Checking for existing report')
+          const cachedItem = DynamicReportComponent._reportCache.find(x => x.conversationId === this.ConversationID && x.conversationDetailId === this.ConversationDetailID);
+          if (cachedItem) {
+            this.matchingReportID = cachedItem.reportId;
+            this.matchingReportName = cachedItem.reportName;
+          }
+          else {
+            const rv = new RunView();
+            const matchingReports = await rv.RunView({
+              EntityName: 'Reports',
+              ExtraFilter: 'ConversationID = ' + this.ConversationID + ' AND ConversationDetailID = ' + this.ConversationDetailID
+            })
+            if (matchingReports && matchingReports.Success && matchingReports.RowCount > 0) {
+              const item = matchingReports.Results[0];
+              this.matchingReportID = item.ID;
+              this.matchingReportName = item.Name;
+              // cache for future to avoid db call
+              DynamicReportComponent._reportCache.push({reportId: item.ID, conversationId: this.ConversationID, reportName: item.Name, conversationDetailId: this.ConversationDetailID});
+            }  
           }
         }
     }
+  }
+
+  async ngAfterViewInit() {
+    await this.RefreshMatchingReport();
   }
 
   public clickMatchingReport() {
@@ -196,8 +143,18 @@ export class DynamicReportComponent {
         report.Description = this.SkipData.userExplanation ? this.SkipData.userExplanation : '';
         report.ConversationID = this.ConversationID;
         report.ConversationDetailID = this.ConversationDetailID;
-        //TO-DO FIX UP REPORT SCHEMA TO PROPERLY MAP TO SKIP DATA FORMAT AS IT IS NOW ----- report.ReportSQL = this.SkipData.SQLResults.sql;
-        report.ReportConfiguration = JSON.stringify(this.SkipData) 
+
+        const newDataContext = await DataContext.Clone(this.DataContext);
+        if (!newDataContext)
+          throw new Error('Error cloning data context')
+        report.DataContextID = newDataContext.ID;
+
+        // next, strip out the messags from the SkipData object to put them into our Report Configuration as we dont need to store that information as we have a 
+        // link back to the conversation and conversation detail
+        const newSkipData : SkipAPIAnalysisCompleteResponse = JSON.parse(JSON.stringify(this.SkipData));
+        newSkipData.messages = [];
+        report.Configuration = JSON.stringify(newSkipData) 
+
         report.SharingScope = 'None'
         report.UserID = md.CurrentUser.ID
 
@@ -212,5 +169,37 @@ export class DynamicReportComponent {
     } 
   }
 
-
+  public async doRefreshReport() {
+    try {
+      if (this.ReportEntity && this.ReportEntity.ID > 0) {
+        const gql = `query ExecuteAskSkipRunScript($dataContextId: Int!, $scriptText: String!) {
+          ExecuteAskSkipRunScript(DataContextId: $dataContextId, ScriptText: $scriptText) {
+            Success
+            Status
+            Result
+            ConversationId 
+            UserMessageConversationDetailId
+            AIMessageConversationDetailId
+          }
+        }`
+        const result = await GraphQLDataProvider.ExecuteGQL(gql, { 
+            dataContextId: this.ReportEntity.DataContextID,
+            scriptText: this.SkipData?.scriptText
+          });
+  
+        const resultObj = <MJAPISkipResult>result.ExecuteAskSkipRunScript;
+        if (resultObj.Success) {
+          // it worked, refresh the report here 
+          const newSkipData : SkipAPIAnalysisCompleteResponse = JSON.parse(resultObj.Result);
+          this.ReportEntity.Configuration = JSON.stringify(newSkipData);
+          await this.ReportEntity.Save();
+          this.SkipData = newSkipData; // this drives binding to chart and table and so forth for a refresh
+        }
+        return result;          
+      }
+    }
+    catch (err) {
+      console.error(err);          
+    }
+  }
 }

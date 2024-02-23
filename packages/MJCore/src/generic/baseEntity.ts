@@ -5,6 +5,7 @@ import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
+import { LogError } from './logging';
 
 export class EntityField {
     private _entityFieldInfo: EntityFieldInfo;
@@ -434,6 +435,31 @@ export abstract class BaseEntity {
             for (let field of this.EntityInfo.Fields) {
                 this.Fields.push(new EntityField(field));
             }
+    }
+
+    /**
+     * This method will copy the values from the other entity object into the current one. This is useful for things like cloning a record.
+     * This method will ONLY copy values for fields that exist in the current entity object. If the other object has fields that don't exist in the current object, they will be ignored.
+     * @param other
+     * @param includePrimaryKeys - if true, the primary keys will be copied as well, if false, they will be ignored, defaults to false and generally you want to leave it that way 
+     */
+    public CopyFrom(other: BaseEntity, includePrimaryKeys: boolean = false): boolean {
+        try {
+            // iterate through all of OUR fields and set them to the value of the other object, if they exist in the other object
+            for (let field of this.Fields) {
+                if (!field.IsPrimaryKey || includePrimaryKeys) {
+                    const otherField = other.GetFieldByName(field.Name);
+                    if (otherField) {
+                        this.Set(field.Name, otherField.Value);
+                    }
+                }
+            }
+            return true;
+        }
+        catch (e) {
+            LogError(`Error in BaseEntity.CopyFrom: ${e}`);
+            return false;            
+        }
     }
 
 

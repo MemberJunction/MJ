@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/14/2024, 10:23:29 AM
+* GENERATED: 2/20/2024, 5:28:54 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -17,7 +17,7 @@ import { AppContext } from '@memberjunction/server';
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, ResourceFolderEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -3582,9 +3582,6 @@ export class User_ {
     @Field(() => [Conversation_])
     ConversationsArray: Conversation_[]; // Link to Conversations
 
-    @Field(() => [ResourceFolder_])
-    ResourceFoldersArray: ResourceFolder_[]; // Link to ResourceFolders
-
     @Field(() => [RecordMergeLog_])
     RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
 
@@ -3860,14 +3857,6 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [ResourceFolder_])
-    async ResourceFoldersArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL));
         return result;
     }
       
@@ -4487,6 +4476,9 @@ export class UserView_ {
     @Field({nullable: true}) 
     Description?: string;
       
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+      
     @Field(() => Boolean) 
     IsShared: boolean;
       
@@ -4583,6 +4575,9 @@ export class CreateUserViewInput {
     @Field({ nullable: true })
     Description: string;
 
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+
     @Field(() => Boolean, )
     IsShared: boolean;
 
@@ -4640,6 +4635,9 @@ export class UpdateUserViewInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
 
     @Field(() => Boolean, )
     IsShared: boolean;
@@ -10433,11 +10431,18 @@ export class Dashboard_ {
     @Field({nullable: true}) 
     Description?: string;
       
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+      
     @Field() 
     UIConfigDetails: string;
       
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Category?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -10455,6 +10460,9 @@ export class CreateDashboardInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
 
     @Field()
     UIConfigDetails: string;
@@ -10477,6 +10485,9 @@ export class UpdateDashboardInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
 
     @Field()
     UIConfigDetails: string;
@@ -10891,6 +10902,9 @@ export class Report_ {
     @Field({nullable: true}) 
     Description?: string;
       
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+      
     @Field(() => Int) 
     UserID: number;
       
@@ -10904,11 +10918,11 @@ export class Report_ {
     @Field(() => Int, {nullable: true}) 
     ConversationDetailID?: number;
       
-    @Field({nullable: true}) 
-    ReportSQL?: string;
+    @Field(() => Int, {nullable: true}) 
+    DataContextID?: number;
       
     @Field({nullable: true}) 
-    ReportConfiguration?: string;
+    Configuration?: string;
       
     @Field(() => Int, {nullable: true}) 
     OutputTriggerTypeID?: number;
@@ -10941,6 +10955,10 @@ export class Report_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Category?: string;
+      
     @Field() 
     @MaxLength(200)
     User: string;
@@ -10948,6 +10966,10 @@ export class Report_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Conversation?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    DataContext?: string;
       
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -10981,6 +11003,9 @@ export class CreateReportInput {
     @Field({ nullable: true })
     Description: string;
 
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+
     @Field(() => Int, )
     UserID: number;
 
@@ -10993,11 +11018,11 @@ export class CreateReportInput {
     @Field(() => Int, { nullable: true })
     ConversationDetailID: number;
 
-    @Field({ nullable: true })
-    ReportSQL: string;
+    @Field(() => Int, { nullable: true })
+    DataContextID: number;
 
     @Field({ nullable: true })
-    ReportConfiguration: string;
+    Configuration: string;
 
     @Field(() => Int, { nullable: true })
     OutputTriggerTypeID: number;
@@ -11036,6 +11061,9 @@ export class UpdateReportInput {
     @Field({ nullable: true })
     Description: string;
 
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+
     @Field(() => Int, )
     UserID: number;
 
@@ -11048,11 +11076,11 @@ export class UpdateReportInput {
     @Field(() => Int, { nullable: true })
     ConversationDetailID: number;
 
-    @Field({ nullable: true })
-    ReportSQL: string;
+    @Field(() => Int, { nullable: true })
+    DataContextID: number;
 
     @Field({ nullable: true })
-    ReportConfiguration: string;
+    Configuration: string;
 
     @Field(() => Int, { nullable: true })
     OutputTriggerTypeID: number;
@@ -11472,9 +11500,6 @@ export class ResourceType_ {
     @Field(() => [WorkspaceItem_])
     WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
 
-    @Field(() => [ResourceFolder_])
-    ResourceFoldersArray: ResourceFolder_[]; // Link to ResourceFolders
-
 }
 //****************************************************************************
 // RESOLVER for Resource Types
@@ -11534,14 +11559,6 @@ export class ResourceTypeResolver extends ResolverBase {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [ResourceTypeID]=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
-        return result;
-    }
-      
-    @FieldResolver(() => [ResourceFolder_])
-    async ResourceFoldersArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [ResourceTypeName]=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL));
         return result;
     }
     
@@ -13117,221 +13134,6 @@ export class UserNotificationResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserNotificationInput) {
-        const i = input, d = dataSource; // prevent error
-    }
-
-}
-
-//****************************************************************************
-// ENTITY CLASS for Resource Folders
-//****************************************************************************
-@ObjectType()
-export class ResourceFolder_ {  
-    @Field(() => Int) 
-    ID: number;
-      
-    @Field(() => Int, {nullable: true}) 
-    ParentID?: number;
-      
-    @Field() 
-    @MaxLength(100)
-    Name: string;
-      
-    @Field() 
-    @MaxLength(510)
-    ResourceTypeName: string;
-      
-    @Field({nullable: true}) 
-    Description?: string;
-      
-    @Field(() => Int) 
-    UserID: number;
-      
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-      
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-      
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    Parent?: string;
-      
-    @Field() 
-    @MaxLength(200)
-    User: string;
-    
-    @Field(() => [ResourceFolder_])
-    ResourceFoldersArray: ResourceFolder_[]; // Link to ResourceFolders
-
-}
-        
-//****************************************************************************
-// INPUT TYPE for Resource Folders   
-//****************************************************************************
-@InputType()
-export class CreateResourceFolderInput {
-    @Field(() => Int, { nullable: true })
-    ParentID: number;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    ResourceTypeName: string;
-
-    @Field({ nullable: true })
-    Description: string;
-
-    @Field(() => Int, )
-    UserID: number;
-}
-
-        
-//****************************************************************************
-// INPUT TYPE for Resource Folders   
-//****************************************************************************
-@InputType()
-export class UpdateResourceFolderInput {
-    @Field(() => Int, )
-    ID: number;
-
-    @Field(() => Int, { nullable: true })
-    ParentID: number;
-
-    @Field()
-    Name: string;
-
-    @Field()
-    ResourceTypeName: string;
-
-    @Field({ nullable: true })
-    Description: string;
-
-    @Field(() => Int, )
-    UserID: number;
-}
-
-//****************************************************************************
-// RESOLVER for Resource Folders
-//****************************************************************************
-@ObjectType()
-export class RunResourceFolderViewResult {
-    @Field(() => [ResourceFolder_])
-    Results: ResourceFolder_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ResourceFolder_)
-export class ResourceFolderResolver extends ResolverBase {
-    @Query(() => RunResourceFolderViewResult)
-    async RunResourceFolderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunResourceFolderViewResult)
-    async RunResourceFolderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunResourceFolderViewResult)
-    async RunResourceFolderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Resource Folders';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => ResourceFolder_, { nullable: true })
-    async ResourceFolder(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceFolder_ | null> {
-        this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-  
-    @FieldResolver(() => [ResourceFolder_])
-    async ResourceFoldersArray(@Root() resourcefolder_: ResourceFolder_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Resource Folders', userPayload);
-        const sSQL = `SELECT * FROM [admin].[vwResourceFolders] WHERE [ParentID]=${resourcefolder_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Folders', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Resource Folders', await dataSource.query(sSQL));
-        return result;
-    }
-    
-    @Mutation(() => ResourceFolder_)
-    async CreateResourceFolder(
-        @Arg('input', () => CreateResourceFolderInput) input: CreateResourceFolderInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ResourceFolderEntity>await new Metadata().GetEntityObject('Resource Folders', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateResourceFolderInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateResourceFolderInput) {
-    }
-    
-    @Mutation(() => ResourceFolder_)
-    async UpdateResourceFolder(
-        @Arg('input', () => UpdateResourceFolderInput) input: UpdateResourceFolderInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ResourceFolderEntity>await new Metadata().GetEntityObject('Resource Folders', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Resource Folders
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateResourceFolderInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateResourceFolderInput) {
         const i = input, d = dataSource; // prevent error
     }
 
@@ -16528,6 +16330,9 @@ export class DataContext_ {
     @Field(() => [DataContextItem_])
     DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
 
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
 }
         
 //****************************************************************************
@@ -16629,6 +16434,14 @@ export class DataContextResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
+      
+    @FieldResolver(() => [Report_])
+    async ReportsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Reports', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [DataContextID]=${datacontext_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
+    }
     
     @Mutation(() => DataContext_)
     async CreateDataContext(
@@ -16688,6 +16501,618 @@ export class DataContextResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for User View Categories
+//****************************************************************************
+@ObjectType()
+export class UserViewCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+    
+    @Field(() => [UserViewCategory_])
+    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+
+    @Field(() => [UserView_])
+    UserViewsArray: UserView_[]; // Link to UserViews
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for User View Categories   
+//****************************************************************************
+@InputType()
+export class CreateUserViewCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for User View Categories   
+//****************************************************************************
+@InputType()
+export class UpdateUserViewCategoryInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+}
+
+//****************************************************************************
+// RESOLVER for User View Categories
+//****************************************************************************
+@ObjectType()
+export class RunUserViewCategoryViewResult {
+    @Field(() => [UserViewCategory_])
+    Results: UserViewCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(UserViewCategory_)
+export class UserViewCategoryResolver extends ResolverBase {
+    @Query(() => RunUserViewCategoryViewResult)
+    async RunUserViewCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunUserViewCategoryViewResult)
+    async RunUserViewCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunUserViewCategoryViewResult)
+    async RunUserViewCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'User View Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => UserViewCategory_, { nullable: true })
+    async UserViewCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewCategory_ | null> {
+        this.CheckUserReadPermissions('User View Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwUserViewCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [UserViewCategory_])
+    async UserViewCategoriesArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('User View Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwUserViewCategories] WHERE [ParentID]=${userviewcategory_.ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [UserView_])
+    async UserViewsArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('User Views', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [CategoryID]=${userviewcategory_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => UserViewCategory_)
+    async CreateUserViewCategory(
+        @Arg('input', () => CreateUserViewCategoryInput) input: CreateUserViewCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewCategoryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewCategoryInput) {
+    }
+    
+    @Mutation(() => UserViewCategory_)
+    async UpdateUserViewCategory(
+        @Arg('input', () => UpdateUserViewCategoryInput) input: UpdateUserViewCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Categories
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Dashboard Categories
+//****************************************************************************
+@ObjectType()
+export class DashboardCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+    
+    @Field(() => [Dashboard_])
+    DashboardsArray: Dashboard_[]; // Link to Dashboards
+
+    @Field(() => [DashboardCategory_])
+    DashboardCategoriesArray: DashboardCategory_[]; // Link to DashboardCategories
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Dashboard Categories   
+//****************************************************************************
+@InputType()
+export class CreateDashboardCategoryInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Dashboard Categories   
+//****************************************************************************
+@InputType()
+export class UpdateDashboardCategoryInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+}
+
+//****************************************************************************
+// RESOLVER for Dashboard Categories
+//****************************************************************************
+@ObjectType()
+export class RunDashboardCategoryViewResult {
+    @Field(() => [DashboardCategory_])
+    Results: DashboardCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DashboardCategory_)
+export class DashboardCategoryResolver extends ResolverBase {
+    @Query(() => RunDashboardCategoryViewResult)
+    async RunDashboardCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDashboardCategoryViewResult)
+    async RunDashboardCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDashboardCategoryViewResult)
+    async RunDashboardCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Dashboard Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DashboardCategory_, { nullable: true })
+    async DashboardCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardCategory_ | null> {
+        this.CheckUserReadPermissions('Dashboard Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDashboardCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [Dashboard_])
+    async DashboardsArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboards', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE [CategoryID]=${dashboardcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [DashboardCategory_])
+    async DashboardCategoriesArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboard Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwDashboardCategories] WHERE [ParentID]=${dashboardcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => DashboardCategory_)
+    async CreateDashboardCategory(
+        @Arg('input', () => CreateDashboardCategoryInput) input: CreateDashboardCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateDashboardCategoryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateDashboardCategoryInput) {
+    }
+    
+    @Mutation(() => DashboardCategory_)
+    async UpdateDashboardCategory(
+        @Arg('input', () => UpdateDashboardCategoryInput) input: UpdateDashboardCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Dashboard Categories
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Report Categories
+//****************************************************************************
+@ObjectType()
+export class ReportCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int) 
+    ParentID: number;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(200)
+    Parent: string;
+    
+    @Field(() => [ReportCategory_])
+    ReportCategoriesArray: ReportCategory_[]; // Link to ReportCategories
+
+    @Field(() => [Report_])
+    ReportsArray: Report_[]; // Link to Reports
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Report Categories   
+//****************************************************************************
+@InputType()
+export class CreateReportCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    ParentID: number;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Report Categories   
+//****************************************************************************
+@InputType()
+export class UpdateReportCategoryInput {
+    @Field(() => Int, )
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, )
+    ParentID: number;
+}
+
+//****************************************************************************
+// RESOLVER for Report Categories
+//****************************************************************************
+@ObjectType()
+export class RunReportCategoryViewResult {
+    @Field(() => [ReportCategory_])
+    Results: ReportCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ReportCategory_)
+export class ReportCategoryResolver extends ResolverBase {
+    @Query(() => RunReportCategoryViewResult)
+    async RunReportCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunReportCategoryViewResult)
+    async RunReportCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunReportCategoryViewResult)
+    async RunReportCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Report Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ReportCategory_, { nullable: true })
+    async ReportCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportCategory_ | null> {
+        this.CheckUserReadPermissions('Report Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwReportCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [ReportCategory_])
+    async ReportCategoriesArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Report Categories', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwReportCategories] WHERE [ParentID]=${reportcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [Report_])
+    async ReportsArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Reports', userPayload);
+        const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [CategoryID]=${reportcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => ReportCategory_)
+    async CreateReportCategory(
+        @Arg('input', () => CreateReportCategoryInput) input: CreateReportCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateReportCategoryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateReportCategoryInput) {
+    }
+    
+    @Mutation(() => ReportCategory_)
+    async UpdateReportCategory(
+        @Arg('input', () => UpdateReportCategoryInput) input: UpdateReportCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Report Categories
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportCategoryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
 
