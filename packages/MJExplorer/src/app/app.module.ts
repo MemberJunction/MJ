@@ -59,7 +59,7 @@ import { InteractionType, PublicClientApplication } from '@azure/msal-browser';
 //***********************************************************
 // Routing
 //***********************************************************
-import { AppRoutingModule } from './app-routing.module';
+import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 
 //***********************************************************
 // Project stuff
@@ -68,6 +68,7 @@ import { AppComponent } from './app.component';
 import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-forms.module';
 import { environment } from 'src/environments/environment';
 import 'hammerjs';
+import { RouteReuseStrategy } from '@angular/router';
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
 
@@ -154,6 +155,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     ListBoxModule
   ],
   providers: [SharedService,
+    { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },
     ...(environment.AUTH_TYPE === 'msal' ? [MsalService] : []),
     ...(environment.AUTH_TYPE === 'msal' ? [MsalGuard] : []),
     ...(environment.AUTH_TYPE === 'msal' ? [MsalBroadcastService] : []),

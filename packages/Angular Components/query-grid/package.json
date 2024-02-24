@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-query-grid",
-  "version": "0.9.29",
+  "version": "0.9.30",
   "description": "MemberJunction: Angular Grid to display any MemberJunction Query",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -15,24 +15,24 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@angular/compiler": "^17.1.2",
-    "@angular/compiler-cli": "^17.1.2"
+    "@angular/compiler": "~17.2.2",
+    "@angular/compiler-cli": "~17.2.2"
   },
   "peerDependencies": {
-    "@angular/common": "^17.1.2",
-    "@angular/core": "^17.1.2",
-    "@angular/forms": "^17.1.2",
-    "@angular/router": "^17.1.2",
-    "@progress/kendo-angular-grid": "^15.0.1",
-    "@progress/kendo-angular-buttons": "^15.0.1",
-    "@progress/kendo-angular-dialog": "^15.0.1"
+    "@angular/common": "~17.2.2",
+    "@angular/core": "~17.2.2",
+    "@angular/forms": "~17.2.2",
+    "@angular/router": "~17.2.2",
+    "@progress/kendo-angular-grid": "~15.1.0",
+    "@progress/kendo-angular-buttons": "~15.1.0",
+    "@progress/kendo-angular-dialog": "~15.1.0"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^0.9.133",
-    "@memberjunction/global": "^0.9.136",
-    "@memberjunction/core": "^0.9.149",
-    "@memberjunction/ng-container-directives": "^0.9.117",
-    "@memberjunction/ng-shared": "^0.9.10",
+    "@memberjunction/core-entities": "^0.9.134",
+    "@memberjunction/global": "^0.9.137",
+    "@memberjunction/core": "^0.9.150",
+    "@memberjunction/ng-container-directives": "^0.9.118",
+    "@memberjunction/ng-shared": "^0.9.11",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
