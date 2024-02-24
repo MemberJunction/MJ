@@ -76,7 +76,7 @@ export class FillContainer implements OnInit, OnDestroy {
   resizeElement(): void {
     const element = this.elementRef.nativeElement as HTMLElement;
     try {
-      if (element && element.style) {
+      if (element && element.style && !this.shouldSkipResize(element)) {
         const parent = this.getParent(element);
   
         if (parent && !this.elementBelowHiddenTab(element)) {      
@@ -100,7 +100,6 @@ export class FillContainer implements OnInit, OnDestroy {
               const newWidth = Math.floor(parentRect.width - this.rightMargin - widthVariance);
               if (Math.floor(elementRect.width) !== newWidth) {
                 element.style.width = newWidth + 'px';
-                //LogStatus('setting ' + element.nodeName + ' width to ' + newWidth + ' from ' + elementRect.width)  
               }
             }
   
@@ -109,7 +108,6 @@ export class FillContainer implements OnInit, OnDestroy {
               const newHeight = Math.floor(parentRect.height - this.bottomMargin - heightVariance);          
               if (Math.floor(elementRect.height) !== newHeight) {
                 element.style.height = newHeight + 'px';  
-                //LogStatus('setting ' + element.nodeName + ' height to ' + newHeight + ' from ' + elementRect.height)  
               }
             }
           }
@@ -120,7 +118,17 @@ export class FillContainer implements OnInit, OnDestroy {
       LogError(err);
     }
   }
-
+    // Function to check if element or its parents have the 'mjSkipResize' attribute
+  protected shouldSkipResize(el: HTMLElement): boolean {
+    let cur: HTMLElement | null = el;
+    while (cur) {
+        if (cur.hasAttribute('mjSkipResize')) {
+            return true;
+        }
+        cur = cur.parentElement;
+    }
+    return false;
+  };
   protected elementBelowHiddenTab(element: HTMLElement): boolean {
     // check if the element is below a hidden tab, a hidden tab will have a class of .k-tabstrip-content and also have .k-active applied
     // we can go all the way up the tree to look for this

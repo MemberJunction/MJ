@@ -65,7 +65,7 @@
         </kendo-tabstrip-tab>  
     </kendo-tabstrip>
   </div> 
-<div mjFillContainer *ngIf="LayoutMode === 'linear'"> 
+<div *ngIf="LayoutMode === 'linear'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
     <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
@@ -87,11 +87,11 @@
         *ngIf="!IsChart"
         [title]="'Table'"
         [expanded]="LinearExpandAll"
+        mjSkipResize="true"
     >
         <mj-dynamic-grid *ngIf="!IsChart" 
+                        [GridHeight]="300"
                         #theGrid [SkipData]="SkipData"
-                        [fillContainer]="false"
-                        style="max-height: 500px;"
                         ></mj-dynamic-grid>  
     </kendo-expansionpanel>
     <kendo-expansionpanel

@@ -32,19 +32,9 @@
         </kendo-listview>
     </div>
     <div class="conversation-wrapper" mjFillContainer>
-        <div #AskSkipPanel class="messages" mjContainer #scrollContainer (scroll)="checkScroll()">
-            <div *ngFor="let message of Messages">  
-                <div class="message-row" [ngClass]="getMessageRowCssClass(message)" > 
-                    <div class="message-image">
-                        <img src="{{message.Role.trim().toLowerCase() === 'ai' || message.Role.trim().toLowerCase() === 'error' ? 'assets/Skip - Mark Only - Small.png' : userImage()}}" class="avatar" />
-                    </div>
-                    <div mjContainer 
-                        class="message"
-                         [id]="'skip_message_' + message.ID">
-                        <div class="message-user-name">{{message.Role.trim().toLowerCase() === 'ai' ? 'Skip' : (this.SelectedConversationUser ? this.SelectedConversationUser.FirstName + ' ' + this.SelectedConversationUser.LastName : 'You')}}</div>
-                        <div>{{this.createDetailHtml(message)}}</div> 
-                    </div>
-                </div>
+        <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
+            <div mjContainer>
+                <!-- Dynamic messages will be injected here -->
             </div>
             <span class="scroll-to-bottom-icon" *ngIf="showScrollToBottomIcon" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
             <div class="waiting-for-ai" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">

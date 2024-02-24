@@ -8,8 +8,8 @@ import { SharedService } from '@memberjunction/ng-shared';
   styleUrls: ['./skip-window.component.css']
 })
 export class SkipWindowComponent  {  
-  @Input() public Width: number = 400;
-  @Input() public Height: number = 700;
+  @Input() public Width: number = 750;
+  @Input() public Height: number = 1000;
 
   // Pass through properties to the chat component
   @Input() AllowSend: boolean = true;

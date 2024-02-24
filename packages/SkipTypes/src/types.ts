@@ -279,6 +279,10 @@ export class SkipAPIResponse {
      */
     success: boolean;
     /**
+     * This property is only used if success is false, and contains an error message that describes the reason for the failure
+     */
+    error: string; 
+    /**
      * The Skip API server response phase, defined within the SkipResponsePhase type
      */
     responsePhase: SkipResponsePhase;

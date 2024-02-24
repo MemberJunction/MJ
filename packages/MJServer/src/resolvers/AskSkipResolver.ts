@@ -590,10 +590,24 @@ export class AskSkipResolver {
                                          dataContext: DataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
     // our job in this method is to go through each of the data requests from the Skip API, get the data, and then go back to the Skip API again and to the next phase
     try {  
+      if (!apiResponse.success) {
+        LogError(`Data request/gathering from Skip API failed: ${apiResponse.error}`);
+        return {
+          Success: false,
+          Status: `The Skip API Server data gathering phase returned a non-recoverable error. Try again later and Skip might be able to handle this request.\n${apiResponse.error}`,
+          ResponsePhase: SkipResponsePhase.DataRequest,
+          ConversationId: ConversationId,
+          UserMessageConversationDetailId: convoDetailEntity.ID,
+          AIMessageConversationDetailId: 0,
+          Result: JSON.stringify(apiResponse)
+        };    
+    }
+
       const _maxDataGatheringRetries = 5;
       const _dataGatheringFailureHeaderMessage = '***DATA GATHERING FAILURE***';
       const md = new Metadata();
       const executionErrors = [];
+      let dataRequest = apiResponse.dataRequest;
 
       // first, in this situation we want to add a message to our apiRequest so that it is part of the message history with the server
       apiRequest.messages.push({
@@ -602,7 +616,20 @@ export class AskSkipResolver {
         role: 'system' // user role of system because this came from Skip, we are simplifying the message for the next round if we need to send it back
       });
 
-      for (const dr of apiResponse.dataRequest) {
+      // check to see if apiResponse.dataRequest is an array, if not, see if it is a single item, and if not, then throw an error
+      if (!Array.isArray(dataRequest)) {
+        if (dataRequest) {
+          dataRequest = [dataRequest];
+        }
+        else {
+          const errorMessage = `Data request from Skip API is not an array and not a single item.`;
+          LogError(errorMessage);
+          executionErrors.push({dataRequest: apiResponse.dataRequest, errorMessage: errorMessage});
+          dataRequest = []; // make a blank array so we can continue
+        }
+      }
+
+      for (const dr of dataRequest) {
         try {
           const item = dataContext.AddDataContextItem();
           switch (dr.type) {
@@ -610,7 +637,8 @@ export class AskSkipResolver {
               item.Type = 'sql';
               item.SQL = dr.text;
               item.AdditionalDescription = dr.description;
-              await item.LoadData(dataSource, false, user);
+              if (!await item.LoadData(dataSource, false, user))
+                throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               break;
             case "stored_query":
               const queryName = dr.text;
@@ -620,10 +648,14 @@ export class AskSkipResolver {
                 item.QueryID = query.ID;
                 item.RecordName = query.Name;
                 item.AdditionalDescription = dr.description;
-                await item.LoadData(dataSource, false, user);
+                if (!await item.LoadData(dataSource, false, user))
+                  throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               }
               else
                 throw new Error(`Query ${queryName} not found.`);
+              break;
+            default:
+              throw new Error(`Unknown data request type: ${dr.type}`);
               break;
           }
         }

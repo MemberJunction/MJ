@@ -1,18 +1,18 @@
-import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef } from '@angular/core';
+import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
 import { Location } from '@angular/common';
-import { Router, ActivatedRoute } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { LogError, Metadata, RunQuery, RunView, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 import { SharedService } from '@memberjunction/ng-shared';
 
-import { SkipDynamicReportComponent } from '../misc/skip-dynamic-report-wrapper';
 import { Subscription } from 'rxjs';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { CopyScalarsAndArrays, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
+import { SkipSingleMessageComponent } from '../skip-single-message/skip-single-message.component';
   
 
 @Component({
@@ -47,6 +47,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   @ViewChild(Container, { static: true }) askSkip!: Container;
   @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
+  @ViewChild('mjContainer', { read: ViewContainerRef }) mjContainerRef!: ViewContainerRef;
+
   @ViewChild('conversationList', { static: false }) conversationList!: ListViewComponent ;
 
   @ViewChild('AskSkipInput') askSkipInput: any;
@@ -58,7 +60,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     private renderer: Renderer2,
     private route: ActivatedRoute,
     private location: Location,
-    private cdRef: ChangeDetectorRef
+    private cdRef: ChangeDetectorRef,
   ) {}
 
   private paramsSubscription!: Subscription;
@@ -78,7 +80,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
               this.SetSkipStatusMessage(obj.message);
             }
           }
-          console.log(obj);
         }
       });
     }
@@ -87,34 +88,27 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
-  public getMessageRowCssClass(detail: ConversationDetailEntity): string {
-    if (detail.Role.trim().toLowerCase() === 'ai') {
-      if (detail.ID > 0)
-        return 'ai-message';
-      else
-        return 'ai-message-in-progress';
-    }
-    else if (detail.Role.trim().toLowerCase() === 'error') {
-      return 'error-message';
-    }
-    else 
-      return 'user-message';
-  }
-
   protected SetSkipStatusMessage(message: string) {
     if (message && message.length > 0) {
       if (!this._temporaryMessage)  {
         this._temporaryMessage = <ConversationDetailEntity><any>{ID: -1, Message: message, Role: 'ai'}; // create a new object
-        this.Messages.push(this._temporaryMessage);
+        this.AddMessageToCurrentConversation(this._temporaryMessage, true);
       }
       else {
         this._temporaryMessage.Message = message;
+        // we need to send a refresh signal to the component linked to this detail record
+        const ref = (<any>this._temporaryMessage)._componentRef;
+        if (ref) {
+          const obj = ref.instance;
+          if (obj && obj.RefreshMessage)
+            obj.RefreshMessage();
+        }
       }  
     }
     else {
       if (this._temporaryMessage) {
         // get rid of the temporary message
-        this.Messages = this.Messages.filter(m => m.ID !== this._temporaryMessage?.ID);
+        this.RemoveMessageFromCurrentConversation(this._temporaryMessage);
         this._temporaryMessage = undefined;
       }
     }
@@ -181,7 +175,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         this.scrollToBottom();
       }
       this._scrollToBottom = false;      
-    },50);
+    },200);
   }
 
   protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
@@ -294,7 +288,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   public async SelectConversation(conversation: ConversationEntity) {
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
       // load up the conversation if not already the one that's loaded
-      this.Messages = []; // clear out the messages
+      this.ClearMessages();
       const oldStatus = this._processingStatus[conversation.ID];
       this._processingStatus[conversation.ID] = true;
       this.SelectedConversation = conversation;
@@ -312,8 +306,15 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         OrderBy: 'CreatedAt ASC' // show messages in order of creation
       })
       if (result && result.Success) {
-        this._detailHtml = {};
+        // copy the results into NEW objects into the array, we don't want to modify the original objects
         this.Messages = <ConversationDetailEntity[]>result.Results;
+        //this.Messages = <ConversationDetailEntity[]>result.Results;
+        this.cdRef.detach(); // temporarily stop change detection to improve performance
+        for (const m of this.Messages) {
+          this.AddMessageToPanel(m, false); 
+        }
+        this.cdRef.reattach(); // resume change detection
+
         this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       }
       this._processingStatus[conversation.ID] = oldStatus; // set back to old status as it might have been processing
@@ -368,7 +369,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     "On it, let me get back to you in a moment with the results!🤖",
     "I'm on it, just a moment! 🙂",
     "I'll get started in a jiffy!",
-    "You betcha, I'd love to help, give me a moment!",
+    "You bet, I'd love to help, give me a moment!",
     "I understand, I'll start running in that direction 👟",
     "No problem, I'll get started right away!",
     "Ok, heard loud and clear, I'll jump right on it! 👂",
@@ -400,7 +401,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       convoDetail.NewRecord();
       convoDetail.Message = val;
       convoDetail.Role = 'user';
-      this.Messages.push(convoDetail); // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server
+      // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
+      this.AddMessageToCurrentConversation(convoDetail, true)
 
       this.SetSkipStatusMessage(this.pickSkipStartMessage());
 
@@ -446,7 +448,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           await convoDetail.Load(skipResult.UserMessageConversationDetailId); // update the object to load from DB
           const aiDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
           await aiDetail.Load(skipResult.AIMessageConversationDetailId) // get record from the database
-          this.Messages.push(aiDetail);  
+          this.AddMessageToCurrentConversation(aiDetail, true)
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }
@@ -455,7 +457,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         errorMessage.NewRecord();
         errorMessage.Role = 'error';
         errorMessage.Message = 'Error took place';
-        this.Messages.push(errorMessage);
+        this.AddMessageToCurrentConversation(errorMessage, true)
       }
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       if (this.SelectedConversation)
@@ -464,66 +466,73 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this.AllowSend = true;
       this._messageInProgress =false;
 
-      this.SetSkipStatusMessage('');
       // now tell Angular to resume its change detection
       this.cdRef.reattach();
       this.cdRef.detectChanges();
       // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
-      this.sharedService.InvokeManualResize(15);      
+      //this.sharedService.InvokeManualResize();      
+      this.SetSkipStatusMessage('');
     }
   } 
 
-  private _detailHtml: any = {};
-  public createDetailHtml(detail: ConversationDetailEntity) {
-    if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0 && this._detailHtml[detail.ID] !== undefined && this._detailHtml[detail.ID] !== null) {
-      // use cached HTML details for SAVED conversation details, don't do for NEW ONes where ID is null
-      return this._detailHtml[detail.ID];
-    }
-    else {
-
-      let sMessage = '';
-
-      if (detail.Role.trim().toLowerCase() === 'ai') {
-        sMessage = this.createSkipResponseHtml(detail);
-      }
-      else {
-        sMessage = detail.Message;
-      }
-      if (detail.ID !== null && detail.ID !== undefined && detail.ID > 0)
-        this._detailHtml[detail.ID] = sMessage; // only cache it if it's a saved detail if it is for a new one don't bother yet...
-  
-      return sMessage;
-    }
-  }      
-
-  protected createSkipResponseHtml(detail: ConversationDetailEntity): string {
-    let sMessage = '';
-    if (detail.ID > 0) {
-      const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
-
-      if (resultObject.success) {
-        switch (resultObject.responsePhase) {
-          case SkipResponsePhase.clarifying_question:
-            const clarifyingQuestion = <SkipAPIClarifyingQuestionResponse>resultObject;
-            sMessage = clarifyingQuestion.clarifyingQuestion;
-            break;
-          case SkipResponsePhase.analysis_complete:
-            sMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
-            const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
-            this.addReportToConversation(detail, analysisResult, detail.ID);
-            break;
-        }
-      }
-      else {
-        sMessage = `I'm having a problem handling the request. If you'd like to try again, please let me know. Also, if this problem persists, please let your administrator know.`;
-      }  
-    }
-    else {
-      // this is a temporary message with just a string in it, don't attempt to JSON parse it
-      return detail.Message;
-    }
-    return sMessage;
+  public ClearMessages() {
+    this.Messages = []; // clear out the messages
+    // remove everything from the panel now
+    this.askSkip.viewContainerRef.clear();
   }
+  public AddMessageToCurrentConversation(detail: ConversationDetailEntity, stopChangeDetection: boolean) {
+    this.Messages.push(detail);
+    this.AddMessageToPanel(detail, stopChangeDetection);
+  }
+  public RemoveMessageFromCurrentConversation(detail: ConversationDetailEntity) {
+    this.Messages = this.Messages.filter(m => m !== detail);
+    this.RemoveMessageFromPanel(detail);
+  }
+
+  // method to dynamically remove a message 
+  protected RemoveMessageFromPanel(messageDetail: ConversationDetailEntity) {
+    const ref = (<any>messageDetail)._componentRef;
+    if (ref) {
+      // Temporarily stop change detection for performance
+      this.cdRef.detach();
+
+      const index = this.askSkip.viewContainerRef.indexOf(ref.hostView);
+      if (index !== -1) {
+        this.askSkip.viewContainerRef.remove(index);
+      }
+
+      // Resume change detection
+      this.cdRef.reattach();
+    }
+  }
+
+  // Method to dynamically add a message
+  protected AddMessageToPanel(messageDetail: ConversationDetailEntity, stopChangeDetection: boolean) {
+    // Temporarily stop change detection for performance
+    if (stopChangeDetection)
+      this.cdRef.detach();
+
+    const componentRef = this.askSkip.viewContainerRef.createComponent(SkipSingleMessageComponent);
+
+    // Pass the message details to the component instance
+    const obj = componentRef.instance;
+
+    obj.ConversationRecord = this.SelectedConversation!;
+    obj.ConversationDetailRecord = messageDetail;
+    obj.DataContext = this.DataContext;
+    obj.ConversationUser = this.SelectedConversationUser!;
+
+    // now, stash a link to our newly created componentRef inside the messageDetail so we know which componentRef to remove when we delete the message
+    (<any>messageDetail)._componentRef = componentRef;
+
+    // set flag to scroll to the bottom of the chat panel
+    this._scrollToBottom = true;
+
+    // Resume change detection
+    if (stopChangeDetection)
+      this.cdRef.reattach();
+  }
+
 
   checkScroll() {
     if (this.scrollContainer) {
@@ -548,36 +557,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });  
     }
   }  
-
-  protected addReportToConversation(detail: ConversationDetailEntity, analysisResult: SkipAPIAnalysisCompleteResponse, messageId: number) {
-    // set a short timeout to allow Angular to render as the div we want to add the grid to won't exist yet otherwise
-    setTimeout(() => {
-      console.log('Adding report to conversation' + detail.ConversationID);
-      const componentRef = this.askSkip.viewContainerRef.createComponent(SkipDynamicReportComponent);
-
-      // Pass the data to the new chart
-      const report = componentRef.instance;
-      report.SkipData = analysisResult;
-      report.DataContext = this.DataContext;
-
-      report.ConversationID = detail.ConversationID
-      report.ConversationDetailID = detail.ID;
-      if (this.SelectedConversation)
-        report.ConversationName = this.SelectedConversation.Name;
-  
-      this._scrollToBottom = true;
-
-      // Locate the target child div by its ID
-      const targetChildDiv = document.getElementById('skip_message_' + messageId);
-  
-      // Move the component's element to the required location
-      this.renderer.appendChild(targetChildDiv, componentRef.location.nativeElement);
-    },250);
-  }
- 
-  public userImage() {
-    return this.sharedService.CurrentUserImage;
-  }
 
   protected async GetCreateDataContextID(): Promise<number> {
     // temporary hack for now, we will have more functionality to do robust UX around DataCOntext viewing and editing soon
@@ -680,7 +659,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       errorMessage.NewRecord();
       errorMessage.Role = 'error';
       errorMessage.Message = 'Error took place' + err;
-      this.Messages.push(errorMessage);
+      this.AddMessageToCurrentConversation(errorMessage, true);
       this.AllowSend = true;
     }
   }

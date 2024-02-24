@@ -7,7 +7,34 @@ import { LogStatus } from '@memberjunction/core';
 @Component({
   selector: 'mj-dynamic-grid',
   template: `
-    <kendo-grid [data]="gridView"
+    <kendo-grid *ngIf="GridHeight !== null" 
+                [height]="GridHeight"
+                [data]="gridView"
+                [skip]="startingRow"
+                [pageSize]="pageSize"
+                scrollable="virtual"
+                [rowHeight]="36"
+                [reorderable]="true"
+                [resizable]="true"
+                (pageChange)="pageChange($event)"
+                (cellClick)="cellClick($event)"
+                [navigable]="true"
+                >
+        <ng-container *ngFor="let col of columns">
+            <kendo-grid-column 
+                field="{{col.fieldName}}" 
+                title="{{col.displayName}}"
+                [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#cyan' }">
+                <ng-template kendoGridCellTemplate let-dataItem>
+                    {{ formatData(col.simpleDataType, dataItem[col.fieldName]) }}
+                </ng-template>
+            </kendo-grid-column>
+        </ng-container>
+    </kendo-grid>
+
+    <!-- Now do the grid that does NOT have a height, wish kendo allowed you to do it another way! -->
+    <kendo-grid *ngIf="GridHeight === null"
+                [data]="gridView"
                 [skip]="startingRow"
                 [pageSize]="pageSize"
                 scrollable="virtual"
@@ -37,7 +64,7 @@ export class DynamicGridComponent implements AfterViewInit {
   @Input() columns: SkipColumnInfo[] = [];
   @Input() public pageSize = 30;
   @Input() public startingRow = 0;
-  @Input() public fillContainer: boolean = true;
+  @Input() public GridHeight: number | null = null;
 
   private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
