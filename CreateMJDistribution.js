@@ -107,10 +107,10 @@ async function createMJDistribution() {
     }, { prefix: normalizedDir });
   });
   
-  // Add LatestVersion_Link.ps1 to the root of the zip
-  console.log('Adding LatestVersion_Link.ps1 to zip file...')
-  const latestVersionScriptContent = fs.readFileSync('packages/LatestVersion_Link.ps1', 'utf8');
-  archive.append(latestVersionScriptContent, { name: 'LatestVersion_Link.ps1' });
+  // Add Update_MemberJunction_Packages_To_Latest.ps1 to the root of the zip
+  console.log('Adding Update_MemberJunction_Packages_To_Latest.ps1 to zip file...')
+  const latestVersionScriptContent = fs.readFileSync('packages/Update_MemberJunction_Packages_To_Latest.ps1', 'utf8');
+  archive.append(latestVersionScriptContent, { name: 'Update_MemberJunction_Packages_To_Latest.ps1' });
   
   // Add InstallMJDistribution.js to the root of the zip
   console.log('Adding InstallMJ.js to zip file...')

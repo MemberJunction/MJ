@@ -122,7 +122,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         this._temporaryMessage = undefined;
       }
     }
-    this.scrollToBottomAnimate();
   }
   
   protected async SetSelectedConversationUser() {
