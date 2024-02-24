@@ -24,7 +24,7 @@ export class RunReportResultType {
 }
 
 @Resolver(RunReportResultType)
-export class ReportResolver {
+export class ReportResolverExtended {
   @Query(() => RunReportResultType)
   async GetReportData(@Arg('ReportID', () => Int) ReportID: number, @Ctx() {}: AppContext): Promise<RunReportResultType> {
     const runReport = new RunReport();

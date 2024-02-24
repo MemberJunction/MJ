@@ -2,6 +2,7 @@ import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFrom
 import fs from 'fs';
 import path from 'path';
 import { logError } from './logging';
+import { mjCoreSchema } from './config';
 
 export function generateGraphQLServerCode(entities: EntityInfo[], outputDirectory: string, generatedEntitiesImportLibrary: string, excludeRelatedEntitiesExternalToSchema: boolean): boolean {
     let sRet: string = '';
@@ -41,10 +42,16 @@ export function generateServerEntityString(entity: EntityInfo, includeFileHeader
         for (let j:number = 0; j < entity.RelatedEntities.length; ++j) {
             const r = entity.RelatedEntities[j];
             const re = md.Entities.find(e => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
-            if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-                // only include the relationship if either we are NOT excluding related entities external to the schema
-                // or if the related entity is in the same schema as the current entity
-                sEntityOutput += generateServerRelationship(entity.RelatedEntities[j]);
+            // only include the relationship if we are IncludeInAPI for the related entity
+            if (re.IncludeInAPI) {
+                if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+                    // only include the relationship if either we are NOT excluding related entities external to the schema
+                    // or if the related entity is in the same schema as the current entity
+                    sEntityOutput += generateServerRelationship(md, entity.RelatedEntities[j]);
+                }    
+            }
+            else {
+                sEntityOutput += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`
             }
         }
 
@@ -78,6 +85,8 @@ import { AppContext } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
+
+import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 import { ${entities.map(e => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';
 `
@@ -181,8 +190,10 @@ function getTypeGraphQLFieldString(fieldInfo: EntityFieldInfo): string {
 
 
 
-function generateServerRelationship (r: EntityRelationshipInfo): string {
-    let relatedClassName = r.RelatedEntityBaseTableCodeName;
+function generateServerRelationship (md: Metadata, r: EntityRelationshipInfo): string {
+    const re = md.Entities.find(e => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
+    const classPackagePrefix: string = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
+    const relatedClassName = classPackagePrefix + r.RelatedEntityBaseTableCodeName;
 
     if (r.Type.toLowerCase().trim() == 'one to many') {
         return `
@@ -292,13 +303,20 @@ sRet += `
         for (let i = 0; i < entity.RelatedEntities.length; i++) {
             const r = entity.RelatedEntities[i];
             const re = md.Entities.find(e => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase());
-            if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
-                // only include the relationship if either we are NOT excluding related entities external to the schema
-                // or if the related entity is in the same schema as the current entity
-                if (r.Type.toLowerCase().trim() == 'many to many') 
-                    sRet += generateManyToManyFieldResolver(entity,r);
-                else 
-                    sRet += generateOneToManyFieldResolver(entity,r);
+
+            // only include the relationship if we are IncludeInAPI for the related entity
+            if (re.IncludeInAPI) {
+                if (!excludeRelatedEntitiesExternalToSchema || re.SchemaName === entity.SchemaName) {
+                    // only include the relationship if either we are NOT excluding related entities external to the schema
+                    // or if the related entity is in the same schema as the current entity
+                    if (r.Type.toLowerCase().trim() == 'many to many') 
+                        sRet += generateManyToManyFieldResolver(entity, r);
+                    else 
+                        sRet += generateOneToManyFieldResolver(entity, r);
+                }    
+            }
+            else {
+                sRet += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`
             }
         }
         // now do the mutations
@@ -541,8 +559,10 @@ function generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshi
     const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField;
     const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
     const quotes = filterField.NeedsQuotes ? "'" : '';
+    const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
+    const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix
     return `  
-    @FieldResolver(() => [${r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix}])
+    @FieldResolver(() => [${serverClassName}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + _graphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
@@ -558,9 +578,11 @@ function generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationsh
     const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField;
     const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
     const quotes = filterField.NeedsQuotes ? "'" : '';
+    const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
+    const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix
 
     return `
-    @FieldResolver(() => [${r.RelatedEntityBaseTableCodeName  + _graphQLTypeSuffix}])
+    @FieldResolver(() => [${serverClassName}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + _graphQLTypeSuffix}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const sSQL = \`SELECT * FROM [${re.SchemaName}].[${r.RelatedEntityBaseView}]\ WHERE [${re.PrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${re.SchemaName}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');

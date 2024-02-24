@@ -24,11 +24,11 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "^0.9.136",
-    "@memberjunction/core": "^0.9.148",
-    "@memberjunction/global": "^0.9.135",
-    "@memberjunction/server": "^0.9.187",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.160",
+    "@memberjunction/ai": "^0.9.137",
+    "@memberjunction/core": "^0.9.149",
+    "@memberjunction/global": "^0.9.136",
+    "@memberjunction/server": "^0.9.188",
+    "@memberjunction/sqlserver-dataprovider": "^0.9.161",
     "axios": "^1.5.1",
     "class-validator": "^0.14.0",
     "mj_generatedentities": "file:../GeneratedEntities",

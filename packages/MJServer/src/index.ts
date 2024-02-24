@@ -46,6 +46,8 @@ export * from './resolvers/EntityRecordNameResolver';
 export * from './resolvers/MergeRecordsResolver';
 export * from './resolvers/ReportResolver';
 
+export * from './generated/generated'
+
 
 //export * from '../../MJAPI/src/resolvers/UserFavoriteResolver';
 //export * from '../../MJAPI/src/resolvers/UserViewResolver';
