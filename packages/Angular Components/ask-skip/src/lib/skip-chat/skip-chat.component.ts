@@ -77,7 +77,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
             if (this._messageInProgress) {
               // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
-              this.SetSkipStatusMessage(obj.message);
+              this.SetSkipStatusMessage(obj.message, 0);
             }
           }
         }
@@ -88,7 +88,17 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
-  protected SetSkipStatusMessage(message: string) {
+  protected SetSkipStatusMessage(message: string, delay: number) {
+    if (delay && delay > 0) {
+      setTimeout(() => {
+        this.InnerSetSkipStatusMessage(message);
+      }, delay);
+    }
+    else 
+      this.InnerSetSkipStatusMessage(message);
+  }
+
+  protected InnerSetSkipStatusMessage(message: string) {
     if (message && message.length > 0) {
       if (!this._temporaryMessage)  {
         this._temporaryMessage = <ConversationDetailEntity><any>{ID: -1, Message: message, Role: 'ai'}; // create a new object
@@ -112,6 +122,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         this._temporaryMessage = undefined;
       }
     }
+    this.scrollToBottomAnimate();
   }
   
   protected async SetSelectedConversationUser() {
@@ -404,7 +415,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
       this.AddMessageToCurrentConversation(convoDetail, true)
 
-      this.SetSkipStatusMessage(this.pickSkipStartMessage());
+      this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
 
       this.askSkipInput.nativeElement.value = '';
       this.resizeTextInput();
@@ -470,8 +481,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this.cdRef.reattach();
       this.cdRef.detectChanges();
       // invoke manual resize with a delay to ensure that the scroll to bottom has taken place
-      //this.sharedService.InvokeManualResize();      
-      this.SetSkipStatusMessage('');
+      //this.sharedService.InvokeManualResize();   
+
+      this.SetSkipStatusMessage('', 3500); // slight delay to ensure that the message is removed after the UI has updated with the new response message
+      // now set focus on the input box
+      this.askSkipInput.nativeElement.focus();
     }
   } 
 

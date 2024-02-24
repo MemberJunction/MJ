@@ -61,7 +61,19 @@
 
 
 
-
+.new-chat-area {
+    display: flex;
+    justify-content: space-between; /* Aligns children (img and button) to each end */
+    align-items: center; /* Centers children vertically */
+}
+.avatar {
+    max-height: 24px;
+    margin-right: 10px;
+    margin-left: 5px;
+    margin-bottom: 3px;
+    /* Ensure the image aligns to the left */
+    margin-right: auto; /* Pushes everything else to the right */
+}
 
 .conversation-item {
     margin-left: 5px;

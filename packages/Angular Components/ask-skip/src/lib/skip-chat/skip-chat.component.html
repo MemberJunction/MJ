@@ -1,6 +1,9 @@
 <div class = "chat-container" mjFillContainer>
     <div class="conversation-history" *ngIf="ShowConversationList">
-        <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()" >+ New Chat</button>
+        <div class="new-chat-area">
+            <img src="assets/Skip Full Logo.jpg" class="avatar" />
+            <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()">+</button>
+        </div>
         <kendo-listview
             class="conversation-list"
             [data]="Conversations"
@@ -15,7 +18,7 @@
                      [ngClass]="SelectedConversation?.ID === dataItem.ID ? 'conversation-item-selected' : ''"
                      [title]="dataItem.Name" 
                      (click)="SelectConversation(dataItem)"> 
-                    <kendo-svgicon *ngIf="!IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('comment')" name="comment" svgIcon="conversation-icon"></kendo-svgicon>
+                    <!-- <kendo-svgicon *ngIf="!IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('comment')" name="comment" svgIcon="conversation-icon"></kendo-svgicon> -->
                     <kendo-svgicon *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('clock')" name="clock" class="conversation-icon"></kendo-svgicon>
                     <div class="text-container">
                         <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
