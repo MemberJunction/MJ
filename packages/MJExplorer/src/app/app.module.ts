@@ -27,7 +27,6 @@ import { LoadResourceWrappers } from '@memberjunction/ng-explorer-core';
 //***********************************************************
 import { GridModule } from '@progress/kendo-angular-grid';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { IconsModule } from '@progress/kendo-angular-icons';
 import { NavigationModule } from '@progress/kendo-angular-navigation';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -35,13 +34,10 @@ import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { LabelModule } from '@progress/kendo-angular-label';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { DialogsModule } from "@progress/kendo-angular-dialog";
-import { SortableModule } from "@progress/kendo-angular-sortable";
 import { FilterModule } from "@progress/kendo-angular-filter";
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { NotificationModule } from "@progress/kendo-angular-notification";
 import { ListViewModule } from '@progress/kendo-angular-listview';
-import { ChartsModule } from '@progress/kendo-angular-charts';
-import { ListBoxModule } from '@progress/kendo-angular-listbox';
 
 //***********************************************************
 // Auth0
@@ -95,7 +91,6 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     FormsModule,
     BrowserAnimationsModule,
     LayoutModule,
-    IndicatorsModule,
     IconsModule,
     InputsModule,
     DateInputsModule,
@@ -107,7 +102,6 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     AppRoutingModule,
     ListViewModule,
     DialogsModule,
-    SortableModule,
     FilterModule,
     UserViewGridModule,
     LinkDirectivesModule,
@@ -150,9 +144,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
           ['https://graph.microsoft.com/v1.0/me', ['user.read']]
         ])
       })
-    ),
-    ChartsModule,
-    ListBoxModule
+    )
   ],
   providers: [SharedService,
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

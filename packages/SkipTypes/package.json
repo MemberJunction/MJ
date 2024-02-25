@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/skip-types",
-  "version": "0.9.39",
+  "version": "0.9.40",
   "description": "MemberJunction: Skip AI Assistant - Types that are used between the MJAPI and the Skip API as well as the UI within MemberJunction Explorer",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "@memberjunction/core-entities": "^0.9.134",
-    "@memberjunction/data-context": "^0.9.22"
+    "@memberjunction/data-context": "^0.9.23"
   }
 }

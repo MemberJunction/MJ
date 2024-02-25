@@ -1,7 +1,8 @@
-<div class = "chat-container" mjFillContainer>
+<div class = "chat-container" mjFillContainer #topLevelDiv>
     <div class="conversation-history" *ngIf="ShowConversationList">
         <div class="new-chat-area">
             <img src="assets/Skip Full Logo.jpg" class="avatar" />
+            <input type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (click)="loadConversations()"/>
             <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()">+</button>
         </div>
         <kendo-listview

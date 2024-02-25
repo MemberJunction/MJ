@@ -33,6 +33,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @Input() public LinkedEntity: string = '';
   @Input() public LinkedEntityRecordID: number = 0;
   @Input() public ShowDataContextButton: boolean = true;
+  @Input() public IncludeLinkedConversationsInList: boolean = false;
   
   public SelectedConversationUser: UserInfo | undefined;
   public DataContext!: DataContext;
@@ -55,6 +56,10 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
   showScrollToBottomIcon = false;
 
+  @ViewChild('topLevelDiv') topLevelDiv!: ElementRef;
+
+  private intersectionObserver: IntersectionObserver | undefined;
+  
   constructor(
     public sharedService: SharedService,
     private renderer: Renderer2,
@@ -158,23 +163,50 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     if (this.paramsSubscription) {
       this.paramsSubscription.unsubscribe();
     }
+    if (this.intersectionObserver) {
+      this.intersectionObserver.disconnect();
+    }
   }
   
   private _loaded: boolean = false;
   ngAfterViewInit(): void {
-    this.paramsSubscription = this.route.params.subscribe(params => {
-      if (!this._loaded) {
-        this._loaded = true; // do this once
+    this.intersectionObserver = new IntersectionObserver(entries => {
+      const [entry] = entries;
+      if (entry.isIntersecting) {
+        // we are now visible, for the first time, 
 
-        const conversationId = params['conversationId'];
-        if (conversationId && !isNaN(conversationId)) {
-          this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
-        } else {
-          this.loadConversations();
+        // first do stuff if we're on "global" skip chat mode...
+        if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && this.LinkedEntityRecordID <= 0) {
+          // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
+          this.paramsSubscription = this.route.params.subscribe(params => {
+            if (!this._loaded) {
+              this._loaded = true; // do this once
+      
+              const conversationId = params['conversationId'];
+              if (conversationId && !isNaN(conversationId)) {
+                this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
+              } else {
+                this.loadConversations();
+              }
+            }
+          });
         }
+        else if (this.LinkedEntity && this.LinkedEntityRecordID > 0) {
+          // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
+          if (!this._loaded) {
+            this._loaded = true; // do this once
+            this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
+          }
+        }
+
+        this.checkScroll();
+    
+        // Only care about the first time we are visible, so unobserve here to save resources
+        this.intersectionObserver!.unobserve(this.topLevelDiv.nativeElement);
       }
     });
-    this.checkScroll();
+
+    this.intersectionObserver.observe(this.topLevelDiv.nativeElement);
   } 
 
   private _scrollToBottom: boolean = false;
@@ -201,7 +233,10 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       OrderBy: 'CreatedAt DESC' // get in reverse order
     })
     if (result && result.Success) {
-      this.Conversations = <ConversationEntity[]>result.Results;
+      if (this.IncludeLinkedConversationsInList)
+        this.Conversations = <ConversationEntity[]>result.Results;
+      else
+        this.Conversations = <ConversationEntity[]>result.Results.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID > 0)); // filter out linked conversations
     }
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
@@ -285,10 +320,47 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       convo.LinkedEntityID = linkedEntityID;
       convo.LinkedRecordID = this.LinkedEntityRecordID
     }
-    await convo.Save();
-    this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
-    this.SelectConversation(convo);
-    this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
+    // next, create a new data context for this conversation
+    const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
+    dc.NewRecord();
+    dc.Name = "Data Context for Skip Conversation";
+    dc.UserID = md.CurrentUser.ID;
+    if (await dc.Save()) {
+      // now create a data context item for the linked record if we have one
+      if (this.LinkedEntityID && this.LinkedEntityID > 0 && this.LinkedEntityRecordID > 0) {
+        const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
+        dci.NewRecord();
+        dci.DataContextID = dc.ID;
+        if (this.LinkedEntity === 'User Views') {
+          dci.Type = 'view';
+          dci.ViewID = this.LinkedEntityRecordID;
+        }
+        else if (this.LinkedEntity === 'Queries') {
+          dci.Type='query';
+          dci.QueryID = this.LinkedEntityRecordID;
+        }
+        else {
+          dci.Type = 'single_record';
+          dci.RecordID = this.LinkedEntityRecordID.toString();
+          dci.EntityID = this.LinkedEntityID;
+        }
+        await dci.Save();
+      }
+
+      convo.DataContextID = dc.ID;
+      this.DataContextID = dc.ID;
+      await convo.Save();
+      this.DataContext = new DataContext();
+      await this.DataContext.LoadMetadata(this.DataContextID);
+      
+      this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
+      this.SelectConversation(convo);
+      this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done  
+    }
+    else {
+      this.sharedService.CreateSimpleNotification('Error creating data context', 'error', 5000)
+    }
+
   }
   
   onEnter(event: any) {

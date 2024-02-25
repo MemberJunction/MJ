@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-record-changes",
-  "version": "0.9.84",
+  "version": "0.9.85",
   "description": "MemberJunction: Angular pop-up window and grid to show changes made to a specific individual record",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -23,7 +23,8 @@
     "@angular/core": "~17.2.2",
     "@angular/forms": "~17.2.2",
     "@angular/router": "~17.2.2",
-    "@progress/kendo-angular-grid": "~15.1.0"
+    "@progress/kendo-angular-grid": "~15.1.0",
+    "@progress/kendo-angular-indicators": "~15.1.0"
   },
   "dependencies": {
     "@memberjunction/core": "^0.9.150",
