@@ -1,5 +1,5 @@
-<div class="fab-container" *ngIf="isVisible">
+<div class="fab-container" *ngIf="SkipChatWindowsCurrentlyVisible === 0">
     <button (click)="OpenSkipWindow()">
-        <i class="fas fa-comments"></i> <!-- This is a Font Awesome chat icon -->
+        <img class = "skip-button-image" src="assets/Skip - Mark Only - Small.png" />
     </button>
 </div>  

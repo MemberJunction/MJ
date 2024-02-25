@@ -4,6 +4,7 @@ import { ComponentPortal } from '@angular/cdk/portal';
 import { Router } from '@angular/router';
 
 import { SkipWindowComponent } from '../skip-window/skip-window.component';
+import { SkipChatComponent } from '../skip-chat/skip-chat.component';
 
 export class SkipClickedEvent {
   public cancel: boolean = false;
@@ -14,19 +15,13 @@ export class SkipClickedEvent {
   templateUrl: './skip-button.component.html',
   styleUrls: ['./skip-button.component.css']
 })
-export class SkipButtonComponent implements OnInit {  
+export class SkipButtonComponent {  
   @Input() action: 'route' | 'window' = 'window';
   @Output() click: EventEmitter<any> = new EventEmitter();
   constructor(private overlay: Overlay, private router: Router) {}
 
-  public isVisible: boolean = true;
-
-  ngOnInit() {
-    // Listen to route changes
-    this.router.events.subscribe((event) => {
-      // Check if the current route starts with /askskip
-      this.isVisible = !this.router.url.startsWith('/askskip');
-    });
+  public get SkipChatWindowsCurrentlyVisible(): number {
+    return SkipChatComponent.SkipChatWindowsCurrentlyVisible
   }
 
   public OpenSkipWindow() {

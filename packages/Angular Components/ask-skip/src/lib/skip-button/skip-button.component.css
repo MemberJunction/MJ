@@ -10,7 +10,7 @@ button {
   width: 60px; /* Adjust based on your design */
   height: 60px; /* Adjust to maintain aspect ratio for circle */
   border-radius: 50%;
-  background-color: #007bff;
+  background-color: #f5dc8a;
   color: white;
   border: none;
   cursor: pointer;
@@ -23,4 +23,8 @@ button {
 
 .custom-backdrop-class {
   background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent backdrop */
+}
+
+.skip-button-image {
+  width: 32px;
 }

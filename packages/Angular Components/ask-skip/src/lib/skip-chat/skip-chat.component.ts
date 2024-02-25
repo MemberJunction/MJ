@@ -34,13 +34,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @Input() public LinkedEntityRecordID: number = 0;
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
-  
-  public SelectedConversationUser: UserInfo | undefined;
-  public DataContext!: DataContext;
-
-  private _messageInProgress: boolean = false;
-  private _temporaryMessage: ConversationDetailEntity | undefined;
-
+ 
   /**
    * If true, the component will update the browser URL when the conversation changes. If false, it will not update the URL. Default is true.
    */
@@ -49,17 +43,44 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @ViewChild(Container, { static: true }) askSkip!: Container;
   @ViewChild('AskSkipPanel', { static: true }) askSkipPanel!: ElementRef;
   @ViewChild('mjContainer', { read: ViewContainerRef }) mjContainerRef!: ViewContainerRef;
-
   @ViewChild('conversationList', { static: false }) conversationList!: ListViewComponent ;
-
   @ViewChild('AskSkipInput') askSkipInput: any;
   @ViewChild('scrollContainer') private scrollContainer: ElementRef | undefined;
-  showScrollToBottomIcon = false;
-
   @ViewChild('topLevelDiv') topLevelDiv!: ElementRef;
 
-  private intersectionObserver: IntersectionObserver | undefined;
-  
+  public SelectedConversationUser: UserInfo | undefined;
+  public DataContext!: DataContext;
+
+  public _showScrollToBottomIcon = false;
+
+  private _messageInProgress: boolean = false;
+  private _temporaryMessage: ConversationDetailEntity | undefined;
+  private _intersectionObserver: IntersectionObserver | undefined;
+  private static __skipChatWindowsCurrentlyVisible: number = 0;
+
+  public WelcomeQuestions = [
+    { 
+      topLine: "Create a report",
+      bottomLine: "with any of your data in it, just ask",
+      prompt: "I'd like help creating a new report with data in my system. Can you help me get started?"
+    },
+    { 
+      topLine: "Learn more about",
+      bottomLine: "specific records in the database",
+      prompt: "I would like to dig deeper into my database and get you to analyze a specific record in the database, can you help me with that?"
+    },
+    { 
+      topLine: "Get business advice",
+      bottomLine: "to improve operating results and more",
+      prompt: "I need some advice on how to improve my business operations, can you help me analyze my data and then think about ways to improve my operating results?"
+    },
+    { 
+      topLine: "Seek marketing help",
+      bottomLine: "to segment your audience or build campaigns",
+      prompt: "I need help with marketing, can you help me analyze my data and then think about ways to segment my audience and build campaigns to improve revenue and retention?"
+    },
+  ]
+
   constructor(
     public sharedService: SharedService,
     private renderer: Renderer2,
@@ -73,6 +94,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this.SubscribeToNotifications();
   }
 
+  public static get SkipChatWindowsCurrentlyVisible(): number {
+    return SkipChatComponent.__skipChatWindowsCurrentlyVisible;
+  }
   
   protected SubscribeToNotifications() {
     try {
@@ -145,8 +169,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
  
-
-
   public get LinkedEntityID(): number | null {
     if (this.LinkedEntity && this.LinkedEntity.length > 0) {
       // lookup the entity id from the linkedentity provided to us as a property
@@ -163,50 +185,84 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     if (this.paramsSubscription) {
       this.paramsSubscription.unsubscribe();
     }
-    if (this.intersectionObserver) {
-      this.intersectionObserver.disconnect();
+    if (this._intersectionObserver) {
+      this._intersectionObserver.disconnect();
     }
   }
   
   private _loaded: boolean = false;
   ngAfterViewInit(): void {
-    this.intersectionObserver = new IntersectionObserver(entries => {
-      const [entry] = entries;
-      if (entry.isIntersecting) {
-        // we are now visible, for the first time, 
-
-        // first do stuff if we're on "global" skip chat mode...
-        if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && this.LinkedEntityRecordID <= 0) {
-          // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
-          this.paramsSubscription = this.route.params.subscribe(params => {
-            if (!this._loaded) {
-              this._loaded = true; // do this once
-      
-              const conversationId = params['conversationId'];
-              if (conversationId && !isNaN(conversationId)) {
-                this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
-              } else {
-                this.loadConversations();
-              }
-            }
-          });
+    // apply a class to our parent if it is a kendo tab, to get rid of padding so we can control our 
+    // own padding/margin and handle colors properly within the tab
+    document.querySelectorAll('.k-tabstrip-content').forEach(function(parent) {
+      if (parent.querySelector('.chat-container')) {
+        // Add a special class to the tab because it contains us, a chat container
+        try {
+          const htmlElement = <HTMLElement>parent;
+          htmlElement.style.padding = '0';
+          htmlElement.style.paddingBlock = '0';
+          htmlElement.style.overflow = 'hidden';
         }
-        else if (this.LinkedEntity && this.LinkedEntityRecordID > 0) {
-          // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
-          if (!this._loaded) {
-            this._loaded = true; // do this once
-            this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
-          }
+        catch (e)
+        {
+          // ignore this, it's not a big deal
+          console.log(e);
         }
-
-        this.checkScroll();
-    
-        // Only care about the first time we are visible, so unobserve here to save resources
-        this.intersectionObserver!.unobserve(this.topLevelDiv.nativeElement);
       }
     });
 
-    this.intersectionObserver.observe(this.topLevelDiv.nativeElement);
+    // create an intersection observer to see if we are visible
+    this._intersectionObserver = new IntersectionObserver(entries => {
+      const [entry] = entries;
+      if (!entry.isIntersecting) {
+        // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
+        if (this._loaded) {
+          SkipChatComponent.__skipChatWindowsCurrentlyVisible--;
+          if (SkipChatComponent.__skipChatWindowsCurrentlyVisible < 0)
+            SkipChatComponent.__skipChatWindowsCurrentlyVisible = 0; // never let it go negative
+        }
+      }
+      else {
+        // we are now visible, increment the count of visible instances
+        SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
+
+        if (!this._loaded) {
+          // we are now visible, for the first time, 
+
+          // first do stuff if we're on "global" skip chat mode...
+          if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && this.LinkedEntityRecordID <= 0) {
+            // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
+            this.paramsSubscription = this.route.params.subscribe(params => {
+              if (!this._loaded) {
+                this._loaded = true; // do this once
+        
+                const conversationId = params['conversationId'];
+                if (conversationId && !isNaN(conversationId)) {
+                  this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
+                } else {
+                  this.loadConversations();
+                }
+              }
+            });
+          }
+          else if (this.LinkedEntity && this.LinkedEntityRecordID > 0) {
+            // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
+            if (!this._loaded) {
+              this._loaded = true; // do this once
+              this.loadConversations(); // Load the conversation which will filter by the linked entity and record id
+            }
+          }
+
+          this.checkScroll();
+        }
+    
+        // Only care about the first time we are visible, so unobserve here to save resources
+        //this._intersectionObserver!.unobserve(this.topLevelDiv.nativeElement);
+      }
+    });
+
+    // now fire up the observer on the top level div
+    this._intersectionObserver.observe(this.topLevelDiv.nativeElement);
   } 
 
   private _scrollToBottom: boolean = false;
@@ -443,6 +499,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       const textarea = this.askSkipInput.nativeElement;
       textarea.style.height = 'auto'; // Reset height to recalculate
       textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight  
+      textarea.parent.style.height = textarea.style.height;
     }
     catch (e) {
       LogError(e);
@@ -472,8 +529,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     this._usedStartMessages.push(SkipChatComponent._startMessages[idx]);
     return SkipChatComponent._startMessages[idx];
   }
-  async sendSkipMessage() {
-    const val = this.askSkipInput.nativeElement.value;
+
+  async sendPrompt(val: string) {
     if (val && val.length > 0) {
       const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
       if (this.SelectedConversation)
@@ -560,6 +617,10 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       // now set focus on the input box
       this.askSkipInput.nativeElement.focus();
     }
+  }
+  async sendSkipMessage() {
+    const val = this.askSkipInput.nativeElement.value;
+    await this.sendPrompt(val);
   } 
 
   public ClearMessages() {
@@ -626,7 +687,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       const element = this.scrollContainer.nativeElement;
       const atBottom = element.scrollHeight - element.scrollTop === element.clientHeight;
       
-      this.showScrollToBottomIcon = !atBottom;  
+      this._showScrollToBottomIcon = !atBottom;  
     }
   }
 
