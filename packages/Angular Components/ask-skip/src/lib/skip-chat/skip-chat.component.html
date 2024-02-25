@@ -41,12 +41,12 @@
             <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
                 <kendo-loader></kendo-loader>
             </div>
-            <div class="welcome-wrapper">
-                <div class='welcome-message' *ngIf="!Messages || Messages.length===0">
+            <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
+                <div class='welcome-message'>
                     <img src="assets/Skip Full Logo.jpg"/>
                     <div class="welcome-header-text">What can I help with today?</div>
                 </div>
-                <div class='welcome-suggested-questions' *ngIf="!Messages || Messages.length===0">
+                <div class='welcome-suggested-questions'>
                     <div class="welcome-suggested-questions-col">
                         <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[0].prompt)">
                             <span class="welcome-question-header">{{WelcomeQuestions[0].topLine}}</span>

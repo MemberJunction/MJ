@@ -54,6 +54,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   public _showScrollToBottomIcon = false;
 
   private _messageInProgress: boolean = false;
+  public _conversationLoadComplete: boolean = false;
   private _temporaryMessage: ConversationDetailEntity | undefined;
   private _intersectionObserver: IntersectionObserver | undefined;
   private static __skipChatWindowsCurrentlyVisible: number = 0;
@@ -82,6 +83,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   ]
 
   constructor(
+    private el: ElementRef,
     public sharedService: SharedService,
     private renderer: Renderer2,
     private route: ActivatedRoute,
@@ -190,26 +192,33 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
   
-  private _loaded: boolean = false;
-  ngAfterViewInit(): void {
+  protected updateParentTabPanelStyling() {
+    // this will update the ancestor above us that is a tabpanel to remove padding so we can control our own padding/margin and handle colors properly within the tab
     // apply a class to our parent if it is a kendo tab, to get rid of padding so we can control our 
     // own padding/margin and handle colors properly within the tab
-    document.querySelectorAll('.k-tabstrip-content').forEach(function(parent) {
-      if (parent.querySelector('.chat-container')) {
-        // Add a special class to the tab because it contains us, a chat container
-        try {
-          const htmlElement = <HTMLElement>parent;
-          htmlElement.style.padding = '0';
-          htmlElement.style.paddingBlock = '0';
-          htmlElement.style.overflow = 'hidden';
-        }
-        catch (e)
-        {
-          // ignore this, it's not a big deal
-          console.log(e);
-        }
+
+    // Find the closest ancestor with the .k-tabstrip-content class
+    const ancestor = this.el.nativeElement.closest('.k-tabstrip-content');
+
+    if (ancestor) {
+      try {
+        // Modify the ancestor's style as needed
+        const htmlElement = <HTMLElement>ancestor;
+        htmlElement.style.padding = '0';
+        htmlElement.style.paddingBlock = '0';
+        htmlElement.style.overflow = 'hidden';
       }
-    });
+      catch (e) {
+        // ignore this, it's not a big deal
+        console.log(e);
+      }
+    }    
+
+  }
+
+  public _loaded: boolean = false;
+  ngAfterViewInit(): void {
+    this.updateParentTabPanelStyling();
 
     // create an intersection observer to see if we are visible
     this._intersectionObserver = new IntersectionObserver(entries => {
@@ -412,7 +421,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       await this.DataContext.LoadMetadata(this.DataContextID);
       
       this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
-      this.SelectConversation(convo);
+      await this.SelectConversation(convo);
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done  
     }
     else {
@@ -428,6 +437,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   public async SelectConversation(conversation: ConversationEntity) {
     if (conversation && conversation.ID !== this.SelectedConversation?.ID) {
       // load up the conversation if not already the one that's loaded
+      this._conversationLoadComplete = false;
       this.ClearMessages();
       const oldStatus = this._processingStatus[conversation.ID];
       this._processingStatus[conversation.ID] = true;
@@ -462,6 +472,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
       // ensure the list box has the conversation in view
       this.scrollToConversation(conversation.ID);
+
+      this._conversationLoadComplete = true;
 
       if (this.UpdateAppRoute) {
         // finally update the browser URL since we've changed the conversation ID
@@ -499,7 +511,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       const textarea = this.askSkipInput.nativeElement;
       textarea.style.height = 'auto'; // Reset height to recalculate
       textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight  
-      textarea.parent.style.height = textarea.style.height;
     }
     catch (e) {
       LogError(e);

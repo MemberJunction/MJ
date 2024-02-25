@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ask-skip",
-  "version": "0.9.44",
+  "version": "0.9.49",
   "description": "MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
