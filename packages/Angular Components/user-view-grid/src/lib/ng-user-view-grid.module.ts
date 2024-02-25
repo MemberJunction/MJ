@@ -18,6 +18,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 
 //import { PlotlyViaCDNModule } from 'angular-plotly.js';
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
+import { UserViewGridWithAnalysisComponent } from './grid-with-analysis.component';
 
 
 // PlotlyViaCDNModule.setPlotlyVersion('latest'); // can be `latest` or any version number (i.e.: '1.40.0')
@@ -25,7 +26,8 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 @NgModule({
   declarations: [
-    UserViewGridComponent
+    UserViewGridComponent,
+    UserViewGridWithAnalysisComponent
   ],
   imports: [
     CommonModule,
@@ -45,7 +47,8 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     AskSkipModule
   ],
   exports: [
-    UserViewGridComponent
+    UserViewGridComponent,
+    UserViewGridWithAnalysisComponent
   ]
 })
 export class UserViewGridModule { }
