@@ -81,7 +81,8 @@
                 </kendo-grid>
             </ng-template>            
         </kendo-tabstrip-tab>
-        <kendo-tabstrip-tab *ngIf="Params?.ViewID">
+        <!-- Only Include the Analysis tab if the ViewID is present and there is no ExtraFilter - meaning we're just a regular view that someone's looking at, we're not on a tab of a form -->
+        <kendo-tabstrip-tab *ngIf="Params?.ViewID && !Params?.ExtraFilter">
             <ng-template kendoTabTitle>Analysis</ng-template>
             <ng-template kendoTabContent>
                 <mj-skip-chat mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
