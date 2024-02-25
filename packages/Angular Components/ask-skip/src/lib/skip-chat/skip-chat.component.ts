@@ -211,13 +211,15 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   private _scrollToBottom: boolean = false;
   ngAfterViewChecked(): void {
-    // have a short delay to make sure view is fully rendered via event cycle going through its queue
-    setTimeout(() => {
-      if (this._scrollToBottom) {
-        this.scrollToBottom();
-      }
+    if (this._scrollToBottom) {
       this._scrollToBottom = false;      
-    },200);
+      // have a short delay to make sure view is fully rendered via event cycle going through its queue
+      // NOTE - we only do this setTimeout if we have a scroll to bottom request, otherwise we don't need to do this, and 
+      // REMEMBER setTimeout() causes Angular to do a change detection cycle, so we don't want to do this unless we need to
+      setTimeout(() => {
+        this.scrollToBottom();
+      },200);
+    }
   }
 
   protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
@@ -230,11 +232,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     const result = await rv.RunView({
       EntityName: 'Conversations',
       ExtraFilter: 'UserID=' + md.CurrentUser.ID + linkFilter,
-      OrderBy: 'CreatedAt DESC' // get in reverse order
+      OrderBy: 'CreatedAt DESC' // get in reverse order so we have latest on top
     })
     if (result && result.Success) {
-      if (this.IncludeLinkedConversationsInList)
-        this.Conversations = <ConversationEntity[]>result.Results;
+      if (this.IncludeLinkedConversationsInList || (this.LinkedEntity && this.LinkedEntity.length > 0 && this.LinkedEntityRecordID > 0))
+        this.Conversations = <ConversationEntity[]>result.Results; // dont filter out linked conversations if the user wants them in the list OR if we ARE constrained to a linked entity/record pair
       else
         this.Conversations = <ConversationEntity[]>result.Results.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID > 0)); // filter out linked conversations
     }

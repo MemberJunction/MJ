@@ -37,13 +37,35 @@
     </div>
     <div class="conversation-wrapper" mjFillContainer>
         <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
+            <div class="waiting-for-ai" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
+                <kendo-loader></kendo-loader>
+            </div>
+            <div class='welcome-message' *ngIf="!Messages || Messages.length===0">
+                <img src="assets/Skip Full Logo.jpg" class="avatar" />
+                <div class="welcome-header-text">My name is Skip and I'm here to help you analyze your data in any way you'd like. What can I help with?</div>
+            </div>
+            <div class='welcome-suggested-questions' *ngIf="!Messages || Messages.length===0">
+                <div class="welcome-question">
+                    <span class="welcome-question-header">Create a report</span>
+                    <span>including tables, charts, maps, whatever else you can imagine</span>
+                </div>
+                <div class="welcome-question">
+                    <span class="welcome-question-header">Learn more about</span>
+                    <span>a specific record(s) in the database, I can look up records and analyze them</span>
+                </div>
+                <div class="welcome-question">
+                    <span class="welcome-question-header">Another idea</span>
+                    <span>with more text goes here...</span>
+                </div>
+                <div class="welcome-question">
+                    <span class="welcome-question-header">Another idea</span>
+                    <span>with more text goes here...</span>
+                </div>
+            </div>
             <div mjContainer>
                 <!-- Dynamic messages will be injected here -->
             </div>
             <span class="scroll-to-bottom-icon" *ngIf="showScrollToBottomIcon" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
-            <div class="waiting-for-ai" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
-                <kendo-loader></kendo-loader>
-            </div>
         </div>
         <div class="input-area">
             <textarea

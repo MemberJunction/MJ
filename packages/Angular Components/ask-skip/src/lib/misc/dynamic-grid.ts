@@ -73,8 +73,28 @@ export class DynamicGridComponent implements AfterViewInit {
   set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
       this._skipData = d;
       if (d) {
-        this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
-        this.columns = d.tableDataColumns ? d.tableDataColumns : [];
+        // check to see if the tableDataColumns is NOT provided, in that case we need to check to see if we 
+        // have column names that are valid in our table data. If we don't we need to prepend whatever was provided with a "_" prefix so that 
+        // we don't have things like 2022 as a column name which is not valid in JavaScript
+        if (!d.tableDataColumns || d.tableDataColumns.length === 0) {
+          // no columns provided, so we check here to make sure the column names are valid
+          this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
+          // now loop through the data and fix up the column names if needed
+          for (let i = 0; i < this.data.length; i++) {
+            const row = this.data[i];
+            for (let key in row) {
+              if (key.match(/^\d/)) {
+                const newKey = '_' + key;
+                row[newKey] = row[key];
+                delete row[key];
+              }
+            }
+          }
+        }
+        else {
+          this.columns = d.tableDataColumns 
+          this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
+        }
         this.loadGridView();
       }
   }

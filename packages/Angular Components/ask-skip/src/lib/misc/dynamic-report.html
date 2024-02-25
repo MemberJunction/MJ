@@ -7,10 +7,12 @@
               <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
               <span class="report-tab-title">Chart</span>
             </ng-template>
-            <ng-template kendoTabContent class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
-                <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
-                <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
-                </mj-dynamic-chart>
+            <ng-template kendoTabContent>
+                <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
+                  <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
+                  <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
+                  </mj-dynamic-chart>  
+                </div>
             </ng-template>
         </kendo-tabstrip-tab>  
         <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">

@@ -191,6 +191,13 @@ export class Metadata {
      * @returns the name of the record
      */
     public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
+        // check each primary key value to make sure it's not null
+        for (let j = 0; j < primaryKeyValues.length; j++) {
+            if (!primaryKeyValues[j] || !primaryKeyValues[j].Value) {
+                throw new Error('GetEntityRecordName: primaryKeyValues cannot contain null values. FieldName: ' + primaryKeyValues[j]?.FieldName);
+            }
+        }
+        
         return await Metadata.Provider.GetEntityRecordName(entityName, primaryKeyValues);
     }
 
@@ -200,6 +207,21 @@ export class Metadata {
      * @returns an array of EntityRecordNameResult objects
      */
     public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
+        // valiate to make sure we don't have any null primary keys being sent in
+        for (let i = 0; i < info.length; i++) {
+            if (!info[i].PrimaryKeyValues || info[i].PrimaryKeyValues.length == 0) {
+                throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot be null or empty. It is for item ' + i.toString() + ' in the input array.');
+            }
+            else {
+                // check each primary key value to make sure it's not null
+                for (let j = 0; j < info[i].PrimaryKeyValues.length; j++) {
+                    if (!info[i].PrimaryKeyValues[j] || !info[i].PrimaryKeyValues[j].Value) {
+                        throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot contain null values. FieldName: ' + info[i].PrimaryKeyValues[j]?.FieldName);
+                    }
+                }
+            }
+
+        }
         return await Metadata.Provider.GetEntityRecordNames(info);          
     }
 

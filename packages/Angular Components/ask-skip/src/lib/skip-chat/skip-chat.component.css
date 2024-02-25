@@ -203,3 +203,60 @@
     box-shadow: 0px 0px 5px rgba(0,0,0,0.3); /* Optional: Adds a subtle shadow for better visibility */
     cursor: pointer;
 }
+
+/* Center the welcome message vertically and horizontally */
+.welcome-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.welcome-message .avatar {
+    max-width: 240px;  
+    margin-bottom: 20px; /* Adds some space between the image and the text below */
+}
+
+.welcome-header-text {
+    font-size: larger;
+    font-weight: bold;
+}
+
+/* Position the welcome-suggested-questions at the bottom of its container */
+.welcome-suggested-questions {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100%;
+}
+
+/* Flex layout for questions, two per row */
+.welcome-question {
+    display: flex;
+    flex-basis: calc(50% - 10px); /* Adjust the width of each question to fit two per row, accounting for any margin/padding */
+    max-height: 100px; /* Limit the height of each question */
+    max-width: 40%; /* Limit the width of each question */
+    justify-content: space-between;
+    margin: 5px; /* Adds some space around each question */
+    flex-direction: column; /* Stack the header and text vertically */
+}
+
+.welcome-question-header {
+    font-weight: bold;
+    display: block; /* Ensures the header is on its own line */
+}
+
+/* Non-bold text for the content below the header */
+.welcome-question span:not(.welcome-question-header) {
+    font-weight: normal;
+}
+
+@media (min-width: 600px) {
+    .welcome-suggested-questions {
+        display: flex;
+        flex-wrap: wrap; /* Allows questions to wrap to the next line */
+        align-content: flex-end; /* Aligns the content to the bottom */
+    }
+}
+  

@@ -8,13 +8,13 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
   selector: '[mjFillContainer]'
 })
 export class FillContainer implements OnInit, OnDestroy {
-  
   @Input() fillWidth: boolean = true;
   @Input() fillHeight: boolean = true;
   @Input() rightMargin: number = 0;
   @Input() bottomMargin: number = 0;
 
-  constructor(private elementRef: ElementRef) {}
+  constructor(private elementRef: ElementRef) {
+  }
 
   private _resizeDebounceTime: number = 100;
   private _resizeEndDebounceTime: number = 500;
@@ -118,17 +118,19 @@ export class FillContainer implements OnInit, OnDestroy {
       LogError(err);
     }
   }
-    // Function to check if element or its parents have the 'mjSkipResize' attribute
+
+  // Function to check if element or its parents have the 'mjSkipResize' attribute or if a parent is within a grid
   protected shouldSkipResize(el: HTMLElement): boolean {
     let cur: HTMLElement | null = el;
     while (cur) {
-        if (cur.hasAttribute('mjSkipResize')) {
+        if (cur.hasAttribute('mjSkipResize') || cur.role === 'grid') {
             return true;
         }
         cur = cur.parentElement;
     }
     return false;
   };
+
   protected elementBelowHiddenTab(element: HTMLElement): boolean {
     // check if the element is below a hidden tab, a hidden tab will have a class of .k-tabstrip-content and also have .k-active applied
     // we can go all the way up the tree to look for this
@@ -144,6 +146,19 @@ export class FillContainer implements OnInit, OnDestroy {
       parent = parent.parentElement;
     }
     // not below a tab at all
+    return false;
+  }
+  protected elementWithinGrid(element: HTMLElement): boolean {
+    // check if the element is within a kendo grid 
+    let parent = element.parentElement;
+    while (parent) {
+      if (parent.role === 'grid') {
+        // element is below a grid
+        return true;  
+      }
+      parent = parent.parentElement;
+    }
+    // not below a grid
     return false;
   }
 
