@@ -1,20 +1,18 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
-import { BaseLLM, BaseModel, ModelUsage } from "../generic/baseModel";
-import { ChatParams, ChatResult, IChat } from "../generic/IChat";
-import { ISummarize, SummarizeParams, SummarizeResult } from '../generic/ISummarize';
-import { ClassifyParams, ClassifyResult, IClassify } from '../generic/IClassify';
+import { ModelUsage } from "../generic/baseModel";
+import { ChatParams, ChatResult } from "../generic/chat.types";
+import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
+import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
+import { BaseLLM } from '../generic/baseLLM';
 
 const { ChatCompletionRequestMessageRoleEnum, Configuration, OpenAIApi } = require("openai");
 
-export class OpenAILLM extends BaseLLM implements IChat, ISummarize, IClassify {
+export class OpenAILLM extends BaseLLM {
     static _openAI;//: OpenAIApi;
 
-    constructor() {
-        super();
+    constructor(apiKey: string) {
+        super(apiKey);
         const configuration = new Configuration({
-            apiKey: process.env.OPEN_AI_API_KEY
+            apiKey: apiKey
         });
         if (!OpenAILLM._openAI)
             OpenAILLM._openAI = new OpenAIApi(configuration);
@@ -118,5 +116,4 @@ export class OpenAILLM extends BaseLLM implements IChat, ISummarize, IClassify {
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
     }
-
 }

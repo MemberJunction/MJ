@@ -25,7 +25,4 @@ export class ChatResult extends BaseResult {
     status: string
     statusText: string
 }
-
-export interface IChat {
-    ChatCompletion(params: ChatParams): Promise<ChatResult> 
-}
+ 
