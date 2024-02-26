@@ -23,8 +23,8 @@ export const enableIntrospection = env.get('ENABLE_INTROSPECTION').default('fals
 export const websiteRunFromPackage = env.get('WEBSITE_RUN_FROM_PACKAGE').asIntPositive();
 export const userEmailMap = env.get('USER_EMAIL_MAP').default('{}').asJsonObject() as Record<string, string>;
 
-export const ___skipAPIurl = env.get('ASK_SKIP_API_URL').required().asString();
-export const ___skipAPIOrgId = env.get('ASK_SKIP_ORGANIZATION_ID').required().asString();
+export const ___skipAPIurl = env.get('ASK_SKIP_API_URL').asString();
+export const ___skipAPIOrgId = env.get('ASK_SKIP_ORGANIZATION_ID').asString();
 
 
 export const auth0Domain = env.get('AUTH0_DOMAIN').asString();
