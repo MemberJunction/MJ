@@ -3,9 +3,11 @@ import { ChatParams, ChatResult } from "../generic/chat.types";
 import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { BaseLLM } from '../generic/baseLLM';
+import { RegisterClass } from '@memberjunction/global'
 
 const { ChatCompletionRequestMessageRoleEnum, Configuration, OpenAIApi } = require("openai");
 
+@RegisterClass(BaseLLM, null, 1)
 export class OpenAILLM extends BaseLLM {
     static _openAI;//: OpenAIApi;
 

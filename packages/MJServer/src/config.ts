@@ -19,6 +19,8 @@ export const graphqlRootPath = env.get('ROOT_PATH').default('/').asString();
 export const webClientID = env.get('WEB_CLIENT_ID').asString();
 export const tenantID = env.get('TENANT_ID').asString();
 
+export const ___aiModelAPIKey = env.get('AI_MODEL_API_KEY').asString();
+
 export const enableIntrospection = env.get('ENABLE_INTROSPECTION').default('false').asBool();
 export const websiteRunFromPackage = env.get('WEBSITE_RUN_FROM_PACKAGE').asIntPositive();
 export const userEmailMap = env.get('USER_EMAIL_MAP').default('{}').asJsonObject() as Record<string, string>;

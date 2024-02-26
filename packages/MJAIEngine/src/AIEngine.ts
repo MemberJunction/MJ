@@ -1,7 +1,7 @@
-import { BaseModel, BaseResult } from "@memberjunction/ai";
-import { ISummarize, SummarizeResult } from "@memberjunction/ai";
-import { ClassifyResult, IClassify } from "@memberjunction/ai";
-import { ChatResult, IChat } from "@memberjunction/ai";
+import { BaseLLM, BaseModel, BaseResult } from "@memberjunction/ai";
+import { SummarizeResult } from "@memberjunction/ai";
+import { ClassifyResult } from "@memberjunction/ai";
+import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity } from "@memberjunction/core-entities";
@@ -234,21 +234,21 @@ export class AIEngine {
         if (driver) {
             switch (action.Name.trim().toLowerCase()) {
                 case 'classify':
-                    const classifyResult = await (<IClassify>driver).ClassifyText({
+                    const classifyResult = await (<BaseLLM>driver).ClassifyText({
                         model: params.modelName,
                         userMessage: params.userMessage,
                         systemPrompt: params.systemPrompt
                     });
                     return classifyResult;
                 case 'summarize':
-                    const summarizeResult = await (<ISummarize>driver).SummarizeText({
+                    const summarizeResult = await (<BaseLLM>driver).SummarizeText({
                         model: params.modelName,
                         userMessage: params.userMessage,
                         systemPrompt: params.systemPrompt
                     });
                     return summarizeResult;
                 case 'chat':
-                    const chatResult = await (<IChat>driver).ChatCompletion({
+                    const chatResult = await (<BaseLLM>driver).ChatCompletion({
                         model: params.modelName,
                         userMessage: params.userMessage,
                         systemPrompt: params.systemPrompt,

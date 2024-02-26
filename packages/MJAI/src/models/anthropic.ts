@@ -3,7 +3,9 @@ import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
 import { BaseLLM } from '../generic/baseLLM';
+import { RegisterClass } from "@memberjunction/global";
 
+@RegisterClass(BaseLLM, null, 0)
 export class AnthropicLLM extends BaseLLM {
     static _anthropic; 
 

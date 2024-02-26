@@ -1,5 +1,5 @@
-import { AnthropicLLM, BaseLLM, IChat, OpenAILLM } from "@memberjunction/ai";
-import { AdvancedGenerationFeature, configInfo } from "./config";
+import { AnthropicLLM, BaseLLM, OpenAILLM } from "@memberjunction/ai";
+import { AdvancedGenerationFeature, anthropicAPIKey, configInfo, openAIAPIKey } from "./config";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -63,17 +63,17 @@ export class AdvancedGeneration {
         return result;
     }
 
-    public get LLM(): IChat {
+    public get LLM(): BaseLLM {
         if (AdvancedGeneration._cachedLLM) {
-            return <IChat>AdvancedGeneration._cachedLLM;
+            return AdvancedGeneration._cachedLLM;
         }
         else {
             switch (configInfo.advancedGeneration?.AIVendor?.toLowerCase().trim()) {
                 case "openai":
-                    AdvancedGeneration._cachedLLM = new OpenAILLM();
+                    AdvancedGeneration._cachedLLM = new OpenAILLM(openAIAPIKey);
                     break;
                 case "anthropic":
-                    AdvancedGeneration._cachedLLM = new AnthropicLLM();
+                    AdvancedGeneration._cachedLLM = new AnthropicLLM(anthropicAPIKey);
                     break;
                 case "mistral":
                     //baseLLM = new MistralLLM();
@@ -81,7 +81,7 @@ export class AdvancedGeneration {
                 default:
                     throw new Error("Invalid AI Vendor");
             }
-            return <IChat>AdvancedGeneration._cachedLLM;    
+            return AdvancedGeneration._cachedLLM;    
         }
     }
 
