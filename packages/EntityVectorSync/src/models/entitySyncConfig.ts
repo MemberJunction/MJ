@@ -24,5 +24,13 @@ export type EntitySyncConfig = {
      * format is Month day, year hour:minute:second
      * e.g. August 19, 1975 23:15:30
      */
-    LastRunDate: string
+    LastRunDate: string,
+    /**
+     * The ID of the vector index to use
+     */
+    VectorIndexID: number,
+    /**
+     * The ID of the vector databse to use
+     */
+    VectorID: number
 }

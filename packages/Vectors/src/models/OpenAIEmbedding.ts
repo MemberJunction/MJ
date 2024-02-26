@@ -1,9 +1,9 @@
 import OpenAI, { Configuration, OpenAIApi } from "openai";
-import { IEmbeddingBase } from "../generic/IEmbeddingBase";
+import { IEmbedding } from "../generic/IEmbedding";
 import { RegisterClass } from '@memberjunction/global'
 
 @RegisterClass(OpenAIEmbedding)
-export class OpenAIEmbedding implements IEmbeddingBase {
+export class OpenAIEmbedding implements IEmbedding {
     static _openAI: OpenAIApi;
 
     constructor(openAIAPIKey: string){

@@ -1,12 +1,12 @@
 import { IndexModel, Pinecone, IndexList, Index, RecordMetadata, 
     PineconeRecord, UpdateOptions, FetchResponse, CreateIndexOptions } from '@pinecone-database/pinecone';
 import { pineconeDefaultIndex } from '../config';
-import { IVectorDatabaseBase, IVectorIndexBase } from '@memberjunction/vectors';
+import { IVectorDatabase, IVectorIndex } from '@memberjunction/vectors';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 
 @RegisterClass(PineconeDatabase)
-export class PineconeDatabase implements IVectorDatabaseBase, IVectorIndexBase {
+export class PineconeDatabase implements IVectorDatabase, IVectorIndex {
 
     static _pinecone: Pinecone;
     
@@ -123,6 +123,16 @@ export class PineconeDatabase implements IVectorDatabaseBase, IVectorIndexBase {
         }
         else if(options){
             index.deleteMany(options);
+        }
+    }
+
+    public async deleteAllRecords<T extends RecordMetadata>(options?: any): Promise<void> {
+        const index = this.getIndex<T>();
+        if(options?.namespace){
+            await index.namespace(options.namespace).deleteAll();
+        }
+        else{
+            index.deleteAll();
         }
     }
 

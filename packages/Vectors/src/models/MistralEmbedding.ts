@@ -1,9 +1,9 @@
 import { RegisterClass } from "@memberjunction/global";
-import { IEmbeddingBase } from "../generic/IEmbeddingBase";
+import { IEmbedding } from "../generic/IEmbedding";
 import { MistralAIEmbeddings } from "@langchain/mistralai";
 
 @RegisterClass(MistralAIEmbedding)
-export class MistralAIEmbedding implements IEmbeddingBase {
+export class MistralAIEmbedding implements IEmbedding {
     private static _mistralClient: MistralAIEmbeddings;
 
     public constructor(apiKey: string) {

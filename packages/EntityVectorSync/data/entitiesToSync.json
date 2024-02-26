@@ -7,6 +7,8 @@
       "IgnoreMaxRows": true
     },
     "IncludeInSync": true,
-    "LastRunDate": "2024-02-23T13:39:31.513Z"
+    "LastRunDate": "2024-02-23T21:55:07.507Z",
+    "VectorIndexID": 1,
+    "VectorID": 1
   }
 ]
