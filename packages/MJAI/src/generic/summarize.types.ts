@@ -1,10 +1,11 @@
 import { BaseParams, BaseResult } from "./baseModel"
+import { ChatParams } from "./chat.types";
 
 
 /**
  * Defined in order to have this type available for future use with additional properties beyond the BaseParams type.
  */
-export class SummarizeParams extends BaseParams {
+export class SummarizeParams extends ChatParams {
 }
 
 export class SummarizeResult extends BaseResult {

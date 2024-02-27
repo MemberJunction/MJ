@@ -257,9 +257,16 @@ async function generateNewEntityDescriptions(ds: DataSource, md: Metadata) {
                                                   ${fields.map(f => `   ${f.Name}: ${f.Type}`).join('\n')}`;
          const result = await llm.ChatCompletion({
             model: ag.AIModel,
-            systemPrompt: systemPrompt,
-            userMessage: entityUserMessage,
-            messages: []
+            messages: [
+               {
+                  role: 'system',
+                  content: systemPrompt
+               },
+               {
+                  role: 'user',
+                  content: entityUserMessage
+               }
+            ]
          })
          if (result?.success) {
             const resultText = result?.data.choices[0].message.content;
@@ -617,9 +624,16 @@ async function createNewEntityName(newEntity: any): Promise<string> {
       const userMessage = ag.fillTemplate(prompt.userMessage, newEntity);
       const result = await chat.ChatCompletion({
          model: ag.AIModel,
-         systemPrompt: systemPrompt,
-         userMessage: userMessage,
-         messages: []
+         messages: [
+            {
+               role: 'system',
+               content: systemPrompt
+            },
+            {
+               role: 'user',
+               content: userMessage
+            }
+         ]
       })
       if (result?.success) {
          const resultText = result?.data.choices[0].message.content;

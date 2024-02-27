@@ -11,9 +11,6 @@ export const dbDatabase = env.get('DB_DATABASE').required().asString();
 export const dbInstanceName = env.get('DB_INSTANCE_NAME').asString();
 export const dbTrustServerCertificate = env.get('DB_TRUST_SERVER_CERTIFICATE').asBool();
 
-export const openAIAPIKey = env.get('OPENAI_API_KEY').asString();
-export const anthropicAPIKey = env.get('ANTHROPIC_API_KEY').asString();
-
 export const outputCode = env.get('OUTPUT_CODE').asString();
 export const configFile = env.get('CONFIG_FILE').asString();
 

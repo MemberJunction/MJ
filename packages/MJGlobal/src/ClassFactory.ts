@@ -26,18 +26,16 @@ export class ClassFactory {
             // validate to make sure that the comabintion of base class and key for the provided priority # is not already registered, if it is, then throw an exception
             const existing = registrations.filter(r => r.Priority === priority);
             if (existing && existing.length > 0) {
-                throw new Error(`ClassFactory.Register: Cannot register class ${subClass.name} for base class ${baseClass.name} and key ${key} because a registration (${existing[0].SubClass?.name}) already exists for that combination with priority ${priority}`);
+                console.warn(`*** ClassFactory.Register: Registering class ${subClass.name} for base class ${baseClass.name} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
             }
-            else {
-                // this combination of baseclass/key/priority is NOT already registered.
-                let reg = new ClassRegistration();
-                reg.BaseClass = baseClass;
-                reg.SubClass = subClass;
-                reg.Key = key;
-                reg.Priority = priority;
+            // this combination of baseclass/key/priority is NOT already registered.
+            let reg = new ClassRegistration();
+            reg.BaseClass = baseClass;
+            reg.SubClass = subClass;
+            reg.Key = key;
+            reg.Priority = priority;
 
-                this._registrations.push(reg);
-            }
+            this._registrations.push(reg);
         }
     }
 

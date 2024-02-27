@@ -29,7 +29,7 @@ export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: bo
         .catch((err) => {
             logError("Error during Data Source initialization", err)
         })
-        const config = new SQLServerProviderConfigData(AppDataSource,'', mj_core_schema(), 0 )
+        const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 )
         await setupSQLServerClient(config);
         
 

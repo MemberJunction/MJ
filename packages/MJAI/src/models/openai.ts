@@ -1,13 +1,14 @@
 import { ModelUsage } from "../generic/baseModel";
-import { ChatParams, ChatResult } from "../generic/chat.types";
+import { ChatMessage, ChatParams, ChatResult, GetUserMessageFromChatParams } from "../generic/chat.types";
 import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { BaseLLM } from '../generic/baseLLM';
 import { RegisterClass } from '@memberjunction/global'
+import { ChatCompletionRequestMessage } from "openai";
 
 const { ChatCompletionRequestMessageRoleEnum, Configuration, OpenAIApi } = require("openai");
 
-@RegisterClass(BaseLLM, null, 1)
+@RegisterClass(BaseLLM, 'OpenAILLM')
 export class OpenAILLM extends BaseLLM {
     static _openAI;//: OpenAIApi;
 
@@ -21,22 +22,8 @@ export class OpenAILLM extends BaseLLM {
     }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
-        const messages = []; 
+        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
 
-        // add system prompt if we have one
-        if (params.systemPrompt && params.systemPrompt.length > 0)
-            messages.push({  
-                role: ChatCompletionRequestMessageRoleEnum.System, 
-                content: params.systemPrompt
-            });
-
-        // add user messages - using types OpenAI likes
-        params.messages.forEach(m => {
-            messages.push({
-                role: this.convertRole(m.role), 
-                content: m.content
-            })
-        });
 
         const startTime = new Date();
         const result = await OpenAILLM._openAI.createChatCompletion({
@@ -61,7 +48,6 @@ export class OpenAILLM extends BaseLLM {
                 usage: new ModelUsage(result.data.usage.prompt_tokens, result.data.usage.completion_tokens)
             },
             success: result.status === 200,
-            status: result.status,
             statusText: result.statusText,
             startTime: startTime,
             endTime: endTime,
@@ -71,34 +57,10 @@ export class OpenAILLM extends BaseLLM {
         }
     }
 
-    protected convertRole(role: string) {//}: ChatCompletionRequestMessageRoleEnum {
-        switch (role.trim().toLowerCase()) {
-            case 'system':
-                return ChatCompletionRequestMessageRoleEnum.System
-            case 'user':
-                return ChatCompletionRequestMessageRoleEnum.User
-            case 'assistant':
-                return ChatCompletionRequestMessageRoleEnum.Assistant
-            default:
-                throw new Error(`Unknown role ${role}`)
-        }
-    }
 
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
-        const messages = []; 
+        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
 
-        // load up the system message first 
-        if (params.systemPrompt && params.systemPrompt.length > 0)
-            messages.push({
-                role: ChatCompletionRequestMessageRoleEnum.System,
-                content: params.systemPrompt
-            })
-
-        // load up the user message(s)
-        messages.push({
-            role: ChatCompletionRequestMessageRoleEnum.User,
-            content: params.userMessage
-        })
 
         const startTime = new Date();
         const result = await OpenAILLM._openAI.createChatCompletion({
@@ -112,10 +74,33 @@ export class OpenAILLM extends BaseLLM {
         if (success)
             summaryText = result.data.choices[0].message.content;
 
-        return new SummarizeResult(params.userMessage, summaryText, success, startTime, endTime);
+        return new SummarizeResult(GetUserMessageFromChatParams(params), summaryText, success, startTime, endTime);
     }
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
+    }
+
+    public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionRequestMessage[] {
+        // add user messages - using types OpenAI likes
+        return messages.map(m => {
+            return {
+                role: this.ConvertMJToOpenAIRole(m.role), 
+                content: m.content
+            }
+        });
+    }
+
+    public ConvertMJToOpenAIRole(role: string) {//}: ChatCompletionRequestMessageRoleEnum {
+        switch (role.trim().toLowerCase()) {
+            case 'system':
+                return ChatCompletionRequestMessageRoleEnum.System
+            case 'user':
+                return ChatCompletionRequestMessageRoleEnum.User
+            case 'assistant':
+                return ChatCompletionRequestMessageRoleEnum.Assistant
+            default:
+                throw new Error(`Unknown role ${role}`)
+        }
     }
 }

@@ -113,10 +113,11 @@ OUTPUT_CODE='${dbDatabase}'
 # Name of the schema that MJ has been setup in. This defaults to admin
 MJ_CORE_SCHEMA=admin
 
-# If you are using MJAI library, provide your API KEYS here for the various services
-OPEN_AI_API_KEY = '${openAIAPIKey}'
-ANTHROPIC_API_KEY = '${anthropicAPIKey}'
-MISTRAL_API_KEY = '${mistralAPIKey}'
+# If using Advanced Generation, populate this with the API key for the AI vendor you are using
+# Also, you need to configure the settings under advancedGeneration in the config.json file, including choosing the vendor.
+AI_VENDOR_API_KEY__OpenAILLM='${openAIAPIKey}'  
+AI_VENDOR_API_KEY__MistralLLM='${mistralAPIKey}'  
+AI_VENDOR_API_KEY__AnthropicLLM='${anthropicAPIKey}'  
 
 #CONFIG_FILE is the name of the file that has the configuration parameters for CodeGen
 CONFIG_FILE='config.json'
@@ -169,9 +170,10 @@ AUTH0_DOMAIN=${auth0Domain}
 MJ_CORE_SCHEMA=admin
 
 # If you are using MJAI library, provide your API KEYS here for the various services
-OPEN_AI_API_KEY = '${openAIAPIKey}'
-ANTHROPIC_API_KEY = '${anthropicAPIKey}'
-MISTRAL_API_KEY = '${mistralAPIKey}'
+# Format is AI_VENDOR_API_KEY__<DriverClass> Where DriverClass is the DriverClass field from the AI Models Entity in MemberJunction
+AI_VENDOR_API_KEY__OpenAILLM = '${openAIAPIKey}'
+AI_VENDOR_API_KEY__AnthropicLLM = '${anthropicAPIKey}'
+AI_VENDOR_API_KEY__MistralLLM = '${mistralAPIKey}'
 
 # Skip API URL, KEY and Org ID
 # YOU MUST ENTER IN THE CORRECT URL and ORG ID for your Skip API USE BELOW

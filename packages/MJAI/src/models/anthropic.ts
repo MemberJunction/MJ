@@ -1,11 +1,11 @@
-import { ChatParams, ChatResult } from "../generic/chat.types";
+import { ChatParams, ChatResult, GetSystemPromptFromChatParams, GetUserMessageFromChatParams } from "../generic/chat.types";
 import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
 import { BaseLLM } from '../generic/baseLLM';
 import { RegisterClass } from "@memberjunction/global";
 
-@RegisterClass(BaseLLM, null, 0)
+@RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
     static _anthropic; 
 
@@ -22,10 +22,10 @@ export class AnthropicLLM extends BaseLLM {
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
         const sPrompt: string = `${HUMAN_PROMPT} the following is a SYSTEM prompt that is important to comply with at all times 
-${params.systemPrompt}
+${GetSystemPromptFromChatParams(params)}
 ${AI_PROMPT} OK
 ${HUMAN_PROMPT} the following is the user message to process
-${params.userMessage}`
+${GetUserMessageFromChatParams(params)}`
         
         const startTime = new Date();            
         const sample = await AnthropicLLM._anthropic
@@ -33,7 +33,7 @@ ${params.userMessage}`
           prompt: sPrompt,
           stop_sequences: [HUMAN_PROMPT],
           max_tokens_to_sample: 2000,
-          model: "claude-v1",
+          model: "claude-2.1",
         })        
         const endTime = new Date();
 
@@ -42,7 +42,7 @@ ${params.userMessage}`
         if (success)
             summaryText = sample.completion;
 
-        return new SummarizeResult(params.userMessage, summaryText, success, startTime, endTime);
+        return new SummarizeResult(GetUserMessageFromChatParams(params), summaryText, success, startTime, endTime);
     }
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {

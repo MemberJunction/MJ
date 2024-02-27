@@ -1,5 +1,7 @@
-import { AnthropicLLM, BaseLLM, OpenAILLM } from "@memberjunction/ai";
-import { AdvancedGenerationFeature, anthropicAPIKey, configInfo, openAIAPIKey } from "./config";
+import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
+import { AdvancedGenerationFeature, configInfo } from "./config";
+import { MJGlobal } from "@memberjunction/global";
+import { LogError } from "@memberjunction/core";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -67,21 +69,12 @@ export class AdvancedGeneration {
         if (AdvancedGeneration._cachedLLM) {
             return AdvancedGeneration._cachedLLM;
         }
-        else {
-            switch (configInfo.advancedGeneration?.AIVendor?.toLowerCase().trim()) {
-                case "openai":
-                    AdvancedGeneration._cachedLLM = new OpenAILLM(openAIAPIKey);
-                    break;
-                case "anthropic":
-                    AdvancedGeneration._cachedLLM = new AnthropicLLM(anthropicAPIKey);
-                    break;
-                case "mistral":
-                    //baseLLM = new MistralLLM();
-                    throw new Error("Mistral not supported yet");
-                default:
-                    throw new Error("Invalid AI Vendor");
-            }
+        else if (configInfo.advancedGeneration.AIVendor && configInfo.advancedGeneration.AIVendor.length > 0) {
+            AdvancedGeneration._cachedLLM = MJGlobal.Instance.ClassFactory.CreateInstance(BaseLLM, configInfo.advancedGeneration.AIVendor, GetAIAPIKey(configInfo.advancedGeneration.AIVendor))
             return AdvancedGeneration._cachedLLM;    
+        }
+        else {
+            LogError("AdvancedGeneration", "No AI vendor specified in Configuration Settings under 'advancedGeneration.AIVendor'");
         }
     }
 

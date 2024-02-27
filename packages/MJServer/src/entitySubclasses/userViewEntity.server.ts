@@ -1,8 +1,8 @@
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, LogError, Metadata } from "@memberjunction/core";
-import { UserViewEntityExtended } from '@memberjunction/core-entities'
-import { BaseLLM, ChatParams } from "@memberjunction/ai";
-import { ___aiModelAPIKey } from "../config";
+import { AIModelEntity, UserViewEntityExtended } from '@memberjunction/core-entities'
+import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
+import { AIEngine } from "@memberjunction/aiengine";
 
 @RegisterClass(BaseEntity, 'User Views', 3) // high priority to ensure this is used ahead of the UserViewEntityExtended in the @memberjunction/core-entities package (which has priority of 2)
 export class UserViewEntity_Server extends UserViewEntityExtended  {
@@ -13,6 +13,15 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
         return true;
     }
 
+    /**
+     * Default implementation simply grabs the first AI model that is of type 1 (Language Model). If you want to override this to use a different model you can override this method in your subclass and return the model you want to use.
+     * @returns 
+     */
+    protected GetAIModel(): AIModelEntity {
+        const model = AIEngine.Models.find(m => m.AIModelTypeID === 1/*elim this hardcoding by adding virtual field for Type to AI Models entity*/) // get the first llm 
+        return model;
+    }
+
     /** 
      * This method will use AI to return a valid WHERE clause based on the provided prompt. This is automatically called at the right time if the view has SmartFilterEnabled turned on and the SmartFilterPrompt is set. If you want
      * to call this directly to get back a WHERE clause for other purposes you can call this method directly and provide both a prompt and the entity that the view is based on.
@@ -20,18 +29,20 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
      */
     public async GenerateSmartFilterWhereClause(prompt: string, entityInfo: EntityInfo): Promise<{whereClause: string, userExplanation: string}> {
         try {
-            const apiKey = ___aiModelAPIKey;
-            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, null, apiKey); 
+            const model = this.GetAIModel();
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)); 
 
             const chatParams: ChatParams = {
                 model: 'gpt-4',
-                systemPrompt: this.GenerateSysPrompt(entityInfo),
-                userMessage: '',
                 messages: [      
-                {
-                    role: 'user',
-                    content: `${prompt}`,
-                  },
+                    {
+                        role: 'system',
+                        content: this.GenerateSysPrompt(entityInfo)
+                    },
+                    {
+                        role: 'user',
+                        content: `${prompt}`,
+                    },
                 ],
             }
             const result = await llm.ChatCompletion(chatParams);
