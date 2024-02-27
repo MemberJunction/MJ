@@ -123,7 +123,7 @@ export const serve = async (resolverPaths: Array<string>) => {
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
-    json(),
+    json({limit: '50mb'}),
     expressMiddleware(apolloServer, {
       context: contextFunction({ setupComplete$, dataSource }),
     })
