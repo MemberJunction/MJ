@@ -33,6 +33,7 @@ ${GetUserMessageFromChatParams(params)}`
           prompt: sPrompt,
           stop_sequences: [HUMAN_PROMPT],
           max_tokens_to_sample: 2000,
+          temperature: params.temperature,
           model: "claude-2.1",
         })        
         const endTime = new Date();

@@ -28,7 +28,8 @@ export class OpenAILLM extends BaseLLM {
         const startTime = new Date();
         const result = await OpenAILLM._openAI.createChatCompletion({
             model: params.model,
-            messages: messages
+            messages: messages,
+            temperature: params.temperature,
         });
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
