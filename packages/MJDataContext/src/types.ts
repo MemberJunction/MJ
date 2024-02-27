@@ -500,6 +500,9 @@ export class DataContext {
      */
     public async LoadMetadata(DataContextID: number, contextUser?: UserInfo): Promise<boolean> {
         try {
+            if (!DataContextID || DataContextID <= 0)
+                throw new Error(`Data Context ID not set or invalid`);
+
             const md = new Metadata();
             const rv = new RunView();
             const dciEntityInfo = md.Entities.find((e) => e.Name === 'Data Context Items');
@@ -627,7 +630,10 @@ export class DataContext {
                     dciEntity.DataJSON = JSON.stringify(item.Data); 
                 else
                     dciEntity.DataJSON = null; //JSON.stringify(item.Data); 
-                await dciEntity.Save();
+
+                if (await dciEntity.Save()) {
+                    item.DataContextItemID = dciEntity.ID;
+                }
             }          
         }   
         catch (e) {
@@ -665,6 +671,9 @@ export class DataContext {
      */
     public async LoadData(dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
         try {
+            if (!this.ID || this.ID <= 0)
+                throw new Error(`Data Context ID not set or invalid`);
+
             let bSuccess: boolean = true;
             for (const item of this.Items) {
                 if (!await item.LoadData(dataSource, forceRefresh, contextUser))

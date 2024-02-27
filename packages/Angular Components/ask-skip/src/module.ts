@@ -45,6 +45,7 @@ import { DynamicChartComponent } from './lib/misc/dynamic-chart';
 import { DynamicGridComponent } from './lib/misc/dynamic-grid';
 import { SkipButtonComponent } from './lib/skip-button/skip-button.component';
 import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
+import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-single-message.component';
 
 
 @NgModule({
@@ -55,7 +56,8 @@ import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
     SkipWindowComponent,
     DynamicReportComponent,
     DynamicChartComponent,
-    DynamicGridComponent
+    DynamicGridComponent,
+    SkipSingleMessageComponent
   ],
   imports: [
     CommonModule,
@@ -93,7 +95,8 @@ import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
     SkipWindowComponent,
     DynamicChartComponent,
     DynamicGridComponent,
-    DynamicReportComponent 
+    DynamicReportComponent ,
+    SkipSingleMessageComponent
   ]
 })
 export class AskSkipModule { }

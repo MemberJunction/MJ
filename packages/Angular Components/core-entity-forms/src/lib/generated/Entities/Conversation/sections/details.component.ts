@@ -31,6 +31,10 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             <kendo-textbox [(ngModel)]="record.Type"  />   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Is Archived</label>
+            <input type="checkbox" [(ngModel)]="record.IsArchived" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Linked Entity ID</label>
             <kendo-numerictextbox [(value)]="record.LinkedEntityID" ></kendo-numerictextbox>   
         </div>               
@@ -80,6 +84,10 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Type</label>
             <span >{{FormatValue('Type', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Is Archived</label>
+            <span >{{FormatValue('IsArchived', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Linked Entity ID</label>

@@ -1,0 +1,25 @@
+<div>
+    <div class="message-row" [ngClass]="GetMessageRowCssClass()" > 
+        <div class="message-image">
+            <img [src]="GetUserImageSource()" class="avatar" />
+        </div>
+        <div class="message"
+            [id]="'skip_message_' + ConversationDetailRecord.ID">
+            <div class="message-user-name">{{ConversationDetailRecord.Role.trim().toLowerCase() === 'ai' ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
+            <div>
+                {{Message}}
+            </div>
+            <div #reportContainer>
+
+            </div>
+            <!-- <mj-skip-dynamic-report
+                *ngIf="AnalysisResult"
+                [SkipData]="AnalysisResult"
+                [DataContext]="DataContext"
+                [ConversationID]="ConversationDetailRecord.ConversationID"
+                [ConversationDetailID]="ConversationDetailRecord.ID"
+                [ConversationName]="ConversationRecord.Name"
+            ></mj-skip-dynamic-report> -->
+        </div>
+    </div>
+</div>

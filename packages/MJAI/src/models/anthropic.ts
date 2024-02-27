@@ -1,26 +1,19 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
-import { BaseLLM, BaseModel, ModelUsage } from "../generic/baseModel";
-import { ChatParams, ChatResult, IChat } from "../generic/IChat";
-import { ISummarize, SummarizeParams, SummarizeResult } from '../generic/ISummarize';
-import { ClassifyParams, ClassifyResult, IClassify } from '../generic/IClassify';
+import { ChatParams, ChatResult } from "../generic/chat.types";
+import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
+import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
+import { BaseLLM } from '../generic/baseLLM';
+import { RegisterClass } from "@memberjunction/global";
 
-export class AnthropicLLM extends BaseLLM implements IChat, ISummarize, IClassify {
-    static _anthropic;//: OpenAIApi;
+@RegisterClass(BaseLLM, null, 0)
+export class AnthropicLLM extends BaseLLM {
+    static _anthropic; 
 
 
-    constructor() {
-        super();
-        if (!AnthropicLLM._anthropic) {
-            const apiKey = process.env.ANTHROPIC_API_KEY;
-            if (!apiKey) {
-              throw new Error("The ANTHROPIC_API_KEY environment variable must be set");
-            }
-            
+    constructor(apiKey: string) {
+        super(apiKey);
+        if (!AnthropicLLM._anthropic) 
             AnthropicLLM._anthropic = new Anthropic({apiKey});
-        }
     }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{

@@ -1,5 +1,8 @@
 import { BaseResult, BaseParams } from "./baseModel"
 
+/**
+ * Defined in order to have this type available for future use with additional properties beyond the BaseParams type.
+ */
 export class ClassifyParams extends BaseParams {
 }
 
@@ -17,7 +20,4 @@ export class ClassifyResult extends BaseResult {
     tags: ClassifyTag[]
     statusMessage: string
 }
-
-export interface IClassify {
-    ClassifyText(params: ClassifyParams): Promise<ClassifyResult>
-}
+ 

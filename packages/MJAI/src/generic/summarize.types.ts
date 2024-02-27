@@ -1,7 +1,10 @@
 import { BaseParams, BaseResult } from "./baseModel"
 
-export class SummarizeParams extends BaseParams {
 
+/**
+ * Defined in order to have this type available for future use with additional properties beyond the BaseParams type.
+ */
+export class SummarizeParams extends BaseParams {
 }
 
 export class SummarizeResult extends BaseResult {
@@ -12,8 +15,4 @@ export class SummarizeResult extends BaseResult {
         this.text = text;
         this.summaryText = summaryText;
     }
-}
-
-export interface ISummarize {
-    SummarizeText(params: SummarizeParams): Promise<SummarizeResult>
 }

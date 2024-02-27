@@ -54,7 +54,9 @@ async function createMJDistribution() {
         });
       }
       if (configJson.commands) {
-        configJson.commands = configJson.commands.filter(item => !item.workingDirectory || !item.workingDirectory.trim().toLowerCase().includes('../mjcoreentities') ); // remove this as we don't want people using MJ to ever generated this stuff.
+        configJson.commands = configJson.commands.filter(item => !item.workingDirectory || 
+                                                                            (    !item.workingDirectory.trim().toLowerCase().includes('../mjcoreentities')
+                                                                              && !item.workingDirectory.trim().toLowerCase().includes('../mjserver')) ); // remove this as we don't want people using MJ to ever generated this stuff.
       }
       if (configJson.customSQLScripts) {
         // find the one that has ../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql and remove one level of the directory
@@ -64,6 +66,25 @@ async function createMJDistribution() {
         }
       }
   
+      archive.append(JSON.stringify(configJson, null, 2), { name: configFileOutputPath });
+    }
+    else if (normalizedDir === 'MJExplorer') {
+      const configFilePath = `${dir}/angular.json`;
+      const configFileOutputPath = `${normalizedDir}/angular.json`;
+      const configFileContent = fs.readFileSync(configFilePath, 'utf8');
+      const configJson = JSON.parse(configFileContent);
+      const assets = configJson.projects?.MJExplorer?.architect?.build?.options?.assets;
+      if (assets) {
+        // in this node of the json, we need to find an object within the array that includes the string 'node_modules/@progress/kendo-theme-default' within a 
+        // property called "input"
+        const kendoThemeDefault = assets.find(item => item.input?.includes('node_modules/@progress/kendo-theme-default'));
+        if (kendoThemeDefault) {
+          // found the object, now we need to update the input property to remove anything that precedes node_modules
+          // find where node_modules is and remove everything before it
+          const nodeModulesIndex = kendoThemeDefault.input.indexOf('node_modules');
+          kendoThemeDefault.input = kendoThemeDefault.input.substring(nodeModulesIndex);
+        }
+      }
       archive.append(JSON.stringify(configJson, null, 2), { name: configFileOutputPath });
     }
     
@@ -80,15 +101,16 @@ async function createMJDistribution() {
         'install/*.sql.old',
         '*.output.txt',
         '.*', // This will ignore all files that start with a dot
-        normalizedDir === 'CodeGen' ? 'config.json' : '' // Ignore the original config.json when adding files from CodeGen
+        normalizedDir === 'CodeGen' ? 'config.json' : '', // Ignore the original config.json when adding files from CodeGen
+        normalizedDir === 'MJExplorer' ? 'angular.json' : '' // Ignore the original angular.json when adding files from MJExplorer
       ],
     }, { prefix: normalizedDir });
   });
   
-  // Add LatestVersion_Link.ps1 to the root of the zip
-  console.log('Adding LatestVersion_Link.ps1 to zip file...')
-  const latestVersionScriptContent = fs.readFileSync('packages/LatestVersion_Link.ps1', 'utf8');
-  archive.append(latestVersionScriptContent, { name: 'LatestVersion_Link.ps1' });
+  // Add Update_MemberJunction_Packages_To_Latest.ps1 to the root of the zip
+  console.log('Adding Update_MemberJunction_Packages_To_Latest.ps1 to zip file...')
+  const latestVersionScriptContent = fs.readFileSync('packages/Update_MemberJunction_Packages_To_Latest.ps1', 'utf8');
+  archive.append(latestVersionScriptContent, { name: 'Update_MemberJunction_Packages_To_Latest.ps1' });
   
   // Add InstallMJDistribution.js to the root of the zip
   console.log('Adding InstallMJ.js to zip file...')

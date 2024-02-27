@@ -1,6 +1,9 @@
-<div class = "chat-container" mjFillContainer>
+<div class = "chat-container" mjFillContainer #topLevelDiv>
     <div class="conversation-history" *ngIf="ShowConversationList">
-        <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()" >+ New Chat</button>
+        <div class="new-chat-area">
+            <img src="assets/Skip Full Logo.jpg" class="avatar" />
+            <button kendoButton *ngIf="AllowNewConversations" (click)="CreateNewConversation()">+</button>
+        </div>
         <kendo-listview
             class="conversation-list"
             [data]="Conversations"
@@ -8,6 +11,7 @@
             [itemClass]="{ 'item-border': true }" 
             mjFillContainer 
             [fillWidth]="false"
+            [bottomMargin]="40"
             #conversationList
             >
             <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
@@ -15,7 +19,7 @@
                      [ngClass]="SelectedConversation?.ID === dataItem.ID ? 'conversation-item-selected' : ''"
                      [title]="dataItem.Name" 
                      (click)="SelectConversation(dataItem)"> 
-                    <kendo-svgicon *ngIf="!IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('comment')" name="comment" svgIcon="conversation-icon"></kendo-svgicon>
+                    <!-- <kendo-svgicon *ngIf="!IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('comment')" name="comment" svgIcon="conversation-icon"></kendo-svgicon> -->
                     <kendo-svgicon *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('clock')" name="clock" class="conversation-icon"></kendo-svgicon>
                     <div class="text-container">
                         <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
@@ -30,36 +34,60 @@
                 </div>
             </ng-template>
         </kendo-listview>
+        <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (click)="loadConversations()"/> Embedded Conversations</div>
     </div>
     <div class="conversation-wrapper" mjFillContainer>
-        <div #AskSkipPanel class="messages" mjContainer #scrollContainer (scroll)="checkScroll()">
-            <div *ngFor="let message of Messages">  
-                <div class="message-row" [ngClass]="message.Role.trim().toLowerCase() === 'ai' ? 'ai-message' : message.Role.trim().toLowerCase() === 'error' ? 'error-message' : 'user-message'" >
-                    <div class="message-image">
-                        <img src="{{message.Role.trim().toLowerCase() === 'ai' || message.Role.trim().toLowerCase() === 'error' ? 'assets/Skip - Mark Only - Small.png' : userImage()}}" class="avatar" />
-                    </div>
-                    <div class="message" mjContainer [id]="'skip_message_' + message.ID">
-                        <div class="message-user-name">{{message.Role.trim().toLowerCase() === 'ai' ? 'Skip' : (this.SelectedConversationUser ? this.SelectedConversationUser.FirstName + ' ' + this.SelectedConversationUser.LastName : 'You')}}</div>
-                        <div>{{this.createDetailHtml(message)}}</div> 
-                    </div>
-                </div>
-            </div>
-            <span class="scroll-to-bottom-icon" *ngIf="showScrollToBottomIcon" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
-            <div class="waiting-for-ai message-row" *ngIf="SelectedConversation && IsSkipProcessing(SelectedConversation)">
-                <div class="waiting-for-ai-message">{{this.WaitingMessage}}</div>
+        <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">
+            <div class="waiting-for-ai" *ngIf="Messages && Messages.length > 0 && SelectedConversation && IsSkipProcessing(SelectedConversation)">
                 <kendo-loader></kendo-loader>
             </div>
+            <div class="welcome-wrapper" *ngIf="(!Messages || Messages.length ===0) && _conversationLoadComplete">
+                <div class='welcome-message'>
+                    <img src="assets/Skip Full Logo.jpg"/>
+                    <div class="welcome-header-text">What can I help with today?</div>
+                </div>
+                <div class='welcome-suggested-questions'>
+                    <div class="welcome-suggested-questions-col">
+                        <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[0].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[0].topLine}}</span>
+                            <span>{{WelcomeQuestions[0].bottomLine}}</span>
+                        </div>
+                        <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[1].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[1].topLine}}</span>
+                            <span>{{WelcomeQuestions[1].bottomLine}}</span>
+                        </div>    
+                    </div>
+                    <div class="welcome-suggested-questions-col">
+                        <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[2].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[2].topLine}}</span>
+                            <span>{{WelcomeQuestions[2].bottomLine}}</span>
+                        </div>
+                        <div class="welcome-question" (click)="sendPrompt(WelcomeQuestions[3].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[3].topLine}}</span>
+                            <span>{{WelcomeQuestions[3].bottomLine}}</span>
+                        </div>    
+                    </div>
+                </div>    
+            </div>
+            <div mjContainer>
+                <!-- Dynamic messages will be injected here -->
+            </div>
+            <span class="scroll-to-bottom-icon" *ngIf="_showScrollToBottomIcon && Messages && Messages.length > 0" (click)="scrollToBottomAnimate()"><i class="fas fa-arrow-down"></i></span>
         </div>
         <div class="input-area">
-            <textarea
+            <div class="text-area-wrapper">
+                <textarea
                     #AskSkipInput 
                     [disabled]="SelectedConversation && IsSkipProcessing(SelectedConversation)" 
                     (keyup.enter)="onEnter($event)" 
                     (input)="onInputChange($event)"
                     type="text" 
                     placeholder="Ask Skip a question"></textarea>
-            <button [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()"><i class="fas fa-solid fa-arrow-up"></i></button>
-            <kendo-svgicon *ngIf="ShowDataContextButton" [icon]="sharedService.kendoSVGIcon('gearIcon')" name="gear" svgIcon="gear-icon" (click)="showDataContext()"></kendo-svgicon>
+            </div>
+            <button kendoButton >
+                <kendo-svgicon *ngIf="ShowDataContextButton" [icon]="sharedService.kendoSVGIcon('gearIcon')" name="gear" svgIcon="gear-icon" (click)="showDataContext()"></kendo-svgicon>
+            </button>
+            <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()"><i class="fas fa-solid fa-arrow-up"></i></button>
         </div>
     </div>
 </div>     

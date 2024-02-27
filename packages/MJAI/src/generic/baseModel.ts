@@ -32,11 +32,21 @@ export class ModelUsage {
     }
 }
 
+/**
+ * Base AI model class, used for everything else in the MemberJunction AI environment
+ */
 export abstract class BaseModel {
-}
+    private _apiKey: string;
+    /**
+     * Only sub-classes can access the API key
+     */
+    protected get apiKey(): string {
+        return this._apiKey;
+    }
+    constructor (apiKey: string) {
+        if (!apiKey || apiKey.trim().length === 0)
+            throw new Error('API key cannot be empty');
 
-export abstract class BaseLLM extends BaseModel {
-}
-
-export abstract class BaseDiffusion extends BaseModel {
+        this._apiKey = apiKey;
+    }
 }

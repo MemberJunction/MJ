@@ -1,5 +1,5 @@
 import { Component, ViewChild, Input, Output, EventEmitter, AfterViewInit, OnInit } from '@angular/core';
-import { GridRowClickedEvent, UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
+import { GridRowClickedEvent, UserViewGridWithAnalysisComponent } from '@memberjunction/ng-user-view-grid';
 import { Metadata, EntityInfo, LogError } from '@memberjunction/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
@@ -13,7 +13,7 @@ import { SharedService } from '@memberjunction/ng-shared';
   styleUrls: ['./single-view.component.css']
 })
 export class SingleViewComponent implements AfterViewInit, OnInit  {
-  @ViewChild(UserViewGridComponent, {static: true}) viewGrid!: UserViewGridComponent;
+  @ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
 
   @Input() public viewId: number | null = null;
   @Input() public viewName: string| null = null;
@@ -83,7 +83,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
     // load up the view
     if (viewInfo && viewInfo.ID && viewInfo.ID > 0)
       this.selectedView = viewInfo
-      await this.viewGrid.Refresh({
+      await this.viewGridWithAnalysis.Refresh({
         ViewEntity: viewInfo,
         ViewID: viewInfo.ID,
         UserSearchString: this.searchText
@@ -93,7 +93,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async LoadDynamicView() {
     this.selectedView = null;
-    await this.viewGrid.Refresh({
+    await this.viewGridWithAnalysis.Refresh({
       EntityName: this.entityName!,
       ExtraFilter: this.extraFilter!,
       UserSearchString: this.searchText

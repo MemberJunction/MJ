@@ -1,7 +1,8 @@
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, LogError, Metadata } from "@memberjunction/core";
 import { UserViewEntityExtended } from '@memberjunction/core-entities'
-import { BaseLLM, BaseModel, ChatParams, IChat, OpenAILLM } from "@memberjunction/ai";
+import { BaseLLM, ChatParams } from "@memberjunction/ai";
+import { ___aiModelAPIKey } from "../config";
 
 @RegisterClass(BaseEntity, 'User Views', 3) // high priority to ensure this is used ahead of the UserViewEntityExtended in the @memberjunction/core-entities package (which has priority of 2)
 export class UserViewEntity_Server extends UserViewEntityExtended  {
@@ -19,7 +20,8 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
      */
     public async GenerateSmartFilterWhereClause(prompt: string, entityInfo: EntityInfo): Promise<{whereClause: string, userExplanation: string}> {
         try {
-            const llm = <IChat> new OpenAILLM(); // for now, hardcoded to use OpenAI
+            const apiKey = ___aiModelAPIKey;
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, null, apiKey); 
 
             const chatParams: ChatParams = {
                 model: 'gpt-4',

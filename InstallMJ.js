@@ -150,7 +150,7 @@ DB_DATABASE='${dbDatabase}'
 ${dbInstance && dbInstance.length > 0 ? 'DB_INSTANCE_NAME=\'' + dbInstance + '\'' : ''}
 ${dbTrustServerCertificate && dbTrustServerCertificate.trim().toUpperCase() === 'Y' ? 'DB_TRUST_SERVER_CERTIFICATE=1' : ''}
 
-GRAPHQL_PORT=${graphQLPort}
+PORT=${graphQLPort}
 
 UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000

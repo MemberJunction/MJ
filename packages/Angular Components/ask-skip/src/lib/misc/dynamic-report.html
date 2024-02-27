@@ -7,10 +7,12 @@
               <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
               <span class="report-tab-title">Chart</span>
             </ng-template>
-            <ng-template kendoTabContent class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
-                <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
-                <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
-                </mj-dynamic-chart>
+            <ng-template kendoTabContent>
+                <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
+                  <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
+                  <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
+                  </mj-dynamic-chart>  
+                </div>
             </ng-template>
         </kendo-tabstrip-tab>  
         <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
@@ -65,7 +67,7 @@
         </kendo-tabstrip-tab>  
     </kendo-tabstrip>
   </div> 
-<div mjFillContainer *ngIf="LayoutMode === 'linear'"> 
+<div *ngIf="LayoutMode === 'linear'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
     <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
@@ -87,11 +89,11 @@
         *ngIf="!IsChart"
         [title]="'Table'"
         [expanded]="LinearExpandAll"
+        mjSkipResize="true"
     >
         <mj-dynamic-grid *ngIf="!IsChart" 
+                        [GridHeight]="300"
                         #theGrid [SkipData]="SkipData"
-                        [fillContainer]="false"
-                        style="max-height: 500px;"
                         ></mj-dynamic-grid>  
     </kendo-expansionpanel>
     <kendo-expansionpanel

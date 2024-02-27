@@ -7,7 +7,34 @@ import { LogStatus } from '@memberjunction/core';
 @Component({
   selector: 'mj-dynamic-grid',
   template: `
-    <kendo-grid [data]="gridView"
+    <kendo-grid *ngIf="GridHeight !== null" 
+                [height]="GridHeight"
+                [data]="gridView"
+                [skip]="startingRow"
+                [pageSize]="pageSize"
+                scrollable="virtual"
+                [rowHeight]="36"
+                [reorderable]="true"
+                [resizable]="true"
+                (pageChange)="pageChange($event)"
+                (cellClick)="cellClick($event)"
+                [navigable]="true"
+                >
+        <ng-container *ngFor="let col of columns">
+            <kendo-grid-column 
+                field="{{col.fieldName}}" 
+                title="{{col.displayName}}"
+                [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#cyan' }">
+                <ng-template kendoGridCellTemplate let-dataItem>
+                    {{ formatData(col.simpleDataType, dataItem[col.fieldName]) }}
+                </ng-template>
+            </kendo-grid-column>
+        </ng-container>
+    </kendo-grid>
+
+    <!-- Now do the grid that does NOT have a height, wish kendo allowed you to do it another way! -->
+    <kendo-grid *ngIf="GridHeight === null"
+                [data]="gridView"
                 [skip]="startingRow"
                 [pageSize]="pageSize"
                 scrollable="virtual"
@@ -37,7 +64,7 @@ export class DynamicGridComponent implements AfterViewInit {
   @Input() columns: SkipColumnInfo[] = [];
   @Input() public pageSize = 30;
   @Input() public startingRow = 0;
-  @Input() public fillContainer: boolean = true;
+  @Input() public GridHeight: number | null = null;
 
   private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
@@ -46,8 +73,28 @@ export class DynamicGridComponent implements AfterViewInit {
   set SkipData(d: SkipAPIAnalysisCompleteResponse | undefined){
       this._skipData = d;
       if (d) {
-        this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
-        this.columns = d.tableDataColumns ? d.tableDataColumns : [];
+        // check to see if the tableDataColumns is NOT provided, in that case we need to check to see if we 
+        // have column names that are valid in our table data. If we don't we need to prepend whatever was provided with a "_" prefix so that 
+        // we don't have things like 2022 as a column name which is not valid in JavaScript
+        if (!d.tableDataColumns || d.tableDataColumns.length === 0) {
+          // no columns provided, so we check here to make sure the column names are valid
+          this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
+          // now loop through the data and fix up the column names if needed
+          for (let i = 0; i < this.data.length; i++) {
+            const row = this.data[i];
+            for (let key in row) {
+              if (key.match(/^\d/)) {
+                const newKey = '_' + key;
+                row[newKey] = row[key];
+                delete row[key];
+              }
+            }
+          }
+        }
+        else {
+          this.columns = d.tableDataColumns 
+          this.data = d.executionResults?.tableData ? d.executionResults?.tableData : [];
+        }
         this.loadGridView();
       }
   }

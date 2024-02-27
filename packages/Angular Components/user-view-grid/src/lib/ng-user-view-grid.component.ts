@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -14,12 +14,9 @@ import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
+import { kendoSVGIcon } from '@memberjunction/ng-shared';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { PlotlyComponent } from 'angular-plotly.js';
-//import * as Plotly from 'plotly.js-dist-min';
- 
+
 
 export type GridRowClickedEvent = {
   entityId: number;
@@ -85,17 +82,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public  _entityInfo: EntityInfo | undefined;
   private _newGridState: ViewGridState = {};
 
-  // public plotData = [];
-  // public plotLayout: any = {};
-
   private editModeEnded = new Subject<void>();
 
   public recordsToCompare: any[] = [];
   public compareMode: boolean = false;
-//  public compareRecords: BaseEntity[] = [];
 
   public mergeMode: boolean = false;
-//  public mergeRecords: BaseEntity[] = [];
 
   public selectableSettings: SelectableSettings = {
     enabled: false
@@ -819,8 +811,5 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
  
   public kendoSVGIcon = kendoSVGIcon;
 
-  public selectTabHandler() {
-    SharedService.Instance.InvokeManualResize(100); // resize when the tab is clicked
-  }
 }
  

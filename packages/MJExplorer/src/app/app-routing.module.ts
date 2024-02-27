@@ -16,6 +16,52 @@ import { SkipChatComponent} from '@memberjunction/ng-ask-skip'
 import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared'
 
 
+import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
+
+export class CustomReuseStrategy implements RouteReuseStrategy {
+  storedRoutes: { [key: string]: DetachedRouteHandle } = {};
+
+  // Determines if a route should be detached and stored
+  shouldDetach(route: ActivatedRouteSnapshot): boolean {
+    // Store the route if it's an "askskip" route
+    return (route.routeConfig && route.routeConfig.path?.includes('askskip')) ? true : false;
+  }
+
+  // Stores the detached route
+  store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandle): void {
+    if (route.routeConfig && route.routeConfig.path) {
+      this.storedRoutes[route.routeConfig.path] = handle;
+    }
+  }
+
+  // Determines if a stored route should be reattached
+  shouldAttach(route: ActivatedRouteSnapshot): boolean {
+    // Reattach if we have a stored route for the incoming route
+    if (route.routeConfig?.path)
+      return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
+    else
+      return false;
+  }
+
+  // Retrieves the stored route; null means no stored route for this path
+  retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
+    if (!route.routeConfig || (route.routeConfig.path && !this.storedRoutes[route.routeConfig.path])) {
+      return null;
+    }
+    else if (route.routeConfig.path)
+      return this.storedRoutes[route.routeConfig.path];
+    else
+      return null;
+  }
+
+  // Determines if the route should be reused
+  shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
+    return future.routeConfig === curr.routeConfig;
+  }
+}
+
+
+
 @Injectable({
   providedIn: 'root',
 })

@@ -34,7 +34,7 @@ export class DatasetItemFilterTypeGQL {
 
 
 @Resolver(DatasetResultType)
-export class DatasetResolver {
+export class DatasetResolverExtended {
   @Query(() => DatasetResultType)
   async GetDatasetByName(
     @Arg('DatasetName', () => String) DatasetName: string,

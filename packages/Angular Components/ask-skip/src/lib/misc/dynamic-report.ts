@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, Input } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, Input } from '@angular/core';
 import { Router } from '@angular/router';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse, MJAPISkipResult } from '@memberjunction/skip-types';
 import { SharedService, HtmlListType } from '@memberjunction/ng-shared';
@@ -44,7 +44,7 @@ export class DynamicReportComponent implements AfterViewInit {
   @Input() SkipData: SkipAPIAnalysisCompleteResponse | undefined;
 
 
-  constructor (public sharedService: SharedService, private router: Router) {}
+  constructor (public sharedService: SharedService, private router: Router, private cdRef: ChangeDetectorRef) {}
 
   public matchingReportID: number | null = null;
   public matchingReportName: string | null = null;
@@ -56,7 +56,6 @@ export class DynamicReportComponent implements AfterViewInit {
         if (this.ShowCreateReportButton) {
           // check to see if a report has been created that is linked to this ConvoID/ConvoDetailID
           // if so don't allow the user to create another report, show a link to the existing one 
-          console.log('Checking for existing report')
           const cachedItem = DynamicReportComponent._reportCache.find(x => x.conversationId === this.ConversationID && x.conversationDetailId === this.ConversationDetailID);
           if (cachedItem) {
             this.matchingReportID = cachedItem.reportId;
@@ -74,7 +73,9 @@ export class DynamicReportComponent implements AfterViewInit {
               this.matchingReportName = item.Name;
               // cache for future to avoid db call
               DynamicReportComponent._reportCache.push({reportId: item.ID, conversationId: this.ConversationID, reportName: item.Name, conversationDetailId: this.ConversationDetailID});
-            }  
+
+              this.cdRef.detectChanges(); // the above will change the view so we need to manually trigger change detection
+            }
           }
         }
     }
