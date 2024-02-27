@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/skip-types",
-  "version": "0.9.46",
-  "description": "MemberJunction: Skip AI Assistant - Types that are used between the MJAPI and the Skip API as well as the UI within MemberJunction Explorer",
+  "name": "@memberjunction/ai-gemini",
+  "version": "0.9.4",
+  "description": "MemberJunction Wrapper for Google Gemini AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,7 +19,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^0.9.140",
-    "@memberjunction/data-context": "^0.9.29"
+    "@memberjunction/ai": "^0.9.147",
+    "@google/generative-ai": "~0.2.1"
   }
 }
