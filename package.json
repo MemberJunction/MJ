@@ -3,6 +3,7 @@
   "version": "1.0.8",
   "workspaces": [
     "packages/*",
+    "packages/AI/*",
     "packages/Angular Components/*",
     "packages/Angular Elements/*"
   ],
