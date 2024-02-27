@@ -141,45 +141,50 @@ function Update-PatchVersion {
 
 
 
-function MapPackageNameToDirectoryName($packageName, $isCurrentAngular = $false) {
+function MapPackageNameToDirectoryName($rootDirectory, $packageName) {
     $directoryName = $null
 
     # First, search in $baseLibraries
     $match = $baseLibraries | Where-Object {$_.PackageName -eq $packageName}
     if ($match) {
-        $directoryName = $match.Name
-        if ($isCurrentAngular) {
-            $directoryName = "../$directoryName"
-        }
+        # simple scenario, we have a base library, so just join the path of the root + the library name (which can be a path like /AI/gemini etc)
+        $directoryName = Join-Path -Path $rootDirectory -ChildPath $match.Name
+        # if ($isCurrentAngular) {
+        #     #Angular Component, so make sure we are using that along with root
+        #     $directoryName = Join-Path -Path $rootDirectory -ChildPath "Angular Components" #$directoryName -ChildPath ".."
+        #     #Now append the match name
+        #     $directoryName = Join-Path -Path $directoryName -ChildPath $match.Name
+        # }
+        # else {
+        #     #$directoryName = $match.Name
+        #     $directoryName = Join-Path -Path $rootDirectory -ChildPath $match.Name
+        # }
     }
 
     # If not found, search in $angularLibraries
     if (!$directoryName) {
         $match = $angularLibraries | Where-Object {$_.PackageName -eq $packageName}
         if ($match) {
-            $directoryName = $match.Name
-            # Only add "Angular Components\" if we're not inside an Angular package
-            if (!$isCurrentAngular) {
-                $directoryName = "Angular Components/$directoryName"
-            }
+            # The MATCH is an angular library, so we add the Angular Components directory to the ROOT path
+            $directoryName = Join-Path -Path $rootDirectory -ChildPath "Angular Components"
+            # now add in the match 
+            $directoryName = Join-Path -Path $directoryName -ChildPath $match.Name
         }
     }
 
     return $directoryName
 }
 
-function UpdatePackageJSONToLatestDependencyVersion($packageName, $isAngular = $false) {
-    # Use the MapPackageNameToDirectoryName function to get the correct directory name
-    $directoryName = MapPackageNameToDirectoryName $packageName $isAngular
+function UpdatePackageJSONToLatestDependencyVersion($rootDirectory, $packageName) {
+    # Use the below function to get the correct directory name
+    $directoryName = MapPackageNameToDirectoryName $rootDirectory $packageName
 
     if (!$directoryName) {
         Write-Host "   Couldn't map package name to directory name for $packageName, halting the script."
         exit
     }
 
-    # Adjust the path if the current package is an Angular package
-    $prefix = "" #$isAngular ? "../" : ""
-    $dependencyPath = $prefix + "../$directoryName/package.json"
+    $dependencyPath = Join-Path -Path $directoryName -ChildPath "package.json"
 
     if (Test-Path $dependencyPath) {
         $depJson = Get-Content $dependencyPath | ConvertFrom-Json
@@ -245,6 +250,7 @@ function LinkAllDependencies($dependenciesArray) {
 $baseLibraries = @(
     @{Name='MJGlobal'},
     @{Name='MJAI'}, 
+    @{Name='AI/gemini'}, 
     @{Name='MJCore'},
     @{Name='MJCoreEntities'},
     @{Name='MJAIEngine'}, 
@@ -259,10 +265,10 @@ $baseLibraries = @(
     @{Name='MJServer'} 
 )
 foreach ($lib in $baseLibraries) {
-    # Use the Get-PackageNameFromPackageJson function to fetch the package name
     if ($lib.Name -eq 'GeneratedEntities') {
         $lib.PackageName = $null
     } else {
+        # Use the Get-PackageNameFromPackageJson function to fetch the package name
         $packageName = Get-PackageNameFromPackageJson -directoryPath $lib.Name
 
         # Check if a package name was returned and update the library object
@@ -306,7 +312,7 @@ foreach ($lib in $angularLibraries) {
 
 
 # Define a custom object for each executable project
-$remainingProjects = @(
+$executableProjects = @(
     @{Name='CodeGen'},
     @{Name='MJAPI'},
     @{Name='MJExplorer'}
@@ -322,9 +328,10 @@ $publishToNPM = Read-Host "Do you want to publish to npm? (y/n)"
 $ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publish EVERYTHING, regardless of if things changed)? (y/n)"
 ############################################################################################################
 
+# Store the Root Directory so we can come back to it later
+$rootDirectory = Get-Location
 
-
-# Iterate over the custom objects
+# Iterate over the Base Libraries
 foreach ($libObject in $baseLibraries) {
     $lib = $libObject.Name
     Write-Host "Processing $lib"
@@ -336,7 +343,7 @@ foreach ($libObject in $baseLibraries) {
     foreach ($mjDep in $MJDependencies) {
         # always update the dependencies to the latest versions for each package before we test for changes.
         # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-        UpdatePackageJSONToLatestDependencyVersion $mjDep $false
+        UpdatePackageJSONToLatestDependencyVersion -rootDirectory $rootDirectory -packageName $mjDep 
     }
 
     if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
@@ -369,7 +376,8 @@ foreach ($libObject in $baseLibraries) {
         Write-Host "   No changes in $lib since last build, skipping this library"
     }
 
-    Set-Location ..
+    # return to the root directory after each iteration
+    Set-Location $rootDirectory
 }
 
 # Step 2: Building and Publishing Angular libraries
@@ -393,7 +401,7 @@ foreach ($libObject in $angularLibraries) {
     foreach ($mjDep in $MJdependencies) {
         # always update the dependencies to the latest versions for each package before we test for changes.
         # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-        UpdatePackageJSONToLatestDependencyVersion $mjDep $true #yep, this is an angular project, gotta tell the function that
+        UpdatePackageJSONToLatestDependencyVersion -rootDirectory $rootDirectory -packageName $mjDep  
     }
 
     if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
@@ -435,7 +443,7 @@ Write-Host ""
 
 # Step 3: Update dependencies in executable projects
 # Iterate over the custom objects
-foreach ($projObject in $remainingProjects) {
+foreach ($projObject in $executableProjects) {
     $proj = $projObject.Name
     Write-Host "Processing $proj"
     Write-Host "   Updating dependencies"
@@ -445,7 +453,7 @@ foreach ($projObject in $remainingProjects) {
     foreach ($mjDep in $MJDependencies) {
         # always update the dependencies to the latest versions for each package  
         # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-        UpdatePackageJSONToLatestDependencyVersion $mjDep $false
+        UpdatePackageJSONToLatestDependencyVersion -rootDirectory $rootDirectory -packageName $mjDep  
     }
 
     Set-Location ..

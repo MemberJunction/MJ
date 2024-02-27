@@ -1,4 +1,4 @@
-import { BaseLLM, BaseModel, BaseResult } from "@memberjunction/ai";
+import { BaseLLM, BaseModel, BaseResult, ChatParams, ClassifyParams, GetAIAPIKey, GetUserMessageFromChatParams } from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
@@ -12,14 +12,13 @@ export class AIActionParams {
     modelId: number
     modelName?: string
     systemPrompt?: string
-    userMessage?: string
+    userPrompt?: string
 }
 
 export class EntityAIActionParams extends AIActionParams {
     entityAIActionId: number
     entityRecord: BaseEntity
 }
- 
 
 // this class handles execution of AI Actions
 export class AIEngine {
@@ -113,7 +112,7 @@ export class AIEngine {
                                     // use the prompt provided in the inputParams if that exists as first priority
                                     // if not, get entity specific prompt if provided, otherwise use the default prompt from the action
 
-            const userMessage = params.userMessage ? params.userMessage : this.markupUserMessage(params.entityRecord,entityAction.UserMessage);
+            const userMessage = params.userPrompt ? params.userPrompt : this.markupUserMessage(params.entityRecord, entityAction.UserMessage);
                                     // if the caller provided a custom user message, use that, otherwise do what we are doing with a markup here
 
             const modelId = entityAction.AIModelID || action.DefaultModelID; // use the provided model if specified, otherwise use the dfault model
@@ -126,6 +125,7 @@ export class AIEngine {
                 modelId: modelId,
                 systemPrompt: entityPrompt,
                 userMessage: userMessage,
+                apiKey: GetAIAPIKey(model.DriverClass),
                 result: null
             }
             if (!await params.entityRecord.BeforeEntityAIAction(entityParams))
@@ -137,8 +137,8 @@ export class AIEngine {
                 actionId: entityParams.actionId,
                 modelId: entityParams.modelId,
                 systemPrompt: entityParams.systemPrompt,
-                userMessage: entityParams.userMessage,
-                modelName: model.Name,
+                userPrompt: entityParams.userMessage,
+                modelName: model.Name
             });
             
             // post process the results
@@ -230,30 +230,30 @@ export class AIEngine {
             throw new Error(`Model ${params.modelId} is not active.`);
 
         // figure out the driver for the requested model
-        const driver: BaseModel = await this.getDriver(model);
+        const driver: BaseModel = await this.getDriver(model, GetAIAPIKey(model.DriverClass));
         if (driver) {
+            const modelParams = <ChatParams>{
+                model: params.modelName,
+                messages: [ 
+                    {
+                        role: 'system',
+                        content: params.systemPrompt
+                    },
+                    {
+                        role: 'user',
+                        content: params.userPrompt
+                    },
+                ],
+            }
             switch (action.Name.trim().toLowerCase()) {
                 case 'classify':
-                    const classifyResult = await (<BaseLLM>driver).ClassifyText({
-                        model: params.modelName,
-                        userMessage: params.userMessage,
-                        systemPrompt: params.systemPrompt
-                    });
-                    return classifyResult;
+                    const classifyResult = await (<BaseLLM>driver).ClassifyText(modelParams);
+                    return classifyResult; 
                 case 'summarize':
-                    const summarizeResult = await (<BaseLLM>driver).SummarizeText({
-                        model: params.modelName,
-                        userMessage: params.userMessage,
-                        systemPrompt: params.systemPrompt
-                    });
+                    const summarizeResult = await (<BaseLLM>driver).SummarizeText(modelParams);
                     return summarizeResult;
                 case 'chat':
-                    const chatResult = await (<BaseLLM>driver).ChatCompletion({
-                        model: params.modelName,
-                        userMessage: params.userMessage,
-                        systemPrompt: params.systemPrompt,
-                        messages: [],
-                    });
+                    const chatResult = await (<BaseLLM>driver).ChatCompletion(modelParams);
                     return chatResult;
                 default:
                     throw new Error(`Action ${action.Name} not supported.`);
@@ -279,16 +279,18 @@ export class AIEngine {
         }
     }
 
-    protected async getDriver(model: BaseEntity): Promise<BaseModel> {
-        const driverClassName = model.Get('DriverClass');
-        const driverModuleName = model.Get('DriverImportPath');
+    protected async getDriver(model: AIModelEntity, apiKey: string): Promise<BaseModel> {
+        const driverClassName = model.DriverClass;
+        const driverModuleName = model.DriverImportPath;
         try {
-            const driverModule = await import(driverModuleName);
-        
-            // Assuming the exported class is the default export.
-            // If it's a named export, you need to adjust accordingly.
-            const DriverClass = driverModule[driverClassName];
-            return new DriverClass();    
+            if (driverModuleName && driverModuleName.length > 0) {
+                const driverModule = await import(driverModuleName);
+                if (!driverModule)
+                    throw new Error(`Error loading driver module '${driverModuleName}'`);
+            }
+            // now the module is loaded (or wasn't specified, so assumed to be loaded already)
+            // so just use ClassFactory as we would in any other case
+            return MJGlobal.Instance.ClassFactory.CreateInstance<BaseModel>(BaseModel, driverClassName, apiKey);
         }
         catch (e) {
             throw new Error(`Error loading driver '${driverModuleName}' / '${driverClassName}' : ${e.message}`);

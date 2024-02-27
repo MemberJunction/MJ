@@ -15,9 +15,15 @@ export class BaseResult {
 }
 
 export class BaseParams {
+    /**
+     * Model name, required.
+     */
     model: string
-    systemPrompt: string
-    userMessage: string
+    
+    /**
+     * Model temperature, optional.
+     */
+    temperature?: number
 }
 
 export class ModelUsage {
