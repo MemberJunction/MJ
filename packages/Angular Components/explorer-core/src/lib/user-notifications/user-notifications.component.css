@@ -18,6 +18,11 @@
   padding: 12px;
   height: 24px;
 }
+
+.header button { /*buttons within the header*/
+  margin-right: 10px; 
+}
+
 .title {
   flex: 1;
   font-size: 22px;
