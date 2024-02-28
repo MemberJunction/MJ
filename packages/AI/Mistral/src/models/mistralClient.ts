@@ -190,7 +190,7 @@ export class MistralClient {
   public async embeddings(model: string, input: string): Promise<EmbeddingResponse> {
     const request = {
         model: model,
-        input: input,
+        input: input, 
       };
       const response: EmbeddingResponse = await this.request(
         'post', 'v1/embeddings', request,
