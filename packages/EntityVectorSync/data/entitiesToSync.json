@@ -1,0 +1,14 @@
+[
+  {
+    "EntityDocumentID": 1,
+    "Interval": 3600,
+    "RunViewParams": {
+      "OrderBy": "ID",
+      "IgnoreMaxRows": true
+    },
+    "IncludeInSync": true,
+    "LastRunDate": "2024-02-23T21:55:07.507Z",
+    "VectorIndexID": 1,
+    "VectorID": 1
+  }
+]
