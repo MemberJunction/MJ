@@ -4,8 +4,8 @@
   "workspaces": [
     "packages/*",
     "packages/AI/*",
-    "packages/Angular Components/*",
-    "packages/Angular Elements/*"
+    "packages/Angular/*",
+    "packages/AngularElements/*"
   ],
   "scripts": {},
   "dependencies": {
