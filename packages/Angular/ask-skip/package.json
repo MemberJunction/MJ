@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ask-skip",
-  "version": "0.9.56",
+  "version": "0.9.57",
   "description": "MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -42,6 +42,7 @@
     "@memberjunction/ng-data-context": "^0.9.19",
     "tslib": "^2.3.0",
     "angular-plotly.js": "^5.2.2",
+    "plotly.js-dist-min": "^2.3.4",
     "@types/plotly.js-dist-min": "^2.3.4",
     "@angular/cdk": "~17.2.1",
     "ngx-markdown": "^17.1.1"

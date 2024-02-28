@@ -15,22 +15,9 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 @Component({
   selector: 'mj-dynamic-report',
-  styles: [
-    `.report-tab-title { margin-left: 10px;}`,
-    `.create-report-button { 
-        margin-bottom: 10px;
-        margin-top: 10px;
-      }`,
-      `.report-link {
-        margin-top: 10px; 
-        margin-bottom: 10px;
-        cursor: pointer;
-        color: blue;
-        font-weight: bold;
-      }`,
-    ],
-    templateUrl: './dynamic-report.html',
-  })
+  styleUrls: ['./dynamic-report.css'],
+  templateUrl: './dynamic-report.html',
+})
 export class DynamicReportComponent implements AfterViewInit {
   @Input() ShowDetailsTab: boolean = false;
   @Input() ShowCreateReportButton: boolean = false;
@@ -203,4 +190,5 @@ export class DynamicReportComponent implements AfterViewInit {
       console.error(err);          
     }
   }
+
 }

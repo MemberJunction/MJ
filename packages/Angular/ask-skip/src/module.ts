@@ -29,6 +29,7 @@ import { ListViewModule } from '@progress/kendo-angular-listview';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { GridModule } from '@progress/kendo-angular-grid';
+import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 
 /*********************************************/
 // MJ
@@ -57,7 +58,7 @@ import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-singl
     DynamicReportComponent,
     DynamicChartComponent,
     DynamicGridComponent,
-    SkipSingleMessageComponent
+    SkipSingleMessageComponent,
   ],
   imports: [
     CommonModule,
@@ -86,6 +87,7 @@ import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-singl
     PlotlyViaCDNModule,
     DataContextModule,
     OverlayModule,
+    ExcelExportModule,
     MarkdownModule.forRoot(),
   ],
   exports: [

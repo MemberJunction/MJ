@@ -1,6 +1,9 @@
 <div mjFillContainer  *ngIf="LayoutMode === 'tabs'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
+    <div class="report-tab-toolbar" *ngIf="ReportEntity && ReportEntity.ID > 0" >
+      <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
+    </div>
     <kendo-tabstrip [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip mjFillContainer [bottomMargin]="25">
         <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)" mjFillContainer>
             <ng-template kendoTabTitle mjFillContainer>
@@ -9,7 +12,6 @@
             </ng-template>
             <ng-template kendoTabContent>
                 <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
-                  <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
                   <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
                   </mj-dynamic-chart>  
                 </div>
@@ -21,7 +23,6 @@
               <span class="report-tab-title">Table</span>
             </ng-template>
             <ng-template kendoTabContent class="report-tab-contents">
-                <kendo-button *ngIf="ReportEntity && ReportEntity.ID > 0" (click)="doRefreshReport()">Refresh</kendo-button>
                 <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
                 </mj-dynamic-grid>
             </ng-template>

@@ -1,17 +1,26 @@
-import { Component, ElementRef, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
+import { PlotlyComponent } from 'angular-plotly.js';
+import * as Plotly from 'plotly.js-dist-min';
 
 @Component({
   selector: 'mj-dynamic-chart',
   template: `
-    <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" mjFillContainer [useResizeHandler]="true"></plotly-plot>
+    <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">Save as Image</button>
+    <div #plotContainer>
+      <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" mjFillContainer [useResizeHandler]="true"></plotly-plot>
+    </div>
   ` 
 })
 export class DynamicChartComponent implements OnInit, OnDestroy {
     @Input() plotData: any;
     @Input() plotLayout: any;
     @Input() defaultPlotHeight: number = 550;
+    @Input() ShowSaveAsImage: boolean = true;
+
+    @ViewChild('plotlyPlot') plotlyPlot!: PlotlyComponent;
+    @ViewChild('plotContainer') plotContainer!: ElementRef;
 
     private resizeObserver: ResizeObserver | undefined;
 
@@ -27,6 +36,27 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
       }
     }
 
+    public async SaveChartAsImage() {
+      if (this.plotlyPlot) {
+        const el = this.plotContainer.nativeElement.querySelector('.js-plotly-plot');
+        const image = await Plotly.toImage(el, {format: 'png'} as Plotly.ToImgopts)
+        if (image) {
+          // Create an <a> element
+          const downloadLink = document.createElement('a');
+          // Set the download attribute with a default file name
+          downloadLink.download = this.SkipData?.reportTitle || this.plotLayout?.title || 'chart.png';
+          // Set the href to the data URL
+          downloadLink.href = image;
+          // Append the <a> element to the body (required for Firefox)
+          document.body.appendChild(downloadLink);
+          // Programmatically trigger a click on the <a> element
+          downloadLink.click();
+          // Remove the <a> element after download
+          document.body.removeChild(downloadLink);
+        }
+      }
+    }
+ 
     setupResizeObserver() {
       return;
         // Invoke manual resize from SharedService.Instance to ensure the chart is sized correctly
