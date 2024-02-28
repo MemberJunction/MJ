@@ -6,7 +6,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 
 @RegisterClass(PineconeDatabase)
-export class PineconeDatabase implements IVectorDatabase, IVectorIndex {
+export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
 
     static _pinecone: Pinecone;
     
