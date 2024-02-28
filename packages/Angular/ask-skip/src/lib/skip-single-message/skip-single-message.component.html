@@ -5,21 +5,21 @@
         </div>
         <div class="message"
             [id]="'skip_message_' + ConversationDetailRecord.ID">
-            <div class="message-user-name">{{ConversationDetailRecord.Role.trim().toLowerCase() === 'ai' ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
+            <div class="message-user-name">{{IsAIMessage ? 'Skip' : (ConversationUser ? ConversationUser.FirstName + ' ' + ConversationUser.LastName : 'You')}}</div>
             <div>
                 {{Message}}
             </div>
             <div #reportContainer>
-
+                <!-- this is where the report will go - dynamically instantiated -->
             </div>
-            <!-- <mj-skip-dynamic-report
-                *ngIf="AnalysisResult"
-                [SkipData]="AnalysisResult"
-                [DataContext]="DataContext"
-                [ConversationID]="ConversationDetailRecord.ConversationID"
-                [ConversationDetailID]="ConversationDetailRecord.ID"
-                [ConversationName]="ConversationRecord.Name"
-            ></mj-skip-dynamic-report> -->
+            <div *ngIf="IsAIMessage && SuggestedQuestions.length > 0" class="suggested-questions">
+                <div class="suggested-questions-header">Suggested Questions</div>
+                <div class="suggested-questions-list">
+                    <div class="suggested-question" *ngFor="let question of SuggestedQuestions" (click)="RaiseSuggestedQuestionSelectedEvent(question)">
+                        {{question}}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

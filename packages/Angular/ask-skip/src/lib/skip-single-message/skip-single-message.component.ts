@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectorRef, Component, Input, ViewChild, ViewContainerRef } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Output, ViewChild, ViewContainerRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
@@ -17,6 +17,9 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     @Input() public ConversationDetailRecord!: ConversationDetailEntity;
     @Input() public ConversationUser!: UserInfo;
     @Input() public DataContext!: DataContext;
+    @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
+
+    public SuggestedQuestions: string[] = [];
 
     constructor (private sharedService: SharedService, private cdRef: ChangeDetectorRef) { }
 
@@ -48,57 +51,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
         // since we are dynamically adding stuff
         this.cdRef.detectChanges();  
     }
-
-    // protected CreateDetailHtml() {
-    //     const detail = this.ConversationDetailRecord;
-    //     const cachedHtml = this.GetHtmlFromCache(detail);
-    //     if (cachedHtml) {
-    //         return cachedHtml;
-    //     }
-    //     else {
-    //         let sMessage = '';
-    
-    //         if (detail.Role.trim().toLowerCase() === 'ai') {
-    //             sMessage = this.CreateSkipResponseHtml(detail);
-    //         }
-    //         else {
-    //             sMessage = detail.Message;
-    //         }
-
-    //         this.CacheHtml(detail, sMessage);
-        
-    //         return sMessage;
-    //     }
-    // }      
-  
-    // protected CreateSkipResponseHtml(detail: ConversationDetailEntity): string {
-    //   let sMessage = '';
-    //   if (detail.ID > 0) {
-    //     const resultObject = <SkipAPIResponse>JSON.parse(detail.Message);
-  
-    //     if (resultObject.success) {
-    //       switch (resultObject.responsePhase) {
-    //         case SkipResponsePhase.clarifying_question:
-    //           const clarifyingQuestion = <SkipAPIClarifyingQuestionResponse>resultObject;
-    //           sMessage = clarifyingQuestion.clarifyingQuestion;
-    //           break;
-    //         case SkipResponsePhase.analysis_complete:
-    //           sMessage = '';//"Here's the report I've prepared for you, please let me know if you need anything changed or another report!"
-    //           const analysisResult = <SkipAPIAnalysisCompleteResponse>resultObject;
-    //           this.AddReportToConversation(detail, analysisResult, detail.ID);
-    //           break;
-    //       }
-    //     }
-    //     else {
-    //       sMessage = `I'm having a problem handling the request. If you'd like to try again, please let me know. Also, if this problem persists, please let your administrator know.`;
-    //     }  
-    //   }
-    //   else {
-    //     // this is a temporary message with just a string in it, don't attempt to JSON parse it
-    //     return detail.Message;
-    //   }
-    //   return sMessage;
-    // }
+ 
 
     public RefreshMessage() {
       this._cachedMessage = null;
@@ -143,6 +96,14 @@ export class SkipSingleMessageComponent implements AfterViewInit {
       }
     }
 
+    public get IsAIMessage(): boolean {
+      return this.ConversationDetailRecord.Role.trim().toLowerCase() === 'ai'
+    }
+
+    public RaiseSuggestedQuestionSelectedEvent(question: string) {
+      this.SuggestedQuestionSelected.emit(question);
+    }
+
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
 
@@ -157,6 +118,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
             // Pass the data to the new chart
             const report = componentRef.instance;
             report.SkipData = analysisResult;
+            this.SuggestedQuestions = analysisResult.suggestedQuestions ? analysisResult.suggestedQuestions : [];
             report.DataContext = this.DataContext;
     
             report.ConversationID = detail.ConversationID

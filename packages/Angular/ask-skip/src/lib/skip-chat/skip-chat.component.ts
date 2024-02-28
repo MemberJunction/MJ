@@ -542,6 +542,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
 
   async sendPrompt(val: string) {
+    if (this._messageInProgress)
+      return; // don't allow sending another message if we're in the midst of sending one
+    
     if (val && val.length > 0) {
       const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
       if (this.SelectedConversation)
@@ -680,6 +683,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     obj.ConversationDetailRecord = messageDetail;
     obj.DataContext = this.DataContext;
     obj.ConversationUser = this.SelectedConversationUser!;
+
+    // Whenever the suggested question is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
+    obj.SuggestedQuestionSelected.subscribe((question: string) => {
+      this.sendPrompt(question);
+    });
 
     // now, stash a link to our newly created componentRef inside the messageDetail so we know which componentRef to remove when we delete the message
     (<any>messageDetail)._componentRef = componentRef;
