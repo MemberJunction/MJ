@@ -18,7 +18,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/codegen-lib": "^0.9.154",
+    "@memberjunction/codegen-lib": "^0.9.155",
     "dotenv": "^16.3.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"

@@ -28,13 +28,16 @@
             "Name": "AI/OpenAI"
         },
         {
-            "Name": "AI/Vectors"
+            "Name": "AI/Vectors",
+            "SkipAll": true
         },
         {
-            "Name": "AI/VectorsEntitySync"
+            "Name": "AI/VectorsEntitySync",
+            "SkipAll": true
         },
         {
-            "Name": "AI/VectorsPinecone"
+            "Name": "AI/VectorsPinecone",
+            "SkipAll": true
         },
         {
             "Name": "MJQueue"

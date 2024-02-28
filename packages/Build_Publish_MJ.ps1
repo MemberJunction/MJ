@@ -322,6 +322,11 @@ $rootDirectory = Get-Location
 
 # Iterate over the library array
 foreach ($libObject in $libraries) {
+    if ($libObject.SkipAll -eq $true) {
+        Write-Host "Skipping $libObject.Name, as it's been marked to be skipped in the JSON file."
+        continue
+    }
+
     $lib = $libObject.Name
     Write-Host "Processing $lib"
     Write-Host "   Checking for changes"
