@@ -73,7 +73,7 @@ export class AskSkipResolver {
                                 @Arg('DataContextId', () => Int) DataContextId: number,
                                 @Arg('ScriptText', () => String) ScriptText: string) {
     const md = new Metadata();
-    const user = UserCache.Instance.Users.find((u) => u.Email === userPayload.email);
+    const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
                                   const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, user);
@@ -129,7 +129,7 @@ export class AskSkipResolver {
     @Arg('DataContextId', () => Int, { nullable: true }) DataContextId?: number
   ) {
     const md = new Metadata();
-    const user = UserCache.Instance.Users.find((u) => u.Email === userPayload.email);
+    const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
     const {convoEntity, dataContextEntity, convoDetailEntity, dataContext} = await this.HandleSkipInitialObjectLoading(dataSource, ConversationId, UserQuestion, user, userPayload, md, DataContextId);
