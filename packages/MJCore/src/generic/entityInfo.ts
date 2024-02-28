@@ -170,10 +170,10 @@ export class EntityPermissionInfo extends BaseInfo{
 }
 
 export const EntityFieldTSType = {
-    String: 'String',
-    Number: 'Number',
+    String: 'string',
+    Number: 'number',
     Date: 'Date',
-    Boolean: 'Boolean',
+    Boolean: 'boolean',
 } as const;
 
 export type EntityFieldTSType = typeof EntityFieldTSType[keyof typeof EntityFieldTSType];
