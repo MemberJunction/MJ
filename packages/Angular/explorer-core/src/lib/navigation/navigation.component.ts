@@ -2,7 +2,7 @@ import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, Host
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
-import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -130,18 +130,23 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       break;
     }
     this.contextMenuVisible = false;
+    const md = new Metadata();
+    const transGroup = await md.CreateTransactionGroup();
     for (let i = 0; i < this.closedTabs.length; ++i) {
       const tab = this.closedTabs[i];
-      await this.removeWorkspaceItem(tab);
+      await this.removeWorkspaceItem(tab, transGroup);
     }
-    this.activeTabIndex = 0
+    await transGroup.Submit();
+    if (this.activeTabIndex > this.tabs.length) 
+      this.activeTabIndex = this.tabs.length - 1;
     this.tabstrip.selectTab(this.activeTabIndex);
-
-    // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
-    let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
-    this.router.navigate([url]);
-    //this.location.go(url); // update the browser URL if needed  
-    this._mostRecentURL = url;
+    if (this.activeTabIndex === 0) {
+      // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
+      let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
+      this.router.navigate([url]);
+      //this.location.go(url); // update the browser URL if needed  
+      this._mostRecentURL = url;
+    }
   }
 
   private checkViewportSize(): void {
@@ -354,7 +359,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.workSpace = workspaceRecord;
       const workspaceItemParams: RunViewParams = {
         EntityName: "Workspace Items",
-        ExtraFilter: `WorkspaceID='${this.workSpace.ID}'`
+        ExtraFilter: `WorkspaceID='${this.workSpace.ID}'`,
+        ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
       }
       const workspaceItems = await rv.RunView(workspaceItemParams);
       if (workspaceItems.Success) {
@@ -381,7 +387,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         labelLoading: true,
         contentLoading: false,
         data: resourceData,
-        workspaceItem: null, // let this get populated later from the ID if we need to modify it
+        workspaceItem: item, // provide the entity object here so we can modify it later if needed
         icon: resourceData.ResourceIcon
       }
       this.tabs.push(newTab);
@@ -647,7 +653,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     if (ev.tab.selected) {
       setTimeout(async () => {
         // find the closest tab to the one we just closed
-        await this.removeWorkspaceItem(this.tabs[ev.index - 1]);
+        await this.removeWorkspaceItem(this.tabs[ev.index - 1], null /*no transaction group*/);
 
         if (ev.index < this.tabs.length + 1) {
           // NOT the last tab, kendo by defulat will show the next tab, so let that be, but we need to update our routing info
@@ -692,7 +698,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  public async removeWorkspaceItem(tab: Tab) {
+  public async removeWorkspaceItem(tab: Tab, transGroup: TransactionGroupBase | null) {
     // remove the tab from the tabs collection
     const index = this.tabs.indexOf(tab);
     if (index >= 0)
@@ -705,9 +711,16 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       await tab.workspaceItem.Load(tab.id);
     }
     if (tab.workspaceItem) {
-      if (!await tab.workspaceItem.Delete()) {
-        // error deleting the workspace item, alert the user
-        this.sharedService.CreateSimpleNotification('Error deleting workspace item ' + tab.workspaceItem.Name + ' from the database. Please contact your system administrator.', 'error', 5000)
+      const entity = <WorkspaceItemEntity>tab.workspaceItem;
+      if (!transGroup) {
+        if (!await entity.Delete()) {
+          // error deleting the workspace item, alert the user
+          this.sharedService.CreateSimpleNotification('Error deleting workspace item ' + tab.workspaceItem.Name + ' from the database. Please contact your system administrator.', 'error', 5000)
+        }
+      }
+      else {
+        entity.TransactionGroup = transGroup;
+        entity.Delete(); // no await here, we're in a transaction group so we don't want to block
       }
     }
   }

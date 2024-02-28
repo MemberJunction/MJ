@@ -156,11 +156,20 @@ export class UserNotificationsComponent implements AfterViewInit {
 
   async markAsRead(notification: UserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
     if (notification) {
+      const notificationId: number = notification.ID;
       notification.Unread = !bRead;
-      const md = new Metadata();
-      const notificationEntity = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
-      await notificationEntity.Load(notification.ID);
-      notificationEntity.Unread = notification.Unread; //copy from local object
+      let notificationEntity: UserNotificationEntity;
+      if (notification instanceof UserNotificationEntity) {
+        // the passed in param truly is a UserNotificationEntity or subclass, so just use it, saves a DB round trip
+        notificationEntity = notification;
+      }
+      else {
+        // the passed in param is just a plain object, so we need to load the entity
+        const md = new Metadata();
+        notificationEntity = await md.GetEntityObject<UserNotificationEntity>('User Notifications');
+        await notificationEntity.Load(notificationId);  
+        notificationEntity.Unread = !bRead;  
+      }
 
       // part of a transaction group, if so, add it as that will defer the actual network traffic/save
       if (transGroup) {
@@ -170,7 +179,7 @@ export class UserNotificationsComponent implements AfterViewInit {
       }
       else {
         if (await notificationEntity.Save()) {
-          SharedService.RefreshUserNotifications();
+          //SharedService.RefreshUserNotifications(); don't need to save because angular binding already updtes the UI from the objects
           return true;
         }
         else  {
