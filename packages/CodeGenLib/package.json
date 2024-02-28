@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/codegen-lib",
-  "version": "0.9.153",
+  "version": "0.9.154",
   "description": "Library used by the CodeGen executable to generate code for the MemberJunction platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,10 +20,10 @@
   },
   "dependencies": {
     "@memberjunction/ai": "^0.9.148",
-    "@memberjunction/core": "^0.9.157",
-    "@memberjunction/core-entities": "^0.9.141",
+    "@memberjunction/core": "^0.9.158",
+    "@memberjunction/core-entities": "^0.9.142",
     "@memberjunction/global": "^0.9.142",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.174",
+    "@memberjunction/sqlserver-dataprovider": "^0.9.175",
     "env-var": "^7.4.1",
     "fs-extra": "^11.1.1",
     "glob": "^10.3.10",
