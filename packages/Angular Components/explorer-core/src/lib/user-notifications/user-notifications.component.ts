@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, TransactionGroupBase } from '@memberjunction/core';
 import { Router } from '@angular/router';
 
 @Component({
@@ -99,6 +99,14 @@ export class UserNotificationsComponent implements AfterViewInit {
     return SharedService.UserNotifications;
   }
 
+  public get UnreadNotifications(): UserNotificationEntity[] {
+    return this.AllNotifications.filter(n => n.Unread);
+  }
+
+  public get ReadNotifications(): UserNotificationEntity[] {
+    return this.AllNotifications.filter(n => !n.Unread);
+  }
+
   selectReadOption(option: string): void {
     this.radioSelected = option;
     // now update the radio button group in the UI
@@ -146,24 +154,72 @@ export class UserNotificationsComponent implements AfterViewInit {
     return classInfo;
   }
 
-  async markAsRead(notification: UserNotificationEntity, bRead: boolean) {
+  async markAsRead(notification: UserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
     if (notification) {
       notification.Unread = !bRead;
       const md = new Metadata();
       const notificationEntity = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
       await notificationEntity.Load(notification.ID);
       notificationEntity.Unread = notification.Unread; //copy from local object
-      if (await notificationEntity.Save())
-        SharedService.RefreshUserNotifications();
-      else  
-        this.sharedService.CreateSimpleNotification('Unable to mark notification as read', 'error', 5000);
+
+      // part of a transaction group, if so, add it as that will defer the actual network traffic/save
+      if (transGroup) {
+        notificationEntity.TransactionGroup = transGroup;
+        notificationEntity.Save() // no await when using a transaction group
+        return true;
+      }
+      else {
+        if (await notificationEntity.Save()) {
+          SharedService.RefreshUserNotifications();
+          return true;
+        }
+        else  {
+          this.sharedService.CreateSimpleNotification('Unable to mark notification as read', 'error', 5000);
+          return false; // let caller do notifications
+        }  
+      }
     }
+    else {
+      return false;
+    }
+  }
+
+  public async markAllAsRead() {
+    this.markAll(true);
+  }
+
+  public async markAllAsUnread() {
+    this.markAll(false);
+  }
+
+  public async markAll(bRead: boolean) {
+    // do a transaction group, not so much for ATOMICITY but for performance in terms of latency to/from the server
+    const md = new Metadata();
+    const transGroup = await md.CreateTransactionGroup();
+
+    for (const notification of this.AllNotifications) {
+      if (notification.Unread && bRead || !notification.Unread && !bRead) {
+        // don't await, we want to just keep going, the backgorund DB stuff happens when it happens but we can update the UI right away
+        if (!await this.markAsRead(notification, bRead, transGroup)) {
+          // failed
+          this.sharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
+          // bail out here
+          return;
+        }
+      }
+    }
+
+    // if we get here, that means all the saves worked...
+    if (!await transGroup.Submit())
+      this.sharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
+    else
+      SharedService.RefreshUserNotifications();
   }
   
   notificationClicked(notification: UserNotificationEntity) {
     if (this.isNotificationClickable(notification)) {
       // also mark this as read when we click it
-      this.markAsRead(notification, true);
+      this.markAsRead(notification, true, null);
 
       const info = this.notificationUrl(notification);
       if (info.queryString && info.queryString.trim().length > 0) {

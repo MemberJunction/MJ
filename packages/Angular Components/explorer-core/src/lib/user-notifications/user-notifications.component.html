@@ -4,11 +4,13 @@
       Notifications
     </div>
     <div>
-      <input #allRadio checked type="radio" name="UnreadStatus" value="All" (change)="onReadRadioChanged($event)" /><span class="radio-label"  
+      <button *ngIf="UnreadNotifications.length > 0" kendoButton (click)="markAllAsRead()">Mark All as Read</button>
+      <button *ngIf="ReadNotifications.length > 0" kendoButton (click)="markAllAsUnread()">Mark All as Unread</button>
+      <input *ngIf="AllNotifications.length > 0" #allRadio checked type="radio" name="UnreadStatus" value="All" (change)="onReadRadioChanged($event)" /><span *ngIf="AllNotifications.length > 0" class="radio-label"  
             (click)="selectReadOption('All')">All</span>
-      <input #unreadRadio type="radio" name="UnreadStatus" value="Unread" (change)="onReadRadioChanged($event)" /><span class="radio-label"  
+      <input *ngIf="UnreadNotifications.length > 0 && ReadNotifications.length > 0" #unreadRadio type="radio" name="UnreadStatus" value="Unread" (change)="onReadRadioChanged($event)" /><span *ngIf="UnreadNotifications.length > 0 && ReadNotifications.length > 0" class="radio-label"  
             (click)="selectReadOption('Unread')">Unread</span>
-      <input #readRadio type="radio" name="UnreadStatus" value="Read" (change)="onReadRadioChanged($event)" /><span class="radio-label" 
+      <input *ngIf="ReadNotifications.length > 0 && UnreadNotifications.length > 0" #readRadio type="radio" name="UnreadStatus" value="Read" (change)="onReadRadioChanged($event)" /><span *ngIf="ReadNotifications.length > 0 && UnreadNotifications.length > 0" class="radio-label" 
             (click)="selectReadOption('Read')">Read</span>
       <kendo-textbox
         class="filter-input"
@@ -31,8 +33,8 @@
           <div class="notification-message">{{dataItem.Message}}</div>
         </div>
         <div>
-          <button kendoButton *ngIf="dataItem.Unread" (click)="markAsRead(dataItem, true)">Mark as Read</button>
-          <button kendoButton *ngIf="!dataItem.Unread" (click)="markAsRead(dataItem, false)">Mark as Unread</button>
+          <button kendoButton *ngIf="dataItem.Unread" (click)="markAsRead(dataItem, true, null)">Mark as Read</button>
+          <button kendoButton *ngIf="!dataItem.Unread" (click)="markAsRead(dataItem, false, null)">Mark as Unread</button>
         </div>  
       </div>
     </ng-template>

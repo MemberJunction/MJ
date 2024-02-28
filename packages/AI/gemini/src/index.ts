@@ -1,9 +1,13 @@
+
+
 // Google Gemini Import
-import { GoogleGenerativeAI, InputContent } from "@google/generative-ai";
+import { GoogleGenerativeAI, InputContent, Part } from "@google/generative-ai";
 
 // MJ stuff
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { RegisterClass } from "@memberjunction/global";
 
+@RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
     private static _gemini: GoogleGenerativeAI;
 
@@ -87,3 +91,7 @@ export class GeminiLLM extends BaseLLM {
     }
 }
  
+
+export function LoadGeminiLLM() {
+    // does nothing, avoid tree shaking that will get rid of this class since there is no static link to this class in the code base as it is loaded dynamically
+}
