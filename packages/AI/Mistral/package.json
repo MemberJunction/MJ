@@ -16,12 +16,12 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3",
-    "openai": "^3.2.1"
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "@memberjunction/ai": "^0.9.148",
     "@memberjunction/global": "^0.9.142",
-    "@google/generative-ai": "~0.2.1"
+    "axios-retry": "^4.0.0",
+    "axois": "^0.0.1-security"
   }
 }

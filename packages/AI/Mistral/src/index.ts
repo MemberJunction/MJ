@@ -1,1 +1,1 @@
-export * from './models/openAI';
+export * from './models/mistral';

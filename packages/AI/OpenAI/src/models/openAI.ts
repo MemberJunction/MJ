@@ -1,5 +1,5 @@
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
-import { ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum, Configuration, OpenAIApi } from "openai";
+import { ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum, Configuration, CreateEmbeddingRequest, CreateEmbeddingResponse, OpenAIApi } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 
 @RegisterClass(BaseLLM, 'OpenAILLM')
@@ -74,6 +74,23 @@ export class OpenAILLM extends BaseLLM {
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
+    }
+
+    public async createEmbedding(text: string, options?: any): Promise<CreateEmbeddingResponse> {
+        try{
+            const request: CreateEmbeddingRequest = {
+                model: options.model,
+                input: text
+            }
+
+            const AxiosResponse = await OpenAILLM._openAI.createEmbedding(request);
+            const data: CreateEmbeddingResponse = AxiosResponse.data;
+            return data;
+        }
+        catch(error){
+            console.log("error creating embedding:", error.response.data);
+            return null;
+        }
     }
 
     public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionRequestMessage[] {
