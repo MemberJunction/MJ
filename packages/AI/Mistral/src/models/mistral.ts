@@ -1,6 +1,8 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import { RegisterClass } from '@memberjunction/global';
 
+@RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
     private apiBaseURL: string;
     private enableSafePrompt: boolean;
