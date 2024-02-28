@@ -1,5 +1,4 @@
 # THIS SCRIPT WILL UPDATE THE LOCAL PROJECTS TO ENSURE THAT ALL MEMBERJUNCTION DEPENDENCIES ARE USING THE LATEST VERSION
-
 function Get-MemberJunctionDependencies {
     param (
         [string]$directoryPath
@@ -39,9 +38,13 @@ function Get-SubDirectoriesWithPackageJson {
     return $subDirectories
 }
 
-function InstallLatestVersion($packageName) {
-    npm install @memberjunction/$packageName@latest --save
+function InstallLatestVersions($dependencies) {
+    $npmCommand = "npm install " + ($dependencies -join " ") + " --save"
+    Invoke-Expression $npmCommand
 }
+
+# ask the user if they want us to build GeneratedEntities or not
+$buildGeneratedEntities = Read-Host "After the packages are updated, do you want to build GeneratedEntities? (y/n)"
 
 Write-Host "Starting to update MemberJunction dependencies..."
 $projects = Get-SubDirectoriesWithPackageJson
@@ -61,17 +64,16 @@ foreach ($projObject in $projects) {
     else {
         # tell the user how many MJ dependencies we're going to update
         Write-Host "   >>>   Found $($MJDependencies.Count) MemberJunction dependencies in $proj"
-    
-        foreach ($mjDep in $MJDependencies) {
-            # update the dependencies to the latest versions for each package  
-            InstallLatestVersion $mjDep
-        }
+
+        # Prepare the dependencies for the npm install command
+        $dependencyInstallString = $MJDependencies | ForEach-Object { "@memberjunction/$_@latest" }
+
+        # Update the dependencies to the latest versions with a single npm command
+        InstallLatestVersions $dependencyInstallString
     }
     Set-Location ..    
 }
 
-# ask the user if they want us to build GeneratedEntities or not
-$buildGeneratedEntities = Read-Host "Do you want to build GeneratedEntities? (y/n)"
 if ($buildGeneratedEntities -eq 'y') {
     Write-Host "Building GeneratedEntities"
     Set-Location GeneratedEntities
