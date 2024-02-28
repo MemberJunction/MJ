@@ -7,11 +7,6 @@ import { LoadDataContextItemsServer } from '@memberjunction/data-context-server'
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
 import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo, SkipAPIRunScriptRequest } from '@memberjunction/skip-types';
-// import axios from 'axios';
-// import zlib from 'zlib';
-// import { promisify } from 'util';
-// // Convert zlib.gzip into a promise-returning function
-// const gzip = promisify(zlib.gzip);
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
@@ -96,17 +91,6 @@ export class AskSkipResolver {
     LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
 
     const response = await sendPostRequest(___skipAPIurl, input, true, null);
-    // // Convert JSON payload to a Buffer and compress it
-    // const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
-
-    // Send the compressed payload with Axios
-    // const response = await axios.post(___skipAPIurl, compressedPayload, {
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     'Content-Encoding': 'gzip'
-    //   }
-    // });
-
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -450,17 +434,6 @@ export class AskSkipResolver {
           sessionId: userPayload.sessionId,
         });
     });
-
-    // // Convert JSON payload to a Buffer and compress it
-    // const compressedPayload = await gzip(Buffer.from(JSON.stringify(input)));
-
-    // // Send the compressed payload with Axios
-    // const response = await axios.post(___skipAPIurl, compressedPayload, {
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     'Content-Encoding': 'gzip'
-    //   }
-    // });
 
     if (response && response.length > 0) { // response.status === 200) {
       // the last object in the response array is the final response from the Skip API
