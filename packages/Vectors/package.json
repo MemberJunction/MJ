@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai",
-  "version": "0.9.148",
-  "description": "MemberJunction: AI Module - LLMs and other AI services wrapped and abstracted for use in MemberJunction",
+  "name": "@memberjunction/vectors",
+  "version": "0.9.0",
+  "description": "MemberJunction: Vectors Module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,10 +15,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "^0.9.142",
+    "@langchain/mistralai": "^0.0.7",
+    "@memberjunction/core": "^0.9.148",
+    "@memberjunction/global": "^0.9.135",
     "dotenv": "^16.0.3",
-    "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "openai": "^3.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.1.7",
