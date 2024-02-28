@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@memberjunction/ai": "^0.9.148",
-    "@memberjunction/global": "^0.9.142",
-    "@google/generative-ai": "~0.2.1"
+    "@memberjunction/global": "^0.9.142"
   }
 }

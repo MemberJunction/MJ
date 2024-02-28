@@ -1,14 +1,14 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 
-export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify {
-    private apiKey: string;
+export class MistralLLM extends BaseLLM {
     private apiBaseURL: string;
     private enableSafePrompt: boolean;
 
-    constructor() {
-        super();
-        this.apiKey = process.env.MISTRAL_API_KEY || "";
-        this.apiBaseURL = process.env.MISTRAL_API_BASE_URL || "";
+    constructor(apiKey: string) {
+        super(apiKey);
+        // need to do this another way, we don't want classes to rely on .env files directly
+        // this.apiBaseURL = process.env.MISTRAL_API_BASE_URL || "";
         this.enableSafePrompt = process.env.MISTRAL_ENABLE_SAFE_PROMPT === "true";
     }
 
@@ -40,6 +40,10 @@ export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify 
         throw new Error("Method not implemented.");
     }
 
+    /**
+     * Helper function to ask a simple question and return the response
+     * @param prompt 
+     */
     public async Ask(prompt: string): Promise<void> {
         let response: ChatCompletionResponse = await this.ChatSingle(prompt, undefined, MistralModels.Tiny);
         console.log(response);
@@ -53,7 +57,7 @@ export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify 
      * @returns {Promise<AvailableModelInfo>}
      */
     public async ListModels(): Promise<ListModelsResponse> {
-        const request: AxiosRequestConfig = this.createAxoisRequestConfig('get', 'models');
+        const request: AxiosRequestConfig = this.createAxiosRequestConfig('get', 'models');
         let response: ListModelsResponse = await this.callApi(request); 
         return response;
     }
@@ -70,7 +74,7 @@ export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify 
         ): Promise<ChatCompletionResponse> {
             const chatMessage: ChatMessage[] = [
                 {
-                    role: role,
+                    role: <ChatMessageRole>role,
                     content: message
                 }
             ];
@@ -88,7 +92,7 @@ export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify 
         ): Promise<ChatCompletionResponse> {
         
         const request: ChatCompletetionRequest = this.MakeChatCompletionRequest(model, messages, temperature, maxTokens, topP, randomSeed, false, safePrompt);
-        const axiosRequest: AxiosRequestConfig = this.createAxoisRequestConfig('post', "chat/completions", request);
+        const axiosRequest: AxiosRequestConfig = this.createAxiosRequestConfig('post', "chat/completions", request);
         return await this.callApi<ChatCompletionResponse>(axiosRequest);
     }
 
@@ -114,7 +118,7 @@ export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify 
         };
     };
 
-    private createAxoisRequestConfig(method: string, path: string, options: ChatCompletetionRequest = null): AxiosRequestConfig {
+    private createAxiosRequestConfig(method: string, path: string, options: ChatCompletetionRequest = null): AxiosRequestConfig {
         return {
             method: method,
             baseURL: this.apiBaseURL,
@@ -144,7 +148,7 @@ export class MistralLLM extends BaseLLM implements IChat, ISummarize, IClassify 
         let messages: ChatMessage[] = [];
         prompts.forEach((prompt: string) => {
             messages.push({
-                role: role,
+                role: <ChatMessageRole>role,
                 content: prompt 
             });
         });

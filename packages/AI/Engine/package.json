@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai",
-  "version": "0.9.148",
-  "description": "MemberJunction: AI Module - LLMs and other AI services wrapped and abstracted for use in MemberJunction",
+  "name": "@memberjunction/aiengine",
+  "version": "0.9.45",
+  "description": "MemberJunction: AI Engine Package - handles automatic execution of Entity AI Actions using AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,10 +15,14 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/core": "^0.9.158",
     "@memberjunction/global": "^0.9.142",
+    "@memberjunction/core-entities": "^0.9.142",
+    "@memberjunction/ai": "^0.9.148",
     "dotenv": "^16.0.3",
+    "openai": "^3.2.1",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.16"
   },
   "devDependencies": {
     "@types/node": "^20.1.7",
