@@ -144,29 +144,19 @@ function Update-PatchVersion {
 function MapPackageNameToDirectoryName($rootDirectory, $packageName) {
     $directoryName = $null
 
-    # First, search in $baseLibraries
-    $match = $baseLibraries | Where-Object {$_.PackageName -eq $packageName}
+    # First, search in $libraries
+    $match = $libraries | Where-Object {$_.PackageName -eq $packageName}
     if ($match) {
         # simple scenario, we have a base library, so just join the path of the root + the library name (which can be a path like /AI/gemini etc)
         $directoryName = Join-Path -Path $rootDirectory -ChildPath $match.Name
-        # if ($isCurrentAngular) {
-        #     #Angular Component, so make sure we are using that along with root
-        #     $directoryName = Join-Path -Path $rootDirectory -ChildPath "Angular Components" #$directoryName -ChildPath ".."
-        #     #Now append the match name
-        #     $directoryName = Join-Path -Path $directoryName -ChildPath $match.Name
-        # }
-        # else {
-        #     #$directoryName = $match.Name
-        #     $directoryName = Join-Path -Path $rootDirectory -ChildPath $match.Name
-        # }
     }
 
     # If not found, search in $angularLibraries
     if (!$directoryName) {
         $match = $angularLibraries | Where-Object {$_.PackageName -eq $packageName}
         if ($match) {
-            # The MATCH is an angular library, so we add the Angular Components directory to the ROOT path
-            $directoryName = Join-Path -Path $rootDirectory -ChildPath "Angular Components"
+            # The MATCH is an angular library, so we add the Angular directory to the ROOT path
+            $directoryName = Join-Path -Path $rootDirectory -ChildPath "Angular"
             # now add in the match 
             $directoryName = Join-Path -Path $directoryName -ChildPath $match.Name
         }
@@ -247,86 +237,79 @@ function LinkAllDependencies($dependenciesArray) {
 ############################################################################################################
 ############################################################################################################
 # Define a custom object for each library including the directory name and the dependencies list (in order)
-$baseLibraries = @(
-    @{Name='MJGlobal'},
-    @{Name='MJCore'},
-    @{Name='MJCoreEntities'},
-    @{Name='AI/Core'}, 
-    @{Name='AI/Engine'}, 
-    @{Name='AI/Anthropic'}, 
-    @{Name='AI/Gemini'}, 
-    @{Name='AI/Mistral'}, 
-    @{Name='AI/OpenAI'}, 
-    @{Name='AI/Vectors'}, 
-    @{Name='AI/VectorsEntitySync'}, 
-    @{Name='AI/VectorsPinecone'}, 
-    @{Name='MJQueue'}, 
-    @{Name='MJDataContext'},
-    @{Name='MJDataContextServer'},
-    @{Name='SkipTypes'},
-    @{Name='SQLServerDataProvider'}, 
-    @{Name='CodeGenLib'}, 
-    @{Name='GraphQLDataProvider'}, 
-    @{Name='GeneratedEntities'}, 
-    @{Name='MJServer'} 
-)
-foreach ($lib in $baseLibraries) {
-    if ($lib.Name -eq 'GeneratedEntities') {
-        $lib.PackageName = $null
+# $libraries = @(
+#     # Base Libraries
+#     @{Name='MJGlobal'},
+#     @{Name='MJCore'},
+#     @{Name='MJCoreEntities'},
+#     @{Name='AI/Core'}, 
+#     @{Name='AI/Engine'}, 
+#     @{Name='AI/Anthropic'}, 
+#     @{Name='AI/Gemini'}, 
+#     @{Name='AI/Mistral'}, 
+#     @{Name='AI/OpenAI'}, 
+#     @{Name='AI/Vectors'}, 
+#     @{Name='AI/VectorsEntitySync'}, 
+#     @{Name='AI/VectorsPinecone'}, 
+#     @{Name='MJQueue'}, 
+#     @{Name='MJDataContext'},
+#     @{Name='MJDataContextServer'},
+#     @{Name='SkipTypes'},
+#     @{Name='SQLServerDataProvider'}, 
+#     @{Name='CodeGenLib'}, 
+#     @{Name='GraphQLDataProvider'}, 
+#     @{Name='GeneratedEntities'}, 
+#     @{Name='MJServer'},
+#     # Angular Libraries
+#     @{Name='Angular/shared'}, 
+#     @{Name='Angular/auth-services'}, 
+#     @{Name='Angular/container-directives'},
+#     @{Name='Angular/link-directives'}, 
+#     @{Name='Angular/compare-records'}, 
+#     @{Name='Angular/record-changes'}, 
+#     @{Name='Angular/data-context'}, 
+#     @{Name='Angular/query-grid'}, 
+#     @{Name='Angular/ask-skip'}, 
+#     @{Name='Angular/user-view-grid'}, 
+#     @{Name='Angular/explorer-core'}, 
+#     @{Name='Angular/core-entity-forms'}
+# )
+
+
+############################################################################################################
+### WE LOAD THE LIBRARY LIST FROM THE JSON FILE
+### THE REASON WE DO THIS INSTEAD OF JUST SCANNING OUR SUB-DIRECTORIES IS BECAUSE 
+### WE WANT TO BE ABLE TO SPECIFY THE ORDER OF THE LIBRARIES
+$jsonPath = './build.order.json'
+
+# Read the JSON file content
+$jsonContent = Get-Content -Path $jsonPath -Raw
+
+# Convert the JSON content into a PowerShell object
+$jsonObject = $jsonContent | ConvertFrom-Json
+
+# Get the libraries and executables from the $jsonObject
+$libraries = $jsonObject.libraries
+$executableProjects = $jsonObject.executables
+############################################################################################################
+
+# Now, we need to update the package names for each library so that we don't need that maintained in the build.order.json file
+foreach ($lib in $libraries) {
+    if ($lib.SkipNPMPublish -eq $true) {
+        $lib | Add-Member -MemberType NoteProperty -Name "PackageName" -Value $null -Force  
     } else {
         # Use the Get-PackageNameFromPackageJson function to fetch the package name
         $packageName = Get-PackageNameFromPackageJson -directoryPath $lib.Name
 
         # Check if a package name was returned and update the library object
         if ($packageName) {
-            $lib.PackageName = $packageName
+             # Use Add-Member to add or update the PackageName property
+             $lib | Add-Member -MemberType NoteProperty -Name "PackageName" -Value $packageName -Force
         } else {
             Write-Host "Could not retrieve package name for library: $($lib.Name)"
         }
     }
 }
-
-# Define a custom object for each Angular library
-$angularLibraries = @(
-    @{Name='shared'}, 
-    @{Name='auth-services'}, 
-    @{Name='container-directives'},
-    @{Name='link-directives'}, 
-    @{Name='compare-records'}, 
-    @{Name='record-changes'}, 
-    @{Name='data-context'}, 
-    @{Name='query-grid'}, 
-    @{Name='ask-skip'}, 
-    @{Name='user-view-grid'}, 
-    @{Name='explorer-core'}, 
-    @{Name='core-entity-forms'}
-)
-
-
-# now populate the package name for each angular library
-foreach ($lib in $angularLibraries) {
-    # Use the Get-PackageNameFromPackageJson function to fetch the package name
-    $packageName = Get-PackageNameFromPackageJson -directoryPath ('Angular Components/' + $lib.Name)
-
-    # Check if a package name was returned and update the library object
-    if ($packageName) {
-        $lib.PackageName = $packageName
-    } else {
-        Write-Host "Could not retrieve package name for library: $($lib.Name)"
-    }
-}
-
-
-# Define a custom object for each executable project
-$executableProjects = @(
-    @{Name='CodeGen'},
-    @{Name='MJAPI'},
-    @{Name='MJExplorer'}
-)
-############################################################################################################
-
-
-
 
 ############################################################################################################
 # GET USER INPUT ON OPTIONS
@@ -337,8 +320,8 @@ $ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publ
 # Store the Root Directory so we can come back to it later
 $rootDirectory = Get-Location
 
-# Iterate over the Base Libraries
-foreach ($libObject in $baseLibraries) {
+# Iterate over the library array
+foreach ($libObject in $libraries) {
     $lib = $libObject.Name
     Write-Host "Processing $lib"
     Write-Host "   Checking for changes"
@@ -358,7 +341,7 @@ foreach ($libObject in $baseLibraries) {
         # Logic for building and publishing
         Write-Host "   Building and publishing $lib"
 
-        if ($lib -ne 'GeneratedEntities') {
+        if (!$libObject.SkipNPMPublish) {
             Update-PatchVersion
         }
 
@@ -371,7 +354,7 @@ foreach ($libObject in $baseLibraries) {
             exit
         }    
 
-        if ($lib -ne 'GeneratedEntities' -and $publishToNPM -eq 'y') {
+        if (!$libObject.SkipNPMPublish -and $publishToNPM -eq 'y') {
             npm publish --access public
         }        
 
@@ -385,60 +368,7 @@ foreach ($libObject in $baseLibraries) {
     # return to the root directory after each iteration
     Set-Location $rootDirectory
 }
-
-# Step 2: Building and Publishing Angular libraries
-
-
-Write-Host ""
-Write-Host ""
-Write-Host "Checking Angular Libraries"
-Write-Host ""
-
-# Iterate over the custom objects
-foreach ($libObject in $angularLibraries) {
-    $lib = $libObject.Name
-    Write-Host ""
-    Write-Host "Processing Angular Library: $lib"
-    Write-Host "   Checking for changes"
-    Set-Location ('Angular Components\' + $lib)
-
-    # Dynamically fetch MJ dependencies for the current package
-    $MJdependencies = Get-MemberJunctionDependencies -directoryPath "."
-    foreach ($mjDep in $MJdependencies) {
-        # always update the dependencies to the latest versions for each package before we test for changes.
-        # Use the UpdatePackageJSONToLatestDependencyVersion function for each dependency
-        UpdatePackageJSONToLatestDependencyVersion -rootDirectory $rootDirectory -packageName $mjDep  
-    }
-
-    if (($ignoreBuildLog -eq "y") -or (Get-ChangesSinceLastBuild ".")) {
-        Write-Host "      Changes detected in Angular Library: $lib, proceeding with build and publish"
-
-        # Logic for updating package JSON and building
-        Write-Host "   Building and publishing Angular Library: $lib"
-
-        Update-PatchVersion
-
-        # Build the project
-        npm run build
-
-        if ($LASTEXITCODE -ne 0) {
-            # if the build fails, halt the script
-            Write-Host "   Error building $lib. Halting the script."
-            exit
-        }    
-
-        if ($publishToNPM -eq 'y') {
-            npm publish --access public
-        }
-        
-        Update-BuildLog "."
-    } 
-    else {
-        Write-Host "   No changes in $lib since last build, skipping this Angular library"
-    }
-
-    Set-Location ..\..
-}
+ 
 
 
 Write-Host ""

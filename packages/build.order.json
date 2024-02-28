@@ -1,0 +1,115 @@
+{
+    "libraries":  [
+        {
+            "Name": "MJGlobal"
+        },
+        {
+            "Name": "MJCore"
+        },
+        {
+            "Name": "MJCoreEntities"
+        },
+        {
+            "Name": "AI/Core"
+        },
+        {
+            "Name": "AI/Engine"
+        },
+        {
+            "Name": "AI/Anthropic"
+        },
+        {
+            "Name": "AI/Gemini"
+        },
+        {
+            "Name": "AI/Mistral"
+        },
+        {
+            "Name": "AI/OpenAI"
+        },
+        {
+            "Name": "AI/Vectors"
+        },
+        {
+            "Name": "AI/VectorsEntitySync"
+        },
+        {
+            "Name": "AI/VectorsPinecone"
+        },
+        {
+            "Name": "MJQueue"
+        },
+        {
+            "Name": "MJDataContext"
+        },
+        {
+            "Name": "MJDataContextServer"
+        },
+        {
+            "Name": "SkipTypes"
+        },
+        {
+            "Name": "SQLServerDataProvider"
+        },
+        {
+            "Name": "CodeGenLib"
+        },
+        {
+            "Name": "GraphQLDataProvider"
+        },
+        {
+            "Name": "GeneratedEntities",
+            "SkipNPMPublish": true
+        },
+        {
+            "Name": "MJServer"
+        },
+        {
+            "Name": "Angular/shared"
+        },
+        {
+            "Name": "Angular/auth-services"
+        },
+        {
+            "Name": "Angular/container-directives"
+        },
+        {
+            "Name": "Angular/link-directives"
+        },
+        {
+            "Name": "Angular/compare-records"
+        },
+        {
+            "Name": "Angular/record-changes"
+        },
+        {
+            "Name": "Angular/data-context"
+        },
+        {
+            "Name": "Angular/query-grid"
+        },
+        {
+            "Name": "Angular/ask-skip"
+        },
+        {
+            "Name": "Angular/user-view-grid"
+        },
+        {
+            "Name": "Angular/explorer-core"
+        },
+        {
+            "Name": "Angular/core-entity-forms"
+        }
+    ],
+    "executables" : [
+        {
+            "Name": "CodeGen"
+        },
+        {
+            "Name": "MJAPI"
+        },
+        {
+            "Name": "MJExplorer"
+        }
+    ]
+}
