@@ -51,7 +51,7 @@ export abstract class BaseModel {
     }
     constructor (apiKey: string) {
         if (!apiKey || apiKey.trim().length === 0)
-            throw new Error('API key cannot be empty');
+            throw new Error('@memberjuction/AI.baseModel: API key cannot be empty');
 
         this._apiKey = apiKey;
     }

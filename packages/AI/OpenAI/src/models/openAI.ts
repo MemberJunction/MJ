@@ -99,3 +99,7 @@ export class OpenAILLM extends BaseLLM {
         }
     }
 }
+
+export function LoadOpenAILLM() {
+    // this does nothing but prevents the class from being removed by the tree shaker
+}
