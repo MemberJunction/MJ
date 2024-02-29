@@ -2,7 +2,7 @@ import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Outpu
 import { UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
-import { SkipDynamicReportComponent } from '../misc/skip-dynamic-report-wrapper';
+import { SkipDynamicReportComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
 import { SharedService } from '@memberjunction/ng-shared';
  
@@ -17,9 +17,13 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     @Input() public ConversationDetailRecord!: ConversationDetailEntity;
     @Input() public ConversationUser!: UserInfo;
     @Input() public DataContext!: DataContext;
+    @Input() public ConversationMessages!: ConversationDetailEntity[];
+
     @Output() public SuggestedQuestionSelected = new EventEmitter<string>();
+    @Output() public SuggestedAnswerSelected = new EventEmitter<string>();
 
     public SuggestedQuestions: string[] = [];
+    public SuggestedAnswers: string[] = [];
 
     constructor (private sharedService: SharedService, private cdRef: ChangeDetectorRef) { }
 
@@ -103,6 +107,9 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     public RaiseSuggestedQuestionSelectedEvent(question: string) {
       this.SuggestedQuestionSelected.emit(question);
     }
+    public RaiseSuggestedAnswerSelectedEvent(question: string) {
+      this.SuggestedAnswerSelected.emit(question);
+    }
 
     protected AddReportToConversation() {
       const detail = this.ConversationDetailRecord;
@@ -120,12 +127,17 @@ export class SkipSingleMessageComponent implements AfterViewInit {
             report.SkipData = analysisResult;
             this.SuggestedQuestions = analysisResult.suggestedQuestions ? analysisResult.suggestedQuestions : [];
             report.DataContext = this.DataContext;
+            report.AllowDrillDown = false; // we don't want this within the chat, it's too much
     
             report.ConversationID = detail.ConversationID
             report.ConversationDetailID = detail.ID;
             if (this.ConversationRecord) {
               report.ConversationName = this.ConversationRecord.Name;
             }
+          }
+          else if (resultObject.responsePhase === SkipResponsePhase.clarifying_question ) {
+            const clarifyingQuestion = <SkipAPIClarifyingQuestionResponse>resultObject;
+            this.SuggestedAnswers = clarifyingQuestion.suggestedAnswers ? clarifyingQuestion.suggestedAnswers : [];
           }
         }
       }
@@ -151,4 +163,11 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     public get UserImage() {
         return this.sharedService.CurrentUserImage;
     }    
+
+    public get IsFirstMessageInConversation(): boolean {
+        return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === 0;
+    }
+    public get IsLastMessageInConversation(): boolean {
+        return this.ConversationMessages.indexOf(this.ConversationDetailRecord) === this.ConversationMessages.length - 1;
+    }
 }

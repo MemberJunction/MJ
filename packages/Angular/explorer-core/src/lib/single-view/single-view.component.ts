@@ -1,5 +1,6 @@
 import { Component, ViewChild, Input, Output, EventEmitter, AfterViewInit, OnInit } from '@angular/core';
-import { GridRowClickedEvent, UserViewGridWithAnalysisComponent } from '@memberjunction/ng-user-view-grid';
+import { GridRowClickedEvent } from '@memberjunction/ng-user-view-grid';
+import { UserViewGridWithAnalysisComponent } from '@memberjunction/ng-ask-skip';
 import { Metadata, EntityInfo, LogError } from '@memberjunction/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";

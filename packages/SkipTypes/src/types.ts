@@ -209,6 +209,21 @@ export class SkipQueryFieldInfo {
     sourceEntity: string;
 }
 
+
+export class SkipAPIRequestAPIKey {
+    /**
+     * These are the supported LLM vendors that Skip can use. These driver names map to the
+     * registered classes in the MemberJunction AI namespace for example the @memberjunction/ai-openai package includes
+     * a class called OpenAILLM that is registered with the MemberJunction AI system as a valid sub-class of BaseLLM
+     */
+    vendorDriverName: 'OpenAILLM' | 'MistralLLM' | 'GeminiLLM' | 'AnthropicLLM';
+    /**
+     * This is the actual API key for the specified vendor. 
+     * NOTE: Skip NEVER stores this information, it is only used to make requests to the AI vendor of choice
+     */
+    apiKey: string;
+}
+
 /**
  * Defines the shape of the data that is expected by the Skip API Server when making a request
  */
@@ -245,6 +260,12 @@ export class SkipAPIRequest {
      * The request phase, defined within the SkipRequestPhase type
      */
     requestPhase: SkipRequestPhase;
+
+    /**
+     * One or more API keys that are used for AI systems that Skip will access on behalf of the API caller
+     * NOTE: This is not where you put in the bearer token for the Skip API server itself, that goes in the header of the request
+     */
+    apiKeys: SkipAPIRequestAPIKey[];
 }
 
 export class SkipAPIRunScriptRequest extends SkipAPIRequest {
@@ -294,16 +315,69 @@ export class SkipAPIResponse {
 }
 
 /**
+ * Defines an individual filter that will be used to filter the data in the view to the specific row or rows that the user clicked on for a drill down
+ */
+export class SkipAPIAnalysisDrillDownFilter {
+    reportFieldName: string
+    viewFieldName: string
+}
+
+/**
+ * Defines the filtering information necessary for a reporting UI to enable behavior to drill down when a user clicks on a portion of a report like an element of a chart or a row in a table
+ */
+export class SkipAPIAnalysisDrillDown {
+    /**
+     * The name of the view in the database that we should drill into whenever a user clicks on an element in the report
+     */
+    viewName: string;
+    /**
+     * If the data context that was provided to Skip for generating a report had filtered data related to the drill down view noted in viewName property, then this
+     * baseFilter value will be populated with a SQL filter that can be added to a WHERE clause with an AND statement to ensure that the filtering is inclusive of the 
+     * data context's in-built filters.
+     */
+    baseFilter: string;
+    /**
+     * One or more filters that are used to filter the data in the view to the specific row or rows that the user clicked on
+     */
+    filters: SkipAPIAnalysisDrillDownFilter[];
+}
+
+/**
  * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'analysis_complete'
  */
 export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
     executionResults?: SkipSubProcessResponse | null;
+    /**
+     * A user-friendly explanation of what the report does
+     */
     userExplanation?: string;
+    /**
+     * A more detailed technical explanation of what the report does and how it works
+     */
     techExplanation?: string;
+    /**
+     * Describes each column in the report's computed data output that is what is displayed in either a table or a chart
+     */
     tableDataColumns?: SkipColumnInfo[];
+    /**
+     * Zero or more suggested questions that the AI engine suggests might be good follow up questions to ask after reviewing the provided report
+     */
     suggestedQuestions?: string[] | null;
+    /**
+     * The title of the report
+     */
     reportTitle?: string | null;
+    /**
+     * An analysis of the report, the data and the formatted report output.
+     */
     analysis?: string | null;
+    /**
+     * Information that will support a drill-down experience in the reporting UI
+     */
+    drillDown?: SkipAPIAnalysisDrillDown | null;
+    /**
+     * The script text that was used to generated the report and can be saved to be run again later
+     */
     scriptText?: string | null;
 }
 
@@ -311,7 +385,14 @@ export class SkipAPIAnalysisCompleteResponse extends SkipAPIResponse {
  * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'clarifying_question'
  */
 export class SkipAPIClarifyingQuestionResponse extends SkipAPIResponse {
+    /**
+     * The question to display to the user from the AI model after a request is made to the AI when the AI needs more information to process the request
+     */
     clarifyingQuestion: string;
+    /**
+     * Zero or more suggested answers that the AI model suggests might be good responses to the clarifying question
+     */
+    suggestedAnswers: string[];
 }
 
 /**

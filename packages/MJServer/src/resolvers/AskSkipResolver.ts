@@ -6,7 +6,7 @@ import { DataContext } from '@memberjunction/data-context'
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
-import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo, SkipAPIRunScriptRequest } from '@memberjunction/skip-types';
+import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo, SkipAPIRunScriptRequest, SkipAPIRequestAPIKey } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
@@ -17,6 +17,7 @@ import { ___skipAPIOrgId, ___skipAPIurl, mj_core_schema } from '../config';
 import { registerEnumType } from "type-graphql";
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util';
+import { GetAIAPIKey } from '@memberjunction/ai';
 
 
 enum SkipResponsePhase {
@@ -78,6 +79,7 @@ export class AskSkipResolver {
                                   const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, user);
     const input: SkipAPIRunScriptRequest = { 
+      apiKeys: this.buildSkipAPIKeys(),
       scriptText: ScriptText,
       messages: [], // not needed for this request
       conversationID: '', // not needed for this request
@@ -120,6 +122,15 @@ export class AskSkipResolver {
     }
   }
 
+  protected buildSkipAPIKeys(): SkipAPIRequestAPIKey[] {
+    return [
+      {
+        vendorDriverName: 'OpenAILLM',
+        apiKey: GetAIAPIKey('OpenAILLM')
+      }
+    ];
+  }
+
   @Query(() => AskSkipResultType)
   async ExecuteAskSkipAnalysisQuery(
     @Arg('UserQuestion', () => String) UserQuestion: string,
@@ -138,6 +149,7 @@ export class AskSkipResolver {
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(dataSource, convoEntity.ID, AskSkipResolver._maxHistoricalMessages);
 
     const input: SkipAPIRequest = { 
+                    apiKeys: this.buildSkipAPIKeys(),
                     messages: messages, 
                     conversationID: ConversationId.toString(), 
                     dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties

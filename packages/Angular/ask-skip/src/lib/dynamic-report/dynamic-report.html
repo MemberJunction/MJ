@@ -4,7 +4,7 @@
     <div class="report-tab-toolbar" *ngIf="ReportEntity && ReportEntity.ID > 0" >
       <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
     </div>
-    <kendo-tabstrip [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip mjFillContainer [bottomMargin]="25">
+    <kendo-tabstrip #tabComponent [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip mjFillContainer [bottomMargin]="25">
         <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)" mjFillContainer>
             <ng-template kendoTabTitle mjFillContainer>
               <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
@@ -12,7 +12,7 @@
             </ng-template>
             <ng-template kendoTabContent>
                 <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
-                  <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" style="display:block;">
+                  <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
                   </mj-dynamic-chart>  
                 </div>
             </ng-template>
@@ -23,11 +23,20 @@
               <span class="report-tab-title">Table</span>
             </ng-template>
             <ng-template kendoTabContent class="report-tab-contents">
-                <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData">
+                <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleGridDrillDown($event)">
                 </mj-dynamic-grid>
             </ng-template>
         </kendo-tabstrip-tab>  
-        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(2)">
+        <kendo-tabstrip-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [selected]="isTabSelected(2)">
+          <ng-template kendoTabTitle>
+            <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('paneFreeze')"></kendo-svgicon>
+            <span class="report-tab-title">Drill Down</span>
+          </ng-template>
+          <ng-template kendoTabContent class="report-tab-contents">
+            <mj-dynamic-report-drill-down #drillDownComponent [DrillDowns]="DrillDowns" mjFillContainer style="display:block;"></mj-dynamic-report-drill-down>
+          </ng-template>
+        </kendo-tabstrip-tab>
+        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(3)">
             <ng-template kendoTabTitle>
                 <i class="fa-light fa-flask"></i>
                 <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" />
@@ -39,7 +48,7 @@
               </div>
             </ng-template>
         </kendo-tabstrip-tab>  
-        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(3)">
+        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(4)">
             <ng-template kendoTabTitle>
               <kendo-svgicon [icon]="sharedService.kendoSVGIcon('file')"></kendo-svgicon>
               <span class="report-tab-title">Explanation</span>
@@ -47,8 +56,8 @@
             <ng-template kendoTabContent class="report-tab-contents">
               {{SkipData?.userExplanation || 'No Explanation Provided'}}
             </ng-template>
-        </kendo-tabstrip-tab>  
-        <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(4)">
+        </kendo-tabstrip-tab>
+        <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(5)">
             <ng-template kendoTabTitle>
               <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('code')" name="page-properties"></kendo-svgicon>
               <span class="report-tab-title">Details</span>
@@ -66,7 +75,7 @@
               </div>
             </ng-template>
         </kendo-tabstrip-tab>  
-    </kendo-tabstrip>
+  </kendo-tabstrip>
   </div> 
 <div *ngIf="LayoutMode === 'linear'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>

@@ -21,75 +21,86 @@ type StreamCallback = (jsonObject: any) => void;
  */
 export async function sendPostRequest(url: string, payload: any, useCompression: boolean, headers: Record<string, string> | null, streamCallback?: StreamCallback): Promise<any[]> {
   return new Promise(async (resolve, reject) => {
-    const { protocol, hostname, port, pathname } = new URL(url);
-    let data;
-    if (useCompression) {
-      try {
-        data = await gzip(Buffer.from(JSON.stringify(payload)));
-        headers = headers || {}; // Ensure headers is an object
-        headers['Content-Encoding'] = 'gzip';
-      } catch (error) {
-        return reject(error);
+    try {
+      const { protocol, hostname, port, pathname } = new URL(url);
+      let data;
+      if (useCompression) {
+        try {
+          data = await gzip(Buffer.from(JSON.stringify(payload)));
+          headers = headers || {}; // Ensure headers is an object
+          headers['Content-Encoding'] = 'gzip';
+        } catch (error) {
+          console.error(`Error in sendPostRequest while compressing data: ${error && error.message ? error.message : error}`);
+          return reject(error);
+        }
+      } else {
+        data = Buffer.from(JSON.stringify(payload));
       }
-    } else {
-      data = Buffer.from(JSON.stringify(payload));
+  
+      const options = {
+        hostname,
+        port: port || (protocol === 'https:' ? 443 : 80),
+        path: pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers
+        }
+      };
+  
+      const request = protocol === 'https:' ? httpsRequest : httpRequest;
+      const jsonObjects: any[] = [];
+      let buffer = '';
+  
+      const req = request(options, (res) => {
+        const gunzip = createGunzip();
+        const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
+  
+        stream.on('data', (chunk) => {
+          buffer += chunk;
+          let boundary;
+          while ((boundary = buffer.indexOf('\n')) !== -1) {
+            const jsonString = buffer.substring(0, boundary);
+            buffer = buffer.substring(boundary + 1);
+            try {
+              const jsonObject = JSON.parse(jsonString);
+              jsonObjects.push(jsonObject);
+              streamCallback?.(jsonObject);
+            } catch (e) {
+              // Handle JSON parse error for cases of malformed JSON objects
+              console.warn(`Error in postRequest().stream(data) while parsing JSON object: ${e && e.message ? e.message : e}`);
+            }
+          }
+        });
+  
+        stream.on('end', () => {
+          // Attempt to parse any remaining data in buffer in case it's a complete JSON object
+          if (buffer.trim()) {
+            try {
+              const jsonObject = JSON.parse(buffer.trim());
+              jsonObjects.push(jsonObject);
+              streamCallback?.(jsonObject);
+            } catch (e) {
+              // Handle JSON parse error for the last chunk
+              console.warn(`Error in postRequest().stream(end) while parsing JSON object: ${e && e.message ? e.message : e}`);
+            }
+          }
+          resolve(jsonObjects);
+        });
+      });
+  
+      req.on('error', (e) => {
+        console.error(`Error in sendPostRequest().req.on(error): ${e && e.message ? e.message : e}`)
+        reject(e);
+      });
+  
+      req.write(data);
+      req.end();
     }
-
-    const options = {
-      hostname,
-      port: port || (protocol === 'https:' ? 443 : 80),
-      path: pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      }
-    };
-
-    const request = protocol === 'https:' ? httpsRequest : httpRequest;
-    const jsonObjects: any[] = [];
-    let buffer = '';
-
-    const req = request(options, (res) => {
-      const gunzip = createGunzip();
-      const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
-
-      stream.on('data', (chunk) => {
-        buffer += chunk;
-        let boundary;
-        while ((boundary = buffer.indexOf('\n')) !== -1) {
-          const jsonString = buffer.substring(0, boundary);
-          buffer = buffer.substring(boundary + 1);
-          try {
-            const jsonObject = JSON.parse(jsonString);
-            jsonObjects.push(jsonObject);
-            streamCallback?.(jsonObject);
-          } catch (e) {
-            // Handle JSON parse error for cases of malformed JSON objects
-          }
-        }
-      });
-
-      stream.on('end', () => {
-        // Attempt to parse any remaining data in buffer in case it's a complete JSON object
-        if (buffer.trim()) {
-          try {
-            const jsonObject = JSON.parse(buffer.trim());
-            jsonObjects.push(jsonObject);
-            streamCallback?.(jsonObject);
-          } catch (e) {
-            // Handle JSON parse error for the last chunk
-          }
-        }
-        resolve(jsonObjects);
-      });
-    });
-
-    req.on('error', (e) => {
+    catch (e) {
+      console.error(`Error in sendPostRequest: ${e && e.message ? e.message : e}`)
       reject(e);
-    });
-
-    req.write(data);
-    req.end();
-  });
+    }
+  }
+  );
 }

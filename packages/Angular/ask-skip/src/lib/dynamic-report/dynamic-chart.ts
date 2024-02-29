@@ -1,15 +1,23 @@
-import { Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
+import { DrillDownInfo } from './dynamic-drill-down';
+import { DynamicReportComponent } from './dynamic-report';
 
 @Component({
   selector: 'mj-dynamic-chart',
   template: `
     <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">Save as Image</button>
     <div #plotContainer>
-      <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" mjFillContainer [useResizeHandler]="true"></plotly-plot>
+      <plotly-plot #plotlyPlot 
+                   [data]="plotData" 
+                   [layout]="plotLayout" 
+                   mjFillContainer 
+                   [useResizeHandler]="true"
+                   (plotlyClick)="handleChartClick($event)"></plotly-plot>
     </div>
   ` 
 })
@@ -18,6 +26,8 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
     @Input() plotLayout: any;
     @Input() defaultPlotHeight: number = 550;
     @Input() ShowSaveAsImage: boolean = true;
+    @Input() AllowDrillDown: boolean = true
+    @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
     @ViewChild('plotlyPlot') plotlyPlot!: PlotlyComponent;
     @ViewChild('plotContainer') plotContainer!: ElementRef;
@@ -54,6 +64,35 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
           // Remove the <a> element after download
           document.body.removeChild(downloadLink);
         }
+      }
+    }
+
+    public async handleChartClick(chartClickEvent: any) {
+      try {
+        if (!this.AllowDrillDown)
+          return;
+
+        const drillDownValue = chartClickEvent.points[0].label;
+        const drillDown = this.SkipData?.drillDown;
+        if (drillDown && drillDownValue && drillDownValue.length > 0 ) {
+          // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
+          // we can navigate to the drill down view
+          const entityName = DynamicReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
+
+          if (entityName) {
+            const filterSQL = drillDown.filters.map(f => {
+              const isDateValue = drillDownValue instanceof Date;
+              const isNumberValue = !isNaN(parseFloat(drillDownValue));
+              const needsQuotes = isDateValue ? true : (isNumberValue ? false : true);
+              const quotes = needsQuotes ? "'" : '';
+              return `${f.viewFieldName} = ${quotes}${drillDownValue}${quotes}`
+            }).join(' AND ');
+            this.DrillDownEvent.emit(new DrillDownInfo(entityName, filterSQL));
+          }
+        }
+      }
+      catch (e) {
+        console.warn('Error handling chart click', e)
       }
     }
  

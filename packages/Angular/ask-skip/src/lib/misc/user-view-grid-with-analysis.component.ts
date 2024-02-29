@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from "@angular/core";
 import { RunViewParams } from "@memberjunction/core";
-import { GridRowClickedEvent, GridRowEditedEvent, UserViewGridComponent } from "./ng-user-view-grid.component";
+import { GridRowClickedEvent, GridRowEditedEvent, UserViewGridComponent } from "@memberjunction/ng-user-view-grid";
 import { SharedService } from "@memberjunction/ng-shared";
 
 @Component({
@@ -24,7 +24,7 @@ import { SharedService } from "@memberjunction/ng-shared";
     </kendo-tabstrip-tab>
 </kendo-tabstrip>
     `,
-    styleUrls: ['./ng-user-view-grid.component.css']
+    styles: []
   })
   export class UserViewGridWithAnalysisComponent implements AfterViewInit {
     @Input() Params: RunViewParams | undefined;

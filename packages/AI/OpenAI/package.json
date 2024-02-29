@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-openai",
-  "version": "0.9.9",
+  "version": "0.9.13",
   "description": "MemberJunction Wrapper for OpenAI AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +20,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@google/generative-ai": "~0.2.1",
     "@memberjunction/ai": "^0.9.152",
     "@memberjunction/global": "^0.9.146"
   }
