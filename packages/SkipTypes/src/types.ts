@@ -234,6 +234,16 @@ export class SkipAPIRequest {
      * In future requests for the same conversation it is important to include ALL of the messages that have been part of the conversation so far, so that Skip can understand the full context of the conversation.
      */
     messages: SkipMessage[];
+
+    /**
+     * This is an optional string parameter where you can tell Skip anything you'd like to share about your organization, structure, database schema, and anything else
+     * that might be helpful for him to be aware of. Keep in mind that this organizationInfo will be incorprorated into every request Skip makes to the underlying AI
+     * services which can add cost and processing time to your requests. Including this information is extremely helpful as a very simple method of 
+     * contextualizing Skip for your organization. In the Pro and above Skip plans, there are far more granular and effect methods of training Skip beyond this organizationInfo parameter, contact
+     * the team at MemberJunction.com for more information if you're interested.
+     */
+    organizationInfo?: string;
+    
     /**
      * The data context, use this to provide all of the data you have in a data context to Skip. You should provide this from cache or refreshed based on the parameters provided by the user.
      */

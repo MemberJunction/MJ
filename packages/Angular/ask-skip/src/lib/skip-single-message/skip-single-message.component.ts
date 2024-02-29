@@ -25,6 +25,15 @@ export class SkipSingleMessageComponent implements AfterViewInit {
     public SuggestedQuestions: string[] = [];
     public SuggestedAnswers: string[] = [];
 
+    @Input() public ShowSuggestedQuestions: boolean = true;
+    @Input() public HideSuggestedQuestionsAfterClick: boolean = true;
+
+    @Input() public ShowSuggestedAnswers: boolean = true;
+    @Input() public HideSuggestedAnswersAfterClick: boolean = true;
+
+    public SuggestedQuestionsClicked: boolean = false;
+    public SuggestedAnswersClicked: boolean = false;
+
     constructor (private sharedService: SharedService, private cdRef: ChangeDetectorRef) { }
 
     @ViewChild('reportContainer', { read: ViewContainerRef }) reportContainerRef!: ViewContainerRef;
@@ -106,9 +115,11 @@ export class SkipSingleMessageComponent implements AfterViewInit {
 
     public RaiseSuggestedQuestionSelectedEvent(question: string) {
       this.SuggestedQuestionSelected.emit(question);
+      this.SuggestedQuestionsClicked = true;
     }
     public RaiseSuggestedAnswerSelectedEvent(question: string) {
       this.SuggestedAnswerSelected.emit(question);
+      this.SuggestedAnswersClicked = true;
     }
 
     protected AddReportToConversation() {
