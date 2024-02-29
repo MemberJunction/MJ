@@ -209,6 +209,21 @@ export class SkipQueryFieldInfo {
     sourceEntity: string;
 }
 
+
+export class SkipAPIRequestAPIKey {
+    /**
+     * These are the supported LLM vendors that Skip can use. These driver names map to the
+     * registered classes in the MemberJunction AI namespace for example the @memberjunction/ai-openai package includes
+     * a class called OpenAILLM that is registered with the MemberJunction AI system as a valid sub-class of BaseLLM
+     */
+    vendorDriverName: 'OpenAILLM' | 'MistralLLM' | 'GeminiLLM' | 'AnthropicLLM';
+    /**
+     * This is the actual API key for the specified vendor. 
+     * NOTE: Skip NEVER stores this information, it is only used to make requests to the AI vendor of choice
+     */
+    apiKey: string;
+}
+
 /**
  * Defines the shape of the data that is expected by the Skip API Server when making a request
  */
@@ -245,6 +260,12 @@ export class SkipAPIRequest {
      * The request phase, defined within the SkipRequestPhase type
      */
     requestPhase: SkipRequestPhase;
+
+    /**
+     * One or more API keys that are used for AI systems that Skip will access on behalf of the API caller
+     * NOTE: This is not where you put in the bearer token for the Skip API server itself, that goes in the header of the request
+     */
+    apiKeys: SkipAPIRequestAPIKey[];
 }
 
 export class SkipAPIRunScriptRequest extends SkipAPIRequest {
