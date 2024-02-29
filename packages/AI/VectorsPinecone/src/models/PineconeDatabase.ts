@@ -1,21 +1,26 @@
 import { pineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
-import { Index, Pinecone } from '@pinecone-database/pinecone';
+import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
-export class PineconeDatabase  implements VectorDBBase {
+export class PineconeDatabase  extends VectorDBBase {
 
     static _pinecone: Pinecone;
     
     constructor(apiKey: string){
+        super(apiKey);
         if(!PineconeDatabase._pinecone){
             PineconeDatabase._pinecone = new Pinecone({
                 apiKey: apiKey
             });
         }
     }
+    protected get apiKey(): string {
+        throw new Error('Method not implemented.');
+    }
+    
 
     get pinecone(): Pinecone { return PineconeDatabase._pinecone; }
 
@@ -53,8 +58,8 @@ export class PineconeDatabase  implements VectorDBBase {
      * If an indexName is not provided, this will use the default index name
      * defined in the environment variables instead.
      */
-    public getIndex(params: BaseRequestParams): BaseResponse {
-        const name: string = params.id || pineconeDefaultIndex;
+    public getIndex(params?: BaseRequestParams): BaseResponse {
+        const name: string = params?.id || pineconeDefaultIndex;
         const result: BaseResponse = {
             message: "",
             success: true,
@@ -70,7 +75,7 @@ export class PineconeDatabase  implements VectorDBBase {
      * await pinecone.createIndex({ name: 'my-index', dimension: 128, spec: { serverless: { cloud: 'aws', region: 'us-west-2' }}})
      * ```
      */
-    public async createIndex<T>(options: CreateIndexParams): Promise<BaseResponse> {
+    public async createIndex(options: CreateIndexParams): Promise<BaseResponse> {
         const result = await this.pinecone.createIndex({
             name: options.id,
             dimension: options.dimension,
@@ -78,13 +83,7 @@ export class PineconeDatabase  implements VectorDBBase {
             spec: options.additionalParams
         });
 
-        const res: BaseResponse = {
-            message: "",
-            success: true,
-            data: result
-        };
-
-        return res;
+        return this.wrapResponse(result);
     }
 
     public async deleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
@@ -103,79 +102,84 @@ export class PineconeDatabase  implements VectorDBBase {
        throw new error("Method not implemented");
     }
 
+    public async queryIndex(params: QueryOptions): Promise<BaseResponse> {
+        let index: Index = this.getIndex().data;
+        let result = await index.query(params);
+        return this.wrapResponse(result);
+    }
+
     // End IVectorDatabaseBase implementation
 
     // Begin IVectorIndexBase implementation
 
-    public async createRecord(record: VectorRecord): Promise<BaseResponse> {
-        let records: VectorRecord[] = [record];
+    public async createRecord(params: VectorRecord): Promise<BaseResponse> {
+        let records: VectorRecord[] = [params];
         let result = await this.createRecords(records);
 
-        const res: BaseResponse = {
-            message: "",
-            success: true,
-            data: result
-        };
-
-        return res;
+        return this.wrapResponse(result);
     }
 
-    public async createRecords(records: VectorRecord[]): Promise<void> {
-        const index = await this.getDefaultIndex();
+    public async createRecords(records: VectorRecord[]): Promise<BaseResponse> {
+        const index: Index = await this.getIndex().data;
         let result = await index.upsert(records);
 
-        const res: BaseResponse = {
-            message: "",
-            success: true,
-            data: result
-        };
-
-        return res;
+        return this.wrapResponse(result);
     }
 
-    public async getRecord<T extends RecordMetadata>(id: string, options?: any) {
-        return await this.getRecords<T>([id]);
+    public async getRecord(params: BaseRequestParams): Promise<BaseResponse> {
+        let result = await this.getRecords(params);
+
+        return this.wrapResponse(result);
     }
 
-    public async getRecords<T extends RecordMetadata>(Ids: string[], options?: any) {
-        const index = this.getIndex<T>();
-        const fetchResult: FetchResponse<T> = await index.fetch(Ids);
-        return fetchResult;
+    public async getRecords(params: BaseRequestParams): Promise<BaseResponse> {
+        const index: Index = this.getIndex().data;
+        const fetchResult: FetchResponse = await index.fetch(params.data);
+
+        return this.wrapResponse(fetchResult);
     }
 
-    public async updateRecord<T extends RecordMetadata>(data: UpdateOptions<T>, options?: any): Promise<void> {
-        const index = this.getIndex();
-        index.update(data)
+    public async updateRecord(params: BaseRequestParams): Promise<BaseResponse> {
+        const index: Index = this.getIndex().data;
+        let result = index.update(params.data);
+        return this.wrapResponse(result);
     }
 
-    public async updateRecords<T extends RecordMetadata>(data: UpdateOptions<T>[], options?: any): Promise<void> {
+    public async updateRecords(params: BaseRequestParams): Promise<BaseResponse> {
         throw new Error("Method not implemented");
     }
 
-    public async deleteRecord<T extends RecordMetadata>(id: string, options?: any): Promise<void> {
-        const index = this.getIndex<T>();
-        index.deleteOne(id);
+    public async deleteRecord(record: VectorRecord): Promise<BaseResponse> {
+        const index: Index = this.getIndex().data;
+        let result = index.deleteOne(record.id);
+        return this.wrapResponse(result);
     }
 
-    public async deleteRecords<T extends RecordMetadata>(ids?: string[], options?: any): Promise<void> {
-        const index = this.getIndex<T>();
-        if(ids){
-            await index.deleteMany(ids);
-        }
-        else if(options){
-            index.deleteMany(options);
-        }
+    public async deleteRecords(records: VectorRecord[]): Promise<BaseResponse> {
+        const index: Index = this.getIndex().data;
+        const IDMap: string[] = records.map((record: VectorRecord) => record.id);
+        let result = index.deleteMany(IDMap);
+        return this.wrapResponse(result);
     }
 
-    public async deleteAllRecords<T extends RecordMetadata>(options?: any): Promise<void> {
-        const index = this.getIndex<T>();
-        if(options?.namespace){
-            await index.namespace(options.namespace).deleteAll();
+    public async deleteAllRecords(params: BaseRequestParams): Promise<BaseResponse> {
+        const index: Index = this.getIndex().data;
+        if(params?.data){
+            await index.namespace(params?.data).deleteAll();
         }
         else{
             index.deleteAll();
         }
+        return this.wrapResponse(null);
     }
+
+    private wrapResponse(data: any): BaseResponse {
+        return {
+            success: true,
+            message: null,
+            data: data
+        }
+    };
 
     // End IVectorIndexBase implementation
 }

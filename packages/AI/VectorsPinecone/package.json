@@ -19,7 +19,6 @@
     "@memberjunction/aiengine": "^0.9.28",
     "@memberjunction/core": "^0.9.142",
     "@memberjunction/global": "^0.9.135",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.158",
     "@memberjunction/vectors": "file:../Vectors",
     "@pinecone-database/pinecone": "^2.0.1",
     "@memberjunction/ai-vectordb": "^0.9.1",

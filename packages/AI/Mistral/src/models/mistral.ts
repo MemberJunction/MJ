@@ -1,6 +1,6 @@
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+import { ChatCompletionResponseChoice, EmbeddingResponse, ListModelsResponse, MistralClient } from './mistralClient';
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
@@ -71,7 +71,7 @@ export class MistralLLM extends BaseLLM {
      * Returns a list of available models
      * @returns {Promise<AvailableModelInfo>}
      */
-    public async ListModels(): Promise<ListModelsResponse> {
+    public async listModels(): Promise<ListModelsResponse> {
         const listModelsResponse: ListModelsResponse = await this.client.listModels();
         return listModelsResponse;
     }

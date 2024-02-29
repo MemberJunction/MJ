@@ -102,15 +102,17 @@ export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
 
 export type BaseRequestParams = {
     id: string;
+    data?: any
 }
 
-export type CreateIndexParams = BaseRequestParams & {
+export type CreateIndexParams= BaseRequestParams & {
     dimension: number;
     metric: IndexModelMetricEnum,
-    additionalParams?: object
+    additionalParams?: any
 }
 
 export type EditIndexParams = BaseRequestParams & {
+
 }
 
 /**

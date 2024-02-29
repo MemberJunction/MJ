@@ -19,7 +19,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "^0.9.148",
+    "@memberjunction/ai": "^0.9.152",
     "@memberjunction/global": "^0.9.142",
     "axios-retry": "^4.0.0",
     "axois": "^0.0.1-security"
