@@ -1,9 +1,8 @@
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import  { ChatCompletionResponseChoice, EmbeddingResponse, ListModelsResponse, MistralClient } from './mistralClient';
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, 
-    ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 
-@RegisterClass(BaseLLM, 'MistralLLM')
+@RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
     static _client: MistralClient;
     constructor(apiKey: string) {

@@ -33,7 +33,7 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
             combinedQuery += `mutation_${i}: ` + itemMutation + '\n';
         }
 
-        combinedQuery = `mutation (${mutationParams}){ \n` + combinedQuery+ '\n}'; // wrap it up in a mutation so we can execute it
+        combinedQuery = `mutation TransactionGroup(${mutationParams}){ \n` + combinedQuery+ '\n}'; // wrap it up in a mutation so we can execute it
         const execResults = await GraphQLDataProvider.ExecuteGQL(combinedQuery, combinedVars)
         const returnResults: TransactionResult[] = [];
         for (let i = 0; i < items.length; i++) {

@@ -7,7 +7,8 @@ import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
-const _rootPath = '../'
+
+//const _rootPath = '../'
 
 // implement some generic functionality that all/many providers will need
 export type AllMetadata = {

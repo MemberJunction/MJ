@@ -1,4 +1,4 @@
-import { ApolloServerPlugin } from '@apollo/server';
+import { ApolloServerPlugin, GraphQLRequestContextDidEncounterErrors, GraphQLRequestListenerParsingDidEnd } from '@apollo/server';
 import { DataSource } from 'typeorm';
 import { AppContext } from '../types';
 
@@ -23,6 +23,9 @@ export const TransactionPlugin: ApolloServerPlugin<AppContext> = {
     await queryRunner.startTransaction();
 
     return {
+      didEncounterErrors: async (requestContext) => {
+        console.log('Error in transaction wrapper: ' + requestContext.errors, 'time spent: ', Date.now() - start, 'ms');
+      },
       executionDidStart: async () => {
         return {
           executionDidEnd: async (err) => {

@@ -638,13 +638,15 @@ export abstract class BaseEntity {
     }
 
     /**
-     * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. The Dirty flags and other internal state will assume what is loading from
-     * the object is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method.
+     * This method is meant to be used only in situations where you are sure that the data you are loading is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS.
+     * The Dirty flags and other internal state will assume what is loading from the data parameter you pass in is equivalent to what is in the database. Generally speaking, you should use Load() instead of this method. The main use case(s) where this makes sense are:
+     *  (1) On the server if you are pulling data you know is fresh from say the result of another DB operation
+     *  (2) If on any tier you run a fresh RunView result, that gives you data from the database, you can then instantiate objects via Metadata.GetEntityObject() and then use this with the result from the RunView call
+     *  *** Note: for the #2 use case, when you call the RunView Object RunView() method with the ResultType='entity_object', you'll get an array of BaseEntity-derived objects instead of simple objects, that functionality utilizes this method
      * @param data 
      * @returns 
      */
     public LoadFromData(data: any) : boolean {
-        console.warn('LoadFromData should ONLY be used when you are sure that the data you are loading is current in the database, if you are not sure if your data is current, use Load() instead');
         this.SetMany(data, true);
         return true; 
     }

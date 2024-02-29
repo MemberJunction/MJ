@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai",
-  "version": "0.9.149",
+  "version": "0.9.152",
   "description": "MemberJunction: AI Module - LLMs and other AI services wrapped and abstracted for use in MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "^0.9.143",
+    "@memberjunction/global": "^0.9.146",
     "dotenv": "^16.0.3",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20"

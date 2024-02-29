@@ -1,4 +1,4 @@
-import { BaseLLM, BaseModel, BaseResult, ChatParams, ClassifyParams, GetAIAPIKey, GetUserMessageFromChatParams } from "@memberjunction/ai";
+import { BaseLLM, BaseModel, BaseResult, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";

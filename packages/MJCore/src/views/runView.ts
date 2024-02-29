@@ -2,6 +2,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
+import { Metadata } from '../generic/metadata';
 
 /**
  * Parameters for running either a stored or dynamic view. 
@@ -89,7 +90,14 @@ export type RunViewParams = {
      * optional - if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.
      */
     AuditLogDescription?: string
-}
+
+    /**
+     * Result Type is either 'simple' or 'entity_object' and defaults to 'Plain'. If 'EntityObject' is specified, the Results[] array will contain
+     * BaseEntity-derived objects instead of plain objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
+     * if you plan to do any update/delete operations on the data.
+     */
+    ResultType?: 'simple' | 'entity_object';
+} 
 
 /**
  * Class for runnings views in a generic, tier-independent manner - uses a provider model for 
@@ -103,7 +111,38 @@ export class RunView  {
      * @returns 
      */
     public async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> {
-        return RunView.Provider.RunView(params, contextUser);
+        // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
+        // so that we can get the data to populate the entity object with.
+        if (params.ResultType === 'entity_object') {
+            // we need to get the entity definition and then get all the fields for it
+            const md = new Metadata();
+            const entity = md.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            if (!entity)
+                throw new Error(`Entity ${params.EntityName} not found in metadata`);
+            params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
+        }
+
+        // NOW, run the view
+        const result = await RunView.Provider.RunView(params, contextUser);
+
+        // FINALLY, if needed, transform the result set into BaseEntity-derived objects
+        if ( 
+             params.ResultType === 'entity_object' && 
+             result && 
+             result.Success
+           ) {
+            // we need to transform each of the items in the result set into a BaseEntity-derived object
+            const md = new Metadata();
+            const newItems = [];
+            for (const item of result.Results) {
+                const entity = await md.GetEntityObject(params.EntityName);
+                entity.LoadFromData(item);
+                newItems.push(entity);
+            }
+            result.Results = newItems;
+        }
+
+        return result;
     }
 
     private static _globalProviderKey: string = 'MJ_RunViewProvider';
