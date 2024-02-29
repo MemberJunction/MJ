@@ -22,8 +22,8 @@ export class DrillDownInfo {
 @Component({
   selector: 'mj-dynamic-report-drill-down',
   template: `
-<kendo-tabstrip [keepTabContent]="true" [animate] = "false" mjFillContainer>
-  <kendo-tabstrip-tab *ngFor="let dd of DrillDowns; let i = index" [selected]="i === activeTabIndex" >
+<kendo-tabstrip [keepTabContent]="true" [animate] = "false" mjFillContainer [closable]="true">
+  <kendo-tabstrip-tab *ngFor="let dd of DrillDowns; let i = index" [selected]="i === activeTabIndex" closeIcon="delete">
     <ng-template kendoTabTitle>{{dd.Filter}}</ng-template>
     <ng-template kendoTabContent>
       <mj-user-view-grid [Params]="dd.UserViewGridParams" mjFillContainer> </mj-user-view-grid>

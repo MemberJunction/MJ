@@ -96,18 +96,38 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   }
   
   public isTabSelected(index: number) {
-    let totalTabs = 4;
-    if (index > 0 && this.IsChart)
-      totalTabs++; // the chart tab is shown, so we have one extra tab compared to "normal"
-    if (index > 2 && this.AllowDrillDown && this.DrillDowns.length > 0)
-      totalTabs++; // the drill down tab is shown, so we have one extra tab compared to "normal"
-
-    // now we know the total number of tabs
-    // the index passed in is a STATIC value that is the index of the tab in the HTML
+    // the index passed in is a value that is the index of the tab at the DESIGN TIME IN THE HTML
     // which is based on the maximum # of possible tabs that can exist.
     // If some of the tabs are NOT showing, then we have fewer tabs than the max
     // for this reason, we need to 
-    return this.activeTabIndex === index;//(index - offset);
+    return this.activeTabIndex === (index - this.getCurrentTabOffset(index));
+  }
+
+  protected getCurrentTabOffset(currentTabIndex: number): number {
+    let offset = 0;
+    switch (currentTabIndex) {
+      case 0:
+        // chart tab, no change
+        break;
+      case 1:
+        // table tab. If chart tab isn't showing, then we need to offset by 1
+        if (!this.IsChart)
+          offset++;
+        break;
+      case 2:
+        // drill down tab. If chart tab isn't showing, then we need to offset 
+        if (!this.IsChart)
+          offset++;
+        break;
+      default:
+        // rest of the tabs above the first 3 are always showing, so we need to offset by the number of tabs that are not showing
+        if (!this.IsChart)
+          offset++;
+        if (this.DrillDowns.length === 0 || !this.AllowDrillDown)
+          offset++;
+        break;
+    }
+    return offset;
   }
 
   public get Columns(): SkipColumnInfo[] {
@@ -236,7 +256,11 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
 
   public ngAfterViewChecked(): void {
     if (this._drillDownSelectTab >= 0 && this.drillDownComponent) {
-      this.activeTabIndex = 2 // fix this to not be hard coded
+      if (this.IsChart)
+        this.activeTabIndex = 2 // chart tab IS showing show index of drill down is 2
+      else
+        this.activeTabIndex = 1 // chart tab is missing so index is 1
+      
       this.drillDownComponent.SelectTab(this._drillDownSelectTab);
       this._drillDownSelectTab = -1; // turn off flag
     }
