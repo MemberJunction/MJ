@@ -12,11 +12,18 @@
             <div #reportContainer>
                 <!-- this is where the report will go - dynamically instantiated -->
             </div>
-            <div *ngIf="IsAIMessage && SuggestedQuestions.length > 0" class="suggested-questions">
-                <div class="suggested-questions-header">Suggested Questions</div>
+            <div *ngIf="IsAIMessage && SuggestedQuestions.length > 0 && IsLastMessageInConversation" class="suggested-container">
+                <div class="suggested-header">Suggested Questions</div>
                 <div class="suggested-questions-list">
-                    <div class="suggested-question" *ngFor="let question of SuggestedQuestions" (click)="RaiseSuggestedQuestionSelectedEvent(question)">
+                    <div class="suggested-item" *ngFor="let question of SuggestedQuestions" (click)="RaiseSuggestedQuestionSelectedEvent(question)">
                         {{question}}
+                    </div>
+                </div>
+            </div>
+            <div *ngIf="IsAIMessage && SuggestedAnswers.length > 0 && IsLastMessageInConversation" class="suggested-container">
+                <div class="suggested-answers-list">
+                    <div class="suggested-item" *ngFor="let answer of SuggestedAnswers" (click)="RaiseSuggestedAnswerSelectedEvent(answer)">
+                        {{answer}}
                     </div>
                 </div>
             </div>

@@ -2,7 +2,7 @@ import { AfterViewInit, Component, Input, ViewChild } from '@angular/core';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
 import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 
@@ -181,9 +181,46 @@ export class DynamicGridComponent implements AfterViewInit {
     });
   }  
 
-  cellClick(event: any): void {
+  public async cellClick(event: any) {
     LogStatus(`Cell clicked in DynamicGrid`, undefined, event);
-    LogStatus('Need to implement cellClick in DynamicGridComponent like DyanmicChartComponent to do drill down!')
+    try {
+      const rowSelected = event.dataItem;
+      const drillDown = this.SkipData?.drillDown;
+      if (drillDown && rowSelected ) {
+        // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
+        // we can navigate to the drill down view
+        const rv = new RunView();
+        const md = new Metadata();
+        const schemaAndView = drillDown.viewName.trim().toLowerCase();
+        // check to see if the view has a . in it, that would mean it has schema and view name, SHOULD always have that
+        const schema = schemaAndView.split('.')[0];
+        const view = schemaAndView.split('.')[1];
+        const e = md.Entities.find(x => x.BaseView.trim().toLowerCase() === view && x.SchemaName.trim().toLowerCase() === schema);
+        if (e) {
+          const filterSQL = drillDown.filters.map(f => {
+            const val = rowSelected[f.reportFieldName];
+            const isDateValue = val instanceof Date;
+            const isNumberValue = !isNaN(parseFloat(val));
+            const needsQuotes = isDateValue ? true : (isNumberValue ? false : true);
+            const quotes = needsQuotes ? "'" : '';
+            return `${f.viewFieldName} = ${quotes}${val}${quotes}`
+          }).join(' AND ');
+          const result = await rv.RunView({
+            EntityName: e.Name,
+            ExtraFilter: filterSQL
+          });  
+          alert("drill down in console")
+          console.log("Drill down result")
+          console.log(result?.Results);
+        }
+        else {
+          console.warn(`Could not find entity for the specified DrillDownView: ${drillDown.viewName}`);
+        }
+      }
+    }
+    catch (e) {
+      console.warn('Error handling chart click', e)
+    }
   }
 
   // convenience for the HTML template

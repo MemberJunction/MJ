@@ -1,4 +1,5 @@
 import { Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
@@ -9,7 +10,12 @@ import * as Plotly from 'plotly.js-dist-min';
   template: `
     <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">Save as Image</button>
     <div #plotContainer>
-      <plotly-plot #plotlyPlot [data]="plotData" [layout]="plotLayout" mjFillContainer [useResizeHandler]="true"></plotly-plot>
+      <plotly-plot #plotlyPlot 
+                   [data]="plotData" 
+                   [layout]="plotLayout" 
+                   mjFillContainer 
+                   [useResizeHandler]="true"
+                   (plotlyClick)="handleChartClick($event)"></plotly-plot>
     </div>
   ` 
 })
@@ -54,6 +60,46 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
           // Remove the <a> element after download
           document.body.removeChild(downloadLink);
         }
+      }
+    }
+
+    public async handleChartClick(chartClickEvent: any) {
+      try {
+        const drillDownValue = chartClickEvent.points[0].label;
+        const drillDown = this.SkipData?.drillDown;
+        if (drillDown && drillDownValue && drillDownValue.length > 0 ) {
+          // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
+          // we can navigate to the drill down view
+          const rv = new RunView();
+          const md = new Metadata();
+          const schemaAndView = drillDown.viewName.trim().toLowerCase();
+          // check to see if the view has a . in it, that would mean it has schema and view name, SHOULD always have that
+          const schema = schemaAndView.split('.')[0];
+          const view = schemaAndView.split('.')[1];
+          const e = md.Entities.find(x => x.BaseView.trim().toLowerCase() === view && x.SchemaName.trim().toLowerCase() === schema);
+          if (e) {
+            const filterSQL = drillDown.filters.map(f => {
+              const isDateValue = drillDownValue instanceof Date;
+              const isNumberValue = !isNaN(parseFloat(drillDownValue));
+              const needsQuotes = isDateValue ? true : (isNumberValue ? false : true);
+              const quotes = needsQuotes ? "'" : '';
+              return `${f.viewFieldName} = ${quotes}${drillDownValue}${quotes}`
+            }).join(' AND ');
+            const result = await rv.RunView({
+              EntityName: e.Name,
+              ExtraFilter: filterSQL
+            });  
+            alert("drill down in console")
+            console.log("Drill down result")
+            console.log(result?.Results);
+          }
+          else {
+            console.warn(`Could not find entity for the specified DrillDownView: ${drillDown.viewName}`);
+          }
+        }
+      }
+      catch (e) {
+        console.warn('Error handling chart click', e)
       }
     }
  

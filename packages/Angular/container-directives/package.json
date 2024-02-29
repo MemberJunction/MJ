@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-container-directives",
-  "version": "0.9.130",
+  "version": "0.9.131",
   "description": "MemberJunction: Angular Container Directives - Fill Container for Auto-Resizing, and plain container just for element identification/binding",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -29,7 +29,7 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.163",
+    "@memberjunction/core": "^0.9.164",
     "@memberjunction/global": "^0.9.146",
     "tslib": "^2.3.0"
   },

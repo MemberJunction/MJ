@@ -49,7 +49,7 @@
     height: .5rem;
 }
 
-.suggested-questions {
+.suggested-container {
     margin-right: 20px; /*match the message class*/
     display: flex;
     flex-direction: column;
@@ -59,8 +59,9 @@
     margin-top: 10px;
     margin-bottom: 10px;
     border: solid 1px rgba(28, 103, 202, 0.08);
+    background-color: rgb(241, 236, 227);
 }
-.suggested-questions-header {
+.suggested-header {
     font-weight: 600;
     margin-bottom: 10px;
 }
@@ -68,7 +69,11 @@
     display: flex;
     flex-wrap: wrap;
 }
-.suggested-question {
+.suggested-answers-list {
+    display: flex;
+    flex-wrap: none;
+}
+.suggested-item {
     margin: 5px;
     padding: 5px 10px;
     border-radius: 5px;
@@ -76,6 +81,6 @@
     cursor: pointer;
     transition: background-color 0.3s;
 }
-.suggested-question:hover {
+.suggested-item:hover {
     background-color: #96d0f1;
 }

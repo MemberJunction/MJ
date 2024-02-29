@@ -683,10 +683,15 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     obj.ConversationDetailRecord = messageDetail;
     obj.DataContext = this.DataContext;
     obj.ConversationUser = this.SelectedConversationUser!;
+    obj.ConversationMessages = this.Messages; // pass this on so that the single message has access to the full conversation, for example to know if it is the first/last/only message in the conversation/etc
 
     // Whenever the suggested question is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
     obj.SuggestedQuestionSelected.subscribe((question: string) => {
       this.sendPrompt(question);
+    });
+    // Whenever the suggested answer is clicked on by the user in the single message component, we want to bubble that up here and send the prompt
+    obj.SuggestedAnswerSelected.subscribe((answer: string) => {
+      this.sendPrompt(answer);
     });
 
     // now, stash a link to our newly created componentRef inside the messageDetail so we know which componentRef to remove when we delete the message

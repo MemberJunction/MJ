@@ -47,7 +47,7 @@
             <ng-template kendoTabContent class="report-tab-contents">
               {{SkipData?.userExplanation || 'No Explanation Provided'}}
             </ng-template>
-        </kendo-tabstrip-tab>  
+        </kendo-tabstrip-tab>
         <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(4)">
             <ng-template kendoTabTitle>
               <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('code')" name="page-properties"></kendo-svgicon>
@@ -66,7 +66,7 @@
               </div>
             </ng-template>
         </kendo-tabstrip-tab>  
-    </kendo-tabstrip>
+  </kendo-tabstrip>
   </div> 
 <div *ngIf="LayoutMode === 'linear'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
