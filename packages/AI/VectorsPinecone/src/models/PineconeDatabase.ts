@@ -1,12 +1,11 @@
-import { IndexModel, Pinecone, IndexList, Index, RecordMetadata, 
-    PineconeRecord, UpdateOptions, FetchResponse, CreateIndexOptions } from '@pinecone-database/pinecone';
 import { pineconeDefaultIndex } from '../config';
-import { IVectorDatabase, IVectorIndex } from '@memberjunction/vectors';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
+import { Index, Pinecone } from '@pinecone-database/pinecone';
+import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 
-@RegisterClass(PineconeDatabase)
-export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
+@RegisterClass(VectorDBBase, "PineconeDatabase", 1)
+export class PineconeDatabase  implements VectorDBBase {
 
     static _pinecone: Pinecone;
     
@@ -20,8 +19,8 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
 
     get pinecone(): Pinecone { return PineconeDatabase._pinecone; }
 
-    public async getIndexDescription(indexName: string): Promise<IndexModel> {
-        const description: IndexModel = await this.pinecone.describeIndex(indexName);
+    public async getIndexDescription(params: BaseRequestParams): Promise<IndexDescription> {
+        const description: IndexDescription = await this.pinecone.describeIndex(params.id);
         return description;
     }
 
@@ -54,9 +53,14 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
      * If an indexName is not provided, this will use the default index name
      * defined in the environment variables instead.
      */
-    public getIndex<T extends RecordMetadata>(indexName?: string): Index<T> {
-        const name: string = indexName || pineconeDefaultIndex;
-        return this.pinecone.Index<T>(name);
+    public getIndex(params: BaseRequestParams): BaseResponse {
+        const name: string = params.id || pineconeDefaultIndex;
+        const result: BaseResponse = {
+            message: "",
+            success: true,
+            data: this.pinecone.Index(name)
+        };
+        return result;
     }
 
     /**
@@ -66,15 +70,36 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
      * await pinecone.createIndex({ name: 'my-index', dimension: 128, spec: { serverless: { cloud: 'aws', region: 'us-west-2' }}})
      * ```
      */
-    public async createIndex(options: CreateIndexOptions): Promise<void> {
-        await this.pinecone.createIndex(options);
+    public async createIndex<T>(options: CreateIndexParams): Promise<BaseResponse> {
+        const result = await this.pinecone.createIndex({
+            name: options.id,
+            dimension: options.dimension,
+            metric: options.metric,
+            spec: options.additionalParams
+        });
+
+        const res: BaseResponse = {
+            message: "",
+            success: true,
+            data: result
+        };
+
+        return res;
     }
 
-    public async deleteIndex(indexName: string): Promise<void> {
-        await this.pinecone.deleteIndex(indexName);
+    public async deleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
+        let result = await this.pinecone.deleteIndex(params.id);
+
+        const res: BaseResponse = {
+            message: "",
+            success: true,
+            data: result
+        };
+
+        return res;
     }
 
-    public async editIndex(indexID: any, options?: any): Promise<void> {
+    public async editIndex(params: EditIndexParams): Promise<BaseResponse> {
        throw new error("Method not implemented");
     }
 
@@ -82,13 +107,21 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
 
     // Begin IVectorIndexBase implementation
 
-    public async createRecord<T extends RecordMetadata>(record: PineconeRecord<T>, options?: any): Promise<void> {
-        let records: PineconeRecord<T>[] = [record];
-        await this.createRecords(records);
+    public async createRecord(record: VectorRecord): Promise<BaseResponse> {
+        let records: VectorRecord[] = [record];
+        let result = await this.createRecords(records);
+
+        const res: BaseResponse = {
+            message: "",
+            success: true,
+            data: result
+        };
+
+        return res;
     }
 
-    public async createRecords<T extends RecordMetadata>(records: PineconeRecord<T>[], options?: any): Promise<void> {
-        const index = this.getIndex<T>();
+    public async createRecords(records: VectorRecord[]): Promise<void> {
+        const index = this.getIndex();
         await index.upsert(records);
     }
 

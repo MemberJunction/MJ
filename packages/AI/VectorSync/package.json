@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai-vectors-pinecone",
+  "name": "@memberjunction/ai-vectorsync",
   "version": "0.9.1",
-  "description": "MemberJunction: Pinecone Implementation for AI Vectors",
+  "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,17 +15,13 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@langchain/mistralai": "^0.0.7",
     "@memberjunction/aiengine": "^0.9.28",
-    "@memberjunction/core": "^0.9.142",
+    "@memberjunction/core": "^0.9.147",
     "@memberjunction/global": "^0.9.135",
     "@memberjunction/sqlserver-dataprovider": "^0.9.158",
     "@memberjunction/vectors": "file:../Vectors",
-    "@pinecone-database/pinecone": "^2.0.1",
-    "@memberjunction/ai-vectordb": "^0.9.1",
+    "@memberjunction/vectors-pinecone": "file:../VectorsPinecone",
     "dotenv": "^16.0.3",
-    "openai": "^3.2.1",
-    "rxjs": "^7.8.1",
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
