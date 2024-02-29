@@ -1,7 +1,7 @@
 import { pineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
-import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
+import { FetchResponse, Index, Pinecone, PineconeRecord, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
@@ -43,9 +43,9 @@ export class PineconeDatabase  extends VectorDBBase {
             const indexName: string = indexList.indexes[0].name;
             return this.pinecone.index(indexName);
         }
-
         return null;
     }
+
 
     // Begin IVectorDatabaseBase implementation
 

@@ -22,6 +22,8 @@ export class AIAPIKeys {
         if (cached) 
             return cached;
         else {
+            const keyName: string = AIAPIKeys._apiKeyPrefix + AIDriverName;
+            console.log('Getting API Key for ' + keyName);
             const value = env.get(AIAPIKeys._apiKeyPrefix + AIDriverName).asString();
             this.SetCachedAPIKey(AIDriverName, value);
             return value;

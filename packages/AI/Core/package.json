@@ -15,6 +15,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/ai-mistral": "^0.9.9",
     "@memberjunction/global": "^0.9.146",
     "dotenv": "^16.0.3",
     "rxjs": "^7.8.1",
