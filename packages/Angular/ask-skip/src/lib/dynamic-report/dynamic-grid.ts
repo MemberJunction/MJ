@@ -1,10 +1,12 @@
-import { AfterViewInit, Component, Input, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
 import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
+import { DrillDownInfo } from './dynamic-drill-down';
+import { DynamicReportComponent } from './dynamic-report';
 
 @Component({
   selector: 'mj-dynamic-grid',
@@ -84,6 +86,8 @@ export class DynamicGridComponent implements AfterViewInit {
   @Input() public startingRow = 0;
   @Input() public GridHeight: number | null = null;
   @Input() public ShowRefreshButton: boolean = false;
+  @Input() AllowDrillDown: boolean = true
+  @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
   private _skipData: SkipAPIAnalysisCompleteResponse | undefined;
   @Input() get SkipData(): SkipAPIAnalysisCompleteResponse | undefined {
@@ -182,21 +186,18 @@ export class DynamicGridComponent implements AfterViewInit {
   }  
 
   public async cellClick(event: any) {
-    LogStatus(`Cell clicked in DynamicGrid`, undefined, event);
     try {
+      if (!this.AllowDrillDown) 
+        return;
+
       const rowSelected = event.dataItem;
       const drillDown = this.SkipData?.drillDown;
       if (drillDown && rowSelected ) {
         // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
         // we can navigate to the drill down view
-        const rv = new RunView();
-        const md = new Metadata();
-        const schemaAndView = drillDown.viewName.trim().toLowerCase();
-        // check to see if the view has a . in it, that would mean it has schema and view name, SHOULD always have that
-        const schema = schemaAndView.split('.')[0];
-        const view = schemaAndView.split('.')[1];
-        const e = md.Entities.find(x => x.BaseView.trim().toLowerCase() === view && x.SchemaName.trim().toLowerCase() === schema);
-        if (e) {
+        const entityName = DynamicReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
+
+        if (entityName) {
           const filterSQL = drillDown.filters.map(f => {
             const val = rowSelected[f.reportFieldName];
             const isDateValue = val instanceof Date;
@@ -205,21 +206,12 @@ export class DynamicGridComponent implements AfterViewInit {
             const quotes = needsQuotes ? "'" : '';
             return `${f.viewFieldName} = ${quotes}${val}${quotes}`
           }).join(' AND ');
-          const result = await rv.RunView({
-            EntityName: e.Name,
-            ExtraFilter: filterSQL
-          });  
-          alert("drill down in console")
-          console.log("Drill down result")
-          console.log(result?.Results);
-        }
-        else {
-          console.warn(`Could not find entity for the specified DrillDownView: ${drillDown.viewName}`);
+          this.DrillDownEvent.emit(new DrillDownInfo(entityName, filterSQL));
         }
       }
     }
     catch (e) {
-      console.warn('Error handling chart click', e)
+      console.warn('Error handling grid row click', e)
     }
   }
 

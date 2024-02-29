@@ -310,6 +310,12 @@ export class SkipAPIAnalysisDrillDown {
      */
     viewName: string;
     /**
+     * If the data context that was provided to Skip for generating a report had filtered data related to the drill down view noted in viewName property, then this
+     * baseFilter value will be populated with a SQL filter that can be added to a WHERE clause with an AND statement to ensure that the filtering is inclusive of the 
+     * data context's in-built filters.
+     */
+    baseFilter: string;
+    /**
      * One or more filters that are used to filter the data in the view to the specific row or rows that the user clicked on
      */
     filters: SkipAPIAnalysisDrillDownFilter[];

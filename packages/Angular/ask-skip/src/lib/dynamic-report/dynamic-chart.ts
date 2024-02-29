@@ -1,9 +1,11 @@
-import { Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { PlotlyComponent } from 'angular-plotly.js';
 import * as Plotly from 'plotly.js-dist-min';
+import { DrillDownInfo } from './dynamic-drill-down';
+import { DynamicReportComponent } from './dynamic-report';
 
 @Component({
   selector: 'mj-dynamic-chart',
@@ -24,6 +26,8 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
     @Input() plotLayout: any;
     @Input() defaultPlotHeight: number = 550;
     @Input() ShowSaveAsImage: boolean = true;
+    @Input() AllowDrillDown: boolean = true
+    @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
     @ViewChild('plotlyPlot') plotlyPlot!: PlotlyComponent;
     @ViewChild('plotContainer') plotContainer!: ElementRef;
@@ -65,19 +69,17 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
 
     public async handleChartClick(chartClickEvent: any) {
       try {
+        if (!this.AllowDrillDown)
+          return;
+
         const drillDownValue = chartClickEvent.points[0].label;
         const drillDown = this.SkipData?.drillDown;
         if (drillDown && drillDownValue && drillDownValue.length > 0 ) {
           // we have a valid situation to drill down where we have the configuration and we have a drill down value. 
           // we can navigate to the drill down view
-          const rv = new RunView();
-          const md = new Metadata();
-          const schemaAndView = drillDown.viewName.trim().toLowerCase();
-          // check to see if the view has a . in it, that would mean it has schema and view name, SHOULD always have that
-          const schema = schemaAndView.split('.')[0];
-          const view = schemaAndView.split('.')[1];
-          const e = md.Entities.find(x => x.BaseView.trim().toLowerCase() === view && x.SchemaName.trim().toLowerCase() === schema);
-          if (e) {
+          const entityName = DynamicReportComponent.GetEntityNameFromSchemaAndViewString(drillDown.viewName);
+
+          if (entityName) {
             const filterSQL = drillDown.filters.map(f => {
               const isDateValue = drillDownValue instanceof Date;
               const isNumberValue = !isNaN(parseFloat(drillDownValue));
@@ -85,16 +87,7 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
               const quotes = needsQuotes ? "'" : '';
               return `${f.viewFieldName} = ${quotes}${drillDownValue}${quotes}`
             }).join(' AND ');
-            const result = await rv.RunView({
-              EntityName: e.Name,
-              ExtraFilter: filterSQL
-            });  
-            alert("drill down in console")
-            console.log("Drill down result")
-            console.log(result?.Results);
-          }
-          else {
-            console.warn(`Could not find entity for the specified DrillDownView: ${drillDown.viewName}`);
+            this.DrillDownEvent.emit(new DrillDownInfo(entityName, filterSQL));
           }
         }
       }

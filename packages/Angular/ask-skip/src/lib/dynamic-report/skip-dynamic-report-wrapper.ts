@@ -22,6 +22,7 @@ import { DataContext } from '@memberjunction/data-context';
         [ShowCreateReportButton]="true"
         [LayoutMode]="'linear'"
         [LinearExpandAll]="true"
+        [AllowDrillDown]="AllowDrillDown"
     ></mj-dynamic-report>
 </div>
 ` 
@@ -32,4 +33,5 @@ export class SkipDynamicReportComponent {
     @Input() ConversationName: string | null = null;    
     @Input() ConversationDetailID: number | null = null;
     @Input() DataContext!: DataContext;
+    @Input() AllowDrillDown: boolean = true;
 }

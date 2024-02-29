@@ -2,7 +2,7 @@ import { AfterViewInit, ChangeDetectorRef, Component, EventEmitter, Input, Outpu
 import { UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
-import { SkipDynamicReportComponent } from '../misc/skip-dynamic-report-wrapper';
+import { SkipDynamicReportComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { DataContext } from '@memberjunction/data-context';
 import { SharedService } from '@memberjunction/ng-shared';
  
@@ -127,6 +127,7 @@ export class SkipSingleMessageComponent implements AfterViewInit {
             report.SkipData = analysisResult;
             this.SuggestedQuestions = analysisResult.suggestedQuestions ? analysisResult.suggestedQuestions : [];
             report.DataContext = this.DataContext;
+            report.AllowDrillDown = false; // we don't want this within the chat, it's too much
     
             report.ConversationID = detail.ConversationID
             report.ConversationDetailID = detail.ID;

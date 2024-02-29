@@ -40,13 +40,16 @@ import { DataContextModule } from '@memberjunction/ng-data-context';
 /*********************************************/
 // Local Components 
 import { SkipChatComponent } from './lib/skip-chat/skip-chat.component' 
-import { SkipDynamicReportComponent } from './lib/misc/skip-dynamic-report-wrapper'; 
-import { DynamicReportComponent } from './lib/misc/dynamic-report';
-import { DynamicChartComponent } from './lib/misc/dynamic-chart';
-import { DynamicGridComponent } from './lib/misc/dynamic-grid';
+import { SkipDynamicReportComponent } from './lib/dynamic-report/skip-dynamic-report-wrapper'; 
+import { DynamicReportComponent } from './lib/dynamic-report/dynamic-report';
+import { DynamicChartComponent } from './lib/dynamic-report/dynamic-chart';
+import { DynamicGridComponent } from './lib/dynamic-report/dynamic-grid';
 import { SkipButtonComponent } from './lib/skip-button/skip-button.component';
 import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
 import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-single-message.component';
+import { UserViewGridWithAnalysisComponent } from './public-api';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-drill-down';
 
 
 @NgModule({
@@ -59,6 +62,8 @@ import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-singl
     DynamicChartComponent,
     DynamicGridComponent,
     SkipSingleMessageComponent,
+    UserViewGridWithAnalysisComponent,
+    DynamicReportDrillDownComponent
   ],
   imports: [
     CommonModule,
@@ -88,6 +93,7 @@ import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-singl
     DataContextModule,
     OverlayModule,
     ExcelExportModule,
+    UserViewGridModule,
     MarkdownModule.forRoot(),
   ],
   exports: [
@@ -98,7 +104,9 @@ import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-singl
     DynamicChartComponent,
     DynamicGridComponent,
     DynamicReportComponent ,
-    SkipSingleMessageComponent
+    SkipSingleMessageComponent,
+    UserViewGridWithAnalysisComponent,
+    DynamicReportDrillDownComponent
   ]
 })
 export class AskSkipModule { }
