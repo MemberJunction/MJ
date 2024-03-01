@@ -9,5 +9,6 @@
   ],
   "scripts": {},
   "dependencies": {
+    "archiver": "^7.0.0"
   }
 }
