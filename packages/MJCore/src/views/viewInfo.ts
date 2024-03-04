@@ -1,7 +1,7 @@
-import { BaseInfo } from './baseInfo'
-import { EntityFieldInfo, EntityInfo } from './entityInfo'
-import { IMetadataProvider } from './interfaces';
-import { LogError } from './logging';
+import { BaseInfo } from '../generic/baseInfo'
+import { EntityFieldInfo, EntityInfo } from '../generic/entityInfo'
+import { IMetadataProvider } from '../generic/interfaces';
+import { LogError } from '../generic/logging';
 
 export class ViewColumnInfo extends BaseInfo {
     ID: number = null
