@@ -11,7 +11,7 @@ import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteRe
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { DataSource } from 'typeorm';
-import { ___skipAPIOrgId, ___skipAPIurl, mj_core_schema } from '../config';
+import { ___skipAPIOrgId, ___skipAPIurl, configInfo, mj_core_schema } from '../config';
 
 
 import { registerEnumType } from "type-graphql";
@@ -150,6 +150,7 @@ export class AskSkipResolver {
 
     const input: SkipAPIRequest = { 
                     apiKeys: this.buildSkipAPIKeys(),
+                    organizationInfo: configInfo?.askSkip?.organizationInfo,
                     messages: messages, 
                     conversationID: ConversationId.toString(), 
                     dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties

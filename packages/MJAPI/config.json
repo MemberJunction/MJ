@@ -15,5 +15,8 @@
   },
   "viewingSystem" : {
     "enableSmartFilters": true
+  },
+  "askSkip" : {
+    "organizationInfo": "Blue Cypress is a family of companies. We have a number of subsidiaries, their information is stored in the Companies entity (vwCompanies). Each company has its own employees, deals, invoices, etc. Companies provide a range of products and services primarily to associations and non-profits. Mostly in the USA, but globally as well. Many of the users at Blue Cypress and its subsidiaries have some level of technical skill, but we should not assume technical strength. If a given user expresses technical knowledge, definitely take this into account in their requests. In the Blue Cypress entities, Deals contain prospective, won and lost opportunties with clients and prospects. Accounts contains information about prospects, clients, past clients, vendors and partners. Contacts contains information about pepole, who are optionally linked to Accounts. Blue Cypress is focused on revenue growth and cross-selling so anything you can do to help a user improve their revenue by cross-selling their products or services to clients of other Blue Cypress companies, the better!"
   }
 }

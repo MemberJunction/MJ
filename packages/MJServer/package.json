@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/server",
-  "version": "0.9.215",
+  "version": "0.9.218",
   "description": "MemberJunction: This project provides API access via GraphQL to the common data store.",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -30,7 +30,7 @@
     "@memberjunction/global": "^0.9.146",
     "@memberjunction/queue": "^0.9.168",
     "@memberjunction/sqlserver-dataprovider": "^0.9.179",
-    "@memberjunction/skip-types": "^0.9.56",
+    "@memberjunction/skip-types": "^0.9.58",
     "@types/cors": "^2.8.13",
     "@types/jsonwebtoken": "^8.5.9",
     "@types/node": "^18.11.14",

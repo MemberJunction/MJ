@@ -54,11 +54,15 @@ const viewingSystemInfoSchema = z.object({
   enableSmartFilters: z.boolean().optional(),
 });
 
+const askSkipInfoSchema = z.object({
+  organizationInfo: z.string().optional(),
+});
 
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
+  askSkip: askSkipInfoSchema.optional(),
 });
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
