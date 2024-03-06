@@ -264,9 +264,7 @@ export abstract class ProviderBase implements IMetadataProvider {
         try {
             const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
             if (entity) {
-                // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
-                // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
-
+                // Use the MJGlobal Class Factory to do our object instantiation
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
                     if (contextUser)

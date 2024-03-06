@@ -2,10 +2,12 @@ import * as MJ from './interface'
 import { GetGlobalObjectStore } from './util';
 import { Subject, ReplaySubject, Observable } from 'rxjs';
 import { ClassFactory, ClassRegistration } from './ClassFactory'
+import { ObjectCache } from './ObjectCache';
 
 export { ClassFactory, ClassRegistration } from './ClassFactory'
 export * from './interface'
 export * from './util'
+export * from './ObjectCache'
 
 /**
  * Global class used for coordinating events and components across MemberJunction
@@ -48,10 +50,6 @@ export class MJGlobal {
                 return this;
             }
         }
-    }
-
-    public Test(): boolean {
-        return true;
     }
 
     public RegisterComponent(component: MJ.IMJComponent) {
@@ -107,6 +105,14 @@ export class MJGlobal {
 
     public GetGlobalObjectStore(): any {
         return GetGlobalObjectStore(); // wrap the function in a method here so that other modules can use it easily.
+    }
+
+    private _objectCache: ObjectCache = new ObjectCache();
+    /**
+     * ObjectCache can be used to cache objects as needed by any application in memory. These objects are NOT persisted to disk or any other storage medium, so they are only good for the lifetime of the application
+     */
+    public get ObjectCache(): ObjectCache {
+        return this._objectCache;
     }
 }
 
