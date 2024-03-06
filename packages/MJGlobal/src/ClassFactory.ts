@@ -53,7 +53,7 @@ export class ClassFactory {
             }
             else {
                 console.log(`ClassFactory.CreateInstance: Could not find registration for base class ${baseClass && baseClass.name ? baseClass.name : baseClass} and key ${key}, using the base class instead.`);  
-                return new baseClass(); // if we can't find a registration, just return a new instance of the base class
+                return new baseClass(...params); // if we can't find a registration, just return a new instance of the base class
             }
         }
 

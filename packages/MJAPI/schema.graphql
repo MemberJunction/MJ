@@ -960,6 +960,13 @@ input CreateReportInput {
   UserID: Int!
 }
 
+type CreateReportResultType {
+  ErrorMessage: String!
+  ReportID: Float!
+  ReportName: String!
+  Success: Boolean!
+}
+
 input CreateReportSnapshotInput {
   ReportID: Int!
   ResultSet: String!
@@ -1780,6 +1787,7 @@ type Mutation {
   CreateRecordMergeLog(input: CreateRecordMergeLogInput!): RecordMergeLog_!
   CreateReport(input: CreateReportInput!): Report_!
   CreateReportCategory(input: CreateReportCategoryInput!): ReportCategory_!
+  CreateReportFromConversationDetailID(ConversationDetailID: Int!): CreateReportResultType!
   CreateReportSnapshot(input: CreateReportSnapshotInput!): ReportSnapshot_!
   CreateSchemaInfo(input: CreateSchemaInfoInput!): SchemaInfo_!
   CreateUser(input: CreateUserInput!): User_!

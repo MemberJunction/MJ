@@ -156,43 +156,64 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
       return '<h2>No Analysis Provided</h2>'
   }
 
-  public async doCreateReport() {
+  public confirmCreateReportDialogOpen: boolean = false;
+  public isCreatingReport: boolean = false;
+  public async askCreateReport() {
     if (!this.SkipData || !this.ConversationID || !this.ConversationName || !this.ConversationDetailID) {
         throw new Error('Must set SkipData, ConversationID, ConversationName, and ConversationDetailID to enable saving report')
     }
     else {
-      if (confirm('Do you want to save this report?')) {
-        const md = new Metadata();
-        const report = await md.GetEntityObject<ReportEntity>('Reports');
-        report.NewRecord();
-        report.Name = this.SkipData.reportTitle ? this.SkipData.reportTitle : 'Untitled Report';
-        report.Description = this.SkipData.userExplanation ? this.SkipData.userExplanation : '';
-        report.ConversationID = this.ConversationID;
-        report.ConversationDetailID = this.ConversationDetailID;
-
-        const newDataContext = await DataContext.Clone(this.DataContext);
-        if (!newDataContext)
-          throw new Error('Error cloning data context')
-        report.DataContextID = newDataContext.ID;
-
-        // next, strip out the messags from the SkipData object to put them into our Report Configuration as we dont need to store that information as we have a 
-        // link back to the conversation and conversation detail
-        const newSkipData : SkipAPIAnalysisCompleteResponse = JSON.parse(JSON.stringify(this.SkipData));
-        newSkipData.messages = [];
-        report.Configuration = JSON.stringify(newSkipData) 
-
-        report.SharingScope = 'None'
-        report.UserID = md.CurrentUser.ID
-
-        if (await report.Save())  {
-          this.matchingReportID = report.ID;
-          this.matchingReportName = report.Name;
-          this.sharedService.CreateSimpleNotification(`Report "${report.Name}"Saved`, 'success', 2500)
-        }
-        else 
-          this.sharedService.CreateSimpleNotification('Error saving report', 'error', 2500)
-      }  
+      this.confirmCreateReportDialogOpen = true; // shows the dialog, the rest happens when the uesr clicks yes/no/cancel
     } 
+  }
+
+  public closeCreateReport(action: 'yes' | 'no') {
+    if (action === 'yes') {
+      this.doCreateReport();
+    }
+    this.confirmCreateReportDialogOpen = false;
+  }
+  public async doCreateReport() {
+    this.isCreatingReport = true;
+    if (!this.SkipData || !this.ConversationID || !this.ConversationName || !this.ConversationDetailID) {
+      throw new Error('Must set SkipData, ConversationID, ConversationName, and ConversationDetailID to enable saving report')
+    }
+    else {
+      const result = await this.graphQLCreateNewReport();
+      if (result && result.Success) {
+        this.matchingReportID = result.ReportID;
+        this.matchingReportName = result.ReportName;
+        this.sharedService.CreateSimpleNotification(`Report "${result.ReportName}"Saved`, 'success', 2500)
+      }
+      else {
+        this.sharedService.CreateSimpleNotification('Error saving report', 'error', 2500)  
+        this.isCreatingReport = false;
+      }
+    }
+  }
+
+  protected async graphQLCreateNewReport(): Promise<{ReportID: number, ReportName: string, Success: boolean, ErrorMessage: string}> {
+    // do this via a single gql call to make it faster than doing operation via standard objects since it is a multi-step operation
+    const mutation = `mutation CreateReportFromConversationDetailIDMutation ($ConversationDetailID: Int!) {
+      CreateReportFromConversationDetailID(ConversationDetailID: $ConversationDetailID) {
+        ReportID
+        ReportName
+        Success
+        ErrorMessage
+      }
+    }`
+    const result = await GraphQLDataProvider.ExecuteGQL(mutation, { 
+      ConversationDetailID: this.ConversationDetailID,
+    });
+    if (result && result.CreateReportFromConversationDetailID)
+      return result.CreateReportFromConversationDetailID;
+    else
+      return {
+        Success: false,
+        ErrorMessage: 'Failed to execute',
+        ReportID: -1,
+        ReportName: ''
+      }
   }
 
   public async doRefreshReport() {

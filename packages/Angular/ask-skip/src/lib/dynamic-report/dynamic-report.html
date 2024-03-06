@@ -1,5 +1,8 @@
 <div mjFillContainer  *ngIf="LayoutMode === 'tabs'"> 
-    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
+    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" 
+                        (click)="askCreateReport()" 
+                        [disabled]="isCreatingReport"
+                        class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
     <div class="report-tab-toolbar" *ngIf="ReportEntity && ReportEntity.ID > 0" >
       <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
@@ -78,7 +81,10 @@
   </kendo-tabstrip>
   </div> 
 <div *ngIf="LayoutMode === 'linear'"> 
-    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" (click)="doCreateReport()" class="create-report-button">Create Report</button>
+    <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" 
+                        (click)="askCreateReport()" 
+                        [disabled]="isCreatingReport"
+                        class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
     <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
         <h3>Explanation</h3>
@@ -114,3 +120,21 @@
         <markdown [data]="SkipData?.analysis"></markdown>
     </kendo-expansionpanel>                     
 </div> 
+
+<kendo-dialog
+  title="Please confirm"
+  *ngIf="confirmCreateReportDialogOpen"
+  (close)="closeCreateReport('no')"
+  [minWidth]="250"
+  [width]="450"
+>
+<p style="margin: 30px; text-align: center;">
+  Would you like to create a new report from this conversation element? If you choose to continue you'll be notified when the report has been created.
+</p>
+<kendo-dialog-actions>
+  <button kendoButton (click)="closeCreateReport('no')">No</button>
+  <button kendoButton (click)="closeCreateReport('yes')" themeColor="primary">
+    Yes
+  </button>
+</kendo-dialog-actions>
+</kendo-dialog>
