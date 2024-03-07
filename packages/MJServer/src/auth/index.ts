@@ -55,6 +55,10 @@ export class UserPayload {
 }
 
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
+  if (!validationOptions[issuer]) {
+    throw new Error(`No validation options found for issuer ${issuer}`);
+  }
+
   const jwksUri = validationOptions[issuer].jwksUri;
   if (missingAuth0Config && missingAzureConfig) {
     throw new MissingAuthError();
