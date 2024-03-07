@@ -934,7 +934,7 @@ npm
             return data;    
         }
         catch (e) {
-            if (e.code === 'JWT_EXPIRED') {
+            if (e && e.code === 'JWT_EXPIRED') {
                 if (refreshTokenIfNeeded) {
                     // token expired, so we need to refresh it and try again
                     await this.RefreshToken();
