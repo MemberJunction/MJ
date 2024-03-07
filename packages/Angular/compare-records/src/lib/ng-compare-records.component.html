@@ -11,6 +11,7 @@
     </div>
     <div class="kendo-grid-container">
         <kendo-grid
+            [height]="500"
             [resizable]="true"
             [kendoGridBinding]="viewData"
             scrollable="virtual"
@@ -24,9 +25,9 @@
             (cellClick)="SelectField($event)"
             >
             <kendo-grid-column
-                *ngFor="let item of columns; let i = index" 
-                [field]="item.title" 
-                [title]="GetColumnHeaderText(item.recordId)"
+                *ngFor="let column of columns; let i = index" 
+                [field]="column.field" 
+                [title]="GetColumnHeaderText(column)"
                 [width]="i === 0 ? 200 : 400"
                 [sticky]="i === 0" 
                 [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#a9c2af' }">
@@ -36,8 +37,8 @@
                     {{dataItem.Fields}} 
                 </ng-template>
                 <ng-template kendoGridCellTemplate let-dataItem #records>
-                    <span [class]="GetCellStyle(dataItem, item.recordId)">
-                        {{FormatColumnValue(dataItem, item, 300)}}
+                    <span [class]="GetCellStyle(dataItem, column)">
+                        {{FormatColumnValue(dataItem, column, 300)}}
                     </span>
                 </ng-template>
             </kendo-grid-column>
