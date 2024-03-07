@@ -10,7 +10,11 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
+<<<<<<< Updated upstream
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult  } from "@memberjunction/core";
+=======
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, QueryCategoryInfo, QueryInfo, IRunQueryProvider, RunQueryResult, DuplicateRecordSearchParams, DuplicateRecordSearchResult  } from "@memberjunction/core";
+>>>>>>> Stashed changes
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -439,6 +443,14 @@ npm
         catch (e) {
             LogError(e);
             throw (e)
+        }
+    }
+
+    public async GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
+    {
+        return {
+            EntityID: -1,
+            Duplicates: [],
         }
     }
     

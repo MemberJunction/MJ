@@ -4,6 +4,8 @@ import { pineconeDefaultIndex } from '../config';
 import { IVectorDatabase, IVectorIndex } from '@memberjunction/vectors';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
+import { FetchResponse, Index, Pinecone, PineconeRecord, QueryOptions } from '@pinecone-database/pinecone';
+import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, QueryResponse, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 
 @RegisterClass(PineconeDatabase)
 export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
@@ -16,6 +18,10 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
                 apiKey: apiKey
             });
         }
+    }
+
+    protected get apiKey(): string {
+        throw new Error('Method not implemented.');
     }
 
     get pinecone(): Pinecone { return PineconeDatabase._pinecone; }
@@ -42,8 +48,6 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
 
         return null;
     }
-
-    // Begin IVectorDatabaseBase implementation
 
     public async listIndexes(): Promise<IndexList> {
         const indexes: IndexList = await this.pinecone.listIndexes();
@@ -78,13 +82,11 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
        throw new error("Method not implemented");
     }
 
-    // End IVectorDatabaseBase implementation
+    public async createRecord(params: VectorRecord): Promise<BaseResponse> {
+        let records: VectorRecord[] = [params];
+        let result = await this.createRecords(records);
 
-    // Begin IVectorIndexBase implementation
-
-    public async createRecord<T extends RecordMetadata>(record: PineconeRecord<T>, options?: any): Promise<void> {
-        let records: PineconeRecord<T>[] = [record];
-        await this.createRecords(records);
+        return this.wrapResponse(result);
     }
 
     public async createRecords<T extends RecordMetadata>(records: PineconeRecord<T>[], options?: any): Promise<void> {
@@ -136,5 +138,17 @@ export class PineconeDatabase implements IVectorDatabase, IVectorDatabase {
         }
     }
 
-    // End IVectorIndexBase implementation
+    public async queryRecords(params: QueryOptions): Promise<BaseResponse> {
+        let index: Index = this.getIndex().data;
+        let result = await index.query(params);
+        return this.wrapResponse(result);
+    }
+
+    private wrapResponse(data: any): BaseResponse {
+        return {
+            success: true,
+            message: null,
+            data: data
+        }
+    };
 }

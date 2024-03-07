@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, DuplicateRecordSearchParams, DuplicateRecordSearchResult } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -264,7 +264,8 @@ export abstract class ProviderBase implements IMetadataProvider {
         try {
             const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
             if (entity) {
-                // Use the MJGlobal Class Factory to do our object instantiation
+                // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
+                // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
                     if (contextUser)
@@ -294,6 +295,13 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param primaryKeyValues the values of the primary key of the record to check
      */
     public abstract GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> 
+
+    /**
+     * Returns a list of record IDs that are possible duplicates of the specified record. 
+     * 
+     * @param params object containing many properties used in fetching records and determining which ones to return
+     */
+    public abstract GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

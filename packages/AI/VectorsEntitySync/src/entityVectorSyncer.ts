@@ -8,8 +8,10 @@ import { currentUserEmail, mistralAPIKey, pineconeAPIKey } from "./config";
 import { IEmbedding, MistralAIEmbedding } from '@memberjunction/vectors';
 import { PineconeDatabase } from '@memberjunction/vectors-pinecone';
 import { IProcedureResult, Request } from 'mssql';
+import { EntityDocument, EntitiyRecordDocument } from './generic/entity.types';
+import { VectorSyncBase } from './generic/vectorSyncBase';
 
-export class EntityVectorSyncer {
+export class EntityVectorSyncer extends VectorSyncBase {
 
     _provider: SQLServerDataProvider;
     _userInfo: UserInfo;
@@ -24,6 +26,7 @@ export class EntityVectorSyncer {
     public async syncEntityDocuments(): Promise<void> {
         this.start();
         await this.setupDBConnection();
+
         console.log("Connected to SQL Server");
         console.log("Syncing entities...");
 
@@ -44,43 +47,20 @@ export class EntityVectorSyncer {
                 console.log(`Skipping entity document with ID ${entityConfig.EntityDocumentID}`);
             }
         }
-        this.saveJSONData(entityConfigs);
+
+        console.log("Saving updated entity configs to file");
+        this.saveJSONData(entityConfigs, './data/entitiesToSync.json');
+        
         this.end();
         console.log(`Sync completed in ${this.timeDiff()} seconds`);
     } 
 
-    public getJSONData = (): EntitySyncConfig[] => { 
+    private getJSONData = (): EntitySyncConfig[] => { 
         const entities: EntitySyncConfig[] = JSON.parse(fs.readFileSync('./data/entitiesToSync.json', 'utf-8'));
         return entities;
     }
 
-    public async setupDBConnection(): Promise<void> {
-        await SQLConnectionPool.connect();
-        this._provider = await this.setupAndGetSQLServerProvider();
-        this._userInfo = this.getDefaultUser(this._provider);
-        this._runView = new RunView();
-    }
-
-    public setupAndGetSQLServerProvider = async (): Promise<SQLServerDataProvider> => {
-        const config = new SQLServerProviderConfigData(AppDataSource, currentUserEmail);
-        return await setupSQLServerClient(config);
-    }
-
-    public getDefaultUser(provider: IMetadataProvider): UserInfo {
-        return new UserInfo(provider, 
-            { Email: currentUserEmail,
-                UserRoles: [
-                    { UserID: 24, RoleName: "Developer", CreatedAt: new Date(), UpdatedAt: new Date(), User: "Jonathan Stfelix" },
-                    {UserID: 24, RoleName: "UI", CreatedAt: new Date(), UpdatedAt: new Date(), User: "Jonathan Stfelix" }
-                ] 
-            });
-    }
-
-    private async timer(ms: number): Promise<unknown> {
-        return new Promise(res => setTimeout(res, ms));
-    }
-
-    public async syncEntityDocument(config: EntitySyncConfig): Promise<any> {
+    private async syncEntityDocument(config: EntitySyncConfig): Promise<any> {
         const entityDocument: EntityDocument = await this.getEntityDocument(config.EntityDocumentID);
         if(!entityDocument){
             console.log(`Error: no entity document with ID ${config.EntityDocumentID} found`);
@@ -160,6 +140,7 @@ export class EntityVectorSyncer {
                     });
                 }
                 else{
+                    console.log("creating new pinecone record for record", vectorRecordID);
                     const pineconeRecord: any = {
                         id: vectorRecordID, 
                         values: embeddingRes,
@@ -179,7 +160,7 @@ export class EntityVectorSyncer {
         }
     }
 
-    public async getEntityDocument(entityDocumentID: number): Promise<EntityDocument> {
+    private async getEntityDocument(entityDocumentID: number): Promise<EntityDocument> {
         const rvResult: RunViewResult = await this._runView.RunView({
             EntityName: "Entity Documents",
             ExtraFilter: `ID = '${entityDocumentID}'`
@@ -196,7 +177,7 @@ export class EntityVectorSyncer {
         }
     }
 
-    public async getRelatedEntityRecords(entityDocument: EntityDocument): Promise<any> {
+    private async getRelatedEntityRecords(entityDocument: EntityDocument): Promise<any> {
         const rvResult: RunViewResult = await this._runView.RunView({
             EntityName: "Entity Documents",
             ExtraFilter: `ID = '${entityDocument.ID}'`
@@ -260,91 +241,4 @@ export class EntityVectorSyncer {
         const result = await this.executeStoredProcedure<EntitiyRecordDocument>(sp, params);
         return result;
     }
-
-    private async executeStoredProcedure<T>(storedProcedure: string, params: any): Promise<IProcedureResult<T>> {
-        try {
-            const request = SQLConnectionPool.request();
-            this.mapObjectPropertiesToRequest(params, request);
-            return request.execute<T>(storedProcedure);
-        }
-        catch(error){
-            console.log(error);
-            return null;
-        }
-    }
-
-    /**
-    * Collect Data for Procedure
-    * @param obj
-    * @param r
-    * @returns data
-    */
-    mapObjectPropertiesToRequest = (obj: any, r: Request) => {
-        // Generic iteration over object properties and map to input() of request
-        // Doing this generically makes it way simpler over time to handle new
-        // properties that are added to various types
-        Object.keys(obj).map((key: string) => {
-        r.input(key, obj[key]);
-        });
-    };
-
-    private parseStringTemplate(str: string, obj: any): string {
-        //Split string into non-argument textual parts
-        let parts = str.split(/\$\{(?!\d)[\wæøåÆØÅ]*\}/);
-    
-        //Split string into property names. Empty array if match fails.
-        let args = str.match(/[^{\}]+(?=})/g) || [];
-    
-        //Map parameters from obj by property name. Solution is limited by shallow one level mapping. 
-        //Undefined values are substituted with an empty string, but other falsy values are accepted.
-        let parameters = args.map(argument => obj[argument] || (obj[argument] === undefined ? "" : obj[argument]));
-        return String.raw({ raw: parts }, ...parameters);
-    }
-
-    private start(): void {
-        this._startTime = new Date();
-    }
-
-    private end(): void {
-        this._endTime = new Date();
-    }
-
-    private timeDiff(): number {
-        let timeDiff = this._endTime.valueOf() - this._startTime.valueOf(); //in ms
-        // strip the ms
-        timeDiff /= 1000;
-      
-        // get seconds 
-        var seconds = Math.round(timeDiff);
-        return seconds;
-    }
-
-    private saveJSONData(data: EntitySyncConfig[]): void {
-        fs.writeFileSync('./data/entitiesToSync.json', JSON.stringify(data, null, 2));
-    }
-}
-
-type EntityDocument = {
-    ID: number,
-    Name: string,
-    EntityID: number,
-    TypeID: number,
-    Status: string,
-    Template: string,
-    CreatedAt: Date,
-    UpdatedAt: Date,
-    Type: string,
-    VectorIndexID: number,
-    VectorID: number
-}
-
-type EntitiyRecordDocument = {
-    ID: number,
-    EntityID: number,
-    RecordID: number,
-    DocumentText: string,
-    VectorIndexID: number,
-    VectorID: number,
-    VectorJSON: string,
-    EntitiyRecordUpdatedAt: Date
 }
