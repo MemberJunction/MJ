@@ -62,6 +62,15 @@ export class MJMSALProvider extends MJAuthBase {
     });
   }
 
+  public async refresh(): Promise<Observable<any>> {
+    await this.ensureInitialized();
+    const silentRequest: any = {
+      scopes: ['User.Read', 'email', 'profile'],
+      cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork,
+    };
+    return from(this.auth.instance.acquireTokenSilent(silentRequest));
+  }
+
   async getUser(): Promise<AccountInfo | null> {
     await this.ensureInitialized();
     return this.auth.instance.getActiveAccount();

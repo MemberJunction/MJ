@@ -37,6 +37,8 @@ export class AppComponent implements OnInit {
       try {
         const start = Date.now();        
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
+          const refresh$ = await this.authBase.refresh();
+          await lastValueFrom(refresh$);
           return 'the new token goes here'; // CRAIG can you update this to use the auth service to get the new token?
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);

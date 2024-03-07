@@ -23,6 +23,11 @@ export class MJAuth0Provider extends MJAuthBase {
     this.auth.logout({ logoutParams: { returnTo: document.location.origin } });
   }
 
+  public async refresh(): Promise<Observable<any>> {
+    await this.auth.getAccessTokenSilently();
+    return this.auth.idTokenClaims$;
+  }
+
   async getUser(): Promise<Observable<User | null | undefined>> {
     return this.auth.user$;
   }
