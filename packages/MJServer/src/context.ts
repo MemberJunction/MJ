@@ -53,7 +53,7 @@ export const getUserPayload = async (
       throw new AuthenticationError('Invalid token payload');
     }
 
-    const expiryDate = new Date(payload.exp ?? 0 * 1000);
+    const expiryDate = new Date( (payload.exp ?? 0) * 1000);
     if (+expiryDate < Date.now()) {
       throw new TokenExpiredError(expiryDate);
     }
@@ -89,7 +89,11 @@ export const getUserPayload = async (
     return { userRecord, email, sessionId };
   } catch (e) {
     console.error(e);
-    return {} as UserPayload;
+    if (e instanceof TokenExpiredError) {
+      throw e;
+    }
+    else
+      return {} as UserPayload;
   }
 };
 

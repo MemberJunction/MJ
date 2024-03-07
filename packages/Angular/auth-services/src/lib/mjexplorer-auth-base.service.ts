@@ -10,6 +10,7 @@ export abstract class MJAuthBase {
   constructor() { }
   abstract login(options?: any): Promise<any>;
   abstract logout(): Promise<any>;
+  abstract refresh(): Promise<Observable<any>>;
   abstract isAuthenticated(): Promise<any>;
   abstract getUser(): Promise<any>;
   abstract getUserClaims(): Promise<Observable<any>>;

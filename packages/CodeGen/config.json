@@ -160,7 +160,7 @@
         },
         {
             "type": "AngularCoreEntities",
-            "directory": "../Angular Components/core-entity-forms/src/lib/generated",
+            "directory": "../Angular/core-entity-forms/src/lib/generated",
             "options": [
                 {
                     "name": "maxComponentsPerModule",

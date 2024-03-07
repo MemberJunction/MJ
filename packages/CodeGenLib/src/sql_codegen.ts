@@ -387,7 +387,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
 
     const functionName: string = entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0 ? entity.FullTextSearchFunction : `fnSearch${entity.CodeName}`;
     if (entity.FullTextSearchFunctionGenerated) {
-        const fullTextFieldsSimple = entity.Fields.filter(f => f.FullTextSearchEnabled).map(f => '[' + f.Name + ']').join(',');
+        const fullTextFieldsSimple = entity.Fields.filter(f => f.FullTextSearchEnabled).map(f => '[' + f.Name + ']').join(', ');
         if (fullTextFieldsSimple.length === 0)
             throw new Error(`FullTextSearchFunctionGenerated is true for entity ${entity.Name}, but no fields are marked as FullTextSearchEnabled`);
         if (!entity.FullTextSearchFunction || entity.FullTextSearchFunction.length === 0) {
@@ -403,6 +403,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
             if (!await e.Save())
                 throw new Error(`Could not update the FullTextSearchFunction for entity ${entity.Name}`);
         }
+        const pkeyList = entity.PrimaryKeys.map(pk => '[' + pk.Name + ']').join(', ');
         // drop and recreate the full text search function
         sql += `                -- DROP AND RECREATE THE FULL TEXT SEARCH FUNCTION
                 -- Create an inline table-valued function to perform full-text search
@@ -414,7 +415,7 @@ async function generateEntityFullTextSearchSQL(ds: DataSource, entity: EntityInf
                 RETURNS TABLE
                 AS
                 RETURN (
-                    SELECT ID
+                    SELECT ${pkeyList}
                     FROM [${entity.SchemaName}].[${entity.BaseTable}]
                     WHERE CONTAINS((${fullTextFieldsSimple}), @searchTerm)
                 )

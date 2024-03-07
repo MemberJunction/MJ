@@ -15,7 +15,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class IndustryEntity extends BaseEntity {
         /**
         * Loads the Industries record from the database
-        * @param ID: Number - primary key value to load the Industries record.
+        * @param ID: number - primary key value to load the Industries record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -24,7 +24,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -121,7 +121,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ContactRoleEntity extends BaseEntity {
         /**
         * Loads the Contact Roles record from the database
-        * @param ID: Number - primary key value to load the Contact Roles record.
+        * @param ID: number - primary key value to load the Contact Roles record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -130,7 +130,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -227,7 +227,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ContactLevelEntity extends BaseEntity {
         /**
         * Loads the Contact Levels record from the database
-        * @param ID: Number - primary key value to load the Contact Levels record.
+        * @param ID: number - primary key value to load the Contact Levels record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -236,7 +236,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -356,7 +356,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class AccountEntity extends BaseEntity {
         /**
         * Loads the Accounts record from the database
-        * @param ID: Number - primary key value to load the Accounts record.
+        * @param ID: number - primary key value to load the Accounts record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -365,24 +365,12 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * Accounts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof AccountEntity
-        * @throws {Error} - Delete is not allowed for Accounts, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Accounts, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -771,7 +759,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ContactEntity extends BaseEntity {
         /**
         * Loads the Contacts record from the database
-        * @param ID: Number - primary key value to load the Contacts record.
+        * @param ID: number - primary key value to load the Contacts record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -780,7 +768,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -1164,7 +1152,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DealStageEntity extends BaseEntity {
         /**
         * Loads the Deal Stages record from the database
-        * @param ID: Number - primary key value to load the Deal Stages record.
+        * @param ID: number - primary key value to load the Deal Stages record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1173,7 +1161,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -1259,7 +1247,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActivityEntity extends BaseEntity {
         /**
         * Loads the Activities record from the database
-        * @param ID: Number - primary key value to load the Activities record.
+        * @param ID: number - primary key value to load the Activities record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1268,7 +1256,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -1545,7 +1533,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DealForecastCategoryEntity extends BaseEntity {
         /**
         * Loads the Deal Forecast Categories record from the database
-        * @param ID: Number - primary key value to load the Deal Forecast Categories record.
+        * @param ID: number - primary key value to load the Deal Forecast Categories record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1554,7 +1542,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -1651,7 +1639,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DealEntity extends BaseEntity {
         /**
         * Loads the Deals record from the database
-        * @param ID: Number - primary key value to load the Deals record.
+        * @param ID: number - primary key value to load the Deals record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -1660,7 +1648,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -2045,7 +2033,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class DealTypeEntity extends BaseEntity {
         /**
         * Loads the Deal Types record from the database
-        * @param ID: Number - primary key value to load the Deal Types record.
+        * @param ID: number - primary key value to load the Deal Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -2054,7 +2042,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -2151,7 +2139,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class InvoiceEntity extends BaseEntity {
         /**
         * Loads the Invoices record from the database
-        * @param ID: Number - primary key value to load the Invoices record.
+        * @param ID: number - primary key value to load the Invoices record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -2160,7 +2148,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -2412,7 +2400,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class ActivityAttachmentEntity extends BaseEntity {
         /**
         * Loads the Activity Attachments record from the database
-        * @param ID: Number - primary key value to load the Activity Attachments record.
+        * @param ID: number - primary key value to load the Activity Attachments record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -2421,7 +2409,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -2496,7 +2484,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class PaymentTermsTypeEntity extends BaseEntity {
         /**
         * Loads the Payment Terms Types record from the database
-        * @param ID: Number - primary key value to load the Payment Terms Types record.
+        * @param ID: number - primary key value to load the Payment Terms Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -2505,7 +2493,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
@@ -2647,7 +2635,7 @@ import { RegisterClass } from "@memberjunction/global";
     export class InvoiceStatusTypeEntity extends BaseEntity {
         /**
         * Loads the Invoice Status Types record from the database
-        * @param ID: Number - primary key value to load the Invoice Status Types record.
+        * @param ID: number - primary key value to load the Invoice Status Types record.
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
         * @returns {Promise<boolean>} - true if successful, false otherwise
         * @public
@@ -2656,7 +2644,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @method
         * @override
         */      
-        public async Load(ID: Number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);

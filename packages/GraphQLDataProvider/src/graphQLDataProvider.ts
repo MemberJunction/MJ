@@ -940,23 +940,28 @@ npm
             return data.GetEntityRecordNames;
     }
  
-    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = false): Promise<any> {
+    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = true): Promise<any> {
         try {
-            const data = await this._client.request(query, variables);
+            const data = await GraphQLDataProvider._client.request(query, variables);
             return data;    
         }
         catch (e) {
-            if (e.code === 'JWT_EXPIRED') {
-                if (refreshTokenIfNeeded) {
-                    // token expired, so we need to refresh it and try again
-                    await this.RefreshToken();
-                    return await this.ExecuteGQL(query, variables);
+            if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
+                const error = e.response.errors[0];
+                if (error?.extensions?.code?.toUpperCase().trim() === 'JWT_EXPIRED') {
+                    if (refreshTokenIfNeeded) {
+                        // token expired, so we need to refresh it and try again
+                        await GraphQLDataProvider.RefreshToken();
+                        return await GraphQLDataProvider.ExecuteGQL(query, variables, false/*don't attempt to refresh again*/);
+                    }
+                    else {
+                        // token expired but the caller doesn't want a refresh, so just return the error
+                        LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
+                        throw e;
+                    }
                 }
-                else {
-                    // token expired but the caller doesn't want a refresh, so just return the error
-                    LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
+                else
                     throw e;
-                }
             }
             else {
                 LogError(e);
@@ -966,11 +971,13 @@ npm
     }
 
     public static async RefreshToken(): Promise<void> {
-        if (GraphQLDataProvider._configData.RefreshTokenFunction) {
-            const newToken = await GraphQLDataProvider._configData.RefreshTokenFunction();
+        if (GraphQLDataProvider._configData.Data.RefreshTokenFunction) {
+            const newToken = await GraphQLDataProvider._configData.Data.RefreshTokenFunction();
             if (newToken) {
                 GraphQLDataProvider._configData.Token = newToken; // update the token
-                this._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL, GraphQLDataProvider._configData.Token, GraphQLDataProvider._sessionId);
+                GraphQLDataProvider._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL, 
+                                                                          GraphQLDataProvider._configData.Token, 
+                                                                          GraphQLDataProvider._sessionId);
             }
             else {
                 throw new Error('Refresh token function returned null or undefined token');

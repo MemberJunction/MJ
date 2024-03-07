@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 2/23/2024, 4:06:00 PM
+* GENERATED: 3/7/2024, 11:43:28 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -16,6 +16,8 @@ import { AppContext } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
+
+import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity } from '@memberjunction/core-entities';
 
@@ -56,14 +58,14 @@ export class Company_ {
     @MaxLength(510)
     Domain?: string;
     
-    @Field(() => [Employee_])
-    EmployeesArray: Employee_[]; // Link to Employees
+    @Field(() => [mj_core_schema_server_object_types.Employee_])
+    EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
 
-    @Field(() => [CompanyIntegration_])
-    CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
+    CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
 
-    @Field(() => [Workflow_])
-    WorkflowsArray: Workflow_[]; // Link to Workflows
+    @Field(() => [mj_core_schema_server_object_types.Workflow_])
+    WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
 
 }
         
@@ -158,7 +160,7 @@ export class CompanyResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Company_, { nullable: true })
-    async Company(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
+    async Company(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Company_ | null> {
         this.CheckUserReadPermissions('Companies', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanies] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Companies', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -173,7 +175,7 @@ export class CompanyResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [Employee_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Employee_])
     async EmployeesArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE [CompanyID]=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
@@ -181,7 +183,7 @@ export class CompanyResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegration_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [CompanyName]=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
@@ -189,7 +191,7 @@ export class CompanyResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Workflow_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Workflow_])
     async WorkflowsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE [CompanyName]=${company_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
@@ -259,7 +261,7 @@ export class CompanyResolver extends ResolverBase {
     }
 
     @Mutation(() => Company_)
-    async DeleteCompany(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -276,11 +278,11 @@ export class CompanyResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -355,17 +357,17 @@ export class Employee_ {
     @MaxLength(200)
     SupervisorEmail?: string;
     
-    @Field(() => [Employee_])
-    EmployeesArray: Employee_[]; // Link to Employees
+    @Field(() => [mj_core_schema_server_object_types.Employee_])
+    EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
 
-    @Field(() => [EmployeeCompanyIntegration_])
-    EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
+    @Field(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
+    EmployeeCompanyIntegrationsArray: mj_core_schema_server_object_types.EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
 
-    @Field(() => [EmployeeRole_])
-    EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
+    @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
+    EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
 
-    @Field(() => [EmployeeSkill_])
-    EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+    @Field(() => [mj_core_schema_server_object_types.EmployeeSkill_])
+    EmployeeSkillsArray: mj_core_schema_server_object_types.EmployeeSkill_[]; // Link to EmployeeSkills
 
 }
         
@@ -478,7 +480,7 @@ export class EmployeeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Employee_, { nullable: true })
-    async Employee(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
+    async Employee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Employee_ | null> {
         this.CheckUserReadPermissions('Employees', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -493,7 +495,7 @@ export class EmployeeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [Employee_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Employee_])
     async EmployeesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployees] WHERE [SupervisorID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employees', userPayload, EntityPermissionType.Read, 'AND');
@@ -501,7 +503,7 @@ export class EmployeeResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EmployeeCompanyIntegration_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
@@ -509,7 +511,7 @@ export class EmployeeResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EmployeeRole_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeRole_])
     async EmployeeRolesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
@@ -517,7 +519,7 @@ export class EmployeeResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EmployeeSkill_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeSkill_])
     async EmployeeSkillsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [EmployeeID]=${employee_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
@@ -587,7 +589,7 @@ export class EmployeeResolver extends ResolverBase {
     }
 
     @Mutation(() => Employee_)
-    async DeleteEmployee(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -604,11 +606,11 @@ export class EmployeeResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -733,7 +735,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserFavorite_, { nullable: true })
-    async UserFavorite(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
+    async UserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserFavorite_ | null> {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -802,7 +804,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
 
     @Mutation(() => UserFavorite_)
-    async DeleteUserFavorite(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -819,11 +821,11 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -926,7 +928,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EmployeeCompanyIntegration_, { nullable: true })
-    async EmployeeCompanyIntegration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
+    async EmployeeCompanyIntegration(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeCompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1054,7 +1056,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EmployeeRole_, { nullable: true })
-    async EmployeeRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
+    async EmployeeRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeRole_ | null> {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1182,7 +1184,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EmployeeSkill_, { nullable: true })
-    async EmployeeSkill(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
+    async EmployeeSkill(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EmployeeSkill_ | null> {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1254,20 +1256,20 @@ export class Role_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [EmployeeRole_])
-    EmployeeRolesArray: EmployeeRole_[]; // Link to EmployeeRoles
+    @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
+    EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
 
-    @Field(() => [EntityPermission_])
-    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+    @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
+    EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
 
-    @Field(() => [UserRole_])
-    UserRolesArray: UserRole_[]; // Link to UserRoles
+    @Field(() => [mj_core_schema_server_object_types.UserRole_])
+    UserRolesArray: mj_core_schema_server_object_types.UserRole_[]; // Link to UserRoles
 
-    @Field(() => [AuthorizationRole_])
-    AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
+    @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
+    AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
 
-    @Field(() => [QueryPermission_])
-    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+    @Field(() => [mj_core_schema_server_object_types.QueryPermission_])
+    QueryPermissionsArray: mj_core_schema_server_object_types.QueryPermission_[]; // Link to QueryPermissions
 
 }
         
@@ -1337,7 +1339,7 @@ export class RoleResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Role_, { nullable: true })
-    async Role(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
+    async Role(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Role_ | null> {
         this.CheckUserReadPermissions('Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1352,7 +1354,7 @@ export class RoleResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [EmployeeRole_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeRole_])
     async EmployeeRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeRoles] WHERE [RoleID]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Roles', userPayload, EntityPermissionType.Read, 'AND');
@@ -1360,7 +1362,7 @@ export class RoleResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityPermission_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
     async EntityPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
@@ -1368,7 +1370,7 @@ export class RoleResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserRole_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
     async UserRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
@@ -1376,7 +1378,7 @@ export class RoleResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AuthorizationRole_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     async AuthorizationRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
@@ -1384,7 +1386,7 @@ export class RoleResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [QueryPermission_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueryPermission_])
     async QueryPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [RoleName]=${role_.ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
@@ -1452,11 +1454,11 @@ export class Skill_ {
     @MaxLength(100)
     Parent?: string;
     
-    @Field(() => [EmployeeSkill_])
-    EmployeeSkillsArray: EmployeeSkill_[]; // Link to EmployeeSkills
+    @Field(() => [mj_core_schema_server_object_types.EmployeeSkill_])
+    EmployeeSkillsArray: mj_core_schema_server_object_types.EmployeeSkill_[]; // Link to EmployeeSkills
 
-    @Field(() => [Skill_])
-    SkillsArray: Skill_[]; // Link to Skills
+    @Field(() => [mj_core_schema_server_object_types.Skill_])
+    SkillsArray: mj_core_schema_server_object_types.Skill_[]; // Link to Skills
 
 }
 //****************************************************************************
@@ -1504,7 +1506,7 @@ export class SkillResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Skill_, { nullable: true })
-    async Skill(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
+    async Skill(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Skill_ | null> {
         this.CheckUserReadPermissions('Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwSkills] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1519,7 +1521,7 @@ export class SkillResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [EmployeeSkill_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeSkill_])
     async EmployeeSkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeSkills] WHERE [SkillID]=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Skills', userPayload, EntityPermissionType.Read, 'AND');
@@ -1527,7 +1529,7 @@ export class SkillResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Skill_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Skill_])
     async SkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwSkills] WHERE [ParentID]=${skill_.ID} ` + this.getRowLevelSecurityWhereClause('Skills', userPayload, EntityPermissionType.Read, 'AND');
@@ -1636,7 +1638,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => IntegrationURLFormat_, { nullable: true })
-    async IntegrationURLFormat(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
+    async IntegrationURLFormat(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<IntegrationURLFormat_ | null> {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1726,11 +1728,11 @@ export class Integration_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [IntegrationURLFormat_])
-    IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
+    @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
+    IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
 
-    @Field(() => [CompanyIntegration_])
-    CompanyIntegrationsArray: CompanyIntegration_[]; // Link to CompanyIntegrations
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
+    CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
 
 }
         
@@ -1809,7 +1811,7 @@ export class IntegrationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Integration_, { nullable: true })
-    async Integration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
+    async Integration(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Integration_ | null> {
         this.CheckUserReadPermissions('Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwIntegrations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -1824,7 +1826,7 @@ export class IntegrationResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [IntegrationURLFormat_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [IntegrationID]=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
@@ -1832,7 +1834,7 @@ export class IntegrationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegration_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [IntegrationName]=${integration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
@@ -1968,17 +1970,17 @@ export class CompanyIntegration_ {
     @MaxLength(8)
     LastRunEndedAt?: Date;
     
-    @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    @Field(() => [mj_core_schema_server_object_types.List_])
+    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
 
-    @Field(() => [EmployeeCompanyIntegration_])
-    EmployeeCompanyIntegrationsArray: EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
+    @Field(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
+    EmployeeCompanyIntegrationsArray: mj_core_schema_server_object_types.EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
 
-    @Field(() => [CompanyIntegrationRun_])
-    CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
+    CompanyIntegrationRunsArray: mj_core_schema_server_object_types.CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
 
-    @Field(() => [CompanyIntegrationRecordMap_])
-    CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
+    CompanyIntegrationRecordMapsArray: mj_core_schema_server_object_types.CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
 
 }
         
@@ -2072,14 +2074,14 @@ export class CompanyIntegrationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegration_, { nullable: true })
-    async CompanyIntegration(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
+    async CompanyIntegration(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegration_ | null> {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [List_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
@@ -2087,7 +2089,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EmployeeCompanyIntegration_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEmployeeCompanyIntegrations] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Employee Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
@@ -2095,7 +2097,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegrationRun_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
@@ -2103,7 +2105,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegrationRecordMap_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [CompanyIntegrationID]=${companyintegration_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
@@ -2321,8 +2323,8 @@ export class EntityField_ {
     @MaxLength(8000)
     RelatedEntityClassName?: string;
     
-    @Field(() => [EntityFieldValue_])
-    EntityFieldValuesArray: EntityFieldValue_[]; // Link to EntityFieldValues
+    @Field(() => [mj_core_schema_server_object_types.EntityFieldValue_])
+    EntityFieldValuesArray: mj_core_schema_server_object_types.EntityFieldValue_[]; // Link to EntityFieldValues
 
 }
         
@@ -2525,7 +2527,7 @@ export class EntityFieldResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityField_, { nullable: true })
-    async EntityField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
+    async EntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityField_ | null> {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -2540,7 +2542,7 @@ export class EntityFieldResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [EntityFieldValue_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityFieldValue_])
     async EntityFieldValuesArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityFieldValues] WHERE [EntityFieldID]=${entityfield_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
@@ -2610,7 +2612,7 @@ export class EntityFieldResolver extends ResolverBase {
     }
 
     @Mutation(() => EntityField_)
-    async DeleteEntityField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -2627,11 +2629,11 @@ export class EntityFieldResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -2804,77 +2806,77 @@ export class Entity_ {
     @MaxLength(510)
     ParentBaseView?: string;
     
-    @Field(() => [EntityField_])
-    EntityFieldsArray: EntityField_[]; // Link to EntityFields
+    @Field(() => [mj_core_schema_server_object_types.EntityField_])
+    EntityFieldsArray: mj_core_schema_server_object_types.EntityField_[]; // Link to EntityFields
 
-    @Field(() => [EntityPermission_])
-    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+    @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
+    EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
 
-    @Field(() => [EntityRelationship_])
-    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
+    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
 
-    @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+    @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
+    EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
 
-    @Field(() => [UserRecordLog_])
-    UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
+    @Field(() => [mj_core_schema_server_object_types.UserRecordLog_])
+    UserRecordLogsArray: mj_core_schema_server_object_types.UserRecordLog_[]; // Link to UserRecordLogs
 
-    @Field(() => [IntegrationURLFormat_])
-    IntegrationURLFormatsArray: IntegrationURLFormat_[]; // Link to IntegrationURLFormats
+    @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
+    IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
 
-    @Field(() => [Entity_])
-    EntitiesArray: Entity_[]; // Link to Entities
+    @Field(() => [mj_core_schema_server_object_types.Entity_])
+    EntitiesArray: mj_core_schema_server_object_types.Entity_[]; // Link to Entities
 
-    @Field(() => [UserFavorite_])
-    UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
+    @Field(() => [mj_core_schema_server_object_types.UserFavorite_])
+    UserFavoritesArray: mj_core_schema_server_object_types.UserFavorite_[]; // Link to UserFavorites
 
-    @Field(() => [CompanyIntegrationRunDetail_])
-    CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
+    CompanyIntegrationRunDetailsArray: mj_core_schema_server_object_types.CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
 
-    @Field(() => [ApplicationEntity_])
-    ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
+    @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
+    ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
 
-    @Field(() => [UserApplicationEntity_])
-    UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
+    @Field(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
+    UserApplicationEntitiesArray: mj_core_schema_server_object_types.UserApplicationEntity_[]; // Link to UserApplicationEntities
 
-    @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    @Field(() => [mj_core_schema_server_object_types.List_])
+    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
 
-    @Field(() => [UserView_])
-    UserViewsArray: UserView_[]; // Link to UserViews
+    @Field(() => [mj_core_schema_server_object_types.UserView_])
+    UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
 
-    @Field(() => [RecordChange_])
-    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
+    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
 
-    @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
+    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
 
-    @Field(() => [ResourceType_])
-    ResourceTypesArray: ResourceType_[]; // Link to ResourceTypes
+    @Field(() => [mj_core_schema_server_object_types.ResourceType_])
+    ResourceTypesArray: mj_core_schema_server_object_types.ResourceType_[]; // Link to ResourceTypes
 
-    @Field(() => [TaggedItem_])
-    TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
+    @Field(() => [mj_core_schema_server_object_types.TaggedItem_])
+    TaggedItemsArray: mj_core_schema_server_object_types.TaggedItem_[]; // Link to TaggedItems
 
-    @Field(() => [DatasetItem_])
-    DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
+    @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
+    DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
 
-    @Field(() => [CompanyIntegrationRecordMap_])
-    CompanyIntegrationRecordMapsArray: CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
+    CompanyIntegrationRecordMapsArray: mj_core_schema_server_object_types.CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
 
-    @Field(() => [RecordMergeLog_])
-    RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
+    @Field(() => [mj_core_schema_server_object_types.RecordMergeLog_])
+    RecordMergeLogsArray: mj_core_schema_server_object_types.RecordMergeLog_[]; // Link to RecordMergeLogs
 
-    @Field(() => [QueryField_])
-    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+    @Field(() => [mj_core_schema_server_object_types.QueryField_])
+    QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
 
-    @Field(() => [Conversation_])
-    ConversationsArray: Conversation_[]; // Link to Conversations
+    @Field(() => [mj_core_schema_server_object_types.Conversation_])
+    ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
 
-    @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
+    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
 
-    @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
+    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
 
 }
         
@@ -3158,7 +3160,7 @@ export class EntityResolverBase extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Entity_, { nullable: true })
-    async Entity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
+    async Entity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Entity_ | null> {
         this.CheckUserReadPermissions('Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntities] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -3173,7 +3175,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [EntityField_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityField_])
     async EntityFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityFields] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Fields', userPayload, EntityPermissionType.Read, 'AND');
@@ -3181,7 +3183,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityPermission_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
     async EntityPermissionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
@@ -3189,7 +3191,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityRelationship_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
     async EntityRelationshipsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
@@ -3197,7 +3199,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityAIAction_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
     async EntityAIActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
@@ -3205,7 +3207,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserRecordLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
     async UserRecordLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3213,7 +3215,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [IntegrationURLFormat_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwIntegrationURLFormats] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Integration URL Formats', userPayload, EntityPermissionType.Read, 'AND');
@@ -3221,7 +3223,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Entity_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Entity_])
     async EntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntities] WHERE [ParentID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entities', userPayload, EntityPermissionType.Read, 'AND');
@@ -3229,7 +3231,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserFavorite_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
     async UserFavoritesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
@@ -3237,7 +3239,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegrationRunDetail_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
@@ -3245,7 +3247,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [ApplicationEntity_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
@@ -3253,7 +3255,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserApplicationEntity_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
@@ -3261,7 +3263,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [List_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
@@ -3269,7 +3271,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserView_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
@@ -3277,7 +3279,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [RecordChange_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
     async RecordChangesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
@@ -3285,7 +3287,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AuditLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3293,7 +3295,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [ResourceType_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ResourceType_])
     async ResourceTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwResourceTypes] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
@@ -3301,7 +3303,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [TaggedItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.TaggedItem_])
     async TaggedItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -3309,7 +3311,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [DatasetItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DatasetItem_])
     async DatasetItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -3317,7 +3319,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegrationRecordMap_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
@@ -3325,7 +3327,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [RecordMergeLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     async RecordMergeLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3333,7 +3335,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [QueryField_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueryField_])
     async QueryFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [SourceEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
@@ -3341,7 +3343,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Conversation_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
     async ConversationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [LinkedEntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
@@ -3349,7 +3351,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityDocument_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
     async EntityDocumentsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
@@ -3357,7 +3359,7 @@ export class EntityResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [DataContextItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -3427,7 +3429,7 @@ export class EntityResolverBase extends ResolverBase {
     }
 
     @Mutation(() => Entity_)
-    async DeleteEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -3444,11 +3446,11 @@ export class EntityResolverBase extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -3534,59 +3536,59 @@ export class User_ {
     @MaxLength(200)
     EmployeeSupervisorEmail?: string;
     
-    @Field(() => [UserApplication_])
-    UserApplicationsArray: UserApplication_[]; // Link to UserApplications
+    @Field(() => [mj_core_schema_server_object_types.UserApplication_])
+    UserApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to UserApplications
 
-    @Field(() => [UserRole_])
-    UserRolesArray: UserRole_[]; // Link to UserRoles
+    @Field(() => [mj_core_schema_server_object_types.UserRole_])
+    UserRolesArray: mj_core_schema_server_object_types.UserRole_[]; // Link to UserRoles
 
-    @Field(() => [Workspace_])
-    WorkspacesArray: Workspace_[]; // Link to Workspaces
+    @Field(() => [mj_core_schema_server_object_types.Workspace_])
+    WorkspacesArray: mj_core_schema_server_object_types.Workspace_[]; // Link to Workspaces
 
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
-    @Field(() => [ReportSnapshot_])
-    ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
+    @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
+    ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots
 
-    @Field(() => [RecordChange_])
-    RecordChangesArray: RecordChange_[]; // Link to RecordChanges
+    @Field(() => [mj_core_schema_server_object_types.RecordChange_])
+    RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
 
-    @Field(() => [Dashboard_])
-    DashboardsArray: Dashboard_[]; // Link to Dashboards
+    @Field(() => [mj_core_schema_server_object_types.Dashboard_])
+    DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
 
-    @Field(() => [UserViewRun_])
-    UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
+    @Field(() => [mj_core_schema_server_object_types.UserViewRun_])
+    UserViewRunsArray: mj_core_schema_server_object_types.UserViewRun_[]; // Link to UserViewRuns
 
-    @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
+    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
 
-    @Field(() => [List_])
-    ListsArray: List_[]; // Link to Lists
+    @Field(() => [mj_core_schema_server_object_types.List_])
+    ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
 
-    @Field(() => [UserFavorite_])
-    UserFavoritesArray: UserFavorite_[]; // Link to UserFavorites
+    @Field(() => [mj_core_schema_server_object_types.UserFavorite_])
+    UserFavoritesArray: mj_core_schema_server_object_types.UserFavorite_[]; // Link to UserFavorites
 
-    @Field(() => [UserRecordLog_])
-    UserRecordLogsArray: UserRecordLog_[]; // Link to UserRecordLogs
+    @Field(() => [mj_core_schema_server_object_types.UserRecordLog_])
+    UserRecordLogsArray: mj_core_schema_server_object_types.UserRecordLog_[]; // Link to UserRecordLogs
 
-    @Field(() => [UserView_])
-    UserViewsArray: UserView_[]; // Link to UserViews
+    @Field(() => [mj_core_schema_server_object_types.UserView_])
+    UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
 
-    @Field(() => [CompanyIntegrationRun_])
-    CompanyIntegrationRunsArray: CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
+    CompanyIntegrationRunsArray: mj_core_schema_server_object_types.CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
 
-    @Field(() => [UserNotification_])
-    UserNotificationsArray: UserNotification_[]; // Link to UserNotifications
+    @Field(() => [mj_core_schema_server_object_types.UserNotification_])
+    UserNotificationsArray: mj_core_schema_server_object_types.UserNotification_[]; // Link to UserNotifications
 
-    @Field(() => [Conversation_])
-    ConversationsArray: Conversation_[]; // Link to Conversations
+    @Field(() => [mj_core_schema_server_object_types.Conversation_])
+    ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
 
-    @Field(() => [RecordMergeLog_])
-    RecordMergeLogsArray: RecordMergeLog_[]; // Link to RecordMergeLogs
+    @Field(() => [mj_core_schema_server_object_types.RecordMergeLog_])
+    RecordMergeLogsArray: mj_core_schema_server_object_types.RecordMergeLog_[]; // Link to RecordMergeLogs
 
-    @Field(() => [DataContext_])
-    DataContextsArray: DataContext_[]; // Link to DataContexts
+    @Field(() => [mj_core_schema_server_object_types.DataContext_])
+    DataContextsArray: mj_core_schema_server_object_types.DataContext_[]; // Link to DataContexts
 
 }
         
@@ -3717,7 +3719,7 @@ export class UserResolverBase extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => User_, { nullable: true })
-    async User(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
+    async User(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<User_ | null> {
         this.CheckUserReadPermissions('Users', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUsers] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Users', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Users', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -3732,7 +3734,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [UserApplication_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
     async UserApplicationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
@@ -3740,7 +3742,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserRole_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
     async UserRolesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
@@ -3748,7 +3750,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Workspace_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Workspace_])
     async WorkspacesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkspaces] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
@@ -3756,7 +3758,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -3764,7 +3766,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [ReportSnapshot_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     async ReportSnapshotsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
@@ -3772,7 +3774,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [RecordChange_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
     async RecordChangesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
@@ -3780,7 +3782,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Dashboard_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
     async DashboardsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
@@ -3788,7 +3790,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserViewRun_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
     async UserViewRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3796,7 +3798,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AuditLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3804,7 +3806,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [List_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
@@ -3812,7 +3814,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserFavorite_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
     async UserFavoritesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserFavorites] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Favorites', userPayload, EntityPermissionType.Read, 'AND');
@@ -3820,7 +3822,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserRecordLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
     async UserRecordLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3828,7 +3830,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserView_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
@@ -3836,7 +3838,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegrationRun_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [RunByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3844,7 +3846,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserNotification_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserNotification_])
     async UserNotificationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserNotifications] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
@@ -3852,7 +3854,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Conversation_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
     async ConversationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
@@ -3860,7 +3862,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [RecordMergeLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     async RecordMergeLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [InitiatedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -3868,7 +3870,7 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [DataContext_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DataContext_])
     async DataContextsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContexts] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
@@ -4180,7 +4182,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityRelationship_, { nullable: true })
-    async EntityRelationship(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
+    async EntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRelationship_ | null> {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -4257,7 +4259,7 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
 
     @Mutation(() => EntityRelationship_)
-    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -4274,11 +4276,11 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -4411,7 +4413,7 @@ export class UserRecordLogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserRecordLog_, { nullable: true })
-    async UserRecordLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
+    async UserRecordLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRecordLog_ | null> {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserRecordLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Record Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -4547,14 +4549,14 @@ export class UserView_ {
     @MaxLength(510)
     EntityBaseView: string;
     
-    @Field(() => [EntityRelationship_])
-    EntityRelationshipsArray: EntityRelationship_[]; // Link to EntityRelationships
+    @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
+    EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
 
-    @Field(() => [UserViewRun_])
-    UserViewRunsArray: UserViewRun_[]; // Link to UserViewRuns
+    @Field(() => [mj_core_schema_server_object_types.UserViewRun_])
+    UserViewRunsArray: mj_core_schema_server_object_types.UserViewRun_[]; // Link to UserViewRuns
 
-    @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
+    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
 
 }
         
@@ -4721,7 +4723,7 @@ export class UserViewResolverBase extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserView_, { nullable: true })
-    async UserView(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
+    async UserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserView_ | null> {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -4736,7 +4738,7 @@ export class UserViewResolverBase extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [EntityRelationship_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
     async EntityRelationshipsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityRelationships] WHERE [DisplayUserViewGUID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
@@ -4744,7 +4746,7 @@ export class UserViewResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserViewRun_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
     async UserViewRunsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [UserViewID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
@@ -4752,7 +4754,7 @@ export class UserViewResolverBase extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [DataContextItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [ViewID]=${userview_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -4822,7 +4824,7 @@ export class UserViewResolverBase extends ResolverBase {
     }
 
     @Mutation(() => UserView_)
-    async DeleteUserView(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -4839,11 +4841,11 @@ export class UserViewResolverBase extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -4881,14 +4883,14 @@ export class CompanyIntegrationRun_ {
     @MaxLength(200)
     RunByUser: string;
     
-    @Field(() => [CompanyIntegrationRunAPILog_])
-    CompanyIntegrationRunAPILogsArray: CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_])
+    CompanyIntegrationRunAPILogsArray: mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
 
-    @Field(() => [ErrorLog_])
-    ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
+    @Field(() => [mj_core_schema_server_object_types.ErrorLog_])
+    ErrorLogsArray: mj_core_schema_server_object_types.ErrorLog_[]; // Link to ErrorLogs
 
-    @Field(() => [CompanyIntegrationRunDetail_])
-    CompanyIntegrationRunDetailsArray: CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
+    @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
+    CompanyIntegrationRunDetailsArray: mj_core_schema_server_object_types.CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
 
 }
         
@@ -4964,14 +4966,14 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRun_, { nullable: true })
-    async CompanyIntegrationRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
+    async CompanyIntegrationRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRun_ | null> {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [CompanyIntegrationRunAPILog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_])
     async CompanyIntegrationRunAPILogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE [CompanyIntegrationRunID]=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -4979,7 +4981,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [ErrorLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE [CompanyIntegrationRunID]=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -4987,7 +4989,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [CompanyIntegrationRunDetail_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [CompanyIntegrationRunID]=${companyintegrationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
@@ -5069,8 +5071,8 @@ export class CompanyIntegrationRunDetail_ {
     @MaxLength(8)
     RunEndedAt?: Date;
     
-    @Field(() => [ErrorLog_])
-    ErrorLogsArray: ErrorLog_[]; // Link to ErrorLogs
+    @Field(() => [mj_core_schema_server_object_types.ErrorLog_])
+    ErrorLogsArray: mj_core_schema_server_object_types.ErrorLog_[]; // Link to ErrorLogs
 
 }
         
@@ -5146,14 +5148,14 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRunDetail_, { nullable: true })
-    async CompanyIntegrationRunDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
+    async CompanyIntegrationRunDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunDetail_ | null> {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [ErrorLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE [CompanyIntegrationRunDetailID]=${companyintegrationrundetail_.ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -5314,7 +5316,7 @@ export class ErrorLogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ErrorLog_, { nullable: true })
-    async ErrorLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
+    async ErrorLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ErrorLog_ | null> {
         this.CheckUserReadPermissions('Error Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwErrorLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Error Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -5378,11 +5380,11 @@ export class Application_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [ApplicationEntity_])
-    ApplicationEntitiesArray: ApplicationEntity_[]; // Link to ApplicationEntities
+    @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
+    ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
 
-    @Field(() => [UserApplication_])
-    UserApplicationsArray: UserApplication_[]; // Link to UserApplications
+    @Field(() => [mj_core_schema_server_object_types.UserApplication_])
+    UserApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to UserApplications
 
 }
         
@@ -5446,7 +5448,7 @@ export class ApplicationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Application_, { nullable: true })
-    async Application(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
+    async Application(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Application_ | null> {
         this.CheckUserReadPermissions('Applications', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwApplications] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -5461,7 +5463,7 @@ export class ApplicationResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [ApplicationEntity_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE [ApplicationID]=${application_.ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
@@ -5469,7 +5471,7 @@ export class ApplicationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserApplication_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
     async UserApplicationsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE [ApplicationID]=${application_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
@@ -5653,7 +5655,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ApplicationEntity_, { nullable: true })
-    async ApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
+    async ApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationEntity_ | null> {
         this.CheckUserReadPermissions('Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwApplicationEntities] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -5722,7 +5724,7 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
 
     @Mutation(() => ApplicationEntity_)
-    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -5739,11 +5741,11 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -5946,7 +5948,7 @@ export class EntityPermissionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityPermission_, { nullable: true })
-    async EntityPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
+    async EntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityPermission_ | null> {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -6023,7 +6025,7 @@ export class EntityPermissionResolver extends ResolverBase {
     }
 
     @Mutation(() => EntityPermission_)
-    async DeleteEntityPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -6040,11 +6042,11 @@ export class EntityPermissionResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -6163,7 +6165,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserApplicationEntity_, { nullable: true })
-    async UserApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
+    async UserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplicationEntity_ | null> {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -6232,7 +6234,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
 
     @Mutation(() => UserApplicationEntity_)
-    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -6249,11 +6251,11 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -6287,8 +6289,8 @@ export class UserApplication_ {
     @MaxLength(100)
     Application: string;
     
-    @Field(() => [UserApplicationEntity_])
-    UserApplicationEntitiesArray: UserApplicationEntity_[]; // Link to UserApplicationEntities
+    @Field(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
+    UserApplicationEntitiesArray: mj_core_schema_server_object_types.UserApplicationEntity_[]; // Link to UserApplicationEntities
 
 }
         
@@ -6358,14 +6360,14 @@ export class UserApplicationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserApplication_, { nullable: true })
-    async UserApplication(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
+    async UserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserApplication_ | null> {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserApplications] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [UserApplicationEntity_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserApplicationEntities] WHERE [UserApplicationID]=${userapplication_.ID} ` + this.getRowLevelSecurityWhereClause('User Application Entities', userPayload, EntityPermissionType.Read, 'AND');
@@ -6508,7 +6510,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRunAPILog_, { nullable: true })
-    async CompanyIntegrationRunAPILog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
+    async CompanyIntegrationRunAPILog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRunAPILog_ | null> {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRunAPILogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Run API Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -6588,8 +6590,8 @@ export class List_ {
     @MaxLength(200)
     User: string;
     
-    @Field(() => [ListDetail_])
-    ListDetailsArray: ListDetail_[]; // Link to ListDetails
+    @Field(() => [mj_core_schema_server_object_types.ListDetail_])
+    ListDetailsArray: mj_core_schema_server_object_types.ListDetail_[]; // Link to ListDetails
 
 }
         
@@ -6693,14 +6695,14 @@ export class ListResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => List_, { nullable: true })
-    async List(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
+    async List(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<List_ | null> {
         this.CheckUserReadPermissions('Lists', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwLists] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Lists', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [ListDetail_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ListDetail_])
     async ListDetailsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwListDetails] WHERE [ListID]=${list_.ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
@@ -6770,7 +6772,7 @@ export class ListResolver extends ResolverBase {
     }
 
     @Mutation(() => List_)
-    async DeleteList(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -6787,11 +6789,11 @@ export class ListResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -6899,7 +6901,7 @@ export class ListDetailResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ListDetail_, { nullable: true })
-    async ListDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
+    async ListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ListDetail_ | null> {
         this.CheckUserReadPermissions('List Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwListDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -6968,7 +6970,7 @@ export class ListDetailResolver extends ResolverBase {
     }
 
     @Mutation(() => ListDetail_)
-    async DeleteListDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -6985,11 +6987,11 @@ export class ListDetailResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -7021,8 +7023,8 @@ export class UserViewRun_ {
     @MaxLength(200)
     RunByUser: string;
     
-    @Field(() => [UserViewRunDetail_])
-    UserViewRunDetailsArray: UserViewRunDetail_[]; // Link to UserViewRunDetails
+    @Field(() => [mj_core_schema_server_object_types.UserViewRunDetail_])
+    UserViewRunDetailsArray: mj_core_schema_server_object_types.UserViewRunDetail_[]; // Link to UserViewRunDetails
 
 }
         
@@ -7108,14 +7110,14 @@ export class UserViewRunResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserViewRun_, { nullable: true })
-    async UserViewRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
+    async UserViewRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRun_ | null> {
         this.CheckUserReadPermissions('User View Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [UserViewRunDetail_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRunDetail_])
     async UserViewRunDetailsArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewRunDetails] WHERE [UserViewRunID]=${userviewrun_.ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
@@ -7285,7 +7287,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserViewRunDetail_, { nullable: true })
-    async UserViewRunDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
+    async UserViewRunDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewRunDetail_ | null> {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewRunDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User View Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -7468,7 +7470,7 @@ export class WorkflowRunResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => WorkflowRun_, { nullable: true })
-    async WorkflowRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
+    async WorkflowRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowRun_ | null> {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkflowRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -7543,11 +7545,11 @@ export class Workflow_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
-    @Field(() => [WorkflowRun_])
-    WorkflowRunsArray: WorkflowRun_[]; // Link to WorkflowRuns
+    @Field(() => [mj_core_schema_server_object_types.WorkflowRun_])
+    WorkflowRunsArray: mj_core_schema_server_object_types.WorkflowRun_[]; // Link to WorkflowRuns
 
 }
         
@@ -7620,14 +7622,14 @@ export class WorkflowResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Workflow_, { nullable: true })
-    async Workflow(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
+    async Workflow(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workflow_ | null> {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputWorkflowID]=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -7635,7 +7637,7 @@ export class WorkflowResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [WorkflowRun_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.WorkflowRun_])
     async WorkflowRunsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkflowRuns] WHERE [WorkflowName]=${workflow_.ID} ` + this.getRowLevelSecurityWhereClause('Workflow Runs', userPayload, EntityPermissionType.Read, 'AND');
@@ -7707,8 +7709,8 @@ export class WorkflowEngine_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [Workflow_])
-    WorkflowsArray: Workflow_[]; // Link to Workflows
+    @Field(() => [mj_core_schema_server_object_types.Workflow_])
+    WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
 
 }
         
@@ -7778,14 +7780,14 @@ export class WorkflowEngineResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => WorkflowEngine_, { nullable: true })
-    async WorkflowEngine(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
+    async WorkflowEngine(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkflowEngine_ | null> {
         this.CheckUserReadPermissions('Workflow Engines', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkflowEngines] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workflow Engines', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Workflow Engines', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [Workflow_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Workflow_])
     async WorkflowsArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkflows] WHERE [WorkflowEngineName]=${workflowengine_.ID} ` + this.getRowLevelSecurityWhereClause('Workflows', userPayload, EntityPermissionType.Read, 'AND');
@@ -7952,7 +7954,7 @@ export class RecordChangeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordChange_, { nullable: true })
-    async RecordChange(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
+    async RecordChange(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordChange_ | null> {
         this.CheckUserReadPermissions('Record Changes', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordChanges] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Changes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8077,7 +8079,7 @@ export class UserRoleResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserRole_, { nullable: true })
-    async UserRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
+    async UserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserRole_ | null> {
         this.CheckUserReadPermissions('User Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8150,8 +8152,8 @@ export class RowLevelSecurityFilter_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [EntityPermission_])
-    EntityPermissionsArray: EntityPermission_[]; // Link to EntityPermissions
+    @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
+    EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
 
 }
 //****************************************************************************
@@ -8199,7 +8201,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RowLevelSecurityFilter_, { nullable: true })
-    async RowLevelSecurityFilter(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
+    async RowLevelSecurityFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RowLevelSecurityFilter_ | null> {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRowLevelSecurityFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Row Level Security Filters', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8214,7 +8216,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [EntityPermission_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
     async EntityPermissionsArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityPermissions] WHERE [ReadRLSFilterID]=${rowlevelsecurityfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Permissions', userPayload, EntityPermissionType.Read, 'AND');
@@ -8383,7 +8385,7 @@ export class AuditLogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AuditLog_, { nullable: true })
-    async AuditLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
+    async AuditLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLog_ | null> {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8485,17 +8487,17 @@ export class Authorization_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [AuthorizationRole_])
-    AuthorizationRolesArray: AuthorizationRole_[]; // Link to AuthorizationRoles
+    @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
+    AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
 
-    @Field(() => [Authorization_])
-    AuthorizationsArray: Authorization_[]; // Link to Authorizations
+    @Field(() => [mj_core_schema_server_object_types.Authorization_])
+    AuthorizationsArray: mj_core_schema_server_object_types.Authorization_[]; // Link to Authorizations
 
-    @Field(() => [AuditLogType_])
-    AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
+    @Field(() => [mj_core_schema_server_object_types.AuditLogType_])
+    AuditLogTypesArray: mj_core_schema_server_object_types.AuditLogType_[]; // Link to AuditLogTypes
 
-    @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
+    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
 
 }
 //****************************************************************************
@@ -8543,7 +8545,7 @@ export class AuthorizationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Authorization_, { nullable: true })
-    async Authorization(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
+    async Authorization(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Authorization_ | null> {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuthorizations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8558,7 +8560,7 @@ export class AuthorizationResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [AuthorizationRole_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     async AuthorizationRolesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [AuthorizationID]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
@@ -8566,7 +8568,7 @@ export class AuthorizationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Authorization_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Authorization_])
     async AuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuthorizations] WHERE [ParentID]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Authorizations', userPayload, EntityPermissionType.Read, 'AND');
@@ -8574,7 +8576,7 @@ export class AuthorizationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AuditLogType_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLogType_])
     async AuditLogTypesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE [AuthorizationName]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
@@ -8582,7 +8584,7 @@ export class AuthorizationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AuditLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [AuthorizationName]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -8666,7 +8668,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AuthorizationRole_, { nullable: true })
-    async AuthorizationRole(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
+    async AuthorizationRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuthorizationRole_ | null> {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuthorizationRoles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Authorization Roles', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8717,11 +8719,11 @@ export class AuditLogType_ {
     @MaxLength(100)
     Parent?: string;
     
-    @Field(() => [AuditLog_])
-    AuditLogsArray: AuditLog_[]; // Link to AuditLogs
+    @Field(() => [mj_core_schema_server_object_types.AuditLog_])
+    AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
 
-    @Field(() => [AuditLogType_])
-    AuditLogTypesArray: AuditLogType_[]; // Link to AuditLogTypes
+    @Field(() => [mj_core_schema_server_object_types.AuditLogType_])
+    AuditLogTypesArray: mj_core_schema_server_object_types.AuditLogType_[]; // Link to AuditLogTypes
 
 }
 //****************************************************************************
@@ -8769,7 +8771,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AuditLogType_, { nullable: true })
-    async AuditLogType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
+    async AuditLogType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AuditLogType_ | null> {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8784,7 +8786,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [AuditLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogs] WHERE [AuditLogTypeName]=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -8792,7 +8794,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AuditLogType_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AuditLogType_])
     async AuditLogTypesArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAuditLogTypes] WHERE [ParentID]=${auditlogtype_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Log Types', userPayload, EntityPermissionType.Read, 'AND');
@@ -8889,7 +8891,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityFieldValue_, { nullable: true })
-    async EntityFieldValue(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
+    async EntityFieldValue(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityFieldValue_ | null> {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityFieldValues] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Field Values', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -8947,17 +8949,17 @@ export class AIModel_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [AIAction_])
-    AIActionsArray: AIAction_[]; // Link to AIActions
+    @Field(() => [mj_core_schema_server_object_types.AIAction_])
+    AIActionsArray: mj_core_schema_server_object_types.AIAction_[]; // Link to AIActions
 
-    @Field(() => [AIModelAction_])
-    AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
+    @Field(() => [mj_core_schema_server_object_types.AIModelAction_])
+    AIModelActionsArray: mj_core_schema_server_object_types.AIModelAction_[]; // Link to AIModelActions
 
-    @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+    @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
+    EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
 
-    @Field(() => [VectorIndex_])
-    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+    @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
+    VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
 
 }
         
@@ -9036,7 +9038,7 @@ export class AIModelResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModel_, { nullable: true })
-    async AIModel(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
+    async AIModel(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModel_ | null> {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIModels] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -9051,7 +9053,7 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [AIAction_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AIAction_])
     async AIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIActions] WHERE [DefaultModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
@@ -9059,7 +9061,7 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [AIModelAction_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE [AIModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
@@ -9067,7 +9069,7 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityAIAction_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
     async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [AIModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
@@ -9075,7 +9077,7 @@ export class AIModelResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [VectorIndex_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.VectorIndex_])
     async VectorIndexesArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwVectorIndexes] WHERE [EmbeddingModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
@@ -9152,11 +9154,11 @@ export class AIAction_ {
     @MaxLength(100)
     DefaultModel?: string;
     
-    @Field(() => [AIModelAction_])
-    AIModelActionsArray: AIModelAction_[]; // Link to AIModelActions
+    @Field(() => [mj_core_schema_server_object_types.AIModelAction_])
+    AIModelActionsArray: mj_core_schema_server_object_types.AIModelAction_[]; // Link to AIModelActions
 
-    @Field(() => [EntityAIAction_])
-    EntityAIActionsArray: EntityAIAction_[]; // Link to EntityAIActions
+    @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
+    EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
 
 }
         
@@ -9229,7 +9231,7 @@ export class AIActionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIAction_, { nullable: true })
-    async AIAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
+    async AIAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIAction_ | null> {
         this.CheckUserReadPermissions('AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -9244,7 +9246,7 @@ export class AIActionResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [AIModelAction_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AIModelAction_])
     async AIModelActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE [AIActionID]=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
@@ -9252,7 +9254,7 @@ export class AIActionResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [EntityAIAction_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
     async EntityAIActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [AIActionID]=${aiaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
@@ -9391,7 +9393,7 @@ export class AIModelActionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModelAction_, { nullable: true })
-    async AIModelAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
+    async AIModelAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelAction_ | null> {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIModelActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -9595,7 +9597,7 @@ export class EntityAIActionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityAIAction_, { nullable: true })
-    async EntityAIAction(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
+    async EntityAIAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAIAction_ | null> {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityAIActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity AI Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -9658,8 +9660,8 @@ export class AIModelType_ {
     @Field({nullable: true}) 
     Description?: string;
     
-    @Field(() => [AIModel_])
-    AIModelsArray: AIModel_[]; // Link to AIModels
+    @Field(() => [mj_core_schema_server_object_types.AIModel_])
+    AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
 
 }
         
@@ -9723,7 +9725,7 @@ export class AIModelTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => AIModelType_, { nullable: true })
-    async AIModelType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
+    async AIModelType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AIModelType_ | null> {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIModelTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('AI Model Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -9738,7 +9740,7 @@ export class AIModelTypeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [AIModel_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.AIModel_])
     async AIModelsArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwAIModels] WHERE [AIModelTypeID]=${aimodeltype_.ID} ` + this.getRowLevelSecurityWhereClause('AI Models', userPayload, EntityPermissionType.Read, 'AND');
@@ -9805,8 +9807,8 @@ export class QueueType_ {
     @Field(() => Boolean) 
     IsActive: boolean;
     
-    @Field(() => [Queue_])
-    QueuesArray: Queue_[]; // Link to Queues
+    @Field(() => [mj_core_schema_server_object_types.Queue_])
+    QueuesArray: mj_core_schema_server_object_types.Queue_[]; // Link to Queues
 
 }
 //****************************************************************************
@@ -9854,14 +9856,14 @@ export class QueueTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueueType_, { nullable: true })
-    async QueueType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
+    async QueueType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueType_ | null> {
         this.CheckUserReadPermissions('Queue Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueueTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queue Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [Queue_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Queue_])
     async QueuesArray(@Root() queuetype_: QueueType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queues', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueues] WHERE [QueueTypeID]=${queuetype_.ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
@@ -9951,8 +9953,8 @@ export class Queue_ {
     @MaxLength(100)
     QueueType: string;
     
-    @Field(() => [QueueTask_])
-    QueueTasksArray: QueueTask_[]; // Link to QueueTasks
+    @Field(() => [mj_core_schema_server_object_types.QueueTask_])
+    QueueTasksArray: mj_core_schema_server_object_types.QueueTask_[]; // Link to QueueTasks
 
 }
         
@@ -10113,14 +10115,14 @@ export class QueueResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Queue_, { nullable: true })
-    async Queue(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
+    async Queue(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Queue_ | null> {
         this.CheckUserReadPermissions('Queues', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueues] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queues', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [QueueTask_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueueTask_])
     async QueueTasksArray(@Root() queue_: Queue_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueueTasks] WHERE [QueueID]=${queue_.ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
@@ -10346,7 +10348,7 @@ export class QueueTaskResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueueTask_, { nullable: true })
-    async QueueTask(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
+    async QueueTask(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueueTask_ | null> {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueueTasks] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queue Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -10541,7 +10543,7 @@ export class DashboardResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Dashboard_, { nullable: true })
-    async Dashboard(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
+    async Dashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dashboard_ | null> {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Dashboards', ID)
@@ -10611,7 +10613,7 @@ export class DashboardResolver extends ResolverBase {
     }
 
     @Mutation(() => Dashboard_)
-    async DeleteDashboard(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -10628,11 +10630,11 @@ export class DashboardResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -10653,8 +10655,8 @@ export class OutputTriggerType_ {
     @Field({nullable: true}) 
     Description?: string;
     
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
 //****************************************************************************
@@ -10702,7 +10704,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => OutputTriggerType_, { nullable: true })
-    async OutputTriggerType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
+    async OutputTriggerType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputTriggerType_ | null> {
         this.CheckUserReadPermissions('Output Trigger Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwOutputTriggerTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Trigger Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Trigger Types', ID)
@@ -10710,7 +10712,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputTriggerTypeID]=${outputtriggertype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -10738,8 +10740,8 @@ export class OutputFormatType_ {
     @Field({nullable: true}) 
     DisplayFormat?: string;
     
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
 //****************************************************************************
@@ -10787,7 +10789,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => OutputFormatType_, { nullable: true })
-    async OutputFormatType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
+    async OutputFormatType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputFormatType_ | null> {
         this.CheckUserReadPermissions('Output Format Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwOutputFormatTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Format Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Format Types', ID)
@@ -10795,7 +10797,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputFormatTypeID]=${outputformattype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -10820,8 +10822,8 @@ export class OutputDeliveryType_ {
     @Field({nullable: true}) 
     Description?: string;
     
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
 //****************************************************************************
@@ -10869,7 +10871,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => OutputDeliveryType_, { nullable: true })
-    async OutputDeliveryType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
+    async OutputDeliveryType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<OutputDeliveryType_ | null> {
         this.CheckUserReadPermissions('Output Delivery Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwOutputDeliveryTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Output Delivery Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Output Delivery Types', ID)
@@ -10877,7 +10879,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [OutputDeliveryTypeID]=${outputdeliverytype_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -10987,8 +10989,8 @@ export class Report_ {
     @MaxLength(510)
     OutputEvent?: string;
     
-    @Field(() => [ReportSnapshot_])
-    ReportSnapshotsArray: ReportSnapshot_[]; // Link to ReportSnapshots
+    @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
+    ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots
 
 }
         
@@ -11149,14 +11151,14 @@ export class ReportResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Report_, { nullable: true })
-    async Report(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
+    async Report(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Report_ | null> {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [ReportSnapshot_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     async ReportSnapshotsArray(@Root() report_: Report_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE [ReportID]=${report_.ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
@@ -11226,7 +11228,7 @@ export class ReportResolver extends ResolverBase {
     }
 
     @Mutation(() => Report_)
-    async DeleteReport(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -11243,11 +11245,11 @@ export class ReportResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -11363,7 +11365,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ReportSnapshot_, { nullable: true })
-    async ReportSnapshot(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
+    async ReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportSnapshot_ | null> {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReportSnapshots] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Report Snapshots', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -11432,7 +11434,7 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
 
     @Mutation(() => ReportSnapshot_)
-    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -11449,11 +11451,11 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -11497,8 +11499,8 @@ export class ResourceType_ {
     @MaxLength(510)
     Entity?: string;
     
-    @Field(() => [WorkspaceItem_])
-    WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
+    @Field(() => [mj_core_schema_server_object_types.WorkspaceItem_])
+    WorkspaceItemsArray: mj_core_schema_server_object_types.WorkspaceItem_[]; // Link to WorkspaceItems
 
 }
 //****************************************************************************
@@ -11546,7 +11548,7 @@ export class ResourceTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ResourceType_, { nullable: true })
-    async ResourceType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
+    async ResourceType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ResourceType_ | null> {
         this.CheckUserReadPermissions('Resource Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwResourceTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Resource Types', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Resource Types', ID)
@@ -11554,7 +11556,7 @@ export class ResourceTypeResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [WorkspaceItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.WorkspaceItem_])
     async WorkspaceItemsArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [ResourceTypeID]=${resourcetype_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -11590,11 +11592,11 @@ export class Tag_ {
     @MaxLength(510)
     Parent?: string;
     
-    @Field(() => [Tag_])
-    TagsArray: Tag_[]; // Link to Tags
+    @Field(() => [mj_core_schema_server_object_types.Tag_])
+    TagsArray: mj_core_schema_server_object_types.Tag_[]; // Link to Tags
 
-    @Field(() => [TaggedItem_])
-    TaggedItemsArray: TaggedItem_[]; // Link to TaggedItems
+    @Field(() => [mj_core_schema_server_object_types.TaggedItem_])
+    TaggedItemsArray: mj_core_schema_server_object_types.TaggedItem_[]; // Link to TaggedItems
 
 }
 //****************************************************************************
@@ -11642,7 +11644,7 @@ export class TagResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Tag_, { nullable: true })
-    async Tag(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
+    async Tag(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Tag_ | null> {
         this.CheckUserReadPermissions('Tags', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwTags] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Tags', ID)
@@ -11650,7 +11652,7 @@ export class TagResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [Tag_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Tag_])
     async TagsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tags', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwTags] WHERE [ParentID]=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tags', userPayload, EntityPermissionType.Read, 'AND');
@@ -11658,7 +11660,7 @@ export class TagResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [TaggedItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.TaggedItem_])
     async TaggedItemsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE [TagID]=${tag_.ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -11736,7 +11738,7 @@ export class TaggedItemResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => TaggedItem_, { nullable: true })
-    async TaggedItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
+    async TaggedItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<TaggedItem_ | null> {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwTaggedItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Tagged Items', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Tagged Items', ID)
@@ -11768,8 +11770,8 @@ export class Workspace_ {
     @MaxLength(200)
     User: string;
     
-    @Field(() => [WorkspaceItem_])
-    WorkspaceItemsArray: WorkspaceItem_[]; // Link to WorkspaceItems
+    @Field(() => [mj_core_schema_server_object_types.WorkspaceItem_])
+    WorkspaceItemsArray: mj_core_schema_server_object_types.WorkspaceItem_[]; // Link to WorkspaceItems
 
 }
         
@@ -11852,7 +11854,7 @@ export class WorkspaceResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Workspace_, { nullable: true })
-    async Workspace(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
+    async Workspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Workspace_ | null> {
         this.CheckUserReadPermissions('Workspaces', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkspaces] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workspaces', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Workspaces', ID)
@@ -11860,7 +11862,7 @@ export class WorkspaceResolver extends ResolverBase {
         return result;
     }
   
-    @FieldResolver(() => [WorkspaceItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.WorkspaceItem_])
     async WorkspaceItemsArray(@Root() workspace_: Workspace_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [WorkSpaceID]=${workspace_.ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -11930,7 +11932,7 @@ export class WorkspaceResolver extends ResolverBase {
     }
 
     @Mutation(() => Workspace_)
-    async DeleteWorkspace(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -11947,11 +11949,11 @@ export class WorkspaceResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -12101,7 +12103,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => WorkspaceItem_, { nullable: true })
-    async WorkspaceItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
+    async WorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<WorkspaceItem_ | null> {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwWorkspaceItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Workspace Items', userPayload, EntityPermissionType.Read, 'AND');
         this.createRecordAccessAuditLogRecord(userPayload, 'Workspace Items', ID)
@@ -12171,7 +12173,7 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
 
     @Mutation(() => WorkspaceItem_)
-    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -12188,11 +12190,11 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -12221,8 +12223,8 @@ export class Dataset_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [DatasetItem_])
-    DatasetItemsArray: DatasetItem_[]; // Link to DatasetItems
+    @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
+    DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
 
 }
 //****************************************************************************
@@ -12270,14 +12272,14 @@ export class DatasetResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Dataset_, { nullable: true })
-    async Dataset(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
+    async Dataset(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Dataset_ | null> {
         this.CheckUserReadPermissions('Datasets', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDatasets] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Datasets', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Datasets', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [DatasetItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DatasetItem_])
     async DatasetItemsArray(@Root() dataset_: Dataset_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE [DatasetName]=${dataset_.ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -12377,7 +12379,7 @@ export class DatasetItemResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DatasetItem_, { nullable: true })
-    async DatasetItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
+    async DatasetItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DatasetItem_ | null> {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDatasetItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dataset Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -12426,8 +12428,8 @@ export class ConversationDetail_ {
     @MaxLength(200)
     Conversation?: string;
     
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
         
@@ -12528,14 +12530,14 @@ export class ConversationDetailResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ConversationDetail_, { nullable: true })
-    async ConversationDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
+    async ConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ConversationDetail_ | null> {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversationDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [ConversationDetailID]=${conversationdetail_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -12605,7 +12607,7 @@ export class ConversationDetailResolver extends ResolverBase {
     }
 
     @Mutation(() => ConversationDetail_)
-    async DeleteConversationDetail(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -12622,11 +12624,11 @@ export class ConversationDetailResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -12686,11 +12688,11 @@ export class Conversation_ {
     @MaxLength(510)
     LinkedEntity?: string;
     
-    @Field(() => [ConversationDetail_])
-    ConversationDetailsArray: ConversationDetail_[]; // Link to ConversationDetails
+    @Field(() => [mj_core_schema_server_object_types.ConversationDetail_])
+    ConversationDetailsArray: mj_core_schema_server_object_types.ConversationDetail_[]; // Link to ConversationDetails
 
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
         
@@ -12809,14 +12811,14 @@ export class ConversationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Conversation_, { nullable: true })
-    async Conversation(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
+    async Conversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Conversation_ | null> {
         this.CheckUserReadPermissions('Conversations', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Conversations', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [ConversationDetail_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ConversationDetail_])
     async ConversationDetailsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwConversationDetails] WHERE [ConversationID]=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
@@ -12824,7 +12826,7 @@ export class ConversationResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [ConversationID]=${conversation_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -12894,7 +12896,7 @@ export class ConversationResolver extends ResolverBase {
     }
 
     @Mutation(() => Conversation_)
-    async DeleteConversation(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
             await entityObject.Load(ID);
@@ -12911,11 +12913,11 @@ export class ConversationResolver extends ResolverBase {
     }
 
     // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: Number): Promise<boolean> {
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
         const i = ID, d = dataSource; // prevent error;
         return true;
     }
-    protected async AfterDelete(dataSource: DataSource, ID: Number) {
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
 
@@ -13078,7 +13080,7 @@ export class UserNotificationResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserNotification_, { nullable: true })
-    async UserNotification(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
+    async UserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserNotification_ | null> {
         this.CheckUserReadPermissions('User Notifications', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserNotifications] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User Notifications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -13264,7 +13266,7 @@ export class SchemaInfoResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => SchemaInfo_, { nullable: true })
-    async SchemaInfo(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
+    async SchemaInfo(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<SchemaInfo_ | null> {
         this.CheckUserReadPermissions('Schema Info', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwSchemaInfos] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Schema Info', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Schema Info', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -13451,7 +13453,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => CompanyIntegrationRecordMap_, { nullable: true })
-    async CompanyIntegrationRecordMap(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
+    async CompanyIntegrationRecordMap(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CompanyIntegrationRecordMap_ | null> {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwCompanyIntegrationRecordMaps] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Company Integration Record Maps', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -13580,8 +13582,8 @@ export class RecordMergeLog_ {
     @MaxLength(200)
     InitiatedByUser: string;
     
-    @Field(() => [RecordMergeDeletionLog_])
-    RecordMergeDeletionLogsArray: RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
+    @Field(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
+    RecordMergeDeletionLogsArray: mj_core_schema_server_object_types.RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
 
 }
         
@@ -13706,14 +13708,14 @@ export class RecordMergeLogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordMergeLog_, { nullable: true })
-    async RecordMergeLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
+    async RecordMergeLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [RecordMergeDeletionLog_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
     async RecordMergeDeletionLogsArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE [RecordMergeLogID]=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
@@ -13901,7 +13903,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => RecordMergeDeletionLog_, { nullable: true })
-    async RecordMergeDeletionLog(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
+    async RecordMergeDeletionLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<RecordMergeDeletionLog_ | null> {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwRecordMergeDeletionLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -14166,7 +14168,7 @@ export class QueryFieldResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryField_, { nullable: true })
-    async QueryField(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryField_ | null> {
+    async QueryField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryField_ | null> {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -14266,11 +14268,11 @@ export class QueryCategory_ {
     @MaxLength(100)
     Parent?: string;
     
-    @Field(() => [QueryCategory_])
-    QueryCategoriesArray: QueryCategory_[]; // Link to QueryCategories
+    @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
+    QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
 
-    @Field(() => [Query_])
-    QueriesArray: Query_[]; // Link to Queries
+    @Field(() => [mj_core_schema_server_object_types.Query_])
+    QueriesArray: mj_core_schema_server_object_types.Query_[]; // Link to Queries
 
 }
         
@@ -14353,14 +14355,14 @@ export class QueryCategoryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryCategory_, { nullable: true })
-    async QueryCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryCategory_ | null> {
+    async QueryCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryCategory_ | null> {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [QueryCategory_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
     async QueryCategoriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryCategories] WHERE [ParentID]=${querycategory_.ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
@@ -14368,7 +14370,7 @@ export class QueryCategoryResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Query_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Query_])
     async QueriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queries', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueries] WHERE [CategoryID]=${querycategory_.ID} ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
@@ -14485,14 +14487,14 @@ export class Query_ {
     @MaxLength(100)
     Category: string;
     
-    @Field(() => [QueryField_])
-    QueryFieldsArray: QueryField_[]; // Link to QueryFields
+    @Field(() => [mj_core_schema_server_object_types.QueryField_])
+    QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
 
-    @Field(() => [QueryPermission_])
-    QueryPermissionsArray: QueryPermission_[]; // Link to QueryPermissions
+    @Field(() => [mj_core_schema_server_object_types.QueryPermission_])
+    QueryPermissionsArray: mj_core_schema_server_object_types.QueryPermission_[]; // Link to QueryPermissions
 
-    @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
+    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
 
 }
         
@@ -14605,14 +14607,14 @@ export class QueryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => Query_, { nullable: true })
-    async Query(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Query_ | null> {
+    async Query(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Query_ | null> {
         this.CheckUserReadPermissions('Queries', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Queries', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [QueryField_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueryField_])
     async QueryFieldsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryFields] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Query Fields', userPayload, EntityPermissionType.Read, 'AND');
@@ -14620,7 +14622,7 @@ export class QueryResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [QueryPermission_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueryPermission_])
     async QueryPermissionsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
@@ -14628,7 +14630,7 @@ export class QueryResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [DataContextItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [QueryID]=${query_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -14797,7 +14799,7 @@ export class QueryPermissionResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => QueryPermission_, { nullable: true })
-    async QueryPermission(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryPermission_ | null> {
+    async QueryPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<QueryPermission_ | null> {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwQueryPermissions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Query Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -14991,7 +14993,7 @@ export class VectorIndexResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => VectorIndex_, { nullable: true })
-    async VectorIndex(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorIndex_ | null> {
+    async VectorIndex(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorIndex_ | null> {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwVectorIndexes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -15084,8 +15086,8 @@ export class EntityDocumentType_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [EntityDocument_])
-    EntityDocumentsArray: EntityDocument_[]; // Link to EntityDocuments
+    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
+    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
 
 }
         
@@ -15162,14 +15164,14 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocumentType_, { nullable: true })
-    async EntityDocumentType(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentType_ | null> {
+    async EntityDocumentType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentType_ | null> {
         this.CheckUserReadPermissions('Entity Document Types', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocumentTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Types', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Document Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [EntityDocument_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
     async EntityDocumentsArray(@Root() entitydocumenttype_: EntityDocumentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [TypeID]=${entitydocumenttype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
@@ -15362,7 +15364,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocumentRun_, { nullable: true })
-    async EntityDocumentRun(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentRun_ | null> {
+    async EntityDocumentRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentRun_ | null> {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocumentRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -15463,8 +15465,8 @@ export class VectorDatabase_ {
     @MaxLength(8)
     UpdatedAt: Date;
     
-    @Field(() => [VectorIndex_])
-    VectorIndexesArray: VectorIndex_[]; // Link to VectorIndexes
+    @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
+    VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
 
 }
         
@@ -15553,14 +15555,14 @@ export class VectorDatabaseResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => VectorDatabase_, { nullable: true })
-    async VectorDatabase(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorDatabase_ | null> {
+    async VectorDatabase(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VectorDatabase_ | null> {
         this.CheckUserReadPermissions('Vector Databases', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwVectorDatabases] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Vector Databases', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Vector Databases', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [VectorIndex_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.VectorIndex_])
     async VectorIndexesArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwVectorIndexes] WHERE [VectorDatabaseID]=${vectordatabase_.ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
@@ -15776,7 +15778,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityRecordDocument_, { nullable: true })
-    async EntityRecordDocument(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRecordDocument_ | null> {
+    async EntityRecordDocument(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityRecordDocument_ | null> {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityRecordDocuments] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Record Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -15883,8 +15885,8 @@ export class EntityDocument_ {
     @MaxLength(200)
     Type: string;
     
-    @Field(() => [EntityDocumentRun_])
-    EntityDocumentRunsArray: EntityDocumentRun_[]; // Link to EntityDocumentRuns
+    @Field(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
+    EntityDocumentRunsArray: mj_core_schema_server_object_types.EntityDocumentRun_[]; // Link to EntityDocumentRuns
 
 }
         
@@ -15979,14 +15981,14 @@ export class EntityDocumentResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => EntityDocument_, { nullable: true })
-    async EntityDocument(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocument_ | null> {
+    async EntityDocument(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocument_ | null> {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocuments] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [EntityDocumentRun_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
     async EntityDocumentRunsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwEntityDocumentRuns] WHERE [EntityDocumentID]=${entitydocument_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
@@ -16232,7 +16234,7 @@ export class DataContextItemResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DataContextItem_, { nullable: true })
-    async DataContextItem(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContextItem_ | null> {
+    async DataContextItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContextItem_ | null> {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
@@ -16336,11 +16338,11 @@ export class DataContext_ {
     @MaxLength(200)
     User: string;
     
-    @Field(() => [DataContextItem_])
-    DataContextItemsArray: DataContextItem_[]; // Link to DataContextItems
+    @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
+    DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
 
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
         
@@ -16429,14 +16431,14 @@ export class DataContextResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DataContext_, { nullable: true })
-    async DataContext(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContext_ | null> {
+    async DataContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DataContext_ | null> {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContexts] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [DataContextItem_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDataContextItems] WHERE [DataContextID]=${datacontext_.ID} ` + this.getRowLevelSecurityWhereClause('Data Context Items', userPayload, EntityPermissionType.Read, 'AND');
@@ -16444,7 +16446,7 @@ export class DataContextResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [DataContextID]=${datacontext_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');
@@ -16545,11 +16547,11 @@ export class UserViewCategory_ {
     @MaxLength(200)
     Parent?: string;
     
-    @Field(() => [UserViewCategory_])
-    UserViewCategoriesArray: UserViewCategory_[]; // Link to UserViewCategories
+    @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
+    UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
 
-    @Field(() => [UserView_])
-    UserViewsArray: UserView_[]; // Link to UserViews
+    @Field(() => [mj_core_schema_server_object_types.UserView_])
+    UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
 
 }
         
@@ -16632,14 +16634,14 @@ export class UserViewCategoryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => UserViewCategory_, { nullable: true })
-    async UserViewCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewCategory_ | null> {
+    async UserViewCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<UserViewCategory_ | null> {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [UserViewCategory_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
     async UserViewCategoriesArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViewCategories] WHERE [ParentID]=${userviewcategory_.ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
@@ -16647,7 +16649,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [UserView_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwUserViews] WHERE [CategoryID]=${userviewcategory_.ID} ` + this.getRowLevelSecurityWhereClause('User Views', userPayload, EntityPermissionType.Read, 'AND');
@@ -16748,11 +16750,11 @@ export class DashboardCategory_ {
     @MaxLength(200)
     Parent?: string;
     
-    @Field(() => [Dashboard_])
-    DashboardsArray: Dashboard_[]; // Link to Dashboards
+    @Field(() => [mj_core_schema_server_object_types.Dashboard_])
+    DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
 
-    @Field(() => [DashboardCategory_])
-    DashboardCategoriesArray: DashboardCategory_[]; // Link to DashboardCategories
+    @Field(() => [mj_core_schema_server_object_types.DashboardCategory_])
+    DashboardCategoriesArray: mj_core_schema_server_object_types.DashboardCategory_[]; // Link to DashboardCategories
 
 }
         
@@ -16838,14 +16840,14 @@ export class DashboardCategoryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => DashboardCategory_, { nullable: true })
-    async DashboardCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardCategory_ | null> {
+    async DashboardCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DashboardCategory_ | null> {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDashboardCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [Dashboard_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
     async DashboardsArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDashboards] WHERE [CategoryID]=${dashboardcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboards', userPayload, EntityPermissionType.Read, 'AND');
@@ -16853,7 +16855,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [DashboardCategory_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
     async DashboardCategoriesArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwDashboardCategories] WHERE [ParentID]=${dashboardcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
@@ -16954,11 +16956,11 @@ export class ReportCategory_ {
     @MaxLength(200)
     Parent: string;
     
-    @Field(() => [ReportCategory_])
-    ReportCategoriesArray: ReportCategory_[]; // Link to ReportCategories
+    @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
+    ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
 
-    @Field(() => [Report_])
-    ReportsArray: Report_[]; // Link to Reports
+    @Field(() => [mj_core_schema_server_object_types.Report_])
+    ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
 
 }
         
@@ -17041,14 +17043,14 @@ export class ReportCategoryResolver extends ResolverBase {
         return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
     }
     @Query(() => ReportCategory_, { nullable: true })
-    async ReportCategory(@Arg('ID', () => Int) ID: Number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportCategory_ | null> {
+    async ReportCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ReportCategory_ | null> {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReportCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.MapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
   
-    @FieldResolver(() => [ReportCategory_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
     async ReportCategoriesArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReportCategories] WHERE [ParentID]=${reportcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
@@ -17056,7 +17058,7 @@ export class ReportCategoryResolver extends ResolverBase {
         return result;
     }
       
-    @FieldResolver(() => [Report_])
+    @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
         const sSQL = `SELECT * FROM [admin].[vwReports] WHERE [CategoryID]=${reportcategory_.ID} ` + this.getRowLevelSecurityWhereClause('Reports', userPayload, EntityPermissionType.Read, 'AND');

@@ -1803,6 +1803,7 @@ type Mutation {
   CreateVectorIndex(input: CreateVectorIndexInput!): VectorIndex_!
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
+  DeleteAccount(ID: Int!): Account_!
   DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
   DeleteCompany(ID: Int!): Company_!
   DeleteConversation(ID: Int!): Conversation_!
