@@ -36,7 +36,9 @@ export class AppComponent implements OnInit {
 
       try {
         const start = Date.now();        
-        const config = new GraphQLProviderConfigData(token, url, wsurl, environment.MJ_CORE_SCHEMA_NAME);
+        const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
+          return 'the new token goes here'; // CRAIG can you update this to use the auth service to get the new token?
+        }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
         const end = Date.now();
         LogStatus(`GraphQL Client Setup took ${end - start}ms`);

@@ -6,11 +6,11 @@
 **************************************************************************************************************/
 
 import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult, 
-         EntityInfo, EntityFieldInfo, EntityRelationshipInfo, EntityPermissionInfo, EntityFieldTSType,
-         ApplicationInfo, ApplicationEntityInfo, RunViewParams, ProviderBase, ProviderType, RoleInfo, UserInfo, UserRoleInfo, RecordChange, 
-         ILocalStorageProvider, RowLevelSecurityFilterInfo, AuditLogTypeInfo, AuthorizationInfo, EntitySaveOptions, LogError,
+         EntityInfo, EntityFieldInfo, EntityFieldTSType,
+         RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
+         ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, QueryCategoryInfo, QueryInfo, IRunQueryProvider, RunQueryResult  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult  } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -22,17 +22,46 @@ import { Client, createClient } from 'graphql-ws';
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
 
 
+// define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
+export type RefreshTokenFunction = () => Promise<string>;
+
 export class GraphQLProviderConfigData extends ProviderConfigDataBase {
+    /**
+     * Token is the JWT token that is used to authenticate the user with the server
+     */
     get Token(): string { return this.Data.Token }
+
+    set Token(token: string) { this.Data.Token = token}
+
+    /**
+     * URL is the URL to the GraphQL endpoint
+     */
     get URL(): string { return this.Data.URL }
+    /**
+     * WSURL is the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, you can pass in a blank string for this
+     */
     get WSURL(): string { return this.Data.WSURL }
 
     /**
-     * wsurl is the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, pass in a blank string for this
+     * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
+     */
+    get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
+
+
+    /**
+     * 
+     * @param token Token is the JWT token that is used to authenticate the user with the server
+     * @param url the URL to the GraphQL endpoint
+     * @param wsurl the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, you can pass in a blank string for this
+     * @param refreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
+     * @param MJCoreSchemaName the name of the MJ Core schema, if it is not the default name of __mj
+     * @param includeSchemas optional, an array of schema names to include in the metadata. If not passed, all schemas are included
+     * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
      */
     constructor(token: string,
                 url: string,
                 wsurl: string,
+                refreshTokenFunction: RefreshTokenFunction,
                 MJCoreSchemaName?: string, 
                 includeSchemas?: string[], 
                 excludeSchemas?: string[]) {
@@ -41,6 +70,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                     Token: token,
                     URL: url,
                     WSURL: wsurl,
+                    RefreshTokenFunction: refreshTokenFunction,
                 }, 
                 MJCoreSchemaName,
                 includeSchemas,
@@ -53,11 +83,10 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider {
-    private _url: string;
-    private _token: string;
     private static _client: GraphQLClient;
-    private _sessionId: string;
-    public get ConfigData(): GraphQLProviderConfigData { return <GraphQLProviderConfigData>super.ConfigData; }
+    private static _configData: GraphQLProviderConfigData;
+    private static _sessionId: string;
+    public get ConfigData(): GraphQLProviderConfigData { return GraphQLDataProvider._configData; }
 
 
     public GenerateUUID() {
@@ -71,18 +100,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async Config(configData: GraphQLProviderConfigData): Promise<boolean> {
         try {
             // FIRST, set up the GraphQL client
-            this._sessionId = this.GenerateUUID();
-            this._url = configData.URL;
-            this._token = configData.Token;
+            if (GraphQLDataProvider._sessionId === undefined)
+                GraphQLDataProvider._sessionId = this.GenerateUUID();
+
+            GraphQLDataProvider._configData = configData;
 
             // now create the new client, if it isn't alreayd created
             if (!GraphQLDataProvider._client)
-                GraphQLDataProvider._client = new GraphQLClient(configData.URL, {
-                    headers: { 
-                        authorization: 'Bearer ' + configData.Token,
-                        'x-session-id': this._sessionId 
-                    }
-                });
+                GraphQLDataProvider._client = GraphQLDataProvider.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider._sessionId);
 
             return super.Config(configData); // now parent class can do it's config
         }
@@ -93,7 +118,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public get sessionId(): string {
-        return this._sessionId;
+        return GraphQLDataProvider._sessionId;
     }
 
     protected AllowRefresh(): boolean {
@@ -387,7 +412,7 @@ npm
     public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $primaryKeyValues: [PrimaryKeyValue]!) {
+            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $primaryKeyValues: [PrimaryKeyValueInputType!]!) {
                 GetRecordDependencies(entityName: $entityName, primaryKeyValues: $primaryKeyValues) {
                     EntityName
                     RelatedEntityName
@@ -399,7 +424,13 @@ npm
             // now we have our query built, execute it
             const vars = {
                 entityName: entityName,
-                primaryKeyValues: primaryKeyValues
+                primaryKeyValues: primaryKeyValues.map(pkv => {
+                    return {
+                        FieldName: pkv.FieldName,
+                        Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
+                    }
+                
+                })
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -431,13 +462,46 @@ npm
                 }
             }`
 
+            // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
+            const newRequest: RecordMergeRequest = {
+                EntityName: request.EntityName,
+                SurvivingRecordPrimaryKeyValues: request.SurvivingRecordPrimaryKeyValues.map(pkv => {
+                    return {
+                        FieldName: pkv.FieldName,
+                        Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
+                    }
+                }),
+                FieldMap: request.FieldMap?.map(fm => {
+                    return {
+                        FieldName: fm.FieldName,
+                        Value: fm.Value.toString() // turn the value into a string, since that is what the server expects
+                    }
+                }),
+                RecordsToMerge: request.RecordsToMerge.map(r => {
+                    // array of arrays, each inner array is the primary key values for a record to merge
+                    return r.map(pkv => {
+                        return {
+                            FieldName: pkv.FieldName,
+                            Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
+                        }
+                    }); 
+                })
+            }
+
             // now we have our query built, execute it
-            const data = await GraphQLDataProvider.ExecuteGQL(mutation, {request: request});
+            const data = await GraphQLDataProvider.ExecuteGQL(mutation, {request: newRequest});
 
             return data?.MergeRecords; // shape of the result should exactly match the RecordDependency type
         }
         catch (e) {
             LogError(e);
+            return {
+                Success: false,
+                OverallStatus: e && e.message ? e.message : e,
+                RecordStatus: [],
+                RecordMergeLogID: -1,
+                Request: request,
+            }
             throw (e)
         }
     }
@@ -864,15 +928,54 @@ npm
             return data.GetEntityRecordNames;
     }
  
-    public static async ExecuteGQL(query: string, variables: any): Promise<any> {
+    public static async ExecuteGQL(query: string, variables: any, refreshTokenIfNeeded: boolean = false): Promise<any> {
         try {
             const data = await this._client.request(query, variables);
             return data;    
         }
         catch (e) {
-            LogError(e);
-            throw e; // force the caller to handle the error
+            if (e.code === 'JWT_EXPIRED') {
+                if (refreshTokenIfNeeded) {
+                    // token expired, so we need to refresh it and try again
+                    await this.RefreshToken();
+                    return await this.ExecuteGQL(query, variables);
+                }
+                else {
+                    // token expired but the caller doesn't want a refresh, so just return the error
+                    LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
+                    throw e;
+                }
+            }
+            else {
+                LogError(e);
+                throw e; // force the caller to handle the error    
+            }
         }
+    }
+
+    public static async RefreshToken(): Promise<void> {
+        if (GraphQLDataProvider._configData.RefreshTokenFunction) {
+            const newToken = await GraphQLDataProvider._configData.RefreshTokenFunction();
+            if (newToken) {
+                GraphQLDataProvider._configData.Token = newToken; // update the token
+                this._client = this.CreateNewGraphQLClient(GraphQLDataProvider._configData.URL, GraphQLDataProvider._configData.Token, GraphQLDataProvider._sessionId);
+            }
+            else {
+                throw new Error('Refresh token function returned null or undefined token');
+            }
+        }
+        else {
+            throw new Error('No refresh token function provided');
+        }
+    }
+
+    protected static CreateNewGraphQLClient(url: string, token: string, sessionId: string): GraphQLClient {
+        return new GraphQLClient(url, {
+            headers: { 
+                authorization: 'Bearer ' + token,
+                'x-session-id': sessionId
+            }
+        });
     }
 
     // private _allLatestMetadataUpdatesQuery = gql`query mdUpdates {

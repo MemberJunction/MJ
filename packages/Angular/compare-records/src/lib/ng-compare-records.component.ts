@@ -1,7 +1,7 @@
 import { Component, ElementRef, Input, ViewChild } from '@angular/core';
 import { GridComponent, RowClassArgs } from '@progress/kendo-angular-grid';
 import { Subscription, debounceTime, fromEvent } from 'rxjs';
-import { BaseEntity, EntityDependency, EntityField, EntityFieldInfo, EntityInfo, LogError, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core'
+import { BaseEntity, ComparePrimaryKeys, EntityDependency, EntityField, EntityFieldInfo, EntityInfo, LogError, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core'
 import { ViewColumnInfo } from '@memberjunction/core-entities'
 
 @Component({
@@ -254,16 +254,18 @@ export class CompareRecordsComponent {
           this._recordDependencies.push({pkeyValues: primaryKeyValues, dependencies: dependencies});
         }
       }
-      // the default is simply the record with the most dependencies, and if they're all equal, the first one
-      let maxDependencies = 0;
-      let defaultPkeyValue: PrimaryKeyValue[] = [];
-      for (const record of this._recordDependencies) {
-        if (record.dependencies.length > maxDependencies) {
-          maxDependencies = record.dependencies.length;
-          defaultPkeyValue = record.pkeyValues;
+      if (this._recordDependencies.length > 0) {
+        // the default is simply the record with the most dependencies, and if they're all equal, the first one
+        let maxDependencies = 0;
+        let defaultPkeyValue: PrimaryKeyValue[] = this._recordDependencies[0].pkeyValues; // default to first record
+        for (const record of this._recordDependencies) {
+          if (record.dependencies.length > maxDependencies) {
+            maxDependencies = record.dependencies.length;
+            defaultPkeyValue = record.pkeyValues;
+          }
         }
+        this.selectedRecordPKeyVal = defaultPkeyValue;
       }
-      this.selectedRecordPKeyVal = defaultPkeyValue;
     }
     catch (e) {
       LogError(e)
@@ -277,7 +279,7 @@ export class CompareRecordsComponent {
   public FormatColumnValue(dataItem: any, column: any, maxLength: number) { //column: ViewColumnInfo, value: string, maxLength: number) {
     try {
       if (dataItem && column && column.primaryKeyValues) { 
-        const record = this.recordsToCompare.find(r => this.ComparePrimaryKeys(this.getPKeyValues(r), column.primaryKeyValues));
+        const record = this.recordsToCompare.find(r => ComparePrimaryKeys(this.getPKeyValues(r), column.primaryKeyValues));
         const pkeyString = this.getPKeyString(record);
         const item = dataItem[pkeyString]
         const val = item.Value;
@@ -288,18 +290,6 @@ export class CompareRecordsComponent {
     catch (err) {
       console.log(err);
     }
-  }
-
-  public ComparePrimaryKeys(pkeyValues1: PrimaryKeyValue[], pkeyValues2: PrimaryKeyValue[]) {
-    if (pkeyValues1.length !== pkeyValues2.length)
-      return false;
-
-    for (let i = 0; i < pkeyValues1.length; i++) {
-      if ( pkeyValues1[i].Value !== pkeyValues2[i].Value)
-        return false;
-    }
-
-    return true;
   }
 
   public IsCellSelected(dataItem: any, column: any) {
@@ -314,12 +304,12 @@ export class CompareRecordsComponent {
       const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
       if (fieldMapIndex >= 0) {
         // we have a field map for this field, so see if the pkeys matches the selected pkeys
-        return (this.ComparePrimaryKeys(pkeyValues, this.fieldMap[fieldMapIndex].primaryKeyValues));
+        return (ComparePrimaryKeys(pkeyValues, this.fieldMap[fieldMapIndex].primaryKeyValues));
       }
       else {
         // we do not have a field map for this field, so see if the pkeys matches the selected pkeys
         // as we default to the selected record when we don't have a field map
-        return (this.ComparePrimaryKeys(pkeyValues, this.selectedRecordPKeyVal));
+        return (ComparePrimaryKeys(pkeyValues, this.selectedRecordPKeyVal));
       }
     }
     else
@@ -381,9 +371,9 @@ export class CompareRecordsComponent {
   public GetColumnHeaderTextFromPKeys(pkeyValues: PrimaryKeyValue[]) {
     if (pkeyValues) {
       // see if we have any dependencies
-      const r = this._recordDependencies.find(r =>  this.ComparePrimaryKeys(r.pkeyValues, pkeyValues) );
-      const prefix = this.selectionMode && this.ComparePrimaryKeys(this.selectedRecordPKeyVal, pkeyValues) ? '✓✓✓ ' : '';
-      const record = this.recordsToCompare.find(r => this.ComparePrimaryKeys(this.getPKeyValues(r), pkeyValues));
+      const r = this._recordDependencies.find(r =>  ComparePrimaryKeys(r.pkeyValues, pkeyValues) );
+      const prefix = this.selectionMode && ComparePrimaryKeys(this.selectedRecordPKeyVal, pkeyValues) ? '✓✓✓ ' : '';
+      const record = this.recordsToCompare.find(r => ComparePrimaryKeys(this.getPKeyValues(r), pkeyValues));
       const s = this.getPKeyString(record);
       if (r) {
         return `${prefix}Record: ${s} (${r.dependencies.length} dependencies)`;
@@ -413,7 +403,7 @@ export class CompareRecordsComponent {
       // first check to see if the user selected a read-only field
       if (!event.dataItem[currentRecordPkeyString].metaData.EntityField.ReadOnly) {
         // only make writeable fields selectable
-        if (!this.ComparePrimaryKeys(this.selectedRecordPKeyVal, currentRecordPkeys)) {
+        if (!ComparePrimaryKeys(this.selectedRecordPKeyVal, currentRecordPkeys)) {
           // check to see if we have a fieldmap for the current field. If we do have one, then update it to the current record
           // if we don't have one, then add it
           const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
@@ -445,10 +435,16 @@ export class CompareRecordsComponent {
         const element: HTMLElement = event.target;
         if (element.classList.contains('k-header') || element.closest('.k-header')) {
           const columnText = element.innerText;
+          // remove the checkmarks and then also remove the (x) from the column text if it exists as that woudl denote the # of dependencies
+          let strippedTitle = columnText.replace('✓✓✓ ', '').replace(/\(.*\)/, '').trim().toLowerCase();
+
           // now find the column index from the column text
-          const columnIndex = this.columns.findIndex(c => c.title === columnText);
-          if (columnIndex >= 0) {
-            this.selectedRecordPKeyVal = this.getPKeyValues(this.recordsToCompare[columnIndex]);
+          const columnIndex = this.columns.findIndex(c => {
+            return c.title.trim().toLowerCase() === strippedTitle;
+          });
+          if (columnIndex > 0) {
+            // check for colIndex > 0, not >=0 because the first column is the field names, so we don't want to select that
+            this.selectedRecordPKeyVal = this.getPKeyValues(this.recordsToCompare[columnIndex - 1/*always remove 1 because the first col is the "Fields" column*/]);
           }
         }
     }

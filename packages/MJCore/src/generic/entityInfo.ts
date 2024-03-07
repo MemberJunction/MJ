@@ -481,6 +481,23 @@ export class PrimaryKeyValue {
     FieldName: string
     Value: any
 }
+/**
+ * Utility function to compare two primary key sets to see if they are the same or not
+ * @param pkeyValues1 
+ * @param pkeyValues2 
+ * @returns true if the primary key values are the same, false if they are different
+ */
+export function ComparePrimaryKeys(pkeyValues1: PrimaryKeyValue[], pkeyValues2: PrimaryKeyValue[]): boolean {
+    if (pkeyValues1.length !== pkeyValues2.length)
+    return false;
+
+    for (let i = 0; i < pkeyValues1.length; i++) {
+    if ( pkeyValues1[i].Value !== pkeyValues2[i].Value)
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * Metadata about an entity

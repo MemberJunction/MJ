@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -705,11 +705,24 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if (event === 'yes') {
       if (this._entityInfo && this.recordCompareComponent) {
         const md = new Metadata();
-        const pkey = this._entityInfo.PrimaryKey.Name;
+        const pkeys = this._entityInfo.PrimaryKeys;
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
-          RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => r.Get(pkey)).filter((pkeyVal: any) => pkeyVal !== this.recordCompareComponent?.selectedRecordPKeyVal),
-          SurvivingRecordPrimaryKeyValues: [{FieldName: pkey, Value: this.recordCompareComponent.selectedRecordPKeyVal}],
+          RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
+            // return an array of primary key values for each record to merge
+            return pkeys.map((pkey: EntityFieldInfo) => {
+              return {
+                FieldName: pkey.Name,
+                Value: r.Get(pkey.Name)
+              } as PrimaryKeyValue
+            })
+          }).filter((pkeyVals: PrimaryKeyValue[]) => {
+            if (!this.recordCompareComponent)
+              return false;
+            else
+              return !ComparePrimaryKeys(pkeyVals, this.recordCompareComponent.selectedRecordPKeyVal)
+          }),
+          SurvivingRecordPrimaryKeyValues: this.recordCompareComponent.selectedRecordPKeyVal,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,
