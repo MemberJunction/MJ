@@ -33,6 +33,7 @@ export { configInfo } from './config';
 export * from './directives';
 export * from './entitySubclasses/userViewEntity.server';
 export * from './types';
+export { TokenExpiredError } from './auth';
 
 export * from './generic/PushStatusResolver';
 export * from './generic/ResolverBase';

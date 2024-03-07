@@ -9,6 +9,7 @@ import { getSigningKeys, validationOptions, verifyUserRecord } from './auth';
 import { authCache } from './cache';
 import { userEmailMap } from './config';
 import { UserPayload } from './types';
+import { TokenExpiredError } from './auth';
 
 const verifyAsync = async (
   issuer: string,
@@ -50,6 +51,11 @@ export const getUserPayload = async (
     const payload = decode(token);
     if (!payload || typeof payload === 'string') {
       throw new AuthenticationError('Invalid token payload');
+    }
+
+    const expiryDate = new Date(payload.exp ?? 0 * 1000);
+    if (+expiryDate < Date.now()) {
+      throw new TokenExpiredError(expiryDate);
     }
 
     if (!authCache.has(token)) {
