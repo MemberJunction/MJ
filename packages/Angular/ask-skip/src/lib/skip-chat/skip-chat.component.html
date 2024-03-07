@@ -34,7 +34,7 @@
                 </div>
             </ng-template>
         </kendo-listview>
-        <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (click)="loadConversations()"/> Embedded Conversations</div>
+        <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> Embedded Conversations</div>
     </div>
     <div class="conversation-wrapper" mjFillContainer>
         <div #AskSkipPanel class="messages" #scrollContainer (scroll)="checkScroll()">

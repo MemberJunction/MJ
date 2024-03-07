@@ -68,10 +68,9 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
               this.matchingReportName = item.Name;
               // cache for future to avoid db call
               DynamicReportComponent._reportCache.push({reportId: item.ID, conversationId: this.ConversationID, reportName: item.Name, conversationDetailId: this.ConversationDetailID});
-
-              this.cdRef.detectChanges(); // the above will change the view so we need to manually trigger change detection
             }
           }
+          this.cdRef.detectChanges(); // the above will change the view so we need to manually trigger change detection
         }
     }
   }

@@ -288,23 +288,37 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
 
   protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
-    const md = new Metadata();
-    const rv = new RunView();
-    let linkFilter: string = '';
-    if (this.LinkedEntity && this.LinkedEntityRecordID > 0) 
-      linkFilter = ` AND LinkedEntity='${this.LinkedEntity}' AND LinkedRecordID=${this.LinkedEntityRecordID}`
-
-    const result = await rv.RunView({
-      EntityName: 'Conversations',
-      ExtraFilter: 'UserID=' + md.CurrentUser.ID + linkFilter,
-      OrderBy: 'CreatedAt DESC' // get in reverse order so we have latest on top
-    })
-    if (result && result.Success) {
-      if (this.IncludeLinkedConversationsInList || (this.LinkedEntity && this.LinkedEntity.length > 0 && this.LinkedEntityRecordID > 0))
-        this.Conversations = <ConversationEntity[]>result.Results; // dont filter out linked conversations if the user wants them in the list OR if we ARE constrained to a linked entity/record pair
-      else
-        this.Conversations = <ConversationEntity[]>result.Results.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID > 0)); // filter out linked conversations
+    let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+    if (!cachedConversations) {
+      // load up from the database as we don't have any cached conversations
+      const md = new Metadata();
+      const rv = new RunView();
+  
+      const result = await rv.RunView({
+        EntityName: 'Conversations',
+        ExtraFilter: 'UserID=' + md.CurrentUser.ID,
+        OrderBy: 'CreatedAt DESC' // get in reverse order so we have latest on top
+      })
+      if (result && result.Success) {
+        // now, cache the conversations for future use
+        MJGlobal.Instance.ObjectCache.Add('Conversations', result.Results);
+        // also set the local variable so we can use it below
+        cachedConversations = <ConversationEntity[]>result.Results;
+      }
     }
+    if (!cachedConversations) {
+      LogError('Error loading conversations from the database')
+      return; // we couldn't load the conversations, so just return
+    }
+
+    // now setup the array we use to bind to the UI
+    if (this.IncludeLinkedConversationsInList)
+      this.Conversations = cachedConversations; // dont filter out linked conversations  
+    else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.LinkedEntityRecordID > 0)
+      this.Conversations = cachedConversations.filter((c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityRecordID); // ONLY include the linked conversations
+    else
+      this.Conversations = cachedConversations.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID > 0)); // filter OUT linked conversations
+
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
       this.CreateNewConversation();
@@ -326,6 +340,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this.SelectConversation(this.Conversations[0])
     }
   }
+ 
 
   private _oldConvoName: string = '';
   public editConvo(conversation: ConversationEntity) {
@@ -349,8 +364,20 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this.Conversations = this.Conversations.map(c => c.ID == conversation.ID ? newConvoObject : c);
     }
     newConvoObject.Name = conversation.Name;
-    if(await newConvoObject.Save())        
+    if(await newConvoObject.Save()) {
       this.ConversationEditMode = false;
+      // we've already updated the bound UI element, but let's make sure to update the cache as well
+      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+      if (cachedConversations) {
+        // find the item in the cache
+        const idx = cachedConversations.findIndex(c => c.ID === conversation.ID);
+        if (idx >= 0) {
+          // replace the item in the cache with the new one, we are pointing to the same object in the cache here since 
+          // we are just updating an element within the array so don't need to tell the cache
+          cachedConversations[idx] = newConvoObject;
+        }
+      }
+    }
     else
       this.sharedService.CreateSimpleNotification('Error saving conversation name', 'error', 5000)
   }
@@ -360,8 +387,18 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       if (await this.DeleteConversation(conversation.ID)) { 
         // get the index of the conversation
         const idx = this.Conversations.findIndex(c => c.ID === conversation.ID);
-        // remove the conversation from the list
+        // remove the conversation from the list that is bound to the UI
         this.Conversations = this.Conversations.filter(c => c.ID != conversation.ID);
+
+        // also, remove the conversation from the cache
+        const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+        if (cachedConversations) {
+          MJGlobal.Instance.ObjectCache.Replace('Conversations', cachedConversations.filter(c => c.ID != conversation.ID));
+        }
+        else {
+          MJGlobal.Instance.ObjectCache.Add('Conversations', this.Conversations);
+        }
+
         if (this.Conversations.length > 0) {
           const newIdx = idx > 0 ? idx - 1 : 0;
           this.SelectConversation(this.Conversations[newIdx]);
@@ -421,6 +458,14 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       await this.DataContext.LoadMetadata(this.DataContextID);
       
       this.Conversations = [convo, ...this.Conversations]; // do this way instead of unshift to ensure that binding refreshes
+      // also update the cache
+      const cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
+      if (cachedConversations) {
+        MJGlobal.Instance.ObjectCache.Replace('Conversations', [convo, ...cachedConversations]);
+      }
+      else {
+        MJGlobal.Instance.ObjectCache.Add('Conversations', [convo, ...this.Conversations]);
+      }
       await this.SelectConversation(convo);
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done  
     }
@@ -444,28 +489,48 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this.SelectedConversation = conversation;
       this.SetSelectedConversationUser();
       this.DataContextID = conversation.DataContextID;
-      this.DataContext = new DataContext();
-      await this.DataContext.LoadMetadata(this.DataContextID);
+    
+      const convoAny = <any>conversation;
+      if (convoAny._DataContext) {
+        // we have cached data context, so just use it
+        this.DataContext = convoAny._DataContext;
+      }
+      else {
+        this.DataContext = new DataContext();
+        await this.DataContext.LoadMetadata(this.DataContextID);
 
-      const md = new Metadata();
-      const rv = new RunView();
+        // cache it for later
+        convoAny._DataContext = this.DataContext;  
+      }
 
-      const result = await rv.RunView({
-        EntityName: 'Conversation Details',
-        ExtraFilter: 'ConversationID=' + conversation.ID,
-        OrderBy: 'CreatedAt ASC' // show messages in order of creation
-      })
-      if (result && result.Success) {
-        // copy the results into NEW objects into the array, we don't want to modify the original objects
-        this.Messages = <ConversationDetailEntity[]>result.Results;
+      if (convoAny._Messages) {
+        // we have cached messages, so just use them
+        this.Messages = convoAny._Messages;
+      }
+      else {
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: 'Conversation Details',
+          ExtraFilter: 'ConversationID=' + conversation.ID,
+          OrderBy: 'CreatedAt ASC' // show messages in order of creation
+        })
+        if (result && result.Success) {
+          // copy the results into NEW objects into the array, we don't want to modify the original objects
+          this.Messages = <ConversationDetailEntity[]>result.Results;
+
+          // also, cache the messages within the conversation
+          convoAny._Messages = this.Messages;
+        }  
+      }
+      if (this.Messages && this.Messages.length > 0) {
         //this.Messages = <ConversationDetailEntity[]>result.Results;
         this.cdRef.detach(); // temporarily stop change detection to improve performance
         for (const m of this.Messages) {
           this.AddMessageToPanel(m, false); 
         }
-        this.cdRef.reattach(); // resume change detection
 
         this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
+        this.cdRef.reattach(); // resume change detection
       }
       this._processingStatus[conversation.ID] = oldStatus; // set back to old status as it might have been processing
       this.sharedService.InvokeManualResize(500);
@@ -643,11 +708,38 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     this.askSkip.viewContainerRef.clear();
   }
   public AddMessageToCurrentConversation(detail: ConversationDetailEntity, stopChangeDetection: boolean) {
+    // update the local binding for the UI
     this.Messages.push(detail);
+
+    // update the cache of messages for the selected conversation
+    const convo = this.SelectedConversation;
+    if (convo) {
+      const convoAny = <any>convo;
+      if (convoAny._Messages) {
+        convoAny._Messages.push(detail);
+      }
+      else {
+        convoAny._Messages = [detail];
+      }
+    }
+
+    // dynamically add the message to the panel
     this.AddMessageToPanel(detail, stopChangeDetection);
   }
   public RemoveMessageFromCurrentConversation(detail: ConversationDetailEntity) {
+    // update the local binding for the UI
     this.Messages = this.Messages.filter(m => m !== detail);
+
+    // update the cache of messages for the selected conversation
+    const convo = this.SelectedConversation;
+    if (convo) {
+      const convoAny = <any>convo;
+      if (convoAny._Messages) {
+        convoAny._Messages = convoAny._Messages.filter((m: ConversationDetailEntity) => m.ID !== detail.ID);
+      }
+    }
+
+    // dynamically remove the message from the panel
     this.RemoveMessageFromPanel(detail);
   }
 
@@ -706,14 +798,30 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
 
 
+  // checkScroll() {
+  //   if (this.scrollContainer) {
+  //     const element = this.scrollContainer.nativeElement;
+  //     const atBottom = element.scrollHeight - element.scrollTop === element.clientHeight;
+      
+  //     this._showScrollToBottomIcon = !atBottom;  
+  //   }
+  // }
+
   checkScroll() {
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
-      const atBottom = element.scrollHeight - element.scrollTop === element.clientHeight;
+      const buffer = 15; // Tolerance in pixels
+      
+      // Calculate the difference between the scroll height and the sum of scroll top and client height
+      const scrollDifference = element.scrollHeight - (element.scrollTop + element.clientHeight);
+      
+      // Consider it at the bottom if the difference is less than or equal to the buffer
+      const atBottom = scrollDifference <= buffer;
       
       this._showScrollToBottomIcon = !atBottom;  
     }
   }
+ 
 
   scrollToBottom(): void {
     try {
