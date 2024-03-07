@@ -14,8 +14,8 @@
               <span class="report-tab-title">Chart</span>
             </ng-template>
             <ng-template kendoTabContent>
-                <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden'}">
-                  <mj-dynamic-chart mjFillContainer #theChart [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
+                <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
+                  <mj-dynamic-chart mjFillContainer #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
                   </mj-dynamic-chart>  
                 </div>
             </ng-template>
@@ -97,8 +97,12 @@
         [title]="'Chart'"
         [expanded]="LinearExpandAll"
         >
-        <mj-dynamic-chart *ngIf="IsChart" 
-            #theChart [SkipData]="SkipData" style="display:block;">
+        <mj-dynamic-chart 
+            *ngIf="IsChart" 
+            #theChart 
+            [AutoResizeChart]="false"
+            [SkipData]="SkipData" 
+            style="display:block;">
         </mj-dynamic-chart>
     </kendo-expansionpanel>                     
     <kendo-expansionpanel

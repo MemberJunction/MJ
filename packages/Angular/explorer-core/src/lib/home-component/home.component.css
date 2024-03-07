@@ -1,3 +1,7 @@
+.home-container {
+    margin: 10px;
+}
+
 .nav-container {
     display: flex;
     flex-wrap: wrap;

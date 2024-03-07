@@ -27,6 +27,7 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
     @Input() defaultPlotHeight: number = 550;
     @Input() ShowSaveAsImage: boolean = true;
     @Input() AllowDrillDown: boolean = true
+    @Input() AutoResizeChart: boolean = false
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
 
     @ViewChild('plotlyPlot') plotlyPlot!: PlotlyComponent;
@@ -37,7 +38,8 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
     constructor(private el: ElementRef) { }
   
     ngOnInit() {
-      this.setupResizeObserver();
+      if (this.AutoResizeChart)
+        this.setupResizeObserver();
     }
   
     ngOnDestroy() {
@@ -97,7 +99,6 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
     }
  
     setupResizeObserver() {
-      return;
         // Invoke manual resize from SharedService.Instance to ensure the chart is sized correctly
         SharedService.Instance.InvokeManualResize();
         // now wait 1ms - which really just results in the event loop being processed and the manual resize being invoked

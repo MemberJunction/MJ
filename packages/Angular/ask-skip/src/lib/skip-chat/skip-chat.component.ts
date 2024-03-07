@@ -1,4 +1,4 @@
-import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
+  import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { LogError, Metadata, RunQuery, RunView, UserInfo } from '@memberjunction/core';
@@ -133,7 +133,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     if (message && message.length > 0) {
       if (!this._temporaryMessage)  {
         this._temporaryMessage = <ConversationDetailEntity><any>{ID: -1, Message: message, Role: 'ai'}; // create a new object
-        this.AddMessageToCurrentConversation(this._temporaryMessage, true);
+        this.AddMessageToCurrentConversation(this._temporaryMessage, true, false);
       }
       else {
         this._temporaryMessage.Message = message;
@@ -504,8 +504,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       }
 
       if (convoAny._Messages) {
-        // we have cached messages, so just use them
-        this.Messages = convoAny._Messages;
+        // we have cached messages, so just use them, but don't point directly to the array, create new array with the same objects
+        this.Messages = [...convoAny._Messages];
       }
       else {
         const rv = new RunView();
@@ -518,8 +518,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           // copy the results into NEW objects into the array, we don't want to modify the original objects
           this.Messages = <ConversationDetailEntity[]>result.Results;
 
-          // also, cache the messages within the conversation
-          convoAny._Messages = this.Messages;
+          // also, cache the messages within the conversation, but create new array with the same objects
+          convoAny._Messages = [...this.Messages];
         }  
       }
       if (this.Messages && this.Messages.length > 0) {
@@ -622,7 +622,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       convoDetail.Message = val;
       convoDetail.Role = 'user';
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
-      this.AddMessageToCurrentConversation(convoDetail, true)
+      this.AddMessageToCurrentConversation(convoDetail, true, true)
 
       this.SetSkipStatusMessage(this.pickSkipStartMessage(), 850);
 
@@ -668,17 +668,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           await convoDetail.Load(skipResult.UserMessageConversationDetailId); // update the object to load from DB
           const aiDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
           await aiDetail.Load(skipResult.AIMessageConversationDetailId) // get record from the database
-          this.AddMessageToCurrentConversation(aiDetail, true)
+          this.AddMessageToCurrentConversation(aiDetail, true, true)
           // NOTE: we don't create a user notification at this point, that is done on the server and via GraphQL subscriptions it tells us and we update the UI automatically...
         }
       }
-      else {
-        const errorMessage = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
-        errorMessage.NewRecord();
-        errorMessage.Role = 'error';
-        errorMessage.Message = 'Error took place';
-        this.AddMessageToCurrentConversation(errorMessage, true)
-      }
+
       this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
       if (this.SelectedConversation)
         this._processingStatus[this.SelectedConversation?.ID] = false;
@@ -707,19 +701,21 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     // remove everything from the panel now
     this.askSkip.viewContainerRef.clear();
   }
-  public AddMessageToCurrentConversation(detail: ConversationDetailEntity, stopChangeDetection: boolean) {
+  public AddMessageToCurrentConversation(detail: ConversationDetailEntity, stopChangeDetection: boolean, cacheMessage: boolean) {
     // update the local binding for the UI
     this.Messages.push(detail);
 
-    // update the cache of messages for the selected conversation
-    const convo = this.SelectedConversation;
-    if (convo) {
-      const convoAny = <any>convo;
-      if (convoAny._Messages) {
-        convoAny._Messages.push(detail);
-      }
-      else {
-        convoAny._Messages = [detail];
+    if (cacheMessage) {
+      // update the cache of messages for the selected conversation
+      const convo = this.SelectedConversation;
+      if (convo) {
+        const convoAny = <any>convo;
+        if (convoAny._Messages) {
+          convoAny._Messages.push(detail);
+        }
+        else {
+          convoAny._Messages = [detail];
+        }
       }
     }
 
@@ -796,16 +792,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     if (stopChangeDetection)
       this.cdRef.reattach();
   }
-
-
-  // checkScroll() {
-  //   if (this.scrollContainer) {
-  //     const element = this.scrollContainer.nativeElement;
-  //     const atBottom = element.scrollHeight - element.scrollTop === element.clientHeight;
-      
-  //     this._showScrollToBottomIcon = !atBottom;  
-  //   }
-  // }
 
   checkScroll() {
     if (this.scrollContainer) {
@@ -939,7 +925,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       errorMessage.NewRecord();
       errorMessage.Role = 'error';
       errorMessage.Message = 'Error took place' + err;
-      this.AddMessageToCurrentConversation(errorMessage, true);
+      this.AddMessageToCurrentConversation(errorMessage, true, false);
       this.AllowSend = true;
     }
   }

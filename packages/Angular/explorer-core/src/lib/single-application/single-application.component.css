@@ -1,3 +1,7 @@
+.app-container {
+   margin: 10px;
+}
+
  .entity-list {
     width: 500px;
  }
