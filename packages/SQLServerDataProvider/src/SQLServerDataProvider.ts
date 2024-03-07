@@ -9,7 +9,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, DuplicateRecordSearchParams, DuplicateRecordSearchResult} from "@memberjunction/core";
 
 import { RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -20,7 +20,6 @@ import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 
 import { UserCache } from "./UserCache";
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
-  
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     get DataSource(): any { return this.Data.DataSource }
@@ -731,6 +730,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
+    public async GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
+    {
+        return {
+            EntityID: -10,
+            Duplicates: [],
+        }
+    }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
         const result: RecordMergeResult = {

@@ -48,7 +48,42 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
+export class DuplicateRecordSearchParams {
+    /**
+    * The ID of the entity document to use
+    **/
+    EntityDocumentID: number;
+    /**
+    * The ID of the record to check for duplicates
+    **/
+    RecordID: number;
+    /**
+    * The ID of the entity the record belongs to
+    **/
+    EtityID?: number;
+    /**
+    * The name of the entity the record belongs to
+    **/
+    EntityName?: string;
+    /**
+    * The minimum score to consider a record a duplicate
+    **/
+    ScoreMinimum?: number;
+    /**
+    * Additional options to pass to the provider
+    **/
+    Options?: any;
+}
 
+export class DuplicateRecordSearchResult {
+    EntityID: number;
+    Duplicates: DuplicateRecord[];
+}
+
+export class DuplicateRecord {
+    RecordID: number;
+    Score: number;
+}
 
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
@@ -79,7 +114,6 @@ export class EntityRecordNameResult  {
     EntityName: string;
     RecordName?: string;
  }
-
 
 export interface ILocalStorageProvider {
     getItem(key: string): Promise<string | null>;
@@ -130,6 +164,13 @@ export interface IMetadataProvider {
      * @param primaryKeyValues the primary key(s) for the record to check
      */
     GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]>  
+
+    /**
+     * Returns a list of record IDs that are possible duplicates of the specified record. 
+     * 
+     * @param params object containing many properties used in fetching records and determining which ones to return
+     */
+    GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.
