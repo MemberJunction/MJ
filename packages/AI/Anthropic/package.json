@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-anthropic",
-  "version": "0.9.12",
+  "version": "0.9.19",
   "description": "MemberJunction Wrapper for Anthropic AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,12 +16,11 @@
   "license": "ISC",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3",
-    "@anthropic-ai/sdk": "^0.6.8"
+    "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.17.1",
     "@memberjunction/ai": "^0.9.156",
-    "@memberjunction/global": "^0.9.148",
-    "@google/generative-ai": "~0.2.1"
+    "@memberjunction/global": "^0.9.148"
   }
 }

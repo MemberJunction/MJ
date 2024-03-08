@@ -19,8 +19,8 @@
     "@memberjunction/core": "^0.9.147",
     "@memberjunction/global": "^0.9.135",
     "@memberjunction/sqlserver-dataprovider": "^0.9.158",
-    "@memberjunction/vectors": "workspace:^",
-    "@memberjunction/vectors-pinecone": "workspace:^",
+    "@memberjunction/ai-vectors": "^0.9.3",
+    "@memberjunction/ai-vectors-pinecone": "^0.9.1",
     "dotenv": "^16.0.3",
     "typeorm": "^0.3.20"
   },
