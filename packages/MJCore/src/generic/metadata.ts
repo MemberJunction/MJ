@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
 import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -141,6 +141,15 @@ export class Metadata {
      */
     public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
         return await Metadata.Provider.GetRecordDependencies(entityName, primaryKeyValues);
+    }
+
+    /**
+     * Returns a list of record IDs that are possible duplicates of the specified record. 
+     * 
+     * @param params object containing many properties used in fetching records and determining which ones to return
+     */
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse> {
+        return await Metadata.Provider.GetRecordDuplicates(params);
     }
 
     /**

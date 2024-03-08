@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, DuplicateRecordSearchParams, DuplicateRecordSearchResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -301,7 +301,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * 
      * @param params object containing many properties used in fetching records and determining which ones to return
      */
-    public abstract GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
+    public abstract GetRecordDuplicates(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse>
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

@@ -10,11 +10,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-<<<<<<< Updated upstream
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult  } from "@memberjunction/core";
-=======
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, QueryCategoryInfo, QueryInfo, IRunQueryProvider, RunQueryResult, DuplicateRecordSearchParams, DuplicateRecordSearchResult  } from "@memberjunction/core";
->>>>>>> Stashed changes
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse  } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -446,11 +442,33 @@ npm
         }
     }
 
-    public async GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse>
     {
-        return {
-            EntityID: -1,
-            Duplicates: [],
+        if(!params){
+            return null;
+        }
+
+        const query: string = gql`query GetRecordDuplicatesQuery ($params: PotentialDuplicateRequest!) {
+            GetRecordDuplicates(params: $params) {
+                Success
+                Status
+                PotentialDuplicates
+            }
+        }`
+
+        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: {
+            ...params,
+            PrimaryKeyValues: params.PrimaryKeyValues.map(pkv => {
+                // map each pkv so that its Value is a string
+                return { 
+                            FieldName: pkv.FieldName, 
+                            Value: pkv.Value.toString()
+                       }
+                })
+        }});
+
+        if(data && data.GetRecordDuplicates && data.GetRecordDuplicates.Success){
+            return data.GetRecordDuplicates.PotentialDuplicates;
         }
     }
     

@@ -1,15 +1,14 @@
-import { Arg, Field, Int, ObjectType, Query, Resolver } from "type-graphql";
-import {DuplicateRecord, DuplicateRecordSearchParams, DuplicateRecordSearchResult, LogError} from '@memberjunction/core';
-import { UserCache, SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
-import { configInfo } from "../config";
+import { Arg, Field, InputType, Int, ObjectType, Query, Resolver } from "type-graphql";
+import { PotentialDuplicate, Metadata, PrimaryKeyValue } from '@memberjunction/core';
+import {PrimaryKeyValueInputType, PrimaryKeyValueOutputType} from './MergeRecordsResolver'
 
-@ObjectType()
+@InputType()
 export class DuplicateSearchType {
   @Field(() => Int)
   EntityDocumentID: number;
 
-  @Field(() => Int)
-  RecordID: number;
+  @Field(() => [PrimaryKeyValueInputType])
+  PrimaryKeyValues: PrimaryKeyValueInputType[];
 
   @Field(() => Int, { nullable: true })
   EntitiyID: number;
@@ -18,7 +17,34 @@ export class DuplicateSearchType {
   EntityName: string;
 
   @Field(() => Int, { nullable: true })
-  ScoreMinimum: number;
+  ProbabilityScore: number;
+
+  //this is a copy of MJCore's PrimaryKeyValueBase CompositeKey property
+  //changes here should be applied there as well
+  @Field(() => String)
+  public get CompositeKey(): string {
+        
+    if(!this.PrimaryKeyValues){
+        return "";
+    }
+
+    if(this.PrimaryKeyValues.length === 1){
+        return this.PrimaryKeyValues[0].Value.toString();
+    }
+
+    return this.PrimaryKeyValues.map((keyValue, index) => {
+        return keyValue.Value.toString();
+    }).join(", ");
+  }
+}
+
+@ObjectType()
+export class PotentialDuplicateType {
+  @Field(() => Int)
+  ProbabilityScore: number;
+
+  @Field(() => [PrimaryKeyValueOutputType])
+  PrimaryKeyValues: PrimaryKeyValueOutputType[];
 }
 
 @ObjectType()
@@ -27,23 +53,17 @@ export class DuplicateResultType {
   @Field(() => Int)
   EntityID: number;
 
-  @Field(type => [DuplicateRecord])
-  Duplicates: DuplicateRecord[];
+  @Field(type => [PotentialDuplicateType])
+  Duplicates: PotentialDuplicateType[];
 }
 
-@Resolver(_of => DuplicateSearchType)
+@Resolver(_of => DuplicateResultType)
 export class DuplicateRecordResolver {
 
   @Query(_returns => DuplicateResultType, {description: "Returns a list of possible deuplicate records."})
-  async GetDuplicateRecords(@Arg("params") params: DuplicateSearchType): Promise<DuplicateResultType> {
-    const contextUser = UserCache.Instance.Users.find(u => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase())
-        if(!contextUser) {
-            LogError(`Failed to load context user ${configInfo?.userHandling?.contextUserForNewUserCreation}, if you've not specified this on your config.json you must do so. This is the user that is contextually used for creating a new user record dynamically.`);
-            return undefined;
-        }
-
-        const provider = new SQLServerDataProvider();
-        const result: DuplicateRecordSearchResult = await provider.GetRecordDuplicates(params);
-        return result;
+  async GetDuplicateRecords(@Arg("params")params: DuplicateSearchType): Promise<DuplicateResultType> {
+      const md = new Metadata();
+      const result = await md.GetRecordDuplicates(params);
+      return result;
     }
 }

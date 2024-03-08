@@ -1,7 +1,10 @@
+import { PrimaryKeyValue } from "@memberjunction/core";
+
 export type DuplicateRecordSearchParams = {
-    entitiyDocumentID: number,
+    entityDocumentID: number,
+    PrimaryKeyValues: PrimaryKeyValue[]
     recordID: number;
-    entitiyID?: number;
+    entityID?: number;
     entityName?: string;
     storedProcedureName?: string;
     options?: any;
@@ -11,11 +14,11 @@ export type DuplicateRecordSearchParams = {
 
 export type DuplicateRecordSearchResult = {
     entityID: number;
-    duplicates: DuplicateRecord[]
+    duplicates: PotentialDuplicate[]
 }
 
-export type DuplicateRecord = {
-    recordID: number;
-    score: number
+export type PotentialDuplicate = {
+    PrimaryKeyValues: PrimaryKeyValue[]
+    ProbabilityScore: number
 }
 

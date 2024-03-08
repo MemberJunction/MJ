@@ -9,7 +9,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, DuplicateRecordSearchParams, DuplicateRecordSearchResult} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse} from "@memberjunction/core";
 
 import { RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -730,7 +730,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async GetRecordDuplicates(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult>
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse>
     {
         return {
             EntityID: -10,
