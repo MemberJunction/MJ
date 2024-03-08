@@ -132,6 +132,10 @@ export class AskSkipResolver {
         vendorDriverName: 'AnthropicLLM',
         apiKey: GetAIAPIKey('AnthropicLLM')
       },
+      {
+        vendorDriverName: 'GeminiLLM',
+        apiKey: GetAIAPIKey('GeminiLLM')
+      }
     ];
   }
 
