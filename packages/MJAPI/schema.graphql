@@ -2544,7 +2544,7 @@ type RecordChange_ {
 type RecordDependencyResult {
   EntityName: String!
   FieldName: String!
-  RecordID: Int!
+  PrimaryKeyValue: String!
   RelatedEntityName: String!
 }
 

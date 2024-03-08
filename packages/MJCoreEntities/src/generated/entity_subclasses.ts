@@ -5053,7 +5053,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -6291,7 +6290,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -9328,7 +9326,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -10570,7 +10567,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -11125,7 +11121,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get SourceEntity(): string {  
             return this.Get('SourceEntity');
@@ -12281,7 +12276,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -12513,7 +12507,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ask-skip",
-  "version": "0.9.77",
+  "version": "0.9.78",
   "description": "MemberJunction Explorer: Ask Skip UI Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -36,7 +36,7 @@
   "dependencies": {
     "@memberjunction/global": "^0.9.148",
     "@memberjunction/core": "^0.9.168",
-    "@memberjunction/skip-types": "^0.9.61",
+    "@memberjunction/skip-types": "^0.9.62",
     "@memberjunction/ng-container-directives": "^0.9.133",
     "@memberjunction/ng-shared": "^0.9.19",
     "@memberjunction/ng-data-context": "^0.9.23",
