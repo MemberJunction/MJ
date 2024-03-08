@@ -65,8 +65,8 @@ export class RecordDependencyResult {
   @Field(() => String)
   FieldName: string; // required
 
-  @Field(() => Int)
-  RecordID: number;
+  @Field(() => String)
+  PrimaryKeyValue: string;
 }
 
  

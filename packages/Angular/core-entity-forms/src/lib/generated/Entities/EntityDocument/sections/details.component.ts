@@ -39,6 +39,10 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Type</label>
             <span >{{FormatValue('Type', 0)}}</span>   
         </div> 
@@ -51,7 +55,7 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Type ID</label>
@@ -72,6 +76,10 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Type</label>

@@ -406,12 +406,12 @@ npm
 
 
     /**
-     * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
+     * Returns a list of dependencies - records that are linked to the specified Entity/primaryKeyValues combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param recordId the recordId to check
+     * @param primaryKeyValues the primaryKeyValues of the record to check
      */
     public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
         try {
@@ -421,7 +421,7 @@ npm
                     EntityName
                     RelatedEntityName
                     FieldName
-                    RecordID 
+                    PrimaryKeyValue 
                 }
             }`
 

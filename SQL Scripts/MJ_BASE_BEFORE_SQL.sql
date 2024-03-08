@@ -1,6 +1,6 @@
-DROP VIEW IF EXISTS [admin].[vwTablePrimaryKeys] 
+DROP VIEW IF EXISTS [__mj].[vwTablePrimaryKeys] 
 GO 
-CREATE VIEW [admin].[vwTablePrimaryKeys] AS
+CREATE VIEW [__mj].[vwTablePrimaryKeys] AS
 SELECT
     s.name AS SchemaName,
     t.name AS TableName,
@@ -19,9 +19,9 @@ WHERE
     i.is_primary_key = 1;
 GO
 
-DROP VIEW IF EXISTS [admin].[vwTableUniqueKeys]
+DROP VIEW IF EXISTS [__mj].[vwTableUniqueKeys]
 GO
-CREATE VIEW [admin].[vwTableUniqueKeys] AS
+CREATE VIEW [__mj].[vwTableUniqueKeys] AS
 SELECT
     s.name AS SchemaName,
     t.name AS TableName,
@@ -42,9 +42,9 @@ WHERE
 GO
 
 
-DROP PROC IF EXISTS admin.spGetPrimaryKeyForTable
+DROP PROC IF EXISTS __mj.spGetPrimaryKeyForTable
 GO
-CREATE PROC admin.spGetPrimaryKeyForTable 
+CREATE PROC __mj.spGetPrimaryKeyForTable 
   @TableName NVARCHAR(255),
   @SchemaName NVARCHAR(255)
 AS
@@ -78,9 +78,9 @@ GO
 
 -- ALL THE VIEWS
 
-DROP VIEW IF EXISTS [admin].vwForeignKeys
+DROP VIEW IF EXISTS [__mj].vwForeignKeys
 GO
-CREATE VIEW [admin].vwForeignKeys
+CREATE VIEW [__mj].vwForeignKeys
 AS
 SELECT  obj.name AS FK_NAME,
     sch.name AS [schema_name],
@@ -103,9 +103,9 @@ INNER JOIN sys.columns col2
     ON col2.column_id = referenced_column_id AND col2.object_id = tab2.object_id
 GO
 
-DROP VIEW IF EXISTS [admin].vwEntities
+DROP VIEW IF EXISTS [__mj].vwEntities
 GO
-CREATE VIEW [admin].vwEntities
+CREATE VIEW [__mj].vwEntities
 AS
 SELECT 
 	e.*,
@@ -116,16 +116,16 @@ SELECT
 	par.BaseTable ParentBaseTable,
 	par.BaseView ParentBaseView
 FROM 
-	[admin].Entity e
+	[__mj].Entity e
 LEFT OUTER JOIN 
-	[admin].Entity par
+	[__mj].Entity par
 ON
 	e.ParentID = par.ID
 GO
 
-DROP VIEW IF EXISTS [admin].vwEntityFields
+DROP VIEW IF EXISTS [__mj].vwEntityFields
 GO
-CREATE VIEW [admin].vwEntityFields
+CREATE VIEW [__mj].vwEntityFields
 AS
 SELECT
 	ef.*,
@@ -142,18 +142,18 @@ SELECT
 	re.CodeName RelatedEntityCodeName,
 	re.ClassName RelatedEntityClassName
 FROM
-	[admin].EntityField ef
+	[__mj].EntityField ef
 INNER JOIN
-	[admin].vwEntities e ON ef.EntityID = e.ID
+	[__mj].vwEntities e ON ef.EntityID = e.ID
 LEFT OUTER JOIN
-	[admin].vwEntities re ON ef.RelatedEntityID = re.ID
+	[__mj].vwEntities re ON ef.RelatedEntityID = re.ID
 GO
 
 
 
-DROP VIEW IF EXISTS [admin].vwEntityRelationships
+DROP VIEW IF EXISTS [__mj].vwEntityRelationships
 GO
-CREATE VIEW [admin].vwEntityRelationships
+CREATE VIEW [__mj].vwEntityRelationships
 AS
 SELECT
 	er.*,
@@ -169,17 +169,17 @@ SELECT
 	uv.Name DisplayUserViewName,
 	uv.ID DisplayUserViewID
 FROM
-	[admin].EntityRelationship er
+	[__mj].EntityRelationship er
 INNER JOIN
-	[admin].Entity e
+	[__mj].Entity e
 ON
 	er.EntityID = e.ID
 INNER JOIN
-	[admin].vwEntities relatedEntity
+	[__mj].vwEntities relatedEntity
 ON
 	er.RelatedEntityID = relatedEntity.ID
 LEFT OUTER JOIN
-	[admin].UserView uv
+	[__mj].UserView uv
 ON	
 	er.DisplayUserViewGUID = uv.GUID
 GO
@@ -188,9 +188,9 @@ GO
 
  
 GO
-DROP VIEW IF EXISTS [admin].vwCompanyIntegrations
+DROP VIEW IF EXISTS [__mj].vwCompanyIntegrations
 GO
-CREATE VIEW [admin].vwCompanyIntegrations 
+CREATE VIEW [__mj].vwCompanyIntegrations 
 AS
 SELECT 
   ci.*,
@@ -204,37 +204,37 @@ SELECT
   cir.StartedAt LastRunStartedAt,
   cir.EndedAt LastRunEndedAt
 FROM 
-  admin.CompanyIntegration ci
+  __mj.CompanyIntegration ci
 INNER JOIN
-  admin.Company c ON ci.CompanyName = c.Name
+  __mj.Company c ON ci.CompanyName = c.Name
 INNER JOIN
-  admin.Integration i ON ci.IntegrationName = i.Name
+  __mj.Integration i ON ci.IntegrationName = i.Name
 LEFT OUTER JOIN
-  admin.CompanyIntegrationRun cir 
+  __mj.CompanyIntegrationRun cir 
 ON 
   ci.ID = cir.CompanyIntegrationID AND
-  cir.ID = (SELECT TOP 1 cirInner.ID FROM admin.CompanyIntegrationRun cirInner WHERE cirInner.CompanyIntegrationID = ci.ID ORDER BY StartedAt DESC)  
+  cir.ID = (SELECT TOP 1 cirInner.ID FROM __mj.CompanyIntegrationRun cirInner WHERE cirInner.CompanyIntegrationID = ci.ID ORDER BY StartedAt DESC)  
 GO
 
-DROP VIEW IF EXISTS [admin].vwCompanyIntegrationRuns
+DROP VIEW IF EXISTS [__mj].vwCompanyIntegrationRuns
 GO
-CREATE VIEW [admin].vwCompanyIntegrationRuns
+CREATE VIEW [__mj].vwCompanyIntegrationRuns
 AS
 SELECT
    cir.*,
    ci.CompanyName Company,
    ci.IntegrationName Integration
 FROM
-   admin.CompanyIntegrationRun cir
+   __mj.CompanyIntegrationRun cir
 INNER JOIN
-   admin.CompanyIntegration ci
+   __mj.CompanyIntegration ci
 ON
    cir.CompanyIntegrationID = ci.ID
 GO
 
-DROP VIEW IF EXISTS [admin].vwCompanyIntegrationRunDetails
+DROP VIEW IF EXISTS [__mj].vwCompanyIntegrationRunDetails
 GO
-CREATE VIEW [admin].vwCompanyIntegrationRunDetails
+CREATE VIEW [__mj].vwCompanyIntegrationRunDetails
 AS
 SELECT 
     cird.*,
@@ -242,21 +242,21 @@ SELECT
 	cir.StartedAt RunStartedAt,
 	cir.EndedAt RunEndedAt
 FROM
-	admin.CompanyIntegrationRunDetail cird
+	__mj.CompanyIntegrationRunDetail cird
 INNER JOIN
-    admin.CompanyIntegrationRun cir
+    __mj.CompanyIntegrationRun cir
 ON
     cird.CompanyIntegrationRunID = cir.ID
 INNER JOIN
-	admin.Entity e
+	__mj.Entity e
 ON
 	cird.EntityID = e.ID
 GO
 
  
-DROP VIEW IF EXISTS [admin].vwEmployees 
+DROP VIEW IF EXISTS [__mj].vwEmployees 
 GO
-CREATE VIEW [admin].vwEmployees 
+CREATE VIEW [__mj].vwEmployees 
 AS
 SELECT
 	e.*,
@@ -266,35 +266,35 @@ SELECT
 	s.LastName SupervisorLastName,
 	s.Email SupervisorEmail
 FROM
-	admin.Employee e
+	__mj.Employee e
 LEFT OUTER JOIN
-	admin.Employee s
+	__mj.Employee s
 ON
 	e.SupervisorID = s.ID
 
 GO
   
 
-DROP VIEW IF EXISTS [admin].vwCompanies
+DROP VIEW IF EXISTS [__mj].vwCompanies
 GO
-CREATE VIEW [admin].vwCompanies
+CREATE VIEW [__mj].vwCompanies
 AS
-SELECT * FROM admin.Company
+SELECT * FROM __mj.Company
 
 
 
 GO
  
 
-DROP VIEW IF EXISTS [admin].vwIntegrations
+DROP VIEW IF EXISTS [__mj].vwIntegrations
 GO
-CREATE VIEW [admin].vwIntegrations AS
-SELECT * FROM admin.Integration
+CREATE VIEW [__mj].vwIntegrations AS
+SELECT * FROM __mj.Integration
 GO
 
-DROP VIEW IF EXISTS [admin].vwIntegrationURLFormats 
+DROP VIEW IF EXISTS [__mj].vwIntegrationURLFormats 
 GO
-CREATE VIEW [admin].vwIntegrationURLFormats
+CREATE VIEW [__mj].vwIntegrationURLFormats
 AS
 SELECT 
 	iuf.*,
@@ -303,16 +303,16 @@ SELECT
 	i.NavigationBaseURL,
 	i.NavigationBaseURL + iuf.URLFormat FullURLFormat
 FROM
-	admin.IntegrationURLFormat iuf
+	__mj.IntegrationURLFormat iuf
 INNER JOIN
-	admin.Integration i
+	__mj.Integration i
 ON
 	iuf.IntegrationName = i.Name
 GO
 
-DROP VIEW IF EXISTS [admin].vwUsers
+DROP VIEW IF EXISTS [__mj].vwUsers
 GO
-CREATE VIEW [admin].vwUsers 
+CREATE VIEW [__mj].vwUsers 
 AS
 SELECT 
 	u.*,
@@ -323,7 +323,7 @@ SELECT
 	e.Supervisor EmployeeSupervisor,
 	e.SupervisorEmail EmployeeSupervisorEmail
 FROM 
-	[admin].[User] u
+	[__mj].[User] u
 LEFT OUTER JOIN
 	vwEmployees e
 ON
@@ -334,9 +334,9 @@ GO
 
 
 
-DROP VIEW IF EXISTS [admin].vwUserFavorites
+DROP VIEW IF EXISTS [__mj].vwUserFavorites
 GO
-CREATE VIEW [admin].vwUserFavorites
+CREATE VIEW [__mj].vwUserFavorites
 AS
 SELECT 
 	uf.*,
@@ -344,7 +344,7 @@ SELECT
 	e.BaseTable EntityBaseTable,
 	e.BaseView EntityBaseView
 FROM 
-	[admin].UserFavorite uf
+	[__mj].UserFavorite uf
 INNER JOIN
 	vwEntities e
 ON
@@ -353,9 +353,9 @@ GO
 
  
 
-DROP VIEW IF EXISTS [admin].vwUserRecordLogs
+DROP VIEW IF EXISTS [__mj].vwUserRecordLogs
 GO
-CREATE VIEW [admin].vwUserRecordLogs 
+CREATE VIEW [__mj].vwUserRecordLogs 
 AS
 SELECT 
 	ur.*,
@@ -366,9 +366,9 @@ SELECT
 	u.EmployeeSupervisor UserSupervisor,
 	u.EmployeeSupervisorEmail UserSupervisorEmail
 FROM
-	admin.UserRecordLog ur
+	__mj.UserRecordLog ur
 INNER JOIN
-	admin.Entity e 
+	__mj.Entity e 
 ON
 	ur.EntityID = e.ID
 INNER JOIN
@@ -378,9 +378,9 @@ ON
 
 
 GO
-DROP VIEW IF EXISTS [admin].vwUserViews
+DROP VIEW IF EXISTS [__mj].vwUserViews
 GO
-CREATE VIEW [admin].vwUserViews
+CREATE VIEW [__mj].vwUserViews
 AS
 SELECT 
 	uv.*,
@@ -391,13 +391,13 @@ SELECT
 	e.Name Entity,
 	e.BaseView EntityBaseView
 FROM
-	admin.UserView uv
+	__mj.UserView uv
 INNER JOIN
-	[admin].vwUsers u
+	[__mj].vwUsers u
 ON
 	uv.UserID = u.ID
 INNER JOIN
-	admin.Entity e
+	__mj.Entity e
 ON
 	uv.EntityID = e.ID
 
@@ -405,9 +405,9 @@ ON
 GO
  
  
-DROP VIEW IF EXISTS [admin].vwApplicationEntities
+DROP VIEW IF EXISTS [__mj].vwApplicationEntities
 GO
-CREATE VIEW [admin].vwApplicationEntities
+CREATE VIEW [__mj].vwApplicationEntities
 AS
 SELECT 
    ae.*,
@@ -418,21 +418,21 @@ SELECT
    e.ClassName EntityClassName,
    e.BaseTableCodeName EntityBaseTableCodeName
 FROM
-   admin.ApplicationEntity ae
+   __mj.ApplicationEntity ae
 INNER JOIN
-   admin.Application a
+   __mj.Application a
 ON
    ae.ApplicationName = a.Name
 INNER JOIN
-   [admin].vwEntities e
+   [__mj].vwEntities e
 ON
    ae.EntityID = e.ID
 GO
  
 
-DROP VIEW IF EXISTS [admin].vwUserApplicationEntities
+DROP VIEW IF EXISTS [__mj].vwUserApplicationEntities
 GO
-CREATE VIEW [admin].vwUserApplicationEntities
+CREATE VIEW [__mj].vwUserApplicationEntities
 AS
 SELECT 
    uae.*,
@@ -440,29 +440,29 @@ SELECT
    ua.[User] [User],
    e.Name Entity
 FROM
-   admin.UserApplicationEntity uae
+   __mj.UserApplicationEntity uae
 INNER JOIN
-   [admin].vwUserApplications ua
+   [__mj].vwUserApplications ua
 ON
    uae.UserApplicationID = ua.ID
 INNER JOIN
-   admin.Entity e
+   __mj.Entity e
 ON
    uae.EntityID = e.ID
 GO
 
-DROP VIEW IF EXISTS [admin].vwWorkflowRuns
+DROP VIEW IF EXISTS [__mj].vwWorkflowRuns
 GO
-CREATE VIEW [admin].vwWorkflowRuns
+CREATE VIEW [__mj].vwWorkflowRuns
 AS
 SELECT 
   wr.*,
   w.Name Workflow,
   w.WorkflowEngineName
 FROM
-  admin.WorkflowRun wr
+  __mj.WorkflowRun wr
 INNER JOIN
-  [admin].vwWorkflows w
+  [__mj].vwWorkflows w
 ON
   wr.WorkflowName = w.Name
 GO
@@ -473,22 +473,22 @@ GO
 ----- BASE VIEW FOR ENTITY:     User View Run Details
 -----               BASE TABLE: UserViewRunDetail
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [admin].[vwUserViewRunDetails]
+DROP VIEW IF EXISTS [__mj].[vwUserViewRunDetails]
 GO
-CREATE VIEW [admin].[vwUserViewRunDetails]
+CREATE VIEW [__mj].[vwUserViewRunDetails]
 AS
 SELECT 
     u.*,
 	uv.ID UserViewID,
 	uv.EntityID
 FROM
-    [admin].[UserViewRunDetail] AS u
+    [__mj].[UserViewRunDetail] AS u
 INNER JOIN
-	[admin].[UserViewRun] as uvr
+	[__mj].[UserViewRun] as uvr
   ON
     u.UserViewRunID = uvr.ID
 INNER JOIN
-    [admin].[UserView] uv
+    [__mj].[UserView] uv
   ON
     uvr.UserViewID = uv.ID
 GO
@@ -500,9 +500,9 @@ GO
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR RecordChange
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [admin].[spCreateRecordChange]
+DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange]
 GO
-CREATE PROCEDURE [admin].[spCreateRecordChange]
+CREATE PROCEDURE [__mj].[spCreateRecordChange]
     @EntityName nvarchar(100),
     @RecordID NVARCHAR(255),
 	@UserID int,
@@ -515,7 +515,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     INSERT INTO 
-    [admin].[RecordChange]
+    [__mj].[RecordChange]
         (
             EntityID,
             RecordID,
@@ -529,7 +529,7 @@ BEGIN
         )
     VALUES
         (
-            (SELECT ID FROM admin.Entity WHERE Name = @EntityName),
+            (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
             @RecordID,
 			@UserID,
             GETDATE(),
@@ -541,7 +541,7 @@ BEGIN
         )
 
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [admin].vwRecordChanges WHERE ID = SCOPE_IDENTITY()
+    SELECT * FROM [__mj].vwRecordChanges WHERE ID = SCOPE_IDENTITY()
 END
 
 
@@ -556,10 +556,10 @@ GO
 ----- BASE VIEW FOR ENTITY:     Entity Permissions
 -----               BASE TABLE: EntityPermission
 ------------------------------------------------------------0
-DROP VIEW IF EXISTS [admin].[vwEntityPermissions]
+DROP VIEW IF EXISTS [__mj].[vwEntityPermissions]
 GO
 
-CREATE VIEW [admin].[vwEntityPermissions]
+CREATE VIEW [__mj].[vwEntityPermissions]
 AS
 SELECT 
     e.*,
@@ -570,29 +570,29 @@ SELECT
 	rlsU.Name as [UpdateRLSFilter],
 	rlsD.Name as [DeleteRLSFilter]
 FROM
-    [admin].[EntityPermission] AS e
+    [__mj].[EntityPermission] AS e
 INNER JOIN
-    [admin].[Entity] AS Entity_EntityID
+    [__mj].[Entity] AS Entity_EntityID
   ON
     [e].[EntityID] = Entity_EntityID.[ID]
 INNER JOIN
-    [admin].[Role] AS Role_RoleName
+    [__mj].[Role] AS Role_RoleName
   ON
     [e].[RoleName] = Role_RoleName.[Name]
 LEFT OUTER JOIN
-	[admin].RowLevelSecurityFilter rlsC
+	[__mj].RowLevelSecurityFilter rlsC
   ON
     [e].CreateRLSFilterID = rlsC.ID
 LEFT OUTER JOIN
-	[admin].RowLevelSecurityFilter rlsR
+	[__mj].RowLevelSecurityFilter rlsR
   ON
     [e].ReadRLSFilterID = rlsR.ID
 LEFT OUTER JOIN
-	[admin].RowLevelSecurityFilter rlsU
+	[__mj].RowLevelSecurityFilter rlsU
   ON
     [e].UpdateRLSFilterID = rlsU.ID
 LEFT OUTER JOIN
-	[admin].RowLevelSecurityFilter rlsD
+	[__mj].RowLevelSecurityFilter rlsD
   ON
     [e].DeleteRLSFilterID = rlsD.ID
 GO 
@@ -604,20 +604,20 @@ GO
 --- This section handles view execution stuff  ---
 ----------------------------------------------------------------------------------------
 
-DROP PROC IF EXISTS [admin].spCreateUserViewRunWithDetail
+DROP PROC IF EXISTS [__mj].spCreateUserViewRunWithDetail
 GO
 
-IF TYPE_ID('admin.IDListTableType') IS NOT NULL
-	DROP TYPE admin.IDListTableType
+IF TYPE_ID('__mj.IDListTableType') IS NOT NULL
+	DROP TYPE __mj.IDListTableType
 GO
 
-CREATE TYPE admin.IDListTableType AS TABLE
+CREATE TYPE __mj.IDListTableType AS TABLE
 (
     ID NVARCHAR(255) NOT NULL
 );
 GO
 
-CREATE PROCEDURE [admin].spCreateUserViewRunWithDetail(@UserViewID INT, @UserEmail NVARCHAR(255), @RecordIDList admin.IDListTableType READONLY) 
+CREATE PROCEDURE [__mj].spCreateUserViewRunWithDetail(@UserViewID INT, @UserEmail NVARCHAR(255), @RecordIDList __mj.IDListTableType READONLY) 
 AS
 DECLARE @RunID INT
 DECLARE @Now DATETIME
@@ -628,7 +628,7 @@ SELECT @UserID=ID FROM vwUsers WHERE Email=@UserEmail
 INSERT INTO @outputTable
 EXEC spCreateUserViewRun @UserViewID=@UserViewID,@RunAt=@Now,@RunByUserID=@UserID
 SELECT @RunID = ID FROM @outputTable
-INSERT INTO admin.UserViewRunDetail 
+INSERT INTO __mj.UserViewRunDetail 
 (
     UserViewRunID,
     RecordID
@@ -644,9 +644,9 @@ GO
 
  
 
-DROP FUNCTION IF EXISTS [admin].ToTitleCase
+DROP FUNCTION IF EXISTS [__mj].ToTitleCase
 GO
-CREATE FUNCTION [admin].ToTitleCase (@InputString varchar(4000))
+CREATE FUNCTION [__mj].ToTitleCase (@InputString varchar(4000))
 RETURNS varchar(4000)
 AS
 BEGIN
@@ -677,9 +677,9 @@ GO
 
 
  
-DROP PROC IF EXISTS [admin].spGetNextEntityID
+DROP PROC IF EXISTS [__mj].spGetNextEntityID
 GO
-CREATE PROC [admin].spGetNextEntityID
+CREATE PROC [__mj].spGetNextEntityID
     @schemaName NVARCHAR(255)
 AS
 BEGIN
@@ -688,21 +688,21 @@ BEGIN
     DECLARE @MaxEntityID INT;
 	DECLARE @NextID INT;
 
-    -- STEP 1: Get EntityIDMin and EntityIDMax from admin.SchemaInfo
+    -- STEP 1: Get EntityIDMin and EntityIDMax from __mj.SchemaInfo
     SELECT 
 		@EntityIDMin = EntityIDMin, @EntityIDMax = EntityIDMax
     FROM 
-		admin.SchemaInfo
+		__mj.SchemaInfo
     WHERE 
 		SchemaName = @schemaName;
 
-    -- STEP 2: If no matching schemaName, insert a new row into admin.SchemaInfo
+    -- STEP 2: If no matching schemaName, insert a new row into __mj.SchemaInfo
     IF @EntityIDMin IS NULL OR @EntityIDMax IS NULL
     BEGIN
-        -- Get the maximum ID from the admin.Entity table
+        -- Get the maximum ID from the __mj.Entity table
 		DECLARE @MaxEntityIDFromSchema INT;
-        SELECT @MaxEntityID = ISNULL(MAX(ID), 0) FROM admin.Entity;
-		SELECT @MaxEntityIDFromSchema = ISNULL(MAX(EntityIDMax),0) FROM admin.SchemaInfo;
+        SELECT @MaxEntityID = ISNULL(MAX(ID), 0) FROM __mj.Entity;
+		SELECT @MaxEntityIDFromSchema = ISNULL(MAX(EntityIDMax),0) FROM __mj.SchemaInfo;
 		IF @MaxEntityIDFromSchema > @MaxEntityID 
 			SELECT @MaxEntityID = @MaxEntityIDFromSchema; -- use the max ID From the schema info table if it is higher
 
@@ -715,16 +715,16 @@ BEGIN
         -- Calculate the new EntityIDMax
         SET @EntityIDMax = @EntityIDMin + 24999;
 
-        -- Insert the new row into admin.SchemaInfo
-        INSERT INTO admin.SchemaInfo (SchemaName, EntityIDMin, EntityIDMax)
+        -- Insert the new row into __mj.SchemaInfo
+        INSERT INTO __mj.SchemaInfo (SchemaName, EntityIDMin, EntityIDMax)
         VALUES (@schemaName, @EntityIDMin, @EntityIDMax);
     END
 
-    -- STEP 3: Get the maximum ID currently in the admin.Entity table within the range
+    -- STEP 3: Get the maximum ID currently in the __mj.Entity table within the range
     SELECT 
 		@NextID = ISNULL(MAX(ID), @EntityIDMin - 1) -- we subtract 1 from entityIDMin as it will be used the first time if Max(EntityID) is null, and below we will increment it by one to be the first ID in that range
     FROM 
-		admin.Entity
+		__mj.Entity
     WHERE 
 		ID BETWEEN @EntityIDMin AND @EntityIDMax
 
@@ -743,9 +743,9 @@ END;
 GO
 
 
-DROP VIEW IF EXISTS [admin].[vwSQLTablesAndEntities]
+DROP VIEW IF EXISTS [__mj].[vwSQLTablesAndEntities]
 GO
-CREATE VIEW [admin].[vwSQLTablesAndEntities]
+CREATE VIEW [__mj].[vwSQLTablesAndEntities]
 AS
 SELECT 
 	e.ID EntityID,
@@ -766,7 +766,7 @@ INNER JOIN
 ON
 	t.schema_id = s.schema_id
 LEFT OUTER JOIN
-	admin.Entity e 
+	__mj.Entity e 
 ON
 	t.name = e.BaseTable AND
 	s.name = e.SchemaName 
@@ -796,9 +796,9 @@ WHERE
 	( t.TYPE = 'U' OR (t.Type='V' AND e.VirtualEntity=1)) -- TABLE - non-virtual entities 
 GO
 
-DROP VIEW IF EXISTS [admin].[vwSQLColumnsAndEntityFields]
+DROP VIEW IF EXISTS [__mj].[vwSQLColumnsAndEntityFields]
 GO
-CREATE VIEW [admin].[vwSQLColumnsAndEntityFields]
+CREATE VIEW [__mj].[vwSQLColumnsAndEntityFields]
 AS
 SELECT 
 	e.EntityID,
@@ -829,7 +829,7 @@ SELECT
 FROM
 	sys.all_columns c
 INNER JOIN
-	[admin].vwSQLTablesAndEntities e
+	[__mj].vwSQLTablesAndEntities e
 ON
 	c.object_id = IIF(e.view_object_id IS NULL, e.object_id, e.view_object_id)
 INNER JOIN
@@ -855,7 +855,7 @@ ON
 	basetable.object_id = basetable_columns.object_id AND
 	c.name = basetable_columns.name 
 LEFT OUTER JOIN
-	admin.EntityField ef 
+	__mj.EntityField ef 
 ON
 	e.EntityID = ef.EntityID AND
 	c.name = ef.Name
@@ -883,9 +883,9 @@ GO
 
 
 
-DROP PROC IF EXISTS [admin].[spDeleteUnneededEntityFields]
+DROP PROC IF EXISTS [__mj].[spDeleteUnneededEntityFields]
 GO
-CREATE PROC [admin].[spDeleteUnneededEntityFields]
+CREATE PROC [__mj].[spDeleteUnneededEntityFields]
 AS
 /****************************************************************/
 -- Step #3 
@@ -901,7 +901,7 @@ SELECT * INTO #ef_spDeleteUnneededEntityFields FROM vwEntityFields
 SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields   
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
-UPDATE admin.Entity SET UpdatedAt=GETDATE() WHERE ID IN
+UPDATE __mj.Entity SET UpdatedAt=GETDATE() WHERE ID IN
 (
 	SELECT 
 	  ef.EntityID 
@@ -917,7 +917,7 @@ UPDATE admin.Entity SET UpdatedAt=GETDATE() WHERE ID IN
 )
 
 -- now delete the entity fields themsevles
-DELETE FROM admin.EntityField WHERE ID IN
+DELETE FROM __mj.EntityField WHERE ID IN
 (
 	SELECT 
 	  ef.ID 
@@ -937,29 +937,29 @@ DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
 GO
 
-DROP PROC IF EXISTS [admin].[spUpdateExistingEntitiesFromSchema]
+DROP PROC IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema]
 GO
-CREATE PROC [admin].spUpdateExistingEntitiesFromSchema
+CREATE PROC [__mj].spUpdateExistingEntitiesFromSchema
 AS
 	UPDATE 
-		[admin].[Entity]
+		[__mj].[Entity]
 	SET
 		Description = IIF(e.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
 	FROM
-		[admin].[Entity] e
+		[__mj].[Entity] e
 	INNER JOIN
-		[admin].[vwSQLTablesAndEntities] fromSQL
+		[__mj].[vwSQLTablesAndEntities] fromSQL
 	ON
 		e.ID = fromSQL.EntityID
 GO
 
-DROP PROC IF EXISTS [admin].[spUpdateExistingEntityFieldsFromSchema]
+DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
 GO
-CREATE PROC [admin].[spUpdateExistingEntityFieldsFromSchema]
+CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
 AS
 BEGIN
     -- Update Statement
-    UPDATE [admin].EntityField
+    UPDATE [__mj].EntityField
     SET
 		Description = IIF(ef.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.Description), ef.Description),
         Type = fromSQL.Type,
@@ -987,14 +987,14 @@ BEGIN
 						END,
         UpdatedAt = GETDATE()
     FROM
-        [admin].EntityField ef
+        [__mj].EntityField ef
     INNER JOIN
         vwSQLColumnsAndEntityFields fromSQL
     ON
         ef.EntityID = fromSQL.EntityID AND
         ef.Name = fromSQL.FieldName
     INNER JOIN
-        [admin].Entity e 
+        [__mj].Entity e 
     ON
         ef.EntityID = e.ID
     LEFT OUTER JOIN
@@ -1003,17 +1003,17 @@ BEGIN
         ef.Name = fk.[column] AND
         e.BaseTable = fk.[table]
     LEFT OUTER JOIN 
-        [admin].Entity re -- Related Entity
+        [__mj].Entity re -- Related Entity
     ON
         re.BaseTable = fk.referenced_table
     LEFT OUTER JOIN 
-		[admin].vwTablePrimaryKeys pk
+		[__mj].vwTablePrimaryKeys pk
     ON
         e.BaseTable = pk.TableName AND
         ef.Name = pk.ColumnName AND
         e.SchemaName = pk.SchemaName
     LEFT OUTER JOIN 
-		[admin].vwTableUniqueKeys uk
+		[__mj].vwTableUniqueKeys uk
     ON
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
@@ -1027,9 +1027,9 @@ GO
 
 
 
-DROP PROC IF EXISTS [admin].[spSetDefaultColumnWidthWhereNeeded]
+DROP PROC IF EXISTS [__mj].[spSetDefaultColumnWidthWhereNeeded]
 GO
-CREATE PROC [admin].[spSetDefaultColumnWidthWhereNeeded]
+CREATE PROC [__mj].[spSetDefaultColumnWidthWhereNeeded]
 AS
 /**************************************************************************************/
 /* Final step - generate default column widths for columns that don't have a width set*/
@@ -1047,7 +1047,7 @@ SET
 		), 
 	UpdatedAt = GETDATE()
 FROM 
-	admin.EntityField ef
+	__mj.EntityField ef
 WHERE
     ef.DefaultColumnWidth IS NULL
 GO
@@ -1057,37 +1057,37 @@ GO
 
 
 
-DROP PROC IF EXISTS [admin].[spDeleteConversation]
+DROP PROC IF EXISTS [__mj].[spDeleteConversation]
 GO
-CREATE PROCEDURE [admin].[spDeleteConversation]
+CREATE PROCEDURE [__mj].[spDeleteConversation]
     @ID INT
 AS  
 BEGIN
     SET NOCOUNT ON;
     -- Cascade update on Report - set FK to null before deleting rows in Conversation
     UPDATE 
-        [admin].[Report] 
+        [__mj].[Report] 
     SET 
         [ConversationID] = NULL 
     WHERE 
         [ConversationID] = @ID
 
 	UPDATE 
-        [admin].[Report] 
+        [__mj].[Report] 
     SET 
         [ConversationDetailID] = NULL 
     WHERE 
-        [ConversationDetailID] IN (SELECT ID FROM admin.ConversationDetail WHERE ConversationID = @ID)
+        [ConversationDetailID] IN (SELECT ID FROM __mj.ConversationDetail WHERE ConversationID = @ID)
 
     
     -- Cascade delete from ConversationDetail
     DELETE FROM 
-        [admin].[ConversationDetail] 
+        [__mj].[ConversationDetail] 
     WHERE 
         [ConversationID] = @ID
     
     DELETE FROM 
-        [admin].[Conversation]
+        [__mj].[Conversation]
     WHERE 
         [ID] = @ID
     SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
@@ -1095,9 +1095,9 @@ END
 GO
 
 
-DROP PROC IF EXISTS [admin].[spCreateCompanyIntegrationRun]
+DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRun]
 GO
-CREATE PROC [admin].[spCreateCompanyIntegrationRun]
+CREATE PROC [__mj].[spCreateCompanyIntegrationRun]
 @CompanyIntegrationID AS INT,
 @RunByUserID AS INT,
 @StartedAt AS DATETIMEOFFSET(7) = NULL, 
@@ -1105,7 +1105,7 @@ CREATE PROC [admin].[spCreateCompanyIntegrationRun]
 @TotalRecords INT = NULL,
 @NewID AS INT OUTPUT
 AS
-INSERT INTO admin.CompanyIntegrationRun
+INSERT INTO __mj.CompanyIntegrationRun
 (  
   CompanyIntegrationID,
   RunByUserID,
@@ -1125,12 +1125,12 @@ VALUES
 SELECT @NewID = SCOPE_IDENTITY()
 GO
 
-DROP PROC IF EXISTS [admin].[spCreateCompanyIntegrationRunAPILog]
+DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRunAPILog]
 GO
-CREATE PROC [admin].[spCreateCompanyIntegrationRunAPILog]
+CREATE PROC [__mj].[spCreateCompanyIntegrationRunAPILog]
 (@CompanyIntegrationRunID INT, @RequestMethod NVARCHAR(12), @URL NVARCHAR(MAX), @Parameters NVARCHAR(MAX)=NULL, @IsSuccess BIT)
 AS
-INSERT INTO [admin].[CompanyIntegrationRunAPILog]
+INSERT INTO [__mj].[CompanyIntegrationRunAPILog]
            ([CompanyIntegrationRunID]
            ,[RequestMethod]
 		   ,[URL]
@@ -1146,9 +1146,9 @@ GO
 
 
 
-DROP PROC IF EXISTS [admin].[spCreateCompanyIntegrationRunDetail]
+DROP PROC IF EXISTS [__mj].[spCreateCompanyIntegrationRunDetail]
 GO
-CREATE PROC [admin].[spCreateCompanyIntegrationRunDetail]
+CREATE PROC [__mj].[spCreateCompanyIntegrationRunDetail]
 @CompanyIntegrationRunID AS INT,
 @EntityID INT=NULL,
 @EntityName NVARCHAR(200)=NULL,
@@ -1158,7 +1158,7 @@ CREATE PROC [admin].[spCreateCompanyIntegrationRunDetail]
 @ExecutedAt DATETIMEOFFSET(7) = NULL,
 @NewID AS INT OUTPUT
 AS
-INSERT INTO admin.CompanyIntegrationRunDetail
+INSERT INTO __mj.CompanyIntegrationRunDetail
 (  
   CompanyIntegrationRunID,
   EntityID,
@@ -1170,7 +1170,7 @@ INSERT INTO admin.CompanyIntegrationRunDetail
 VALUES
 (
   @CompanyIntegrationRunID,
-  IIF (@EntityID IS NULL, (SELECT ID FROM admin.Entity WHERE REPLACE(Name,' ', '')=@EntityName), @EntityID),
+  IIF (@EntityID IS NULL, (SELECT ID FROM __mj.Entity WHERE REPLACE(Name,' ', '')=@EntityName), @EntityID),
   @RecordID,
   @Action,
   @IsSuccess,
@@ -1181,9 +1181,9 @@ SELECT @NewID = SCOPE_IDENTITY()
 GO
 
 
-DROP PROC IF EXISTS [admin].[spCreateErrorLog]
+DROP PROC IF EXISTS [__mj].[spCreateErrorLog]
 GO
-CREATE PROC [admin].[spCreateErrorLog]
+CREATE PROC [__mj].[spCreateErrorLog]
 (
 @CompanyIntegrationRunID AS INT = NULL,
 @CompanyIntegrationRunDetailID AS INT = NULL,
@@ -1197,7 +1197,7 @@ CREATE PROC [admin].[spCreateErrorLog]
 AS
 
 
-INSERT INTO [admin].[ErrorLog]
+INSERT INTO [__mj].[ErrorLog]
            ([CompanyIntegrationRunID]
            ,[CompanyIntegrationRunDetailID]
            ,[Code]
@@ -1218,25 +1218,25 @@ INSERT INTO [admin].[ErrorLog]
 	SELECT @ErrorLogID = SCOPE_IDENTITY()
 GO
 
-DROP PROC IF EXISTS [admin].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
+DROP PROC IF EXISTS [__mj].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
 GO
-CREATE PROC [admin].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
+CREATE PROC [__mj].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
 (
 	@EntityFieldID INT, 
 	@RelatedEntityNameFieldMap NVARCHAR(50)
 )
 AS
 UPDATE 
-	admin.EntityField 
+	__mj.EntityField 
 SET 
 	RelatedEntityNameFieldMap = @RelatedEntityNameFieldMap
 WHERE
 	ID = @EntityFieldID
 GO
 
-DROP VIEW IF EXISTS [admin].[vwCompanyIntegrationRunsRanked] 
+DROP VIEW IF EXISTS [__mj].[vwCompanyIntegrationRunsRanked] 
 GO
-CREATE VIEW [admin].[vwCompanyIntegrationRunsRanked] AS
+CREATE VIEW [__mj].[vwCompanyIntegrationRunsRanked] AS
 SELECT
 	ci.ID,
 	ci.CompanyIntegrationID,
@@ -1247,14 +1247,14 @@ SELECT
 	ci.Comments,
 	RANK() OVER(PARTITION BY ci.CompanyIntegrationID ORDER BY ci.ID DESC) [RunOrder]
  FROM
-	admin.CompanyIntegrationRun ci
+	__mj.CompanyIntegrationRun ci
 GO
 
 
 
-DROP PROC IF EXISTS [admin].[spGetAuthenticationDataByExternalSystemID]
+DROP PROC IF EXISTS [__mj].[spGetAuthenticationDataByExternalSystemID]
 GO
-CREATE PROC [admin].[spGetAuthenticationDataByExternalSystemID] 
+CREATE PROC [__mj].[spGetAuthenticationDataByExternalSystemID] 
 	@IntegrationName NVARCHAR(100), 
 	@ExternalSystemID NVARCHAR(100),
 	@AccessToken NVARCHAR(255)=NULL OUTPUT,
@@ -1272,8 +1272,8 @@ SELECT
 	@TokenExpirationDate = ci.TokenExpirationDate,
 	@APIKey = ci.APIKey
 FROM
-	admin.CompanyIntegration ci
-JOIN admin.Integration i
+	__mj.CompanyIntegration ci
+JOIN __mj.Integration i
 	ON i.Name = ci.IntegrationName
 WHERE 
 	i.Name = @IntegrationName

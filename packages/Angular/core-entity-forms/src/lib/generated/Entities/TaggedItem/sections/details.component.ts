@@ -25,6 +25,10 @@ import { TaggedItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Tag</label>
             <span >{{FormatValue('Tag', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -35,7 +39,7 @@ import { TaggedItemEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Record ID</label>
@@ -44,6 +48,10 @@ import { TaggedItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Tag</label>
             <span >{{FormatValue('Tag', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>
         </div>
     </div>
 </div>

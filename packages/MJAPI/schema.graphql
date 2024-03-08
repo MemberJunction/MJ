@@ -181,6 +181,7 @@ type AuditLog_ {
   CreatedAt: Timestamp!
   Description: String
   Details: String
+  Entity: String
   EntityID: Int
   ID: Int!
   RecordID: String
@@ -228,6 +229,7 @@ type ColorNotification {
 type CompanyIntegrationRecordMap_ {
   CompanyIntegrationID: Int!
   CreatedAt: Timestamp!
+  Entity: String!
   EntityID: Int!
   EntityRecordID: String!
   ExternalSystemRecordID: String!
@@ -1129,6 +1131,7 @@ type DataContextItem_ {
   Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.
   """
   DataJSON: String
+  Entity: String
 
   """Used if type='full_entity' or type='single_record'"""
   EntityID: Int
@@ -1391,6 +1394,7 @@ type EntityDocumentType_ {
 
 type EntityDocument_ {
   CreatedAt: Timestamp!
+  Entity: String!
   EntityDocumentRunsArray: [EntityDocumentRun_!]!
   EntityID: Int!
   ID: Int!
@@ -1587,6 +1591,7 @@ type Entity_ {
   EntityObjectSubclassImport: String
   EntityObjectSubclassName: String
   EntityPermissionsArray: [EntityPermission_!]!
+  EntityRecordDocumentsArray: [EntityRecordDocument_!]!
   EntityRelationshipsArray: [EntityRelationship_!]!
   FullTextCatalog: String
   FullTextCatalogGenerated: Boolean!
@@ -1619,6 +1624,7 @@ type Entity_ {
   UserRecordLogsArray: [UserRecordLog_!]!
   UserViewMaxRows: Int
   UserViewsArray: [UserView_!]!
+  UsersArray: [User_!]!
   VirtualEntity: Boolean!
   spCreate: String
   spCreateGenerated: Boolean!
@@ -1730,6 +1736,7 @@ type List_ {
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
+  Entity: String
   EntityID: Int
   ExternalSystemRecordID: String
   ID: Int!
@@ -2439,6 +2446,7 @@ type QueryField_ {
   """
   SQLFullType: String!
   Sequence: Int!
+  SourceEntity: String
   SourceEntityID: Int
   SourceFieldName: String
   SummaryDescription: String
@@ -2536,7 +2544,7 @@ type RecordChange_ {
 type RecordDependencyResult {
   EntityName: String!
   FieldName: String!
-  RecordID: Int!
+  PrimaryKeyValue: String!
   RelatedEntityName: String!
 }
 
@@ -3902,6 +3910,7 @@ type Tag_ {
 }
 
 type TaggedItem_ {
+  Entity: String!
   EntityID: Int!
   ID: Int!
   RecordID: String!

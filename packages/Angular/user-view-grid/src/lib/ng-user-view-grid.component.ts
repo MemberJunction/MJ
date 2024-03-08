@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, ViewContainerRef} from '@angular/core';
+import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, ViewContainerRef, Renderer2} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
@@ -61,7 +61,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @ViewChild('analysisResults', { read: ElementRef }) analysisResults: ElementRef | null = null;
 
 //  @ViewChild('plotlyPlot', { read: PlotlyComponent }) plotlyPlot: PlotlyComponent | null = null;
-  @ViewChild('plotContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
+//  @ViewChild('plotContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
+
+  @ViewChild('compareDialogContainer') private compareDialogContainer!: ElementRef;
+
 
   private _pendingRecords: GridPendingRecordItem[] = [];
 
@@ -189,7 +192,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
   constructor(private formBuilder: FormBuilder, 
-              private router: Router) {
+              private router: Router,
+              private renderer: Renderer2) {
 
   } 
 
@@ -511,6 +515,22 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       this.Refresh(this.Params);
   }
 
+  private _movedToBody: boolean = false;
+  moveDialogToBody() {
+    if (this._movedToBody)
+      return;
+    const dialogElement = this.compareDialogContainer.nativeElement;
+    this.renderer.appendChild(document.body, dialogElement);
+    // const appBody = dialogElement.closest('.app-body');
+    // if (appBody) {
+    //   this.renderer.appendChild(appBody, dialogElement);
+    // } 
+    // else {
+    //   console.error('App body element not found!');
+    // }
+    this._movedToBody = true;
+  }
+
   private _deferLoadCount: number = 0;
   private _allowLoad: boolean = true;
   @Input() public get AllowLoad(): boolean {
@@ -681,6 +701,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(!cancel && this.recordsToCompare.length >= 2){
       // this scenario occurs when we've already started the merge/compare and the user has selected records, then clicked the merge/compare button again
       this.isCompareDialogOpened = true;
+      this.moveDialogToBody();
     }
     else if (cancel) {
       // the user clicked cancel in our toolbar

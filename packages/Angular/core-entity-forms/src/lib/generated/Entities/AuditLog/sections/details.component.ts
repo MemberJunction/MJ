@@ -53,6 +53,10 @@ import { AuditLogEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -83,7 +87,7 @@ import { AuditLogEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Record</label>
@@ -100,6 +104,10 @@ import { AuditLogEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">User</label>
             <span >{{FormatValue('User', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>
         </div>
     </div>
 </div>

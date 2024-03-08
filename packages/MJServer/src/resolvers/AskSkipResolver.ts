@@ -127,7 +127,11 @@ export class AskSkipResolver {
       {
         vendorDriverName: 'OpenAILLM',
         apiKey: GetAIAPIKey('OpenAILLM')
-      }
+      },
+      {
+        vendorDriverName: 'AnthropicLLM',
+        apiKey: GetAIAPIKey('AnthropicLLM')
+      },
     ];
   }
 

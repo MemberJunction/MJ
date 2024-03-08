@@ -284,6 +284,26 @@
                                                [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
                         </ng-template>
                     </kendo-tabstrip-tab>
+          
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Users')">
+                        <ng-template kendoTabTitle>Users</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Users')"  
+                                               [AllowLoad]="this.IsCurrentTab('Users')"  
+                                               [EditMode]="this.GridEditMode()"  
+                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
+          
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('Entity Record Documents')">
+                        <ng-template kendoTabTitle>Entity Record Documents</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Record Documents')"  
+                                               [AllowLoad]="this.IsCurrentTab('Entity Record Documents')"  
+                                               [EditMode]="this.GridEditMode()"  
+                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
                             </kendo-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>
