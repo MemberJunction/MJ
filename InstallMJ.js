@@ -110,8 +110,8 @@ ${dbTrustServerCertificate && dbTrustServerCertificate.trim().toUpperCase() === 
 #OUTPUT CODE is used for output directories like SQL Scripts
 OUTPUT_CODE='${dbDatabase}'
 
-# Name of the schema that MJ has been setup in. This defaults to admin
-MJ_CORE_SCHEMA=admin
+# Name of the schema that MJ has been setup in. This defaults to __mj
+MJ_CORE_SCHEMA='__mj'
 
 # If using Advanced Generation, populate this with the API key for the AI vendor you are using
 # Also, you need to configure the settings under advancedGeneration in the config.json file, including choosing the vendor.
@@ -166,8 +166,8 @@ AUTH0_CLIENT_ID=${auth0ClientId}
 AUTH0_CLIENT_SECRET=${auth0ClientSecret}
 AUTH0_DOMAIN=${auth0Domain}
 
-# Name of the schema that MJ has been setup in. This defaults to admin
-MJ_CORE_SCHEMA=admin
+# Name of the schema that MJ has been setup in. This defaults to __mj
+MJ_CORE_SCHEMA='__mj'
 
 # If you are using MJAI library, provide your API KEYS here for the various services
 # Format is AI_VENDOR_API_KEY__<DriverClass> Where DriverClass is the DriverClass field from the AI Models Entity in MemberJunction

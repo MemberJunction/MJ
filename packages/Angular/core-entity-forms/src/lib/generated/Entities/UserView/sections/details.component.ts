@@ -123,7 +123,7 @@ import { UserViewEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Name</label>

@@ -65,6 +65,10 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Query</label>
             <span >{{FormatValue('Query', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -87,7 +91,7 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Record ID</label>
@@ -124,6 +128,10 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Query</label>
             <span >{{FormatValue('Query', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity</label>
+            <span >{{FormatValue('Entity', 0)}}</span>
         </div>
     </div>
 </div>

@@ -3,7 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 
     /**
      * Companies - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Company
      * * Base View: vwCompanies
      * * Primary Key: ID
@@ -115,7 +115,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Employees - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Employee
      * * Base View: vwEmployees
      * * Primary Key: ID
@@ -317,7 +317,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Favorites - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserFavorite
      * * Base View: vwUserFavorites
      * * Primary Key: ID
@@ -438,7 +438,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Employee Company Integrations - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EmployeeCompanyIntegration
      * * Base View: vwEmployeeCompanyIntegrations
      * * Primary Key: ID
@@ -557,7 +557,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Employee Roles - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EmployeeRole
      * * Base View: vwEmployeeRoles
      * * Primary Key: ID
@@ -663,7 +663,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Employee Skills - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EmployeeSkill
      * * Base View: vwEmployeeSkills
      * * Primary Key: ID
@@ -769,7 +769,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Roles - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Role
      * * Base View: vwRoles
      * * Primary Key: ID
@@ -882,7 +882,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Skills - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Skill
      * * Base View: vwSkills
      * * Primary Key: ID
@@ -997,7 +997,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Integration URL Formats - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: IntegrationURLFormat
      * * Base View: vwIntegrationURLFormats
      * * Primary Key: ID
@@ -1119,7 +1119,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Integrations - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Integration
      * * Base View: vwIntegrations
      * * Primary Key: ID
@@ -1268,7 +1268,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Company Integrations - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: CompanyIntegration
      * * Base View: vwCompanyIntegrations
      * * Primary Key: ID
@@ -1553,7 +1553,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Fields - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityField
      * * Base View: vwEntityFields
      * * Primary Key: ID
@@ -1592,6 +1592,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -1910,6 +1911,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RelatedEntityID
         * * Display Name: RelatedEntity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get RelatedEntityID(): number {  
             return this.Get('RelatedEntityID');
@@ -2083,7 +2085,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entities - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Entity
      * * Base View: vwEntities
      * * Primary Key: ID
@@ -2635,7 +2637,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Users - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: User
      * * Base View: vwUsers
      * * Primary Key: ID
@@ -2784,6 +2786,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get LinkedEntityID(): number {  
             return this.Get('LinkedEntityID');
@@ -2881,7 +2884,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Relationships - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityRelationship
      * * Base View: vwEntityRelationships
      * * Primary Key: ID
@@ -3186,7 +3189,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Record Logs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserRecordLog
      * * Base View: vwUserRecordLogs
      * * Primary Key: ID
@@ -3363,7 +3366,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Views - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserView
      * * Base View: vwUserViews
      * * Primary Key: ID
@@ -3414,6 +3417,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -3679,7 +3683,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Company Integration Runs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: CompanyIntegrationRun
      * * Base View: vwCompanyIntegrationRuns
      * * Primary Key: ID
@@ -3807,7 +3811,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Company Integration Run Details - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: CompanyIntegrationRunDetail
      * * Base View: vwCompanyIntegrationRunDetails
      * * Primary Key: ID
@@ -3870,6 +3874,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -3953,7 +3958,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Error Logs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ErrorLog
      * * Base View: vwErrorLogs
      * * Primary Key: ID
@@ -4101,7 +4106,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Applications - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Application
      * * Base View: vwApplications
      * * Primary Key: ID
@@ -4193,7 +4198,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Application Entities - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ApplicationEntity
      * * Base View: vwApplicationEntities
      * * Primary Key: ID
@@ -4244,6 +4249,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4350,7 +4356,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Permissions - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityPermission
      * * Base View: vwEntityPermissions
      * * Primary Key: ID
@@ -4389,6 +4395,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4582,7 +4589,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Application Entities - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserApplicationEntity
      * * Base View: vwUserApplicationEntities
      * * Primary Key: ID
@@ -4633,6 +4640,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -4683,7 +4691,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Applications - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserApplication
      * * Base View: vwUserApplications
      * * Primary Key: ID
@@ -4800,7 +4808,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Company Integration Run API Logs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: CompanyIntegrationRunAPILog
      * * Base View: vwCompanyIntegrationRunAPILogs
      * * Primary Key: ID
@@ -4919,7 +4927,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Lists - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: List
      * * Base View: vwLists
      * * Primary Key: ID
@@ -4978,6 +4986,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -5041,6 +5050,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -5054,7 +5073,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * List Details - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ListDetail
      * * Base View: vwListDetails
      * * Primary Key: ID
@@ -5128,7 +5147,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User View Runs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserViewRun
      * * Base View: vwUserViewRuns
      * * Primary Key: ID
@@ -5233,7 +5252,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User View Run Details - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserViewRunDetail
      * * Base View: vwUserViewRunDetails
      * * Primary Key: ID
@@ -5326,7 +5345,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Workflow Runs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: WorkflowRun
      * * Base View: vwWorkflowRuns
      * * Primary Key: ID
@@ -5462,7 +5481,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Workflows - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Workflow
      * * Base View: vwWorkflows
      * * Primary Key: ID
@@ -5589,7 +5608,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Workflow Engines - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: WorkflowEngine
      * * Base View: vwWorkflowEngines
      * * Primary Key: ID
@@ -5703,7 +5722,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Record Changes - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: RecordChange
      * * Base View: vwRecordChanges
      * * Primary Key: ID
@@ -5874,7 +5893,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Roles - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserRole
      * * Base View: vwUserRoles
      * * Primary Key: ID
@@ -5980,7 +5999,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Row Level Security Filters - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: RowLevelSecurityFilter
      * * Base View: vwRowLevelSecurityFilters
      * * Primary Key: ID
@@ -6098,7 +6117,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Audit Logs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AuditLog
      * * Base View: vwAuditLogs
      * * Primary Key: ID
@@ -6220,6 +6239,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -6267,12 +6287,22 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('User');
         }
     
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
 
     }
     
     /**
      * Authorizations - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Authorization
      * * Base View: vwAuthorizations
      * * Primary Key: ID
@@ -6415,7 +6445,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Authorization Roles - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AuthorizationRole
      * * Base View: vwAuthorizationRoles
      * * Primary Key: ID
@@ -6550,7 +6580,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Audit Log Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AuditLogType
      * * Base View: vwAuditLogTypes
      * * Primary Key: ID
@@ -6690,7 +6720,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Field Values - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityFieldValue
      * * Base View: vwEntityFieldValues
      * * Primary Key: ID
@@ -6852,7 +6882,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * AI Models - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AIModel
      * * Base View: vwAIModels
      * * Primary Key: ID
@@ -7004,7 +7034,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * AI Actions - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AIAction
      * * Base View: vwAIActions
      * * Primary Key: ID
@@ -7143,7 +7173,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * AI Model Actions - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AIModelAction
      * * Base View: vwAIModelActions
      * * Primary Key: ID
@@ -7270,7 +7300,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity AI Actions - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityAIAction
      * * Base View: vwEntityAIActions
      * * Primary Key: ID
@@ -7498,7 +7528,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * AI Model Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: AIModelType
      * * Base View: vwAIModelTypes
      * * Primary Key: ID
@@ -7573,7 +7603,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Queue Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: QueueType
      * * Base View: vwQueueTypes
      * * Primary Key: ID
@@ -7694,7 +7724,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Queues - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Queue
      * * Base View: vwQueues
      * * Primary Key: ID
@@ -7955,7 +7985,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Queue Tasks - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: QueueTask
      * * Base View: vwQueueTasks
      * * Primary Key: ID
@@ -8109,7 +8139,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Dashboards - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Dashboard
      * * Base View: vwDashboards
      * * Primary Key: ID
@@ -8225,7 +8255,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Output Trigger Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: OutputTriggerType
      * * Base View: vwOutputTriggerTypes
      * * Primary Key: ID
@@ -8312,7 +8342,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Output Format Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: OutputFormatType
      * * Base View: vwOutputFormatTypes
      * * Primary Key: ID
@@ -8410,7 +8440,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Output Delivery Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: OutputDeliveryType
      * * Base View: vwOutputDeliveryTypes
      * * Primary Key: ID
@@ -8497,7 +8527,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Reports - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Report
      * * Base View: vwReports
      * * Primary Key: ID
@@ -8817,7 +8847,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Report Snapshots - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ReportSnapshot
      * * Base View: vwReportSnapshots
      * * Primary Key: ID
@@ -8921,7 +8951,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Resource Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ResourceType
      * * Base View: vwResourceTypes
      * * Primary Key: ID
@@ -9071,7 +9101,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Tags - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Tag
      * * Base View: vwTags
      * * Primary Key: ID
@@ -9190,7 +9220,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Tagged Items - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: TaggedItem
      * * Base View: vwTaggedItems
      * * Primary Key: ID
@@ -9266,6 +9296,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -9293,12 +9324,22 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('Tag');
         }
     
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
 
     }
     
     /**
      * Workspaces - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Workspace
      * * Base View: vwWorkspaces
      * * Primary Key: ID
@@ -9382,7 +9423,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Workspace Items - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: WorkspaceItem
      * * Base View: vwWorkspaceItems
      * * Primary Key: ID
@@ -9520,7 +9561,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Datasets - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Dataset
      * * Base View: vwDatasets
      * * Primary Key: ID
@@ -9627,7 +9668,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Dataset Items - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: DatasetItem
      * * Base View: vwDatasetItems
      * * Primary Key: ID
@@ -9801,7 +9842,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Conversation Details - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ConversationDetail
      * * Base View: vwConversationDetails
      * * Primary Key: ID
@@ -9940,7 +9981,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Conversations - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Conversation
      * * Base View: vwConversations
      * * Primary Key: ID
@@ -10122,7 +10163,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User Notifications - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserNotification
      * * Base View: vwUserNotifications
      * * Primary Key: ID
@@ -10294,7 +10335,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Schema Info - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: SchemaInfo
      * * Base View: vwSchemaInfos
      * * Primary Key: ID
@@ -10411,7 +10452,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Company Integration Record Maps - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: CompanyIntegrationRecordMap
      * * Base View: vwCompanyIntegrationRecordMaps
      * * Primary Key: ID
@@ -10486,6 +10527,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -10524,12 +10566,22 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
     
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
 
     }
     
     /**
      * Record Merge Logs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: RecordMergeLog
      * * Base View: vwRecordMergeLogs
      * * Primary Key: ID
@@ -10735,7 +10787,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Record Merge Deletion Logs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: RecordMergeDeletionLog
      * * Base View: vwRecordMergeDeletionLogs
      * * Primary Key: ID
@@ -10854,7 +10906,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Query Fields - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: QueryField
      * * Base View: vwQueryFields
      * * Primary Key: ID
@@ -10975,6 +11027,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceEntityID
         * * Display Name: Source Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get SourceEntityID(): number {  
             return this.Get('SourceEntityID');
@@ -11068,12 +11121,22 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('Query');
         }
     
+        /**
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get SourceEntity(): string {  
+            return this.Get('SourceEntity');
+        }
+    
 
     }
     
     /**
      * Query Categories - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: QueryCategory
      * * Base View: vwQueryCategories
      * * Primary Key: ID
@@ -11189,7 +11252,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Queries - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: Query
      * * Base View: vwQueries
      * * Primary Key: ID
@@ -11362,7 +11425,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Query Permissions - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: QueryPermission
      * * Base View: vwQueryPermissions
      * * Primary Key: ID
@@ -11459,7 +11522,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Vector Indexes - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: VectorIndex
      * * Base View: vwVectorIndexes
      * * Primary Key: ID
@@ -11596,7 +11659,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Document Types - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityDocumentType
      * * Base View: vwEntityDocumentTypes
      * * Primary Key: ID
@@ -11691,7 +11754,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Document Runs - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityDocumentRun
      * * Base View: vwEntityDocumentRuns
      * * Primary Key: ID
@@ -11820,7 +11883,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Vector Databases - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: VectorDatabase
      * * Base View: vwVectorDatabases
      * * Primary Key: ID
@@ -11937,7 +12000,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Record Documents - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityRecordDocument
      * * Base View: vwEntityRecordDocuments
      * * Primary Key: ID
@@ -11989,6 +12052,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -12087,7 +12151,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Entity Documents - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: EntityDocument
      * * Base View: vwEntityDocuments
      * * Primary Key: ID
@@ -12150,6 +12214,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -12213,6 +12278,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
+        /**
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(100)
@@ -12226,7 +12301,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Data Context Items - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: DataContextItem
      * * Base View: vwDataContextItems
      * * @description Data Context Items store information about each item within a Data Context. Each item stores a link to a view, query, or raw sql statement and can optionally cache the JSON representing the last run of that data object as well.
@@ -12330,6 +12405,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         * * Description: Used if type='full_entity' or type='single_record'
         */
         get EntityID(): number {  
@@ -12433,12 +12509,22 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('Query');
         }
     
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
 
     }
     
     /**
      * Data Contexts - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: DataContext
      * * Base View: vwDataContexts
      * * @description Data Contexts are a primitive within the MemberJunction architecture. They store information about data contexts which are groups of data including views, queries, or raw SQL statements. Data contexts can be used in conversations, reports and more.
@@ -12566,7 +12652,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * User View Categories - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: UserViewCategory
      * * Base View: vwUserViewCategories
      * * Primary Key: ID
@@ -12682,7 +12768,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Dashboard Categories - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: DashboardCategory
      * * Base View: vwDashboardCategories
      * * Primary Key: ID
@@ -12798,7 +12884,7 @@ import { RegisterClass } from "@memberjunction/global";
     
     /**
      * Report Categories - strongly typed entity sub-class
-     * * Schema: admin
+     * * Schema: __mj
      * * Base Table: ReportCategory
      * * Base View: vwReportCategories
      * * Primary Key: ID

@@ -14,7 +14,7 @@
     "settings": [
         {
             "name": "mj_core_schema",
-            "value": "admin"
+            "value": "__mj"
         },
         {
             "name": "skip_database_generation",
@@ -100,7 +100,7 @@
             {
                 "name": "_Core_Apps",
                 "excludeSchemas": [
-                    "admin"
+                    "__mj"
                 ]
             }
         ]

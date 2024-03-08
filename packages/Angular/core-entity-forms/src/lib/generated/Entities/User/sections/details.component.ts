@@ -127,7 +127,7 @@ import { UserEntity } from '@memberjunction/core-entities';
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Linked Entity ID</label>
-            <span >{{FormatValue('LinkedEntityID', 0)}}</span>
+            <span mjFieldLink [record]="record" fieldName="LinkedEntityID" >{{FormatValue('LinkedEntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Linked Entity Record ID</label>
