@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-gemini",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "description": "MemberJunction Wrapper for Google Gemini AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
