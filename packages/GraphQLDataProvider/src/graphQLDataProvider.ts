@@ -448,11 +448,16 @@ npm
             return null;
         }
 
-        const query: string = gql`query GetRecordDuplicatesQuery ($params: PotentialDuplicateRequest!) {
+        const query: string = gql`query GetRecordDuplicatesQuery ($params: PotentialDuplicateRequestType!) {
             GetRecordDuplicates(params: $params) {
-                Success
-                Status
-                PotentialDuplicates
+                EntityID
+                Duplicates {
+                    ProbabilityScore
+                    PrimaryKeyValues {
+                        FieldName
+                        Value
+                    }
+                }
             }
         }`
 
@@ -467,8 +472,8 @@ npm
                 })
         }});
 
-        if(data && data.GetRecordDuplicates && data.GetRecordDuplicates.Success){
-            return data.GetRecordDuplicates.PotentialDuplicates;
+        if(data && data.GetRecordDuplicates){
+            return data.GetRecordDuplicates;
         }
     }
     

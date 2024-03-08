@@ -1292,20 +1292,6 @@ type Deal_ {
   Value: Float
 }
 
-type DuplicateResultType {
-  Duplicates: [PotentialDuplicateType!]!
-  EntityID: Int!
-}
-
-input DuplicateSearchType {
-  CompositeKey: String! = ""
-  EntitiyID: Int
-  EntityDocumentID: Int!
-  EntityName: String
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
-  ProbabilityScore: Int
-}
-
 type EmployeeCompanyIntegration_ {
   CompanyIntegrationID: Int!
   CreatedAt: Timestamp!
@@ -1965,6 +1951,19 @@ type PaymentTermsType_ {
   UpdatedAt: Timestamp!
 }
 
+input PotentialDuplicateRequestType {
+  EntitiyID: Int
+  EntityDocumentID: Int!
+  EntityName: String
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  ProbabilityScore: Int
+}
+
+type PotentialDuplicateResponseType {
+  Duplicates: [PotentialDuplicateType!]!
+  EntityID: Int!
+}
+
 type PotentialDuplicateType {
   PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   ProbabilityScore: Int!
@@ -2069,14 +2068,12 @@ type Query {
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
-
-  """Returns a list of possible deuplicate records."""
-  GetDuplicateRecords(params: DuplicateSearchType!): DuplicateResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
   GetEntityRecordName(EntityName: String!, PrimaryKeyValues: [PrimaryKeyValueInputType!]!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
   GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
+  GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
   Industry(ID: Int!): Industry_

@@ -56,7 +56,7 @@ export class PrimaryKeyValueBase {
 
     //MJ Server's DuplicateRecordResolve has a copy of this property
     //changes here should be applied there as well
-    public get CompositeKey(): string {
+    GetCompositeKey(): string {
         
         if(!this.PrimaryKeyValues){
             return "";
