@@ -948,7 +948,8 @@ npm
         catch (e) {
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
-                if (error?.extensions?.code?.toUpperCase().trim() === 'JWT_EXPIRED') {
+                const code = error?.extensions?.code?.toUpperCase().trim()
+                if (code === 'JWT_EXPIRED') {
                     if (refreshTokenIfNeeded) {
                         // token expired, so we need to refresh it and try again
                         await GraphQLDataProvider.RefreshToken();

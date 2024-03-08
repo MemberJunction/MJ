@@ -54,7 +54,7 @@ export const getUserPayload = async (
     }
 
     const expiryDate = new Date( (payload.exp ?? 0) * 1000);
-    if (+expiryDate < Date.now()) {
+    if (expiryDate.getTime() <= Date.now()) {
       throw new TokenExpiredError(expiryDate);
     }
 

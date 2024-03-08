@@ -38,8 +38,9 @@ export class AppComponent implements OnInit {
         const start = Date.now();        
         const config = new GraphQLProviderConfigData(token, url, wsurl, async () => {
           const refresh$ = await this.authBase.refresh();
-          const result = await lastValueFrom(refresh$);
-          return result?.accessToken;
+          const claims = await lastValueFrom(refresh$);
+          const token = environment.AUTH_TYPE === 'auth0' ? claims?.__raw : claims?.idToken;
+          return token;
         }, environment.MJ_CORE_SCHEMA_NAME);
         await setupGraphQLClient(config);
         const end = Date.now();
