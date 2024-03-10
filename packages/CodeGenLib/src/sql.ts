@@ -7,19 +7,42 @@ import { outputDir } from "./config";
 import { newEntityList } from "./manageMetadata";
 
 
-export async function recompileAllBaseViews(ds: DataSource): Promise<boolean> {
+/**
+ * Returns a file name for a given DB Object given a type, schema and object name.
+ * The basic format is to have a directory for each schema, and within each directory
+ * the file name for each object has this format: <type>.<objectName>.<permissions>.<generated>.sql
+ * Where in the above format the <permissions> is only included if the isPermissions flag is true.
+ * For example:
+ *    getDBObjectFileName('view', 'dbo', 'MyView', false, true) => 'dbo/MyView.view.generated.sql'
+ *    getDBObjectFileName('view', 'dbo', 'MyView', true, true)  => 'dbo/MyView.view.permissions.generated.sql'
+ *    getDBObjectFileName('full_text_search_function', 'dbo', 'tableName', false, true) => 'dbo/tableName.fulltext.generated.sql'
+ * @param type 
+ * @param schema 
+ * @param objectName 
+ */
+export function getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function', 
+                                    schema: string, 
+                                    objectName: string, 
+                                    isPermissions: boolean,
+                                    isGenerated: boolean): string {
+                  
+   return path.join(schema, `${objectName}.${type}${type==='full_text_search_function' ? '.fulltext' : ''}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
+}
+
+export async function recompileAllBaseViews(ds: DataSource, applyPermissions: boolean): Promise<boolean> {
     let bSuccess: boolean = true; // start off true
     const md: Metadata = new Metadata();
     for (let i = 0; i < md.Entities.length; ++i) {  
        // do this in two steps to ensure recompile isn't ever short circuited through code optimization
       const e = md.Entities[i];
-      if ( e.BaseViewGenerated && 
-           !e.VirtualEntity && 
+      if ( e.BaseViewGenerated && // only do this for entities that have a base view generated
+           e.IncludeInAPI && // only do this for entities that are included in the API
+           !e.VirtualEntity && // do not include virtual entities
            !newEntityList.includes(e.Name)) {
          // only do this if base view generated and for NON-virtual entities, 
          // custom base views should be defined in the BEFORE SQL Scripts 
          // and NOT for newly created entities         
-         bSuccess = await recompileSingleBaseView(ds, e) && bSuccess;
+         bSuccess = await recompileSingleBaseView(ds, e, applyPermissions) && bSuccess;
       }
     }
 
@@ -31,10 +54,22 @@ export async function recompileAllBaseViews(ds: DataSource): Promise<boolean> {
     return bSuccess;
  }
  
- export async function recompileSingleBaseView(ds: DataSource, entity: EntityInfo): Promise<boolean> {
-    const filePath = path.join(outputDir('SQL', true), `${entity.BaseView}${entity.BaseViewGenerated ? '.generated' : ''}.sql`);
-    if (fs.existsSync(filePath)) 
-      return await executeSQLFile(ds, filePath, true)
+ export async function recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
+   const file = getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
+   const filePath = path.join(outputDir('SQL', true), file);
+   if (fs.existsSync(filePath)) {
+      const recompileResult = await executeSQLFile(ds, filePath, true)
+      if (applyPermissions) {
+         // now apply permissions
+         const permissionsFile = getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
+         const permissionsFilePath = path.join(outputDir('SQL', true), permissionsFile);
+         if (fs.existsSync(permissionsFilePath)) {
+            return await executeSQLFile(ds, permissionsFilePath, true) && recompileResult;
+         }
+      }  
+      else
+         return recompileResult;
+   }
    else {
       logError(`     Error Recompiling Base View: File ${filePath} does not exist`)
       return false

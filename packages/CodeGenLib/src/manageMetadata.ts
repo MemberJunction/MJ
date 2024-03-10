@@ -25,11 +25,10 @@ export async function manageMetadata(ds: DataSource): Promise<boolean> {
       logError('Error updating existing entities');
       bSuccess = false;
    }  
-   if (! await recompileAllBaseViews(ds)) {
-      logError('Error recompiling base views');
+   if (! await recompileAllBaseViews(ds, true)) {
+      logError('Warning: Non-Fatal error recompiling base views');
       // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
       // failure for this entire function
-      // bSuccess = false;
    }         
 
    if (! await manageEntityFields(ds)) {
