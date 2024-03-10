@@ -598,7 +598,7 @@ async function shouldCreateNewEntity(ds: DataSource, newEntity: any): Promise<{s
    // 1) entity has a field that is a primary key
    // validate all of these factors by getting the sql from SQL Server and check the result, if failure, shouldCreate=false and generate validation message, otherwise return empty validation message and true for shouldCreate.
 
-   const query = `EXEC admin.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
+   const query = `EXEC ${Metadata.Provider.ConfigData.MJCoreSchemaName}.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
 
    try {
        const result = await ds.query(query);

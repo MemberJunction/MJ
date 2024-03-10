@@ -1,26 +1,26 @@
--- COMMENTED OUT FOR SAFETY, EXECUTE THIS ONLY ON MJ_BASE TO CLEAN UP THE DATA for baseline MJ Admin schema
+-- COMMENTED OUT FOR SAFETY, EXECUTE THIS ONLY ON MJ_BASE TO CLEAN UP THE DATA for baseline MJ __mj schema
 /*
 
-DELETE FROM admin.QueueTask
-DELETE FROM admin.ErrorLog
-DELETE FROM admin.CompanyIntegrationRunDetail
-DELETE FROM admin.CompanyIntegrationRunAPILog
-DELETE FROM admin.CompanyIntegrationRun
-DELETE FROM admin.CompanyIntegration
-DELETE FROM admin.AuditLog
-DELETE FROM admin.Report
-DELETE FROM admin.ConversationDetail
-DELETE FROM admin.Conversation
-DELETE FROM admin.UserViewRunDetail
-DELETE FROM admin.UserViewRun
-DELETE FROM admin.UserView WHERE ID NOT IN (select ID FROM admin.UserView WHERE ID IN (SELECT DisplayUserViewID FROM admin.EntityRelationship))
-DELETE FROM admin.CompanyIntegrationRunAPILog
-DELETE FROM admin.RecordChange
-DELETE FROM admin.WorkspaceItem
-DELETE FROM admin.EmployeeCompanyIntegration
-DELETE FROM admin.Employee
-DELETE FROM admin.Dashboard
-DELETE FROM admin.Integration 
+DELETE FROM __mj.QueueTask
+DELETE FROM __mj.ErrorLog
+DELETE FROM __mj.CompanyIntegrationRunDetail
+DELETE FROM __mj.CompanyIntegrationRunAPILog
+DELETE FROM __mj.CompanyIntegrationRun
+DELETE FROM __mj.CompanyIntegration
+DELETE FROM __mj.AuditLog
+DELETE FROM __mj.Report
+DELETE FROM __mj.ConversationDetail
+DELETE FROM __mj.Conversation
+DELETE FROM __mj.UserViewRunDetail
+DELETE FROM __mj.UserViewRun
+DELETE FROM __mj.UserView WHERE ID NOT IN (select ID FROM __mj.UserView WHERE ID IN (SELECT DisplayUserViewID FROM __mj.EntityRelationship))
+DELETE FROM __mj.CompanyIntegrationRunAPILog
+DELETE FROM __mj.RecordChange
+DELETE FROM __mj.WorkspaceItem
+DELETE FROM __mj.EmployeeCompanyIntegration
+DELETE FROM __mj.Employee
+DELETE FROM __mj.Dashboard
+DELETE FROM __mj.Integration 
 
 */
  

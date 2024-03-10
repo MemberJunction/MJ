@@ -37,13 +37,13 @@ async function createMJDistribution() {
                                                               item.type.trim().toLowerCase() !== 'graphqlcoreentityresolvers' &&
                                                               item.type.trim().toLowerCase() !== 'angularcoreentities' ); // remove these as we don't want people using MJ to ever generated this stuff.
   
-        // next up, we add "admin" to the list of exclude schemas as we don't want people using MJ to ever generate stuff in the admin schema.
-        // Add "admin" to the "excludeSchemas" array
+        // next up, we add "__mj" to the list of exclude schemas as we don't want people using MJ to ever generate stuff in the __mj schema.
+        // Add "__mj" to the "excludeSchemas" array
         if (configJson.excludeSchemas) {
-          configJson.excludeSchemas.push("admin");
+          configJson.excludeSchemas.push("__mj");
         } 
         else {
-          configJson.excludeSchemas = ["admin"];
+          configJson.excludeSchemas = ["__mj"];
         }
   
         // next up, we need to remove one level of directory from output path if our type = DBSchemaJSON or type = SQL

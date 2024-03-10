@@ -11,7 +11,7 @@ import { RunQueryParams } from "./runQuery";
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
-    private _MJCoreSchemaName: string = 'admin';
+    private _MJCoreSchemaName: string = '__mj';
     private _data: any;
     public get Data(): any {
         return this._data;
@@ -25,7 +25,7 @@ export class ProviderConfigDataBase {
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
     }
-    constructor(data: any, MJCoreScemaName: string = 'admin', includeSchemas?: string[], excludeSchemas?: string[]) {
+    constructor(data: any, MJCoreScemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[]) {
         this._data = data;
         this._MJCoreSchemaName = MJCoreScemaName;
         if (includeSchemas)
