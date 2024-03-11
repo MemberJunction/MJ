@@ -25,11 +25,10 @@ export async function manageMetadata(ds: DataSource): Promise<boolean> {
       logError('Error updating existing entities');
       bSuccess = false;
    }  
-   if (! await recompileAllBaseViews(ds)) {
-      logError('Error recompiling base views');
+   if (! await recompileAllBaseViews(ds, true)) {
+      logError('Warning: Non-Fatal error recompiling base views');
       // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
       // failure for this entire function
-      // bSuccess = false;
    }         
 
    if (! await manageEntityFields(ds)) {
@@ -598,7 +597,7 @@ async function shouldCreateNewEntity(ds: DataSource, newEntity: any): Promise<{s
    // 1) entity has a field that is a primary key
    // validate all of these factors by getting the sql from SQL Server and check the result, if failure, shouldCreate=false and generate validation message, otherwise return empty validation message and true for shouldCreate.
 
-   const query = `EXEC admin.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
+   const query = `EXEC ${Metadata.Provider.ConfigData.MJCoreSchemaName}.spGetPrimaryKeyForTable @TableName='${newEntity.TableName}', @SchemaName='${newEntity.SchemaName}'`;
 
    try {
        const result = await ds.query(query);

@@ -14,7 +14,7 @@ export const dbTrustServerCertificate = env.get('DB_TRUST_SERVER_CERTIFICATE').a
 export const outputCode = env.get('OUTPUT_CODE').asString();
 export const configFile = env.get('CONFIG_FILE').asString();
 
-export const mjCoreSchema = env.get('MJ_CORE_SCHEMA').default('admin').asString();
+export const mjCoreSchema = env.get('MJ_CORE_SCHEMA').default('__mj').asString();
 
 export const graphqlPort = env.get('GRAPHQL_PORT').default('4000').asPortNumber();
 

@@ -43,8 +43,8 @@ export function combineFiles(directory: string, combinedFileName: string, patter
         return;
     }
 
-    // Use glob.sync to find files that match the pattern synchronously
-    const files = glob.sync(pattern, { cwd: directory });
+    // Use glob.sync to find files that match the pattern synchronously, excluding the combinedFileName
+    const files = glob.sync(pattern, { cwd: directory }).filter(file => file !== combinedFileName);
 
     // Sort the files so that files ending with '.generated.sql' come before '.permissions.generated.sql'
     files.sort((a, b) => {

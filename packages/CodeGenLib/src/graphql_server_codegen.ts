@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { logError } from './logging';
 import { mjCoreSchema } from './config';
+import { makeDir } from './util';
 
 export function generateGraphQLServerCode(entities: EntityInfo[], outputDirectory: string, generatedEntitiesImportLibrary: string, excludeRelatedEntitiesExternalToSchema: boolean): boolean {
     let sRet: string = '';
@@ -12,6 +13,7 @@ export function generateGraphQLServerCode(entities: EntityInfo[], outputDirector
         for (let i:number = 0; i < entities.length; ++i) {
             sRet += generateServerEntityString(entities[i], false, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema);
         }
+        makeDir(outputDirectory);
         fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
 
         return true;
