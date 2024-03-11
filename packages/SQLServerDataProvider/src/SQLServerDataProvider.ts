@@ -736,14 +736,12 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     {
 
         if(!contextUser){
-            throw new Error("User context is required to get potential duplicates");
+            throw new Error("User context is required to get record duplicates.");
         }
 
         if(!this._recordDupeDetector){
             this._recordDupeDetector = new DuplicateRecordDetector();
         }
-
-        LogError("SQL SERVER: " + contextUser?.Email);
 
         return await this._recordDupeDetector.getDuplicateRecords(params, contextUser);
     }

@@ -54,7 +54,6 @@ export class DuplicateRecordResolver {
         throw new Error(`User ${userPayload.email} not found in UserCache`);
       }
 
-      LogError("RESOLVER: Current User: " + user.Email);
       const result = await md.GetRecordDuplicates(params, user);
       return result;
     }

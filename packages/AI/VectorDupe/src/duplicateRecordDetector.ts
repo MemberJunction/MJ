@@ -41,8 +41,6 @@ export class DuplicateRecordDetector extends VectorSyncBase {
             return { EntityID: params.EntityDocumentID, Duplicates: [] };
         }
 
-        LogStatus("Registering class", entitiyDocument.Type);
-
         //then get the entity we are looking for duplicates of
         const entityRecord = await this.getEntityRecord(entitiyDocument.Type, params.PrimaryKeyValues);
         LogStatus("Entity Record: ", entityRecord);
@@ -114,7 +112,6 @@ export class DuplicateRecordDetector extends VectorSyncBase {
 
         for(let duplicate of queryResult){
 
-            LogError(JSON.stringify(duplicate));
             if(duplicate.score > 1){
                 //this is likely the record we wanted duplicates of
                 continue;

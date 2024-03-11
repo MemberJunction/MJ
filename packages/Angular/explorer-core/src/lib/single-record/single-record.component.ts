@@ -69,7 +69,6 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
 
       this.loading = false;
 
-      console.log("getting dupe records maybe");
       let request = new PotentialDuplicateRequest();
       request.PrimaryKeyValues = primaryKeyValues;
       request.EntityDocumentID = 1;
