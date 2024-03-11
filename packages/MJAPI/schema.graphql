@@ -1966,7 +1966,7 @@ type PotentialDuplicateResponseType {
 
 type PotentialDuplicateType {
   PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
-  ProbabilityScore: Int!
+  ProbabilityScore: Float!
 }
 
 input PrimaryKeyValueInputType {

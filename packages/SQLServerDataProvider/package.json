@@ -25,6 +25,7 @@
     "@memberjunction/core-entities": "^0.9.152",
     "@memberjunction/global": "^0.9.148",
     "@memberjunction/queue": "^0.9.172",
+    "@memberjunction/ai-vector-dupe": "^0.9.1",
     "mssql": "^10.0.2",
     "typeorm": "^0.3.20"
   }

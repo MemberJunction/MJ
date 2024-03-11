@@ -442,7 +442,7 @@ npm
         }
     }
 
-    public async GetRecordDuplicates(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse>
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
     {
         if(!params){
             return null;

@@ -2,11 +2,9 @@ import * as fs from 'fs';
 import { BaseLLM } from "@memberjunction/ai";
 import { PineconeDatabase } from "@memberjunction/ai-vectors-pinecone";
 import { UserInfo, RunView } from "@memberjunction/core";
-import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient, UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 export class VectorSyncBase {
-    _provider: SQLServerDataProvider;
-    _userInfo: UserInfo;
+    _contextUser: UserInfo;
     _runView: RunView;
 
     _startTime: Date; 
@@ -15,11 +13,6 @@ export class VectorSyncBase {
     _pineconeDB: PineconeDatabase;
     _embedding: BaseLLM;
     _languageModel: BaseLLM;
-
-    public load(provider: any, userInfo: any): void {
-        this._provider = provider;
-        this._userInfo = userInfo;
-    }
 
     protected async timer(ms: number): Promise<unknown> {
         return new Promise(res => setTimeout(res, ms));

@@ -1,20 +1,5 @@
-export * from './generic/duplicateRecords.type';
+export * from './generic/duplicateRecords.types';
 export * from './generic/entity.types';
-export * from './generic/vectorSyncBase';
-export * from './models/entitySyncConfig';
-export * from './entityVectorSyncer';
-export * from './duplicateRecordDetector';
-
-import { EntityVectorSyncer } from './entityVectorSyncer';
-import { DuplicateRecordDetector } from './duplicateRecordDetector';
-
-//const evs = new EntityVectorSyncer();
-//evs.syncEntityDocuments();
-
-/*
-const drd = new DuplicateRecordDetector();
-drd.getDuplicateRecords({ entitiyDocumentID: 1, recordID: 5400 }).then((results) => {
-    console.log("Results: ", results);
-    console.log("done");
-});
-*/
+export * from './models/vectorSyncBase';
+export * from './generic/entitySyncConfig.types';
+export * from './models/entityVectorSyncer';

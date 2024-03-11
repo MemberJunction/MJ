@@ -110,7 +110,7 @@ export class VectorSyncBase {
         fs.writeFileSync(path, JSON.stringify(data, null, 2));
     }
 
-    protected isEmpty(obj) {
+    protected isEmpty(obj: object) {
         for (const prop in obj) {
           if (Object.hasOwn(obj, prop)) {
             return false;

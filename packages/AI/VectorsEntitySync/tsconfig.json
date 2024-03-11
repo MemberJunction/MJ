@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
       "module": "commonjs",
-      "target": "es2020",
+      "target": "es2022",
       "declaration": true,
       "outDir": "dist",
       "rootDir": "src",
@@ -9,7 +9,7 @@
       "experimentalDecorators": true,
       "resolveJsonModule": true,
       "esModuleInterop": true,
-      "lib": ["es2020", "esnext.asynciterable"],
+      "lib": ["es2022", "esnext.asynciterable"],
       "moduleResolution": "node",
       "removeComments": true,
       "noImplicitThis": true,

@@ -9,7 +9,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus} from "@memberjunction/core";
 
 import { RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -20,6 +20,7 @@ import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 
 import { UserCache } from "./UserCache";
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
+import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     get DataSource(): any { return this.Data.DataSource }
@@ -51,6 +52,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     private _currentUserEmail: string;
     private _localStorageProvider: ILocalStorageProvider;
     private _bAllowRefresh: boolean = true;
+    private _recordDupeDetector: DuplicateRecordDetector;
 
     public get ConfigData(): SQLServerProviderConfigData { return <SQLServerProviderConfigData>super.ConfigData; }
 
@@ -730,12 +732,20 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async GetRecordDuplicates(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse>
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
     {
-        return {
-            EntityID: -10,
-            Duplicates: [],
+
+        if(!contextUser){
+            throw new Error("User context is required to get potential duplicates");
         }
+
+        if(!this._recordDupeDetector){
+            this._recordDupeDetector = new DuplicateRecordDetector();
+        }
+
+        LogError("SQL SERVER: " + contextUser?.Email);
+
+        return await this._recordDupeDetector.getDuplicateRecords(params, contextUser);
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {

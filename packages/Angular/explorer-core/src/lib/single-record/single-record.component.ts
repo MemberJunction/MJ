@@ -73,8 +73,9 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       let request = new PotentialDuplicateRequest();
       request.PrimaryKeyValues = primaryKeyValues;
       request.EntityDocumentID = 1;
-      let results = await md.GetRecordDuplicates(request);
-      console.log("got dupe results: ", results);
+      let results = await md.GetRecordDuplicates(request, md.CurrentUser);
+      console.log("got dupe results: ");
+      console.log(results);
     }
   }
 }
