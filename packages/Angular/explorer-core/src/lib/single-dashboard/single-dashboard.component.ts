@@ -1,5 +1,5 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
-import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
+import { TileLayoutComponent, TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
 import { ResourceData } from '@memberjunction/ng-shared';
 import { DashboardEntity, ResourceTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
@@ -34,6 +34,8 @@ export class SingleDashboardComponent implements OnInit {
   public selectedResource!: ResourceTypeEntity | null;
   public selectedDashboardItem!: DashboardItem | null;
   private saveChangesSubject: Subject<any> = new Subject();
+
+  private selectedComponent: SingleDashboardComponent | null = null;
 
   public get contentLoading(): boolean {
     for (const item of this.items) {
@@ -281,6 +283,19 @@ export class SingleDashboardComponent implements OnInit {
       item.rowSpan = e.newRowSpan;
     }
   }
+
+  onMouseEnter(e: MouseEvent): void {
+    this.selectedComponent = <SingleDashboardComponent>(e.target as any);
+  }
+
+  onMouseOut(e: MouseEvent): void {
+    this.selectedComponent = null;
+  }
+
+  getSelectedComponentStyle(component: SingleDashboardComponent): string {
+    return this.selectedComponent === component ? "position: unset" : "";
+  }
+
 }
 
 export class DashboardConfigDetails {
