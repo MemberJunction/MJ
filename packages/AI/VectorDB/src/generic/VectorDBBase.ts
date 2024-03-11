@@ -1,5 +1,5 @@
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexList, RecordMetadata, UpdateOptions, VectorRecord } from "./record";
-import { QueryOptions, QueryResponse } from "./query.types";
+import { QueryOptions, QueryResponse } from './query.types';
 
 export abstract class VectorDBBase {
     private _apiKey: string;
@@ -23,6 +23,7 @@ export abstract class VectorDBBase {
     abstract createIndex(params: CreateIndexParams): BaseResponse | Promise<BaseResponse>;
     abstract deleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
     abstract editIndex(params: EditIndexParams): BaseResponse  | Promise<BaseResponse>;
+    abstract queryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
 
     abstract createRecord(record: VectorRecord): BaseResponse | Promise<BaseResponse>;
     abstract createRecords(record: VectorRecord[]): BaseResponse  | Promise<BaseResponse>;
@@ -32,5 +33,4 @@ export abstract class VectorDBBase {
     abstract updateRecords(records: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
     abstract deleteRecord(record: VectorRecord): BaseResponse  | Promise<BaseResponse>;
     abstract deleteRecords(records: VectorRecord[]): BaseResponse  | Promise<BaseResponse>;
-    abstract queryRecords(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
 }

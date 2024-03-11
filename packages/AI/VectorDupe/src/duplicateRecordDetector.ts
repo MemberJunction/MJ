@@ -1,13 +1,12 @@
 import { GetAIAPIKey } from "@memberjunction/ai";
-import { DuplicateRecordSearchParams, DuplicateRecordSearchResult } from "./generic/duplicateRecords.type";
 import { VectorSyncBase } from "./generic/vectorSyncBase";
 import { MistralLLM } from "@memberjunction/ai-mistral";
 import { PineconeDatabase } from "@memberjunction/ai-vectors-pinecone";
-import { RunViewResult } from "@memberjunction/core";
+import { RunViewResult, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, PrimaryKeyValue } from "@memberjunction/core";
 import { EntityDocument } from "./generic/entity.types";
 
 export class DuplicateRecordDetector extends VectorSyncBase {
-    public async getDuplicateRecords(params: DuplicateRecordSearchParams): Promise<DuplicateRecordSearchResult> {
+    public async getDuplicateRecords(params: PotentialDuplicateRequest): Promise<PotentialDuplicateResponse> {
         this.start();
 
         console.log("Connected to SQL Server");
@@ -24,22 +23,22 @@ export class DuplicateRecordDetector extends VectorSyncBase {
         this._embedding = new MistralLLM(mistralAPIKey); 
         this._languageModel = new MistralLLM(mistralAPIKey);
         
-        const entitiyDocument: EntityDocument=  await this.getEntityDocumennt(params.entitiyDocumentID);
+        const entitiyDocument: EntityDocument=  await this.getEntityDocumennt(params.EntityDocumentID);
         console.log("Entity Document: ", entitiyDocument);
         
         if(!entitiyDocument){
             console.log("Entity Document not found");
-            return { entityID: entitiyDocument.EntityID, duplicates: [] };
+            return { EntityID: entitiyDocument.EntityID, Duplicates: [] };
         }
 
         console.log("Registering class", entitiyDocument.Type);
 
-        const entityRecord = await this.getEntityRecord({ entityName: entitiyDocument.Type, recordID: params.recordID });
+        const entityRecord = await this.getEntityRecord(entitiyDocument.Type, params.PrimaryKeyValues);
         console.log("Entity Record: ", entityRecord);
 
         if(!entityRecord){
             console.log("Entity Record not found");
-            return { entityID: entitiyDocument.EntityID, duplicates: [] };
+            return { EntityID: entitiyDocument.EntityID, Duplicates: [] };
         }
 
         const template = super.parseStringTemplate(entitiyDocument.Template, entityRecord);
@@ -70,10 +69,10 @@ export class DuplicateRecordDetector extends VectorSyncBase {
         }
     }
 
-    private async getEntityRecord(params: {entityName: string, recordID: number}): Promise<any> {
+    private async getEntityRecord(entityName: string, keyValues: PrimaryKeyValue[]): Promise<any> {
         const rvResult: RunViewResult = await this._provider.RunView({
-            EntityName: params.entityName,
-            ExtraFilter: `ID = '${params.recordID}'`
+            EntityName: entityName,
+            ExtraFilter: this.buildExtraFilter(keyValues)
         });
 
         if(!rvResult || rvResult.RowCount === 0){
@@ -85,6 +84,12 @@ export class DuplicateRecordDetector extends VectorSyncBase {
             const entityDocument: EntityDocument = vdResults[0];
             return entityDocument;
         }
+    }
+
+    private buildExtraFilter(keyValues: PrimaryKeyValue[]): string {
+        return keyValues.map((keyValue, index) => {
+            return keyValue.FieldName + " = " + keyValue.Value;
+        }).join(" AND ");
     }
 
     //this is specific to pinecone, should be moved there

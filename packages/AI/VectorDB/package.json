@@ -1,7 +1,7 @@
 {
-    "name": "@memberjunction/ai-openai",
-    "version": "0.9.14",
-    "description": "MemberJunction Wrapper for OpenAI AI Models",
+    "name": "@memberjunction/ai-vectordb",
+    "version": "0.9.1",
+    "description": "MemberJunction: AI Vector Database Module",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "files": [
@@ -14,14 +14,16 @@
     },
     "author": "MemberJunction.com",
     "license": "ISC",
+    "dependencies": {
+      "@langchain/mistralai": "^0.0.7",
+      "@memberjunction/core": "^0.9.148",
+      "@memberjunction/global": "^0.9.135",
+      "dotenv": "^16.0.3",
+      "openai": "^3.2.1"
+    },
     "devDependencies": {
-      "openai": "^3.2.1",
+      "@types/node": "^20.1.7",
       "ts-node-dev": "^2.0.0",
       "typescript": "^5.3.3"
-    },
-    "dependencies": {
-      "@memberjunction/ai": "^0.9.155",
-      "@memberjunction/global": "^0.9.146",
-      "openai": "^4.28.4"
     }
   }
