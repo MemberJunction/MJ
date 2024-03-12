@@ -953,6 +953,7 @@ AS
 		e.ID = fromSQL.EntityID
 GO
 
+
 DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
 GO
 CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
@@ -1001,11 +1002,13 @@ BEGIN
         vwForeignKeys fk
     ON
         ef.Name = fk.[column] AND
-        e.BaseTable = fk.[table]
+        e.BaseTable = fk.[table] AND
+		e.SchemaName = fk.[schema_name]
     LEFT OUTER JOIN 
         [__mj].Entity re -- Related Entity
     ON
-        re.BaseTable = fk.referenced_table
+        re.BaseTable = fk.referenced_table AND
+		re.SchemaName = fk.[schema_name]
     LEFT OUTER JOIN 
 		[__mj].vwTablePrimaryKeys pk
     ON

@@ -672,7 +672,8 @@ async function createNewEntity(ds: DataSource, newEntity: any, md: Metadata) {
          let newEntityName: string = await createNewEntityName(newEntity);
          let suffix = '';
          const existingEntity = md.Entities.find(e => e.Name === newEntityName);
-         if (existingEntity) {
+         const existingEntityInNewEntityList = newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
+         if (existingEntity || existingEntityInNewEntityList) {
             // the generated name is already in place, so we need another name
             // use Entity Name __ SchemaName instead of just the table name as basis
             suffix = '__' + newEntity.SchemaName;
