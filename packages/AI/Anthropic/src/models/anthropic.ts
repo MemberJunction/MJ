@@ -1,5 +1,7 @@
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
+    EmbedParams, 
+    EmbedResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
     SummarizeResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
@@ -120,6 +122,10 @@ ${GetUserMessageFromChatParams(params)}`
     }
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
+        throw new Error("Method not implemented.");
+    }
+
+    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
         throw new Error("Method not implemented.");
     }
 

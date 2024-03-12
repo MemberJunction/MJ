@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
-import { Metadata, PrimaryKeyValue } from '@memberjunction/core';
+import { Metadata, PotentialDuplicateRequest, PrimaryKeyValue } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '../generic/base-form-component';
@@ -39,6 +39,8 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       this.entityName = entityName
       this.primaryKeyValues = primaryKeyValues
 
+      console.log("loading form...");
+
       const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
       const md = new Metadata();
       const entity = md.Entities.find(e => {
@@ -66,6 +68,13 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       }
 
       this.loading = false;
+
+      let request = new PotentialDuplicateRequest();
+      request.PrimaryKeyValues = primaryKeyValues;
+      request.EntityDocumentID = 1;
+      let results = await md.GetRecordDuplicates(request, md.CurrentUser);
+      console.log("got dupe results: ");
+      console.log(results);
     }
   }
 }

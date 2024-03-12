@@ -4,10 +4,11 @@ import SQLConnectionPool from "./db/db";
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
 import AppDataSource from "./db/dbAI";
 import { IMetadataProvider, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
-import { currentUserEmail, mistralAPIKey, pineconeAPIKey } from "./config";
-import { IEmbedding, MistralAIEmbedding } from '@memberjunction/vectors';
-import { PineconeDatabase } from '@memberjunction/vectors-pinecone';
+import { currentUserEmail } from "./config";
+import { PineconeDatabase } from '@memberjunction/ai-vectors-pinecone';
 import { IProcedureResult, Request } from 'mssql';
+import {BaseLLM, GetAIAPIKey} from '@memberjunction/ai';
+import { MistralLLM } from '@memberjunction/ai-mistral';
 
 export class EntityVectorSyncer {
 
@@ -18,8 +19,8 @@ export class EntityVectorSyncer {
     _startTime: Date; 
     _endTime: Date;
 
-    _embedding: IEmbedding;
     _pineconeDB: PineconeDatabase;
+    _embedding: BaseLLM;
 
     public async syncEntityDocuments(): Promise<void> {
         this.start();
@@ -27,8 +28,11 @@ export class EntityVectorSyncer {
         console.log("Connected to SQL Server");
         console.log("Syncing entities...");
 
-        this._embedding = new MistralAIEmbedding(mistralAPIKey);
+        const pineconeAPIKey = GetAIAPIKey("PineconeDatabase");
+        const mistralAPIKey = GetAIAPIKey("MistralLLM");
+
         this._pineconeDB = new PineconeDatabase(pineconeAPIKey);
+        this._embedding = new MistralLLM(mistralAPIKey); 
 
         const entityConfigs: EntitySyncConfig[] = this.getJSONData();
         const activeCount: number = entityConfigs.filter((entity: EntitySyncConfig) => entity.IncludeInSync).length;
@@ -111,7 +115,7 @@ export class EntityVectorSyncer {
             let result: RunViewResult = await this._runView.RunView(rvParams, this._userInfo);
             console.log("processing embedding batch #", (offset/fetchNext) + 1, `of ${entityDocument.Type}-${entityDocument.Name} records`);
 
-            for(const record of result.Results){
+            for(const record of result.Results as any[]){
                 //the record needs to have an ID and UpdatedAt column
                 if(!record.ID || !record.UpdatedAt || record.UpdatedAt <= lastRunDate){
                     continue;
@@ -122,7 +126,8 @@ export class EntityVectorSyncer {
                 //and update MJ with the new embedding
                 const formattedTemplate: string = this.parseStringTemplate(entityDocument.Template, record);
                 
-                const embeddingRes: number[] = await this._embedding.createEmbedding(formattedTemplate);
+                const embedResponse = this._embedding.EmbedText({text: formattedTemplate, model: null});
+                const embeddingRes: number[] = (await embedResponse).data;
                 
                 //add a delay to avoid rate limiting
                 await this.timer(100);
@@ -152,11 +157,14 @@ export class EntityVectorSyncer {
                     vectorRecordID = `${entityDocument.Type}${entityDocument.Name}${recordID}`
                 }
 
-                const existingRecord = await this._pineconeDB.getRecord(vectorRecordID);
+                const existingRecord = (await this._pineconeDB.getRecord({id: vectorRecordID})).data;
                 if(existingRecord){
                     await this._pineconeDB.updateRecord({
-                        id: upsertResult.recordset[0].ID.toString(),
-                        values: embeddingRes,
+                        id: null,
+                        data: {
+                            id: vectorRecordID,
+                            values: embeddingRes
+                        }
                     });
                 }
                 else{
@@ -233,30 +241,21 @@ export class EntityVectorSyncer {
 
     private async upsertEntityRecordDocument(document: EntitiyRecordDocument): Promise<IProcedureResult<EntitiyRecordDocument>> {
         const sp: string = document.ID <= -1 ? "admin.spCreateEntityRecordDocument" : "admin.spUpdateEntityRecordDocument";
-        let params: any;
+        let params = {
+            ID: document.ID,
+            EntityID: document.EntityID,
+            RecordID: document.RecordID,
+            DocumentText: document.DocumentText,
+            VectorIndexID: document.VectorIndexID,
+            VectorID: document.VectorID,
+            VectorJSON: document.VectorJSON,
+            EntityRecordUpdatedAt: document.EntitiyRecordUpdatedAt
+        };
+
         if(sp === "admin.spCreateEntityRecordDocument"){
-            params = {
-                EntityID: document.EntityID,
-                RecordID: document.RecordID,
-                DocumentText: document.DocumentText,
-                VectorIndexID: document.VectorIndexID,
-                VectorID: document.VectorID,
-                VectorJSON: document.VectorJSON,
-                EntityRecordUpdatedAt: document.EntitiyRecordUpdatedAt
-            };
+            delete params.ID;
         }
-        else{
-            params = {
-                ID: document.ID,
-                EntityID: document.EntityID,
-                RecordID: document.RecordID,
-                DocumentText: document.DocumentText,
-                VectorIndexID: document.VectorIndexID,
-                VectorID: document.VectorID,
-                VectorJSON: document.VectorJSON,
-                EntityRecordUpdatedAt: document.EntitiyRecordUpdatedAt
-            };
-        }
+
         const result = await this.executeStoredProcedure<EntitiyRecordDocument>(sp, params);
         return result;
     }

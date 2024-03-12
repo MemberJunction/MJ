@@ -1,25 +1,25 @@
 {
-  "name": "@memberjunction/core-entities",
-  "version": "0.9.156",
-  "description": "Entity subclasses for the metadata layer of MemberJunction defined in the MJ_CORE schema (usually '__mj'), distributed as part of each release of MemberJunction",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "MemberJunction.com",
-  "license": "ISC",
-  "devDependencies": {
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "@memberjunction/core": "^0.9.169",
-    "@memberjunction/global": "^0.9.148"
-  }
+    "name":  "@memberjunction/core-entities",
+    "version":  "0.9.154",
+    "description":  "Entity subclasses for the metadata layer of MemberJunction defined in the MJ_CORE schema (usually \u0027admin\u0027), distributed as part of each release of MemberJunction",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "start":  "ts-node-dev src/index.ts",
+                    "build":  "tsc",
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
+                },
+    "author":  "MemberJunction.com",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "ts-node-dev":  "^2.0.0",
+                            "typescript":  "^5.3.3"
+                        },
+    "dependencies":  {
+                         "@memberjunction/core":  "^0.9.170",
+                         "@memberjunction/global":  "^0.9.150"
+                     }
 }

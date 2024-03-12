@@ -42,6 +42,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   }
 
   private async initialLoad() {
+    console.log("loading view...single-view");
     const md = new Metadata()
     if (this.viewId || this.viewName) {
       let view: UserViewEntity | null = null;

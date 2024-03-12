@@ -1,26 +1,25 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
-import { OpenAI } from "openai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, ClassifyParams, ClassifyResult, EmbedParams, EmbedResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import OpenAI, { OpenAIApi, ChatCompletionRequestMessage, ChatCompletionRequestMessageRoleEnum, Configuration, CreateEmbeddingRequest, CreateEmbeddingResponse } from "openai";
 import { RegisterClass } from '@memberjunction/global';
-import { ChatCompletionMessageParam } from "openai/resources";
+import { EmbeddingModels } from './embeddingModels.types';
 
 @RegisterClass(BaseLLM, 'OpenAILLM')
 export class OpenAILLM extends BaseLLM {
-    static _openAI: OpenAI;
+    static _openAI;//: OpenAIApi;
 
     constructor(apiKey: string) {
         super(apiKey);
+        const configuration = new Configuration({
+            apiKey: apiKey
+        });
         if (!OpenAILLM._openAI)
-            OpenAILLM._openAI = new OpenAI({
-                apiKey: apiKey,
-            });
+            OpenAILLM._openAI = new OpenAIApi(configuration);
     }
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
-
-
         const startTime = new Date();
-        const result = await OpenAILLM._openAI.chat.completions.create({
+        const result = await OpenAILLM._openAI.createChatCompletion({
             model: params.model,
             messages: messages,
             temperature: params.temperature,
@@ -30,20 +29,20 @@ export class OpenAILLM extends BaseLLM {
 
         return {
             data: {
-                choices: result.choices.map((c: { message: { role: string | number; content: any; }; finish_reason: any; index: any; }) => {
+                choices: result.data.choices.map((c: { message: { role: string | number; content: any; }; finish_reason: any; index: any; }) => {
                     return {
                         message: {
-                            role: <ChatMessageRole>c.message.role,
+                            role: ChatCompletionRequestMessageRoleEnum[c.message.role],
                             content: c.message.content
                         },
                         finish_reason: c.finish_reason,
                         index: c.index
                     }
                 }),
-                usage: new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens)
+                usage: new ModelUsage(result.data.usage.prompt_tokens, result.data.usage.completion_tokens)
             },
-            success: !!result,
-            statusText: 'success',
+            success: result.status === 200,
+            statusText: result.statusText,
             startTime: startTime,
             endTime: endTime,
             timeElapsed: timeElapsed,
@@ -58,16 +57,16 @@ export class OpenAILLM extends BaseLLM {
 
 
         const startTime = new Date();
-        const result = await OpenAILLM._openAI.chat.completions.create({
+        const result = await OpenAILLM._openAI.createChatCompletion({
             model: params.model,
             messages: messages
         });
         const endTime = new Date();
 
-        const success = result && result.choices && result.choices.length > 0;
+        const success = result.data && result.data.choices && result.data.choices.length > 0;
         let summaryText = null;
         if (success)
-            summaryText = result.choices[0].message.content;
+            summaryText = result.data.choices[0].message.content;
 
         return new SummarizeResult(GetUserMessageFromChatParams(params), summaryText, success, startTime, endTime);
     }
@@ -76,7 +75,46 @@ export class OpenAILLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 
-    public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
+    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
+        try{
+            const request: CreateEmbeddingRequest = {
+                model: params.model,
+                input: params.text
+            };
+
+            const AxiosResponse = await OpenAILLM._openAI.createEmbedding(request);
+            const data: CreateEmbeddingResponse = AxiosResponse.data;
+            return {
+                object: 'object',
+                model: params.model,
+                ModelUsage: new ModelUsage(data.usage.prompt_tokens, 0),
+                data: data.data[0].embedding
+            }
+        }
+        catch(error){
+            console.log("error creating embedding:", error.response.data);
+            return null;
+        }
+    }
+
+    public async createEmbedding(text: string, options?: any): Promise<CreateEmbeddingResponse> {
+        try{
+            const request: CreateEmbeddingRequest = {
+                model: options.model || EmbeddingModels.ada,
+                input: text
+            }
+
+            const AxiosResponse = await OpenAILLM._openAI.createEmbedding(request);
+            const data: CreateEmbeddingResponse = AxiosResponse.data;
+            return data;
+        }
+        catch(error){
+            console.log("error creating embedding:", error.response.data);
+            return null;
+        }
+    }
+
+    public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionRequestMessage[] {
         // add user messages - using types OpenAI likes
         return messages.map(m => {
             return {
@@ -89,11 +127,11 @@ export class OpenAILLM extends BaseLLM {
     public ConvertMJToOpenAIRole(role: string) {//}: ChatCompletionRequestMessageRoleEnum {
         switch (role.trim().toLowerCase()) {
             case 'system':
-                return 'system';
+                return ChatCompletionRequestMessageRoleEnum.System
             case 'user':
-                return 'user';
+                return ChatCompletionRequestMessageRoleEnum.User
             case 'assistant':
-                return 'assistant';
+                return ChatCompletionRequestMessageRoleEnum.Assistant
             default:
                 throw new Error(`Unknown role ${role}`)
         }
@@ -101,5 +139,5 @@ export class OpenAILLM extends BaseLLM {
 }
 
 export function LoadOpenAILLM() {
-    // this does nothing but prevents the class from being removed by the tree shaker
+    // does nothing, avoid tree shaking that will get rid of this class since there is no static link to this class in the code base as it is loaded dynamically
 }

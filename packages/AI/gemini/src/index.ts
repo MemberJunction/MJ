@@ -4,7 +4,7 @@
 import { GoogleGenerativeAI, InputContent, Part } from "@google/generative-ai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, EmbedParams, EmbedResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
@@ -107,6 +107,10 @@ export class GeminiLLM extends BaseLLM {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
             parts: message.content
         }
+    }
+
+    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
+        throw new Error("Method not implemented.");
     }
 }
  

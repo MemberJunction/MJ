@@ -48,7 +48,61 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
+export class PrimaryKeyValueBase {
+    /*
+    * The primary key values of the record 
+    */
+    PrimaryKeyValues: PrimaryKeyValue[];
 
+    //MJ Server's DuplicateRecordResolve has a copy of this property
+    //changes here should be applied there as well
+    GetCompositeKey(): string {
+        
+        if(!this.PrimaryKeyValues){
+            return "";
+        }
+
+        if(this.PrimaryKeyValues.length === 1){
+            return this.PrimaryKeyValues[0].Value.toString();
+        }
+
+        return this.PrimaryKeyValues.map((keyValue, index) => {
+            return keyValue.Value.toString();
+        }).join(", ");
+    }
+}
+
+export class PotentialDuplicate extends PrimaryKeyValueBase {
+    ProbabilityScore: number
+}
+
+export class PotentialDuplicateRequest extends PrimaryKeyValueBase {
+    /**
+    * The ID of the entity document to use
+    **/
+    EntityDocumentID: number;
+    /**
+    * The ID of the entity the record belongs to
+    **/
+    EntityID?: number;
+    /**
+    * The name of the entity the record belongs to
+    **/
+    EntityName?: string;
+    /**
+    * The minimum score in order to consider a record a potential duplicate
+    **/
+    ProbabilityScore?: number;
+    /**
+    * Additional options to pass to the provider
+    **/
+    Options?: any;
+}
+
+export class PotentialDuplicateResponse {
+    EntityID: number;
+    Duplicates: PotentialDuplicate[];
+}
 
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
@@ -79,7 +133,6 @@ export class EntityRecordNameResult  {
     EntityName: string;
     RecordName?: string;
  }
-
 
 export interface ILocalStorageProvider {
     getItem(key: string): Promise<string | null>;
@@ -130,6 +183,13 @@ export interface IMetadataProvider {
      * @param primaryKeyValues the primary key(s) for the record to check
      */
     GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]>  
+
+    /**
+     * Returns a list of record IDs that are possible duplicates of the specified record. 
+     * 
+     * @param params object containing many properties used in fetching records and determining which ones to return
+     */
+    GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

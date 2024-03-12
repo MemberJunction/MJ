@@ -1951,6 +1951,24 @@ type PaymentTermsType_ {
   UpdatedAt: Timestamp!
 }
 
+input PotentialDuplicateRequestType {
+  EntitiyID: Int
+  EntityDocumentID: Int!
+  EntityName: String
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  ProbabilityScore: Int
+}
+
+type PotentialDuplicateResponseType {
+  Duplicates: [PotentialDuplicateType!]!
+  EntityID: Int!
+}
+
+type PotentialDuplicateType {
+  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  ProbabilityScore: Float!
+}
+
 input PrimaryKeyValueInputType {
   FieldName: String!
   Value: String!
@@ -2055,6 +2073,7 @@ type Query {
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
   GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
+  GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
   Industry(ID: Int!): Industry_
