@@ -1,14 +1,13 @@
 import * as fs from 'fs';
-import { EntitySyncConfig } from './models/entitySyncConfig';
-import SQLConnectionPool from "./db/db";
+import { EntitySyncConfig } from '../generic/entitySyncConfig.types';
+import SQLConnectionPool from '../db/db';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
-import AppDataSource from "./db/dbAI";
+import AppDataSource from "../db/dbAI";
 import { IMetadataProvider, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
-import { currentUserEmail } from "./config";
-import { PineconeDatabase } from '@memberjunction/ai-vectors-pinecone';
+import { currentUserEmail } from "../config";
 import { IProcedureResult, Request } from 'mssql';
-import {BaseLLM, GetAIAPIKey} from '@memberjunction/ai';
-import { MistralLLM } from '@memberjunction/ai-mistral';
+import { Embeddings, GetAIAPIKey} from '@memberjunction/ai';
+import { UpdateOptions, VectorDBBase } from '@memberjunction/ai-vectordb';
 
 export class EntityVectorSyncer {
 
@@ -19,8 +18,8 @@ export class EntityVectorSyncer {
     _startTime: Date; 
     _endTime: Date;
 
-    _pineconeDB: PineconeDatabase;
-    _embedding: BaseLLM;
+    _vectorDB: VectorDBBase;
+    _embedding: Embeddings;
 
     public async syncEntityDocuments(): Promise<void> {
         this.start();
@@ -29,9 +28,12 @@ export class EntityVectorSyncer {
         console.log("Syncing entities...");
 
         const pineconeAPIKey = GetAIAPIKey("PineconeDatabase");
-        const mistralAPIKey = GetAIAPIKey("MistralLLM");
+        console.log("Pinecone API Key: ", pineconeAPIKey);
 
-        this._pineconeDB = new PineconeDatabase(pineconeAPIKey);
+        const mistralAPIKey = GetAIAPIKey("MistralLLM");
+        console.log("Mistral API Key: ", mistralAPIKey);
+
+        this._vectorDB = new PineconeDatabase(pineconeAPIKey);
         this._embedding = new MistralLLM(mistralAPIKey); 
 
         const entityConfigs: EntitySyncConfig[] = this.getJSONData();
@@ -157,15 +159,19 @@ export class EntityVectorSyncer {
                     vectorRecordID = `${entityDocument.Type}${entityDocument.Name}${recordID}`
                 }
 
-                const existingRecord = (await this._pineconeDB.getRecord({id: vectorRecordID})).data;
+                const existingRecord = (await this._vectorDB.getRecord({id: vectorRecordID})).data;
+                
+                //we need the data param but its not defined
+                let updateParams: any = {
+                    id: null,
+                    data: {
+                        id: vectorRecordID,
+                        values: embeddingRes
+                    }
+                }
+
                 if(existingRecord){
-                    await this._pineconeDB.updateRecord({
-                        id: null,
-                        data: {
-                            id: vectorRecordID,
-                            values: embeddingRes
-                        }
-                    });
+                    await this._vectorDB.updateRecord(updateParams);
                 }
                 else{
                     const pineconeRecord: any = {
@@ -176,7 +182,7 @@ export class EntityVectorSyncer {
                         }
                     }
 
-                    await this._pineconeDB.createRecord(pineconeRecord);
+                    await this._vectorDB.createRecord(pineconeRecord);
                 }
             }
 

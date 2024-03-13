@@ -1,6 +1,7 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, EmbedParams, EmbedResult, ModelUsage, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { ChatCompletionResponseChoice, EmbeddingResponse, ListModelsResponse, MistralClient } from './mistralClient';
+import { MistralClient } from './mistralClient';
+import { ChatCompletionResponseChoice, ListModelsResponse } from '../generic/mistral.types';
 
 @RegisterClass(BaseLLM, "MistralLLM")
 export class MistralLLM extends BaseLLM {
@@ -60,21 +61,6 @@ export class MistralLLM extends BaseLLM {
 
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
-    }
-
-    public async createEmbedding(model: string, text: string): Promise<EmbeddingResponse> {
-        const response: EmbeddingResponse = await this.client.embeddings(model, text);
-        return response;
-    }
-
-    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
-        const response: EmbeddingResponse = await this.client.embeddings(params.model, params.text);
-        return {
-            object: 'object',
-            model: params.model || "mistral-embed", //hard coded for now as theres only one available embedding model
-            ModelUsage: new ModelUsage(response.usage.prompt_tokens, response.usage.completion_tokens),
-            data: response.data[0].embedding
-        }
     }
 
     /**

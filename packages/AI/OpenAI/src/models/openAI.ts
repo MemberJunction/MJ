@@ -15,10 +15,6 @@ export class OpenAILLM extends BaseLLM {
             });
     }
 
-    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
-        throw new Error("Method not implemented.");
-    }
-
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
 

@@ -1,35 +1,33 @@
 {
-    "name": "@memberjunction/ai-vectorsync",
-    "version": "0.9.1",
-    "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "files": [
-      "/dist"
-    ],
-    "scripts": {
-      "start": "ts-node-dev src/index.ts",
-      "build": "tsc",
-      "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "author": "MemberJunction.com",
-    "license": "ISC",
-    "dependencies": {
-      "@memberjunction/ai": "^0.9.152",
-      "@memberjunction/ai-mistral": "^0.9.9",
-      "@memberjunction/ai-vectors": "^0.9.3",
-      "@memberjunction/ai-vectors-pinecone": "^0.9.1",
-      "@memberjunction/aiengine": "^0.9.28",
-      "@memberjunction/core": "^0.9.147",
-      "@memberjunction/global": "^0.9.135",
-      "@memberjunction/sqlserver-dataprovider": "^0.9.158",
-      "dotenv": "^16.0.3",
-      "typeorm": "^0.3.20"
-    },
-    "devDependencies": {
-      "@types/mssql": "^9.1.5",
-      "@types/node": "^20.1.7",
-      "ts-node-dev": "^2.0.0",
-      "typescript": "^5.3.3"
-    }
+  "name": "@memberjunction/ai-vector-sync",
+  "version": "0.9.6",
+  "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between Vector DB and MJ CDP Data",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/ai": "^0.9.159",
+    "@memberjunction/ai-vectordb": "^0.9.3",
+    "@memberjunction/ai-vectors": "^0.9.4",
+    "@memberjunction/aiengine": "^0.9.56",
+    "@memberjunction/core": "^0.9.171",
+    "@memberjunction/global": "^0.9.152",
+    "dotenv": "^16.0.3",
+    "typeorm": "^0.3.20"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.5",
+    "@types/node": "^20.1.7",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
   }
+}
