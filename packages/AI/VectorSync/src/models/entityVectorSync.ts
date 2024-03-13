@@ -8,6 +8,7 @@ import { currentUserEmail } from "../config";
 import { IProcedureResult, Request } from 'mssql';
 import { Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { UpdateOptions, VectorDBBase } from '@memberjunction/ai-vectordb';
+import { MJGlobal } from '@memberjunction/global';
 
 export class EntityVectorSyncer {
 
@@ -33,8 +34,11 @@ export class EntityVectorSyncer {
         const mistralAPIKey = GetAIAPIKey("MistralLLM");
         console.log("Mistral API Key: ", mistralAPIKey);
 
+        //use class factory here 
         this._vectorDB = new PineconeDatabase(pineconeAPIKey);
         this._embedding = new MistralLLM(mistralAPIKey); 
+
+        this._vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(BaseLLM, apiKey.vendorDriverName, apiKey.apiKey)
 
         const entityConfigs: EntitySyncConfig[] = this.getJSONData();
         const activeCount: number = entityConfigs.filter((entity: EntitySyncConfig) => entity.IncludeInSync).length;
