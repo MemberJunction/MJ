@@ -75,9 +75,5 @@ export class GroqLLM extends BaseLLM {
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
     }
-  
-    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
-        throw new Error("Method not implemented.");
-    }
 }
  
