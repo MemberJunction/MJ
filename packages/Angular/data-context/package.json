@@ -29,6 +29,7 @@
   "dependencies": {
     "@memberjunction/core": "^0.9.171",
     "@memberjunction/global": "^0.9.152",
+    "@memberjunction/ng-compare-records": "^0.9.172",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
