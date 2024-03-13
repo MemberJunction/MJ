@@ -177,8 +177,8 @@ AI_VENDOR_API_KEY__MistralLLM = '${mistralAPIKey}'
 
 # Skip API URL, KEY and Org ID
 # YOU MUST ENTER IN THE CORRECT URL and ORG ID for your Skip API USE BELOW
-BOT_EXTERNAL_API_URL = 'https://tasioskipapi.azurewebsites.net/report'
-BOT_SCHEMA_ORGANIZATION_ID = -1
+ASK_SKIP_API_URL = 'http://localhost:8000'
+ASK_SKIP_ORGANIZATION_ID = 1
 
 CONFIG_FILE='config.json'
 `

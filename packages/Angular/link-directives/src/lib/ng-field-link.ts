@@ -1,6 +1,6 @@
 import { Directive, ElementRef, Renderer2, Input, OnInit, HostListener } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BaseEntity, EntityField, LogStatus, Metadata } from '@memberjunction/core';
+import { BaseEntity, EntityField, EntityInfo, LogStatus, Metadata } from '@memberjunction/core';
 import { BaseLink } from './ng-base-link';
 
 @Directive({
@@ -13,6 +13,7 @@ export class FieldLink extends BaseLink implements OnInit {
   @Input('replaceText') replaceText: boolean = true ; // 
 
   private _targetEntity: string = '';
+  private _targetEntityInfo: EntityInfo | undefined;
   private _targetRecordID: number = 0;
 
   constructor(private el: ElementRef, private renderer: Renderer2, private route: ActivatedRoute, private router: Router) {
@@ -32,6 +33,11 @@ export class FieldLink extends BaseLink implements OnInit {
     if (relatedEntity && relatedEntity.length > 0) {
       this._targetEntity = relatedEntity;
       this._targetRecordID = this.field.Value;
+      const md = new Metadata();
+      this._targetEntityInfo = md.Entities.find(e => e.Name === relatedEntity);
+      if (!this._targetEntityInfo)
+        throw new Error('Related entity not found in metadata: ' + relatedEntity);
+
       this.CreateLink(this.el, this.field, this.renderer, '', false);
       
       if (this.replaceText) { 
@@ -49,8 +55,12 @@ export class FieldLink extends BaseLink implements OnInit {
 
           // we didn't have the related field mapping info (above), no related entity name field map provided in the entity field metadata, so do a lookup
           // requires a server round trip and hitting the DB, so we try to avoid this
-          const md = new Metadata();
-          md.GetEntityRecordName(relatedEntity, [{FieldName: "ID", Value: this.field.Value}]).then(recordName => {
+
+          const pkVals = [{
+            FieldName: this._targetEntityInfo.PrimaryKey.Name, // AT THE MOMENT - we only support foreign keys with a single value
+            Value: this.field.Value
+          }];
+          md.GetEntityRecordName(relatedEntity, pkVals).then(recordName => {
             if (recordName && recordName.length > 0)
                 this.renderer.setProperty(this.el.nativeElement, 'textContent', recordName);
           });
@@ -65,7 +75,12 @@ export class FieldLink extends BaseLink implements OnInit {
   @HostListener('click', ['$event'])
   onClick(event: Event) {
     event.preventDefault();
-    this.router.navigate(['resource', 'record', this._targetRecordID], { queryParams: { Entity: this._targetEntity } })
+    if (!this._targetEntityInfo) 
+      throw new Error('targetEntityInfo not set');
+
+    // AT THE MOMENT - we only support foreign keys with a single value
+    const keyVals = `${this._targetEntityInfo.PrimaryKey.Name}|${this._targetRecordID}`
+    this.router.navigate(['resource', 'record', keyVals], { queryParams: { Entity: this._targetEntity } })
   }  
 
 }
