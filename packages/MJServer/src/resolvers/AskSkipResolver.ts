@@ -135,6 +135,10 @@ export class AskSkipResolver {
       {
         vendorDriverName: 'GeminiLLM',
         apiKey: GetAIAPIKey('GeminiLLM')
+      },
+      {
+        vendorDriverName: 'GroqLLM',
+        apiKey: GetAIAPIKey('GroqLLM')
       }
     ];
   }

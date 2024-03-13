@@ -27,7 +27,7 @@
     "@memberjunction/ai": "^0.9.159",
     "@memberjunction/core": "^0.9.171",
     "@memberjunction/global": "^0.9.152",
-    "@memberjunction/server": "^0.9.234",
+    "@memberjunction/server": "^0.9.235",
     "@memberjunction/sqlserver-dataprovider": "^0.9.192",
     "axios": "^1.5.1",
     "class-validator": "^0.14.0",
