@@ -368,7 +368,7 @@ LEFT OUTER JOIN
    [${mj_core_schema()}].Entity re -- Related Entity
 ON
    re.BaseTable = fk.referenced_table AND
-   re.SchemaName = fk.[schema_name]
+   re.SchemaName = fk.[referenced_schema]
 LEFT OUTER JOIN 
    [${mj_core_schema()}].vwTablePrimaryKeys pk
 ON

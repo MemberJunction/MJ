@@ -103,7 +103,7 @@ INNER JOIN sys.tables tab2
 INNER JOIN sys.columns col2
     ON col2.column_id = referenced_column_id AND col2.object_id = tab2.object_id
 INNER JOIN sys.schemas sch2
-    ON tab2.schema_id = sch.schema_id
+    ON tab2.schema_id = sch2.schema_id
 GO
 
 DROP VIEW IF EXISTS [__mj].vwEntities
