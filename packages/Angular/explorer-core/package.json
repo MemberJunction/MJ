@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.191",
+  "version": "0.9.193",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -36,16 +36,16 @@
     "@progress/kendo-svg-icons": "~2.1.0"
   },
   "dependencies": {
-    "@memberjunction/global": "^0.9.148",
-    "@memberjunction/core": "^0.9.168",
-    "@memberjunction/ng-compare-records": "^0.9.167",
-    "@memberjunction/ng-record-changes": "^0.9.101",
-    "@memberjunction/ng-container-directives": "^0.9.133",
-    "@memberjunction/ng-user-view-grid": "^0.9.200",
-    "@memberjunction/ng-query-grid": "^0.9.47",
-    "@memberjunction/ng-shared": "^0.9.19",
-    "@memberjunction/ng-ask-skip": "^0.9.78",
-    "@memberjunction/ng-auth-services": "^0.9.91",
+    "@memberjunction/global": "^0.9.152",
+    "@memberjunction/core": "^0.9.171",
+    "@memberjunction/ng-compare-records": "^0.9.172",
+    "@memberjunction/ng-record-changes": "^0.9.106",
+    "@memberjunction/ng-container-directives": "^0.9.135",
+    "@memberjunction/ng-user-view-grid": "^0.9.205",
+    "@memberjunction/ng-query-grid": "^0.9.52",
+    "@memberjunction/ng-shared": "^0.9.21",
+    "@memberjunction/ng-ask-skip": "^0.9.86",
+    "@memberjunction/ng-auth-services": "^0.9.94",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

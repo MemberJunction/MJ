@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectors-pinecone",
-  "version": "0.9.1",
+  "version": "0.9.7",
   "description": "MemberJunction: Pinecone Implementation for AI Vectors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,11 +16,10 @@
   "license": "ISC",
   "dependencies": {
     "@langchain/mistralai": "^0.0.7",
-    "@memberjunction/aiengine": "^0.9.28",
-    "@memberjunction/core": "^0.9.142",
-    "@memberjunction/global": "^0.9.135",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.158",
-    "@memberjunction/vectors": "file:../Vectors",
+    "@memberjunction/aiengine": "^0.9.56",
+    "@memberjunction/core": "^0.9.171",
+    "@memberjunction/global": "^0.9.152",
+    "@memberjunction/ai-vectors": "^0.9.4",
     "@pinecone-database/pinecone": "^2.0.1",
     "dotenv": "^16.0.3",
     "openai": "^3.2.1",

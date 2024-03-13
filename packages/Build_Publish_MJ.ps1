@@ -235,48 +235,6 @@ function LinkAllDependencies($dependenciesArray) {
 
 
 ############################################################################################################
-############################################################################################################
-# Define a custom object for each library including the directory name and the dependencies list (in order)
-# $libraries = @(
-#     # Base Libraries
-#     @{Name='MJGlobal'},
-#     @{Name='MJCore'},
-#     @{Name='MJCoreEntities'},
-#     @{Name='AI/Core'}, 
-#     @{Name='AI/Engine'}, 
-#     @{Name='AI/Anthropic'}, 
-#     @{Name='AI/Gemini'}, 
-#     @{Name='AI/Mistral'}, 
-#     @{Name='AI/OpenAI'}, 
-#     @{Name='AI/Vectors'}, 
-#     @{Name='AI/VectorsEntitySync'}, 
-#     @{Name='AI/VectorsPinecone'}, 
-#     @{Name='MJQueue'}, 
-#     @{Name='MJDataContext'},
-#     @{Name='MJDataContextServer'},
-#     @{Name='SkipTypes'},
-#     @{Name='SQLServerDataProvider'}, 
-#     @{Name='CodeGenLib'}, 
-#     @{Name='GraphQLDataProvider'}, 
-#     @{Name='GeneratedEntities'}, 
-#     @{Name='MJServer'},
-#     # Angular Libraries
-#     @{Name='Angular/shared'}, 
-#     @{Name='Angular/auth-services'}, 
-#     @{Name='Angular/container-directives'},
-#     @{Name='Angular/link-directives'}, 
-#     @{Name='Angular/compare-records'}, 
-#     @{Name='Angular/record-changes'}, 
-#     @{Name='Angular/data-context'}, 
-#     @{Name='Angular/query-grid'}, 
-#     @{Name='Angular/ask-skip'}, 
-#     @{Name='Angular/user-view-grid'}, 
-#     @{Name='Angular/explorer-core'}, 
-#     @{Name='Angular/core-entity-forms'}
-# )
-
-
-############################################################################################################
 ### WE LOAD THE LIBRARY LIST FROM THE JSON FILE
 ### THE REASON WE DO THIS INSTEAD OF JUST SCANNING OUR SUB-DIRECTORIES IS BECAUSE 
 ### WE WANT TO BE ABLE TO SPECIFY THE ORDER OF THE LIBRARIES
