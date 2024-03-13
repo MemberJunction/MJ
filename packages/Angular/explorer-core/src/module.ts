@@ -36,6 +36,8 @@ import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
 import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
 import { DataBrowserComponent } from './lib/data-browser-component/data-browser.component';
 import { GenericBrowseListComponent } from './lib/generic-browse-list/generic-browse-list.component';
+import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
+
 import { HomeComponent } from './lib/home-component/home.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
 import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
@@ -76,6 +78,7 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     DashboardBrowserComponent,
     DataBrowserComponent,
     GenericBrowseListComponent,
+    GenericBrowserListComponent,
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,
@@ -151,6 +154,7 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     DashboardBrowserComponent,
     DataBrowserComponent,
     GenericBrowseListComponent,
+    GenericBrowserListComponent,
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,

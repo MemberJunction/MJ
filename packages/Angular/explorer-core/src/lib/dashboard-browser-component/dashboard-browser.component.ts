@@ -19,6 +19,7 @@ export class DashboardBrowserComponent {
   ngOnInit(): void {
     this.LoadData();
   }
+
   async LoadData() {
     this.showLoader = true;
 
@@ -37,6 +38,7 @@ export class DashboardBrowserComponent {
 
     this.showLoader = false;
   }
+
   public itemClick(item: DashboardEntity) {
     if (item) {
       this.router.navigate(['resource', 'dashboard', item.ID])
@@ -98,5 +100,9 @@ export class DashboardBrowserComponent {
       }
     }
     this.showLoader = false;
+  }
+
+  public async createFolder(folderName: string): Promise<void> {
+    console.log(`creating folder ${folderName}...`);
   }
 }
