@@ -21,6 +21,7 @@ export class GenericBrowserListComponent {
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public createFolderClickEvent: EventEmitter<string> = new EventEmitter<string>();
   @Output() public createResourceClickEvent: EventEmitter<any> = new EventEmitter<any>();
+  @Output() public backButtonClickEvent: EventEmitter<void> = new EventEmitter<void>();
 
   constructor(public sharedService: SharedService, private router: Router) {
     this.router = router;
@@ -49,6 +50,6 @@ export class GenericBrowserListComponent {
   }
 
   public goHomeButtonClicked(){
-    this.router.navigate(["dashboard"]);
+    this.backButtonClickEvent.emit();
   }
 }

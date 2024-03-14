@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
-import { Router } from '@angular/router'
-import { Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core';
+import { Router, ActivatedRoute, Params  } from '@angular/router'
+import { Metadata, RunView } from '@memberjunction/core';
 import { DashboardEntity } from '@memberjunction/core-entities';
 import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
 import { SharedService } from '@memberjunction/ng-shared';
-import { Folder, Item, ItemType } from '../../generic/Item.types';
+import { Folder, Item, ItemType, PathData } from '../../generic/Item.types';
 
 @Component({
   selector: 'app-dashboard-browser',
@@ -16,10 +16,24 @@ export class DashboardBrowserComponent {
   public dashboards: DashboardEntity[] = [];
   public showLoader: boolean = false;
   public items: Item<DashboardEntity | Folder>[];
-  public currentPath: PrimaryKeyValue[] = [];
-
-  constructor(private router: Router, private sharedService: SharedService) {
+  public PathData: PathData;
+  
+  private selectedFolderID: number = -1;
+  
+  constructor(private router: Router, private activatedRoute: ActivatedRoute, private sharedService: SharedService) {
     this.items = [];
+    this.PathData = new PathData(0, "Dashboards", "/dashboards");
+    let queryParams: Params | undefined = this.router.getCurrentNavigation()?.extractedUrl.queryParams;
+    console.log(queryParams);
+    if(queryParams && queryParams.folderID){
+      let folderID: number = Number(queryParams.folderID);
+      this.PathData = new PathData(-1, "Dashboards", "/dashboards?folderID=" + folderID);
+      console.log(queryParams["folderID"]);
+      this.selectedFolderID = folderID;
+    }
+    else{
+      this.PathData = new PathData(-1, "Dashboards", "/dashboards");
+    }
   }
 
   ngOnInit(): void {
@@ -28,6 +42,9 @@ export class DashboardBrowserComponent {
 
   async LoadData() {
     this.showLoader = true;
+
+    this.dashboards = [];
+    this.items = [];
 
     const md = new Metadata()
     const rv = new RunView();
@@ -52,11 +69,25 @@ export class DashboardBrowserComponent {
   private createItems(): void {
     for(const dashboard of this.dashboards){
       let item: Item<DashboardEntity> = new Item(dashboard, ItemType.Resource);
+
+      if(this.selectedFolderID > 0){
+        item.Name = `Dashboard ${dashboard.ID} in Sub Folder ${this.selectedFolderID}`;
+      }
+
       this.items.push(item);
     }
 
     for(let i = 0; i < 5; i++){
-      let folder: Folder = new Folder(i, `Sample Folder ${i}`, this.currentPath);
+      let folderName: string = '';
+      let rng: number = Math.floor(Math.random() * 100);
+      if(this.selectedFolderID > 0){
+        folderName = `Folder #${rng} in Sub Folder ${this.selectedFolderID} - Sample Folder ${i}`;
+      }
+      else{
+        folderName = `Sample Folder ${rng}`;
+      }
+
+      let folder: Folder = new Folder(rng, folderName);
       let item: Item<Folder> = new Item(folder, ItemType.Folder);
       this.items.push(item);
     }
@@ -82,6 +113,36 @@ export class DashboardBrowserComponent {
     }
     else if(item.Type === ItemType.Folder){
       console.log(`folder clicked: ${item.Name}`);
+      const oldPathData: PathData = this.PathData;
+      const newPathData: PathData = new PathData(item.Data.ID, item.Data.Name, `/dashboards?folderID=${item.Data.ID}`);
+      
+      oldPathData.ChildPatchData = newPathData;
+      newPathData.ParentPathData = oldPathData;
+      this.PathData = newPathData;
+      
+      //navigation seems like it does nothing but update the URL
+      //so just reload all of the data
+      this.router.navigate(['dashboards'], {queryParams: {folderID: item.Data.ID}});
+      this.selectedFolderID = item.Data.ID;
+      this.LoadData();
+    }
+  }
+
+  public onBackButtonClick(): void {
+    console.log("back button clicked");
+    const pathData: PathData | undefined  = this.PathData.ParentPathData;
+    if(pathData){
+      this.PathData = pathData;
+      //navigation seems like it does nothing but update the URL
+      //so just reload all of the data
+      this.router.navigate(['dashboards'], {queryParams: {folderID: pathData.ID}});
+      this.selectedFolderID = pathData.ID;
+      this.LoadData();
+      
+    }
+    else{
+      //no parent path, so just go home
+      this.router.navigate(['']);
     }
   }
 
@@ -166,7 +227,7 @@ export class DashboardBrowserComponent {
 
   public async createFolder(folderName: string): Promise<void> {
     console.log(`creating folder ${folderName}...`);
-    let folder: Folder = new Folder(this.items.length, folderName, this.currentPath);
+    let folder: Folder = new Folder(this.items.length, folderName);
     let item: Item<Folder> = new Item(folder, ItemType.Folder);
     this.items.push(item);
   }

@@ -1,5 +1,3 @@
-import { PrimaryKeyValue } from "@memberjunction/core";
-
 export enum ItemType {
     Folder = "Folder",
     Resource = "Resource"
@@ -8,12 +6,14 @@ export enum ItemType {
 export class PathData {
     public Name: string;
     public ID: number;
-    public rootPath: string;
+    public URL: string;
+    public ParentPathData?: PathData;
+    public ChildPatchData?: PathData;
 
-    constructor(id: number, name: string, rootPath: string){
+    constructor(id: number, name: string, url: string){
         this.ID = id;
         this.Name = name;
-        this.rootPath = rootPath;
+        this.URL = url;
     }
 }
 
@@ -45,20 +45,14 @@ export class Item<T> {
 
 export class Folder {
     public ID: number;
-    public PathData: PathData[];
+    public ParentFolderID?: number;
     public Name: string;
     public Description: string;
     public Type: ItemType;
 
-    constructor(id: number, name: string, pathData: PathData[]){
-
-        let clonedPath: PathData[] = JSON.parse(JSON.stringify(pathData));
-        let path: PathData = new PathData(id, name, "");
-        clonedPath.push({FieldName: "ID", Value: id});
-
+    constructor(id: number, folderName: string){
         this.ID = id;
-        this.Name = name;
-        this.PathData = clonedPath;
+        this.Name = folderName;
         this.Description = "";
         this.Type = ItemType.Folder;
     }
