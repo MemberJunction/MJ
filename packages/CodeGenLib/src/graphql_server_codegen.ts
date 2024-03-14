@@ -18,7 +18,7 @@ export function generateGraphQLServerCode(entities: EntityInfo[], outputDirector
 
         return true;
     } catch (err) {
-        console.error(err);
+        logError(err);
         return false
     }  
 }
@@ -62,7 +62,7 @@ export function generateServerEntityString(entity: EntityInfo, includeFileHeader
 
         sEntityOutput += generateServerGraphQLResolver(entity, serverGraphQLTypeName, excludeRelatedEntitiesExternalToSchema);
     } catch (err) {
-        console.error(err);
+        logError(err);
     } finally {
         return sEntityOutput;
     }
@@ -568,6 +568,9 @@ function generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshi
     const instanceName = entity.BaseTableCodeName.toLowerCase() + _graphQLTypeSuffix
     const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField;
     const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
+    if (!filterField)
+        throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+
     const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix
@@ -587,6 +590,9 @@ function generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationsh
     const instanceName = entity.BaseTableCodeName.toLowerCase() + _graphQLTypeSuffix
     const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.Name : r.EntityKeyField;
     const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
+    if (!filterField)
+        throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+    
     const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
     const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + _graphQLTypeSuffix
