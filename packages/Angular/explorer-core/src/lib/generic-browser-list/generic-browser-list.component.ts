@@ -20,6 +20,7 @@ export class GenericBrowserListComponent {
   @Output() public deleteButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public createFolderClickEvent: EventEmitter<string> = new EventEmitter<string>();
+  @Output() public createResourceClickEvent: EventEmitter<any> = new EventEmitter<any>();
 
   constructor(public sharedService: SharedService, private router: Router) {
     this.router = router;
@@ -27,6 +28,7 @@ export class GenericBrowserListComponent {
 
   public itemClick(item: any) {
     if (item) {
+      console.log("item clicked");
       this.itemClickEvent.emit(item);
     }
   }
@@ -37,6 +39,7 @@ export class GenericBrowserListComponent {
     }
   }
 
+    //todo - let the parent component handle this?
   public addButtonClicked() {
     this.addButtonClickEvent.emit();
   }

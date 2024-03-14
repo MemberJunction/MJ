@@ -24,13 +24,8 @@
           <div *ngFor="let d of items">
             <kendo-card class="card-wrapper">
               <kendo-card-header class="k-hstack view-card">
-                <kendo-svgicon name="table" [icon]="sharedService.kendoSVGIcon(iconName)"></kendo-svgicon>
                 <div class="btn-wrapper">
-                  <button kendoButton fillMode="flat">
-                    <span class="k-icon k-i-edit"></span>
-                  </button>
-                  <button kendoButton fillMode="flat" (click)="deleteItem(d)"><span
-                      class="k-icon k-i-delete"></span></button>
+                  <kendo-button iconClass="fa fa-trash" fillMode="flat" title="Delete Item" (click)="deleteItem(d)"></kendo-button>
                 </div>
               </kendo-card-header>
               <kendo-card-body (click)="itemClick(d)">
