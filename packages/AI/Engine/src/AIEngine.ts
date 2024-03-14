@@ -4,7 +4,7 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 
 export class AIActionParams {
@@ -26,6 +26,7 @@ export class AIEngine {
     private static _globalInstanceKey = '__mj_ai_engine_instance__';
 
     private _models: AIModelEntity[] = [];
+    private _vectorDatabases: VectorDatabaseEntity[] = [];
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
     private _modelActions: AIModelActionEntity[] = [];
@@ -36,6 +37,10 @@ export class AIEngine {
             const rv = new RunView();
             const models = await rv.RunView({EntityName: 'AI Models'}, contextUser)
             this._models = models?.Results
+
+            // load up vector database models
+            const vectorDatabases = await rv.RunView({EntityName: 'Vector Databases'}, contextUser)
+            this._vectorDatabases = vectorDatabases?.Results
 
             // load up AI Actions
             const actions = await rv.RunView({EntityName: 'AI Actions'}, contextUser)
@@ -60,6 +65,10 @@ export class AIEngine {
     public static get Models(): AIModelEntity[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
+    }
+    public static get VectorDatabases(): VectorDatabaseEntity[] {
+        AIEngine.checkMetadataLoaded();
+        return AIEngine.Instance._vectorDatabases;
     }
     public static get ModelActions(): AIModelActionEntity[] {
         AIEngine.checkMetadataLoaded();

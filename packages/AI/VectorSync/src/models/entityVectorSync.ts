@@ -3,12 +3,14 @@ import { EntitySyncConfig } from '../generic/entitySyncConfig.types';
 import SQLConnectionPool from '../db/db';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from "@memberjunction/sqlserver-dataprovider";
 import AppDataSource from "../db/dbAI";
-import { IMetadataProvider, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogStatus, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
 import { currentUserEmail } from "../config";
 import { IProcedureResult, Request } from 'mssql';
 import { Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { UpdateOptions, VectorDBBase } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
+import { AIModelEntity, VectorDatabaseEntity } from '@memberjunction/core-entities';
+import { AIEngine } from "@memberjunction/aiengine";
 
 export class EntityVectorSyncer {
 
@@ -22,23 +24,44 @@ export class EntityVectorSyncer {
     _vectorDB: VectorDBBase;
     _embedding: Embeddings;
 
+    /**
+     * Default implementation simply grabs the first AI model that is of type 1 (Embeddings).
+     * @returns 
+     */
+    protected GetAIModel(): AIModelEntity {
+        const model = AIEngine.Models.find(m => m.AIModelTypeID === 3/*elim this hardcoding by adding virtual field for Type to AI Models entity*/)
+        return model;
+    }
+
+    /**
+     * Default implementation simply grabs the first vector database
+     * @returns 
+     */
+    protected GetVectorDatabase(): VectorDatabaseEntity {
+        if(AIEngine.VectorDatabases.length > 0){
+            return AIEngine.VectorDatabases[0];
+        }
+        else{
+            throw new Error("No Vector Databases found");
+        }
+    }
+
     public async syncEntityDocuments(): Promise<void> {
         this.start();
         await this.setupDBConnection();
         console.log("Connected to SQL Server");
         console.log("Syncing entities...");
 
-        const pineconeAPIKey = GetAIAPIKey("PineconeDatabase");
-        console.log("Pinecone API Key: ", pineconeAPIKey);
+        const aiModel: AIModelEntity = this.GetAIModel();
+        const vectorDB: VectorDatabaseEntity = this.GetVectorDatabase();
+        const embeddingAPIKey: string = GetAIAPIKey(aiModel.DriverClass);
+        const vectorDBAPIKey: string = GetAIAPIKey(vectorDB.ClassKey);
 
-        const mistralAPIKey = GetAIAPIKey("MistralLLM");
-        console.log("Mistral API Key: ", mistralAPIKey);
+        LogStatus("Embedding API Key: ", embeddingAPIKey);
+        LogStatus("Vector Database API Key: ", vectorDBAPIKey);
 
-        //use class factory here 
-        this._vectorDB = new PineconeDatabase(pineconeAPIKey);
-        this._embedding = new MistralLLM(mistralAPIKey); 
-
-        this._vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(BaseLLM, apiKey.vendorDriverName, apiKey.apiKey)
+        this._embedding = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, aiModel.DriverClass, embeddingAPIKey)
+        this._vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey);
 
         const entityConfigs: EntitySyncConfig[] = this.getJSONData();
         const activeCount: number = entityConfigs.filter((entity: EntitySyncConfig) => entity.IncludeInSync).length;
