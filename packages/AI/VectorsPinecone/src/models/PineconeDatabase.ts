@@ -5,7 +5,7 @@ import { FetchResponse, Index, Pinecone, PineconeRecord, QueryOptions } from '@p
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
-export class PineconeDatabase  extends VectorDBBase {
+export class PineconeDatabase extends VectorDBBase {
 
     static _pinecone: Pinecone;
     
