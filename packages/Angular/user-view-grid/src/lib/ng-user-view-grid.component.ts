@@ -384,7 +384,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   } 
 
   public GeneratePrimaryKeyValueString(pkVals: PrimaryKeyValue[]): string {
-    return pkVals.length > 1 ? pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||') : pkVals[0].Value;
+    return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
   }
 
   public createFormGroup(dataItem: any): FormGroup {
