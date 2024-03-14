@@ -108,10 +108,6 @@ export class GeminiLLM extends BaseLLM {
             parts: message.content
         }
     }
-
-    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
-        throw new Error("Method not implemented.");
-    }
 }
  
 

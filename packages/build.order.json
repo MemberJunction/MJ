@@ -58,7 +58,7 @@
             "Name": "SQLServerDataProvider"
         },
         {
-            "Name": "AI/VectorsEntitySync"
+            "Name": "AI/VectorSync"
         },
         {
             "Name": "CodeGenLib"

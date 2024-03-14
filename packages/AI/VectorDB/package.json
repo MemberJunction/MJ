@@ -15,11 +15,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@langchain/mistralai": "^0.0.7",
     "@memberjunction/core": "^0.9.171",
     "@memberjunction/global": "^0.9.152",
-    "dotenv": "^16.0.3",
-    "openai": "^3.2.1"
+    "dotenv": "^16.0.3"
   },
   "devDependencies": {
     "@types/node": "^20.1.7",

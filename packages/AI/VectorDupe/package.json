@@ -16,13 +16,12 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/ai": "^0.9.159",
-    "@memberjunction/ai-mistral": "^0.9.17",
     "@memberjunction/ai-vectordb": "^0.9.3",
     "@memberjunction/ai-vectors": "^0.9.4",
-    "@memberjunction/ai-vectors-pinecone": "^0.9.7",
     "@memberjunction/aiengine": "^0.9.56",
     "@memberjunction/core": "^0.9.171",
     "@memberjunction/global": "^0.9.152",
+    "@memberjunction/core-entities": "^0.9.155",
     "dotenv": "^16.0.3",
     "typeorm": "^0.3.20"
   },
