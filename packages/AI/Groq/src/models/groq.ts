@@ -1,28 +1,42 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, EmbedParams, EmbedResult, ModelUsage, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { ChatCompletionResponseChoice, EmbeddingResponse, ListModelsResponse, MistralClient } from './mistralClient';
+import Groq from 'groq-sdk';
 
-@RegisterClass(BaseLLM, "MistralLLM")
-export class MistralLLM extends BaseLLM {
-    static _client: MistralClient;
+@RegisterClass(BaseLLM, "GroqLLM")
+export class GroqLLM extends BaseLLM {
+    static _client: Groq;
     constructor(apiKey: string) {
         super(apiKey);
-        if (!MistralLLM._client){
-            MistralLLM._client = new MistralClient({ apiKey });
+        if (!GroqLLM._client){
+            GroqLLM._client = new Groq({ apiKey: apiKey });
         }
     }
 
-    public get client(): MistralClient {return MistralLLM._client;}
+    public get client(): Groq {return GroqLLM._client;}
 
-    public async ChatCompletion(params: MistralChatParams): Promise<ChatResult>{
+    public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const startTime = new Date();
-        const chatResponse = await this.client.chat({
+
+
+        // const completion = await groq.chat.completions.create({
+        //     messages: [
+        //         {
+        //             role: "user",
+        //             content: "Explain the importance of low latency LLMs"
+        //         }
+        //     ],
+        //     model: "mixtral-8x7b-32768"
+        // }).then((chatCompletion)=>{
+        //     process.stdout.write(chatCompletion.choices[0]?.message?.content || "");
+        // });
+
+        const chatResponse = await this.client.chat.completions.create({
             model: params.model,
             messages: params.messages
         });
         const endTime = new Date();
 
-        let choices: ChatResultChoice[] = chatResponse.choices.map((choice: ChatCompletionResponseChoice) => {
+        let choices: ChatResultChoice[] = chatResponse.choices.map((choice: any) => {
             const res: ChatResultChoice = {
                 message: {
                     role: 'assistant',
@@ -51,7 +65,7 @@ export class MistralLLM extends BaseLLM {
             errorMessage: "",
             exception: null,
         }
-
+        throw new Error("Method not implemented.");
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
@@ -61,36 +75,12 @@ export class MistralLLM extends BaseLLM {
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error("Method not implemented.");
     }
-
-    public async createEmbedding(model: string, text: string): Promise<EmbeddingResponse> {
-        const response: EmbeddingResponse = await this.client.embeddings(model, text);
-        return response;
-    }
-
+  
     public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
-        const response: EmbeddingResponse = await this.client.embeddings(params.model, params.text);
-        return {
-            object: 'object',
-            model: params.model || "mistral-embed", //hard coded for now as theres only one available embedding model
-            ModelUsage: new ModelUsage(response.usage.prompt_tokens, response.usage.completion_tokens),
-            data: response.data[0].embedding
-        }
-    }
-
-    /**
-     * Returns a list of available models
-     * @returns {Promise<AvailableModelInfo>}
-     */
-    public async listModels(): Promise<ListModelsResponse> {
-        const listModelsResponse: ListModelsResponse = await this.client.listModels();
-        return listModelsResponse;
+        throw new Error("Method not implemented.");
     }
 }
-
-export class MistralChatParams extends ChatParams {
-    model: string;
-}
-
-export function LoadMistralLLM() {
+ 
+export function LoadGroqLLM() {
     // this does nothing but prevents the class from being removed by the tree shaker
 }

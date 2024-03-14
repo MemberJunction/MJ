@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/ai-openai",
-  "version": "0.9.18",
-  "description": "MemberJunction Wrapper for OpenAI AI Models",
+  "name": "@memberjunction/ai-groq",
+  "version": "0.9.5",
+  "description": "MemberJunction Wrapper for Groq AI LPU inference engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -21,6 +21,6 @@
   "dependencies": {
     "@memberjunction/ai": "^0.9.159",
     "@memberjunction/global": "^0.9.152",
-    "openai": "^4.28.4"
+    "groq-sdk": "^0.3.2"
   }
 }

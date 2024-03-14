@@ -25,19 +25,22 @@
             "Name": "AI/Mistral"
         },
         {
+            "Name": "AI/Groq"
+        },
+        {
             "Name": "AI/OpenAI"
         },
         {
-            "Name": "AI/Vectors",
-            "SkipAll": true
+            "Name": "AI/VectorDB"
         },
         {
-            "Name": "AI/VectorsEntitySync",
-            "SkipAll": true
+            "Name": "AI/Vectors"
         },
         {
-            "Name": "AI/VectorsPinecone",
-            "SkipAll": true
+            "Name": "AI/VectorsPinecone"
+        },
+        {
+            "Name": "AI/VectorDupe"
         },
         {
             "Name": "MJQueue"
@@ -53,6 +56,9 @@
         },
         {
             "Name": "SQLServerDataProvider"
+        },
+        {
+            "Name": "AI/VectorsEntitySync"
         },
         {
             "Name": "CodeGenLib"
