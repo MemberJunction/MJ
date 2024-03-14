@@ -216,7 +216,7 @@ export class SkipAPIRequestAPIKey {
      * registered classes in the MemberJunction AI namespace for example the @memberjunction/ai-openai package includes
      * a class called OpenAILLM that is registered with the MemberJunction AI system as a valid sub-class of BaseLLM
      */
-    vendorDriverName: 'OpenAILLM' | 'MistralLLM' | 'GeminiLLM' | 'AnthropicLLM';
+    vendorDriverName: 'OpenAILLM' | 'MistralLLM' | 'GeminiLLM' | 'AnthropicLLM' | 'GroqLLM';
     /**
      * This is the actual API key for the specified vendor. 
      * NOTE: Skip NEVER stores this information, it is only used to make requests to the AI vendor of choice

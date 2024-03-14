@@ -77,3 +77,6 @@ export class GroqLLM extends BaseLLM {
     }
 }
  
+export function LoadGroqLLM() {
+    // this does nothing but prevents the class from being removed by the tree shaker
+}

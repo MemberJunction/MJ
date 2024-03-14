@@ -76,3 +76,7 @@ export class MistralLLM extends BaseLLM {
 export class MistralChatParams extends ChatParams {
     model: string;
 }
+
+export function LoadMistralLLM() {
+    // this does nothing but prevents the class from being removed by the tree shaker
+}
