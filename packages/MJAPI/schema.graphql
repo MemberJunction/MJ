@@ -571,7 +571,6 @@ input CreateConversationInput {
 
 input CreateDashboardCategoryInput {
   Description: String
-  ID: Int!
   Name: String!
   ParentID: Int
 }
