@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/10/2024, 9:40:58 AM
+* GENERATED: 3/15/2024, 4:20:01 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -16814,9 +16814,6 @@ export class DashboardCategory_ {
 //****************************************************************************
 @InputType()
 export class CreateDashboardCategoryInput {
-    @Field(() => Int, )
-    ID: number;
-
     @Field()
     Name: string;
 
