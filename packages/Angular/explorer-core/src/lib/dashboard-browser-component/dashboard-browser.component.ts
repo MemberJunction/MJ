@@ -19,7 +19,8 @@ export class DashboardBrowserComponent {
   public items: Item<DashboardEntity | Folder>[];
   public PathData: PathData;
   
-  private selectedFolderID: number = -1;
+  private selectedFolderID: number | null = null;
+  private parentFolderID: number | null = null;
   
   constructor(private router: Router, private activatedRoute: ActivatedRoute, private sharedService: SharedService) {
     this.items = [];
@@ -28,7 +29,7 @@ export class DashboardBrowserComponent {
     console.log(queryParams);
     if(queryParams && queryParams.folderID){
       let folderID: number = Number(queryParams.folderID);
-      this.PathData = new PathData(-1, "Dashboards", "/dashboards?folderID=" + folderID);
+      this.PathData = new PathData(folderID, "Dashboards", "/dashboards?folderID=" + folderID);
       console.log(queryParams["folderID"]);
       this.selectedFolderID = folderID;
     }
@@ -50,9 +51,11 @@ export class DashboardBrowserComponent {
     const md = new Metadata()
     const rv = new RunView();
 
+    let folderFilter: string = this.selectedFolderID ? `AND CategoryID = ${this.selectedFolderID}` : "";
+    console.log("dashboard folder filter: ", folderFilter);
     const result = await rv.RunView({
       EntityName: 'Dashboards',
-      ExtraFilter: `UserID=${md.CurrentUser.ID}`
+      ExtraFilter: `UserID=${md.CurrentUser.ID}  ${folderFilter}`
     })
 
     if (result && result.Success){
@@ -62,14 +65,24 @@ export class DashboardBrowserComponent {
       this.dashboards = [];
     }
 
+    console.log("folder ID: ", this.selectedFolderID);
+    let filterString: string = this.selectedFolderID ? `ID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
+    filterString += " AND Name != 'Root'";
+    console.log("category folder filter: ", filterString)
     const folderResult = await rv.RunView({
       EntityName:'Dashboard Categories',
-      ExtraFilter: `ParentID=${this.selectedFolderID}`
+      ExtraFilter: filterString
     });
 
     if(folderResult && folderResult.Success){
       this.folders = folderResult.Results;
+
+      if(this.folders.length > 0){
+        this.parentFolderID = this.folders[0].ParentID;
+      }
     }
+
+    console.log(this.selectedFolderID, this.parentFolderID);
 
     this.createItems();
 
@@ -80,7 +93,7 @@ export class DashboardBrowserComponent {
     for(const dashboard of this.dashboards){
       let item: Item<DashboardEntity> = new Item(dashboard, ItemType.Resource);
 
-      if(this.selectedFolderID > 0){
+      if(this.selectedFolderID && this.selectedFolderID > 0){
         item.Name = `Dashboard ${dashboard.ID} in Sub Folder ${this.selectedFolderID}`;
       }
 
@@ -134,7 +147,7 @@ export class DashboardBrowserComponent {
   public onBackButtonClick(): void {
     console.log("back button clicked");
     const pathData: PathData | undefined  = this.PathData.ParentPathData;
-    if(pathData){
+    if(pathData && pathData.ID > 0){
       this.PathData = pathData;
       //navigation seems like it does nothing but update the URL
       //so just reload all of the data
@@ -142,6 +155,12 @@ export class DashboardBrowserComponent {
       this.selectedFolderID = pathData.ID;
       this.LoadData();
       
+    }
+    else if(this.parentFolderID || !this.parentFolderID && this.selectedFolderID){
+      this.router.navigate(['dashboards'], {queryParams: {folderID: this.parentFolderID}});
+      this.selectedFolderID = this.parentFolderID;
+      this.parentFolderID = null;
+      this.LoadData();
     }
     else{
       //no parent path, so just go home
@@ -234,7 +253,7 @@ export class DashboardBrowserComponent {
     const folderEntity: DashboardCategoryEntity = await md.GetEntityObject<DashboardCategoryEntity>('Dashboard Categories');
     folderEntity.NewRecord();
     folderEntity.Name = folderName;
-    folderEntity.ParentID = this.selectedFolderID;
+    folderEntity.ParentID = this.selectedFolderID as any;
 
     let saveResult: boolean = await folderEntity.Save();
 
