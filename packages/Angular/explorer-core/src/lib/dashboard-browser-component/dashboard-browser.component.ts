@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { Router, ActivatedRoute, Params  } from '@angular/router'
 import { Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntity } from '@memberjunction/core-entities';
+import { DashboardCategoryEntity, DashboardEntity } from '@memberjunction/core-entities';
 import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType, PathData } from '../../generic/Item.types';
@@ -14,6 +14,7 @@ import { Folder, Item, ItemType, PathData } from '../../generic/Item.types';
 
 export class DashboardBrowserComponent {
   public dashboards: DashboardEntity[] = [];
+  public folders: DashboardCategoryEntity[] = [];
   public showLoader: boolean = false;
   public items: Item<DashboardEntity | Folder>[];
   public PathData: PathData;
@@ -61,6 +62,15 @@ export class DashboardBrowserComponent {
       this.dashboards = [];
     }
 
+    const folderResult = await rv.RunView({
+      EntityName:'Dashboard Categories',
+      ExtraFilter: `ParentID=${this.selectedFolderID}`
+    });
+
+    if(folderResult && folderResult.Success){
+      this.folders = folderResult.Results;
+    }
+
     this.createItems();
 
     this.showLoader = false;
@@ -77,18 +87,11 @@ export class DashboardBrowserComponent {
       this.items.push(item);
     }
 
-    for(let i = 0; i < 5; i++){
-      let folderName: string = '';
-      let rng: number = Math.floor(Math.random() * 100);
-      if(this.selectedFolderID > 0){
-        folderName = `Folder #${rng} in Sub Folder ${this.selectedFolderID} - Sample Folder ${i}`;
-      }
-      else{
-        folderName = `Sample Folder ${rng}`;
-      }
-
-      let folder: Folder = new Folder(rng, folderName);
-      let item: Item<Folder> = new Item(folder, ItemType.Folder);
+    for(const folder of this.folders){
+      const dashboardFolder: Folder = new Folder(folder.ID, folder.Name);
+      dashboardFolder.ParentFolderID = folder.ParentID;
+      dashboardFolder.Description = folder.Description;
+      let item: Item<Folder> = new Item(dashboardFolder, ItemType.Folder);
       this.items.push(item);
     }
 
@@ -227,8 +230,24 @@ export class DashboardBrowserComponent {
 
   public async createFolder(folderName: string): Promise<void> {
     console.log(`creating folder ${folderName}...`);
-    let folder: Folder = new Folder(this.items.length, folderName);
-    let item: Item<Folder> = new Item(folder, ItemType.Folder);
-    this.items.push(item);
+    const md: Metadata = new Metadata();
+    const folderEntity: DashboardCategoryEntity = await md.GetEntityObject<DashboardCategoryEntity>('Dashboard Categories');
+    folderEntity.NewRecord();
+    folderEntity.Name = folderName;
+    folderEntity.ParentID = this.selectedFolderID;
+
+    let saveResult: boolean = await folderEntity.Save();
+
+    if(saveResult){
+      //todo - change these to use the shared
+      this.sharedService.CreateSimpleNotification(`successfully created folder ${folderName}`, "info");
+
+      let folder: Folder = new Folder(folderEntity.ID, folderEntity.Name);
+      let item: Item<Folder> = new Item(folder, ItemType.Folder);
+      this.items.push(item);
+    }
+    else{
+      this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
+    }
   }
 }
