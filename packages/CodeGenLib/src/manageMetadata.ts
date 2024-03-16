@@ -710,9 +710,10 @@ async function createNewEntity(ds: DataSource, newEntity: any, md: Metadata) {
             // now we have an application ID, but make sure that we are configured to add this new entity to an application at all
             if (configInfo.newEntityDefaults.AddToApplicationWithSchemaName) {
                // we should add this entity to the application
+               const appName: string = newEntity.SchemaName === mj_core_schema() ? 'Admin' : newEntity.SchemaName; // for the __mj schema or whatever it is installed as for mj_core - we want to drop stuff into the admin app
                const sSQLInsertApplicationEntity = `INSERT INTO ${mj_core_schema()}.ApplicationEntity 
                                                          (ApplicationName, EntityID, Sequence) VALUES 
-                                                         ('${newEntity.SchemaName}', ${newEntityID}, (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${newEntity.SchemaName}'))`;
+                                                         ('${appName}', ${newEntityID}, (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${mj_core_schema()}.ApplicationEntity WHERE ApplicationName = '${appName}'))`;
                await ds.query(sSQLInsertApplicationEntity);
             }
 

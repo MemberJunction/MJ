@@ -364,10 +364,10 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         const f = entity.Fields[i];
         const sTypeGraphQLString: string = getTypeGraphQLFieldString(f);
         const sNull: string = f.AllowsNull ? '{ nullable: true }' : '';
-        const sFullTypeGraphQLString: string =  sTypeGraphQLString + (sTypeGraphQLString == '' ? '' : ', ') + sNull;
+        const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
         // always include ID becuase it is used for UPDATES
         const includePrimaryKey = isUpdate || (!f.AutoIncrement && f.Type !=='uniqueidentifier') // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
-        if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.IsVirtual && f.AllowUpdateAPI && f.Type.trim().toLowerCase() !== 'uniqueidentifier') ) {
+        if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.IsPrimaryKey && !f.IsVirtual && f.AllowUpdateAPI && f.Type.trim().toLowerCase() !== 'uniqueidentifier') ) {
             sRet += `
     @Field(${sFullTypeGraphQLString})
     ${f.CodeName}: ${TypeScriptTypeFromSQLType(f.Type)};

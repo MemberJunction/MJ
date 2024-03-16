@@ -12,10 +12,13 @@ import { IconsModule } from '@progress/kendo-angular-icons';
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FormsModule } from '@angular/forms';
+import { EntityPermissionsSelectorWithGridComponent } from './entity-selector-with-grid/entity-selector-with-grid.component';
+import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 
 @NgModule({
   declarations: [
-    EntityPermissionsGridComponent
+    EntityPermissionsGridComponent,
+    EntityPermissionsSelectorWithGridComponent
   ],
   imports: [
     CommonModule,
@@ -26,10 +29,12 @@ import { FormsModule } from '@angular/forms';
     CompareRecordsModule,
     ContainerDirectivesModule,
     ButtonsModule,
-    IconsModule
+    IconsModule,
+    DropDownsModule
   ],
   exports: [
-    EntityPermissionsGridComponent
+    EntityPermissionsGridComponent,
+    EntityPermissionsSelectorWithGridComponent
   ]
 })
 export class EntityPermissionsModule { }

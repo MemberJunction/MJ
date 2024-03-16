@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit } from '@angular/core';
+import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, SimpleChanges, OnChanges } from '@angular/core';
 
 import { Metadata, RunView } from '@memberjunction/core';
 import { kendoSVGIcon } from '@memberjunction/ng-shared'
@@ -21,7 +21,7 @@ export type EntityPermissionChangedEvent = {
   templateUrl: './entity-permissions-grid.component.html',
   styleUrls: ['./entity-permissions-grid.component.css']
 })
-export class EntityPermissionsGridComponent implements OnInit {
+export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   @Input() EntityName!: string;
   @Input() BottomMargin: number = 0;
 
@@ -54,7 +54,14 @@ export class EntityPermissionsGridComponent implements OnInit {
   ngOnInit(): void {
     this.Refresh()
   }
- 
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes.EntityName && !changes.EntityName.isFirstChange()) {
+      // If EntityName has changed and it's not the first change (initialization)
+      this.Refresh();
+    }
+  }
+
   async Refresh() { 
     if (this.EntityName && this.EntityName.length > 0) {
       const startTime = new Date().getTime();
@@ -68,13 +75,31 @@ export class EntityPermissionsGridComponent implements OnInit {
       const rv = new RunView();
       const result = await rv.RunView({
         EntityName: 'Entity Permissions',
-        ExtraFilter: 'Entity = \'' + this.EntityName + '\'',
+        ExtraFilter: 'EntityID=' + e.ID,
         OrderBy: 'RoleName ASC',
         ResultType: 'entity_object'
       })
       if (result.Success) {
-        this.permissions = <EntityPermissionEntity[]>result.Results;
-        // the above results in the grid binding
+        // we have all of the saved permissions now
+        // the post-process we need to do now is to see if there are any roles that don't have any existing permissions and if so, we need to create 
+        // new permission records for them. We won't actually consider those "Dirty" and save those unless the user actually selects one or more
+        // to turn on, we are just doing this to make the grid easy to manage from the user perspective.
+        const existingPermissions = <EntityPermissionEntity[]>result.Results;
+        const roles = md.Roles;
+
+        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleName === r.Name));
+        rolesWithNoPermissions.forEach(async (r) => {
+          const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
+          p.NewRecord();
+          p.EntityID = e.ID;
+          p.RoleName = r.Name;
+          p.CanRead = false;
+          p.CanCreate = false;
+          p.CanUpdate = false;
+          p.CanDelete = false;
+          existingPermissions.push(p);
+        })
+        this.permissions = existingPermissions.sort((a, b) => a.RoleName!.localeCompare(b.RoleName!));
       }
       else {
         throw new Error("Error loading entity permissions: " + result.ErrorMessage)
@@ -89,7 +114,7 @@ export class EntityPermissionsGridComponent implements OnInit {
     const tg = await md.CreateTransactionGroup();
     let itemCount: number = 0;
     this.permissions.forEach(p => {
-      if (p.Dirty) {
+      if (this.IsPermissionReallyDirty(p)) {
         p.TransactionGroup = tg;
         itemCount++;
         p.Save(); // don't await since we are using a tg
@@ -99,6 +124,15 @@ export class EntityPermissionsGridComponent implements OnInit {
       await tg.Submit();
   }
   public get NumDirtyPermissions(): number {
-    return this.permissions.filter(p => p.Dirty).length;
+    return this.permissions.filter(p => this.IsPermissionReallyDirty(p)).length;
+  }
+
+  protected IsPermissionReallyDirty(p: EntityPermissionEntity): boolean {
+    if (!p.Dirty)
+      return false;
+    else if (p.ID > 0)
+      return true;
+    else
+      return p.CanRead || p.CanCreate || p.CanUpdate || p.CanDelete; // if we have a new record, only consider it dirty if at least one permission is true
   }
 }

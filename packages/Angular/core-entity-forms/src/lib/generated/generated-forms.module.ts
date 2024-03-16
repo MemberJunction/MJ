@@ -101,6 +101,10 @@ import { DataContextFormComponent, LoadDataContextFormComponent } from "./Entiti
 import { UserViewCategoryFormComponent, LoadUserViewCategoryFormComponent } from "./Entities/UserViewCategory/userviewcategory.form.component";
 import { DashboardCategoryFormComponent, LoadDashboardCategoryFormComponent } from "./Entities/DashboardCategory/dashboardcategory.form.component";
 import { ReportCategoryFormComponent, LoadReportCategoryFormComponent } from "./Entities/ReportCategory/reportcategory.form.component";
+import { FileStorageProviderFormComponent, LoadFileStorageProviderFormComponent } from "./Entities/FileStorageProvider/filestorageprovider.form.component";
+import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.form.component";
+import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Entities/FileCategory/filecategory.form.component";
+import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -190,6 +194,10 @@ import { DataContextDetailsComponent, LoadDataContextDetailsComponent } from "./
 import { UserViewCategoryDetailsComponent, LoadUserViewCategoryDetailsComponent } from "./Entities/UserViewCategory/sections/details.component"
 import { DashboardCategoryDetailsComponent, LoadDashboardCategoryDetailsComponent } from "./Entities/DashboardCategory/sections/details.component"
 import { ReportCategoryDetailsComponent, LoadReportCategoryDetailsComponent } from "./Entities/ReportCategory/sections/details.component"
+import { FileStorageProviderDetailsComponent, LoadFileStorageProviderDetailsComponent } from "./Entities/FileStorageProvider/sections/details.component"
+import { FileDetailsComponent, LoadFileDetailsComponent } from "./Entities/File/sections/details.component"
+import { FileCategoryDetailsComponent, LoadFileCategoryDetailsComponent } from "./Entities/FileCategory/sections/details.component"
+import { FileEntityRecordLinkDetailsComponent, LoadFileEntityRecordLinkDetailsComponent } from "./Entities/FileEntityRecordLink/sections/details.component"
 
 
 @NgModule({
@@ -358,6 +366,10 @@ declarations: [
     UserViewCategoryFormComponent,
     DashboardCategoryFormComponent,
     ReportCategoryFormComponent,
+    FileStorageProviderFormComponent,
+    FileFormComponent,
+    FileCategoryFormComponent,
+    FileEntityRecordLinkFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
@@ -369,11 +381,7 @@ declarations: [
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
     CompanyIntegrationDetailsComponent,
-    EntityFieldDetailsComponent,
-    EntityDetailsComponent,
-    EntityTopComponent,
-    EntityAuditComponent,
-    EntityAPIComponent],
+    EntityFieldDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -394,6 +402,10 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    EntityDetailsComponent,
+    EntityTopComponent,
+    EntityAuditComponent,
+    EntityAPIComponent,
     EntityDBComponent,
     EntityUIComponent,
     UserDetailsComponent,
@@ -409,11 +421,7 @@ declarations: [
     UserApplicationEntityDetailsComponent,
     UserApplicationDetailsComponent,
     CompanyIntegrationRunAPILogDetailsComponent,
-    ListDetailsComponent,
-    ListDetailDetailsComponent,
-    UserViewRunDetailsComponent,
-    UserViewRunDetailDetailsComponent,
-    WorkflowRunDetailsComponent],
+    ListDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -434,6 +442,10 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    ListDetailDetailsComponent,
+    UserViewRunDetailsComponent,
+    UserViewRunDetailDetailsComponent,
+    WorkflowRunDetailsComponent,
     WorkflowDetailsComponent,
     WorkflowEngineDetailsComponent,
     RecordChangeDetailsComponent,
@@ -449,11 +461,7 @@ declarations: [
     AIModelActionDetailsComponent,
     EntityAIActionDetailsComponent,
     AIModelTypeDetailsComponent,
-    QueueTypeDetailsComponent,
-    QueueDetailsComponent,
-    QueueTaskDetailsComponent,
-    DashboardDetailsComponent,
-    OutputTriggerTypeDetailsComponent],
+    QueueTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -474,6 +482,10 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    QueueDetailsComponent,
+    QueueTaskDetailsComponent,
+    DashboardDetailsComponent,
+    OutputTriggerTypeDetailsComponent,
     OutputFormatTypeDetailsComponent,
     OutputDeliveryTypeDetailsComponent,
     ReportDetailsComponent,
@@ -489,11 +501,7 @@ declarations: [
     ConversationDetailsComponent,
     UserNotificationDetailsComponent,
     SchemaInfoDetailsComponent,
-    CompanyIntegrationRecordMapDetailsComponent,
-    RecordMergeLogDetailsComponent,
-    RecordMergeDeletionLogDetailsComponent,
-    QueryFieldDetailsComponent,
-    QueryCategoryDetailsComponent],
+    CompanyIntegrationRecordMapDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -514,6 +522,10 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    RecordMergeLogDetailsComponent,
+    RecordMergeDeletionLogDetailsComponent,
+    QueryFieldDetailsComponent,
+    QueryCategoryDetailsComponent,
     QueryDetailsComponent,
     QueryPermissionDetailsComponent,
     VectorIndexDetailsComponent,
@@ -526,7 +538,10 @@ declarations: [
     DataContextDetailsComponent,
     UserViewCategoryDetailsComponent,
     DashboardCategoryDetailsComponent,
-    ReportCategoryDetailsComponent],
+    ReportCategoryDetailsComponent,
+    FileStorageProviderDetailsComponent,
+    FileDetailsComponent,
+    FileCategoryDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -547,6 +562,27 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    FileEntityRecordLinkDetailsComponent],
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    ExplorerCoreModule,
+    UserViewGridModule,
+    LinkDirectivesModule
+],
+exports: [
+]
+})
+export class GeneratedForms_SubModule_9 { }
+
+
+
+@NgModule({
+declarations: [
 ],
 imports: [
     GeneratedForms_SubModule_0,
@@ -557,7 +593,8 @@ imports: [
     GeneratedForms_SubModule_5,
     GeneratedForms_SubModule_6,
     GeneratedForms_SubModule_7,
-    GeneratedForms_SubModule_8
+    GeneratedForms_SubModule_8,
+    GeneratedForms_SubModule_9
 ]
 })
 export class CoreGeneratedFormsModule { }
@@ -652,6 +689,10 @@ export function LoadCoreGeneratedForms() {
     LoadUserViewCategoryFormComponent();
     LoadDashboardCategoryFormComponent();
     LoadReportCategoryFormComponent();
+    LoadFileStorageProviderFormComponent();
+    LoadFileFormComponent();
+    LoadFileCategoryFormComponent();
+    LoadFileEntityRecordLinkFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -741,4 +782,8 @@ export function LoadCoreGeneratedForms() {
     LoadUserViewCategoryDetailsComponent();
     LoadDashboardCategoryDetailsComponent();
     LoadReportCategoryDetailsComponent();
+    LoadFileStorageProviderDetailsComponent();
+    LoadFileDetailsComponent();
+    LoadFileCategoryDetailsComponent();
+    LoadFileEntityRecordLinkDetailsComponent();
 }

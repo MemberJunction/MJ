@@ -1,10 +1,13 @@
-.grid-wrap {
-    height: calc(100vh-20px);
-} 
-
 /* Style for the whole table */
 table {
+    margin-left: 5px;
+    margin-top: 5px;
     border-collapse: collapse; /* Ensures border collapse for a cleaner look */
+}
+
+button {
+    margin-left: 5px;
+    margin-top: 5px;
 }
  
 table th {

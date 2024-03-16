@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/16/2024, 12:26:28 PM
+* GENERATED: 3/16/2024, 6:26:43 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -97,7 +97,7 @@ export class CreateCompanyInput {
 //****************************************************************************
 @InputType()
 export class UpdateCompanyInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -392,10 +392,10 @@ export class CreateEmployeeInput {
     @Field({ nullable: true })
     Phone: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     Active: boolean;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyID: number;
 
     @Field(() => Int, { nullable: true })
@@ -408,7 +408,7 @@ export class CreateEmployeeInput {
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -426,10 +426,10 @@ export class UpdateEmployeeInput {
     @Field({ nullable: true })
     Phone: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     Active: boolean;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyID: number;
 
     @Field(() => Int, { nullable: true })
@@ -662,10 +662,10 @@ export class UserFavorite_ {
 //****************************************************************************
 @InputType()
 export class CreateUserFavoriteInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -678,13 +678,13 @@ export class CreateUserFavoriteInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserFavoriteInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -868,19 +868,19 @@ export class EmployeeCompanyIntegration_ {
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeCompanyIntegrationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EmployeeID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field()
     ExternalSystemRecordID: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 }
 
@@ -1002,13 +1002,13 @@ export class EmployeeRole_ {
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeRoleInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EmployeeID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RoleID: number;
 }
 
@@ -1130,13 +1130,13 @@ export class EmployeeSkill_ {
 //****************************************************************************
 @InputType()
 export class UpdateEmployeeSkillInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EmployeeID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     SkillID: number;
 }
 
@@ -1279,7 +1279,7 @@ export class Role_ {
 //****************************************************************************
 @InputType()
 export class UpdateRoleInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -1581,13 +1581,13 @@ export class IntegrationURLFormat_ {
 //****************************************************************************
 @InputType()
 export class UpdateIntegrationURLFormatInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
     IntegrationName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -1742,7 +1742,7 @@ export class Integration_ {
 //****************************************************************************
 @InputType()
 export class UpdateIntegrationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -1760,10 +1760,10 @@ export class UpdateIntegrationInput {
     @Field({ nullable: true })
     ImportPath: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     BatchMaxRequestCount: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     BatchRequestWaitTime: number;
 }
 
@@ -1990,7 +1990,7 @@ export class CompanyIntegration_ {
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -2017,7 +2017,7 @@ export class UpdateCompanyIntegrationInput {
     @Field({ nullable: true })
     ExternalSystemID: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsExternalSystemReadOnly: boolean;
 
     @Field({ nullable: true })
@@ -2340,13 +2340,13 @@ export class CreateEntityFieldInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AutoUpdateDescription: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsPrimaryKey: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsUnique: boolean;
 
     @Field({ nullable: true })
@@ -2358,7 +2358,7 @@ export class CreateEntityFieldInput {
     @Field({ nullable: true })
     ExtendedType: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     DefaultInView: boolean;
 
     @Field({ nullable: true })
@@ -2367,28 +2367,28 @@ export class CreateEntityFieldInput {
     @Field(() => Int, { nullable: true })
     DefaultColumnWidth: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUpdateAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUpdateInView: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
 
     @Field({ nullable: true })
     UserSearchParamFormatAPI: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
 
     @Field()
     GeneratedFormSection: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsNameField: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -2397,7 +2397,7 @@ export class CreateEntityFieldInput {
     @Field({ nullable: true })
     RelatedEntityFieldName: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
 
     @Field({ nullable: true })
@@ -2410,7 +2410,7 @@ export class CreateEntityFieldInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityFieldInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
@@ -2419,13 +2419,13 @@ export class UpdateEntityFieldInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AutoUpdateDescription: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsPrimaryKey: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsUnique: boolean;
 
     @Field({ nullable: true })
@@ -2437,7 +2437,7 @@ export class UpdateEntityFieldInput {
     @Field({ nullable: true })
     ExtendedType: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     DefaultInView: boolean;
 
     @Field({ nullable: true })
@@ -2446,28 +2446,28 @@ export class UpdateEntityFieldInput {
     @Field(() => Int, { nullable: true })
     DefaultColumnWidth: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUpdateAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUpdateInView: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
 
     @Field({ nullable: true })
     UserSearchParamFormatAPI: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
 
     @Field()
     GeneratedFormSection: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsNameField: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -2476,7 +2476,7 @@ export class UpdateEntityFieldInput {
     @Field({ nullable: true })
     RelatedEntityFieldName: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
 
     @Field({ nullable: true })
@@ -2885,6 +2885,9 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
     EntityRecordDocumentsArray: mj_core_schema_server_object_types.EntityRecordDocument_[]; // Link to EntityRecordDocuments
 
+    @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
+    FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+
 }
         
 //****************************************************************************
@@ -2892,7 +2895,7 @@ export class Entity_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field(() => Int, { nullable: true })
@@ -2907,67 +2910,67 @@ export class CreateEntityInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AutoUpdateDescription: boolean;
 
     @Field()
     BaseView: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     BaseViewGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     VirtualEntity: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     TrackRecordChanges: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AuditRecordAccess: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AuditViewRuns: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUpdateAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowCreateAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowDeleteAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CustomResolverAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
 
     @Field({ nullable: true })
     FullTextCatalog: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
 
     @Field({ nullable: true })
     FullTextIndex: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
 
     @Field({ nullable: true })
     FullTextSearchFunction: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -2982,19 +2985,19 @@ export class CreateEntityInput {
     @Field({ nullable: true })
     spDelete: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     spCreateGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     spUpdateGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     spDeleteGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CascadeDeletes: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     UserFormGenerated: boolean;
 
     @Field({ nullable: true })
@@ -3010,7 +3013,7 @@ export class CreateEntityInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field(() => Int, { nullable: true })
@@ -3025,67 +3028,67 @@ export class UpdateEntityInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AutoUpdateDescription: boolean;
 
     @Field()
     BaseView: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     BaseViewGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     VirtualEntity: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     TrackRecordChanges: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AuditRecordAccess: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AuditViewRuns: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUpdateAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowCreateAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowDeleteAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CustomResolverAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
 
     @Field({ nullable: true })
     FullTextCatalog: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
 
     @Field({ nullable: true })
     FullTextIndex: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
 
     @Field({ nullable: true })
     FullTextSearchFunction: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -3100,19 +3103,19 @@ export class UpdateEntityInput {
     @Field({ nullable: true })
     spDelete: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     spCreateGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     spUpdateGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     spDeleteGenerated: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CascadeDeletes: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     UserFormGenerated: boolean;
 
     @Field({ nullable: true })
@@ -3389,6 +3392,14 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
     }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
+    async FileEntityRecordLinksArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('File Entity Record Links', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileEntityRecordLinks] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
+        return result;
+    }
     
     @Mutation(() => Entity_)
     async CreateEntity(
@@ -3638,7 +3649,7 @@ export class CreateUserInput {
     @Field()
     Type: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 
     @Field()
@@ -3660,7 +3671,7 @@ export class CreateUserInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -3681,7 +3692,7 @@ export class UpdateUserInput {
     @Field()
     Type: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 
     @Field()
@@ -4077,16 +4088,16 @@ export class EntityRelationship_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRelationshipInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RelatedEntityID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     BundleInAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
 
     @Field()
@@ -4107,7 +4118,7 @@ export class CreateEntityRelationshipInput {
     @Field({ nullable: true })
     JoinEntityInverseJoinField: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     DisplayInForm: boolean;
 
     @Field({ nullable: true })
@@ -4120,19 +4131,19 @@ export class CreateEntityRelationshipInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityRelationshipInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RelatedEntityID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     BundleInAPI: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
 
     @Field()
@@ -4153,7 +4164,7 @@ export class UpdateEntityRelationshipInput {
     @Field({ nullable: true })
     JoinEntityInverseJoinField: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     DisplayInForm: boolean;
 
     @Field({ nullable: true })
@@ -4369,13 +4380,13 @@ export class UserRecordLog_ {
 //****************************************************************************
 @InputType()
 export class UpdateUserRecordLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -4387,7 +4398,7 @@ export class UpdateUserRecordLogInput {
     @Field()
     LatestAt: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     TotalCount: number;
 }
 
@@ -4588,10 +4599,10 @@ export class UserView_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -4603,10 +4614,10 @@ export class CreateUserViewInput {
     @Field(() => Int, { nullable: true })
     CategoryID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsShared: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsDefault: boolean;
 
     @Field({ nullable: true })
@@ -4615,10 +4626,10 @@ export class CreateUserViewInput {
     @Field({ nullable: true })
     FilterState: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CustomFilterState: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     SmartFilterEnabled: boolean;
 
     @Field({ nullable: true })
@@ -4633,7 +4644,7 @@ export class CreateUserViewInput {
     @Field({ nullable: true })
     WhereClause: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CustomWhereClause: boolean;
 
     @Field({ nullable: true })
@@ -4646,13 +4657,13 @@ export class CreateUserViewInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserViewInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -4664,10 +4675,10 @@ export class UpdateUserViewInput {
     @Field(() => Int, { nullable: true })
     CategoryID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsShared: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsDefault: boolean;
 
     @Field({ nullable: true })
@@ -4676,10 +4687,10 @@ export class UpdateUserViewInput {
     @Field({ nullable: true })
     FilterState: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CustomFilterState: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     SmartFilterEnabled: boolean;
 
     @Field({ nullable: true })
@@ -4694,7 +4705,7 @@ export class UpdateUserViewInput {
     @Field({ nullable: true })
     WhereClause: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CustomWhereClause: boolean;
 
     @Field({ nullable: true })
@@ -4922,13 +4933,13 @@ export class CompanyIntegrationRun_ {
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRunInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RunByUserID: number;
 
     @Field({ nullable: true })
@@ -4937,7 +4948,7 @@ export class UpdateCompanyIntegrationRunInput {
     @Field({ nullable: true })
     EndedAt: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     TotalRecords: number;
 
     @Field({ nullable: true })
@@ -5104,13 +5115,13 @@ export class CompanyIntegrationRunDetail_ {
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRunDetailInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationRunID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -5122,7 +5133,7 @@ export class UpdateCompanyIntegrationRunDetailInput {
     @Field()
     ExecutedAt: Date;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsSuccess: boolean;
 }
 
@@ -5266,7 +5277,7 @@ export class ErrorLog_ {
 //****************************************************************************
 @InputType()
 export class UpdateErrorLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field(() => Int, { nullable: true })
@@ -5416,7 +5427,7 @@ export class Application_ {
 //****************************************************************************
 @InputType()
 export class UpdateApplicationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -5595,19 +5606,16 @@ export class ApplicationEntity_ {
 //****************************************************************************
 @InputType()
 export class CreateApplicationEntityInput {
-    @Field(() => Int, )
-    ID: number;
-
     @Field({ nullable: true })
     ApplicationName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     DefaultForNewUser: boolean;
 }
 
@@ -5617,19 +5625,19 @@ export class CreateApplicationEntityInput {
 //****************************************************************************
 @InputType()
 export class UpdateApplicationEntityInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
     ApplicationName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     DefaultForNewUser: boolean;
 }
 
@@ -5852,25 +5860,22 @@ export class EntityPermission_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityPermissionInput {
-    @Field(() => Int, )
-    ID: number;
-
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field({ nullable: true })
     RoleName: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanCreate: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanRead: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanUpdate: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanDelete: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -5892,25 +5897,25 @@ export class CreateEntityPermissionInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityPermissionInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field({ nullable: true })
     RoleName: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanCreate: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanRead: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanUpdate: boolean;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     CanDelete: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -6111,16 +6116,13 @@ export class UserApplicationEntity_ {
 //****************************************************************************
 @InputType()
 export class CreateUserApplicationEntityInput {
-    @Field(() => Int, )
-    ID: number;
-
-    @Field(() => Int, )
+    @Field(() => Int)
     UserApplicationID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 }
 
@@ -6130,16 +6132,16 @@ export class CreateUserApplicationEntityInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserApplicationEntityInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserApplicationID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 }
 
@@ -6322,19 +6324,19 @@ export class UserApplication_ {
 //****************************************************************************
 @InputType()
 export class UpdateUserApplicationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ApplicationID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 }
 
@@ -6466,16 +6468,16 @@ export class CompanyIntegrationRunAPILog_ {
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRunAPILogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationRunID: number;
 
     @Field()
     ExecutedAt: Date;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsSuccess: boolean;
 
     @Field({ nullable: true })
@@ -6627,9 +6629,6 @@ export class List_ {
 //****************************************************************************
 @InputType()
 export class CreateListInput {
-    @Field(() => Int, )
-    ID: number;
-
     @Field()
     Name: string;
 
@@ -6639,7 +6638,7 @@ export class CreateListInput {
     @Field(() => Int, { nullable: true })
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -6655,7 +6654,7 @@ export class CreateListInput {
 //****************************************************************************
 @InputType()
 export class UpdateListInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -6667,7 +6666,7 @@ export class UpdateListInput {
     @Field(() => Int, { nullable: true })
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -6851,16 +6850,13 @@ export class ListDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateListDetailInput {
-    @Field(() => Int, )
-    ID: number;
-
-    @Field(() => Int, )
+    @Field(() => Int)
     ListID: number;
 
     @Field()
     RecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 }
 
@@ -6870,16 +6866,16 @@ export class CreateListDetailInput {
 //****************************************************************************
 @InputType()
 export class UpdateListDetailInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ListID: number;
 
     @Field()
     RecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 }
 
@@ -7060,16 +7056,13 @@ export class UserViewRun_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunInput {
-    @Field(() => Int, )
-    ID: number;
-
-    @Field(() => Int, )
+    @Field(() => Int)
     UserViewID: number;
 
     @Field()
     RunAt: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RunByUserID: number;
 }
 
@@ -7079,16 +7072,16 @@ export class CreateUserViewRunInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserViewRunInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserViewID: number;
 
     @Field()
     RunAt: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RunByUserID: number;
 }
 
@@ -7243,10 +7236,7 @@ export class UserViewRunDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateUserViewRunDetailInput {
-    @Field(() => Int, )
-    ID: number;
-
-    @Field(() => Int, )
+    @Field(() => Int)
     UserViewRunID: number;
 
     @Field()
@@ -7259,10 +7249,10 @@ export class CreateUserViewRunDetailInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserViewRunDetailInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserViewRunID: number;
 
     @Field()
@@ -7430,7 +7420,7 @@ export class WorkflowRun_ {
 //****************************************************************************
 @InputType()
 export class UpdateWorkflowRunInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -7585,7 +7575,7 @@ export class Workflow_ {
 //****************************************************************************
 @InputType()
 export class UpdateWorkflowInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -7746,7 +7736,7 @@ export class WorkflowEngine_ {
 //****************************************************************************
 @InputType()
 export class UpdateWorkflowEngineInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -7908,13 +7898,13 @@ export class RecordChange_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordChangeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
     RecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field()
@@ -8054,7 +8044,7 @@ export class UserRole_ {
 //****************************************************************************
 @InputType()
 export class CreateUserRoleInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field()
@@ -8315,7 +8305,7 @@ export class CreateAuditLogInput {
     @Field({ nullable: true })
     AuditLogTypeName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -8343,13 +8333,13 @@ export class CreateAuditLogInput {
 //****************************************************************************
 @InputType()
 export class UpdateAuditLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
     AuditLogTypeName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -8999,7 +8989,7 @@ export class AIModel_ {
 //****************************************************************************
 @InputType()
 export class UpdateAIModelInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -9008,7 +8998,7 @@ export class UpdateAIModelInput {
     @Field({ nullable: true })
     Vendor: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     AIModelTypeID: number;
 
     @Field({ nullable: true })
@@ -9020,7 +9010,7 @@ export class UpdateAIModelInput {
     @Field({ nullable: true })
     DriverImportPath: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 }
 
@@ -9198,7 +9188,7 @@ export class AIAction_ {
 //****************************************************************************
 @InputType()
 export class UpdateAIActionInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -9213,7 +9203,7 @@ export class UpdateAIActionInput {
     @Field({ nullable: true })
     DefaultPrompt: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 }
 
@@ -9366,16 +9356,16 @@ export class AIModelAction_ {
 //****************************************************************************
 @InputType()
 export class UpdateAIModelActionInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     AIModelID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     AIActionID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 }
 
@@ -9543,13 +9533,13 @@ export class EntityAIAction_ {
 //****************************************************************************
 @InputType()
 export class UpdateEntityAIActionInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     AIActionID: number;
 
     @Field(() => Int, { nullable: true })
@@ -9573,7 +9563,7 @@ export class UpdateEntityAIActionInput {
     @Field({ nullable: true })
     OutputField: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     SkipIfOutputFieldNotEmpty: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -9701,7 +9691,7 @@ export class AIModelType_ {
 //****************************************************************************
 @InputType()
 export class UpdateAIModelTypeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -10000,10 +9990,10 @@ export class CreateQueueInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     QueueTypeID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -10049,7 +10039,7 @@ export class CreateQueueInput {
 //****************************************************************************
 @InputType()
 export class UpdateQueueInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -10058,10 +10048,10 @@ export class UpdateQueueInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     QueueTypeID: number;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsActive: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -10269,7 +10259,7 @@ export class QueueTask_ {
 //****************************************************************************
 @InputType()
 export class CreateQueueTaskInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     QueueID: number;
 
     @Field()
@@ -10303,10 +10293,10 @@ export class CreateQueueTaskInput {
 //****************************************************************************
 @InputType()
 export class UpdateQueueTaskInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     QueueID: number;
 
     @Field()
@@ -10510,7 +10500,7 @@ export class CreateDashboardInput {
 //****************************************************************************
 @InputType()
 export class UpdateDashboardInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -11039,7 +11029,7 @@ export class CreateReportInput {
     @Field(() => Int, { nullable: true })
     CategoryID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field()
@@ -11085,7 +11075,7 @@ export class CreateReportInput {
 //****************************************************************************
 @InputType()
 export class UpdateReportInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -11097,7 +11087,7 @@ export class UpdateReportInput {
     @Field(() => Int, { nullable: true })
     CategoryID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field()
@@ -11322,7 +11312,7 @@ export class ReportSnapshot_ {
 //****************************************************************************
 @InputType()
 export class CreateReportSnapshotInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ReportID: number;
 
     @Field()
@@ -11338,10 +11328,10 @@ export class CreateReportSnapshotInput {
 //****************************************************************************
 @InputType()
 export class UpdateReportSnapshotInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ReportID: number;
 
     @Field()
@@ -11821,7 +11811,7 @@ export class CreateWorkspaceInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 }
 
@@ -11831,7 +11821,7 @@ export class CreateWorkspaceInput {
 //****************************************************************************
 @InputType()
 export class UpdateWorkspaceInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -11840,7 +11830,7 @@ export class UpdateWorkspaceInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 }
 
@@ -12046,16 +12036,16 @@ export class CreateWorkspaceItemInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     WorkSpaceID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ResourceTypeID: number;
 
     @Field({ nullable: true })
     ResourceRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
     @Field({ nullable: true })
@@ -12068,7 +12058,7 @@ export class CreateWorkspaceItemInput {
 //****************************************************************************
 @InputType()
 export class UpdateWorkspaceItemInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -12077,16 +12067,16 @@ export class UpdateWorkspaceItemInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     WorkSpaceID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ResourceTypeID: number;
 
     @Field({ nullable: true })
     ResourceRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
     @Field({ nullable: true })
@@ -12473,7 +12463,7 @@ export class ConversationDetail_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationDetailInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ConversationID: number;
 
     @Field({ nullable: true })
@@ -12488,7 +12478,7 @@ export class CreateConversationDetailInput {
     @Field({ nullable: true })
     Error: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     HiddenToUser: boolean;
 }
 
@@ -12498,10 +12488,10 @@ export class CreateConversationDetailInput {
 //****************************************************************************
 @InputType()
 export class UpdateConversationDetailInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ConversationID: number;
 
     @Field({ nullable: true })
@@ -12516,7 +12506,7 @@ export class UpdateConversationDetailInput {
     @Field({ nullable: true })
     Error: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     HiddenToUser: boolean;
 }
 
@@ -12736,7 +12726,7 @@ export class Conversation_ {
 //****************************************************************************
 @InputType()
 export class CreateConversationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -12751,7 +12741,7 @@ export class CreateConversationInput {
     @Field()
     Type: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsArchived: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -12770,10 +12760,10 @@ export class CreateConversationInput {
 //****************************************************************************
 @InputType()
 export class UpdateConversationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -12788,7 +12778,7 @@ export class UpdateConversationInput {
     @Field()
     Type: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsArchived: boolean;
 
     @Field(() => Int, { nullable: true })
@@ -13011,7 +13001,7 @@ export class UserNotification_ {
 //****************************************************************************
 @InputType()
 export class CreateUserNotificationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -13029,7 +13019,7 @@ export class CreateUserNotificationInput {
     @Field({ nullable: true })
     ResourceConfiguration: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     Unread: boolean;
 
     @Field({ nullable: true })
@@ -13042,10 +13032,10 @@ export class CreateUserNotificationInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserNotificationInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -13063,7 +13053,7 @@ export class UpdateUserNotificationInput {
     @Field({ nullable: true })
     ResourceConfiguration: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     Unread: boolean;
 
     @Field({ nullable: true })
@@ -13224,10 +13214,10 @@ export class CreateSchemaInfoInput {
     @Field()
     SchemaName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityIDMin: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityIDMax: number;
 
     @Field({ nullable: true })
@@ -13240,16 +13230,16 @@ export class CreateSchemaInfoInput {
 //****************************************************************************
 @InputType()
 export class UpdateSchemaInfoInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
     SchemaName: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityIDMin: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityIDMax: number;
 
     @Field({ nullable: true })
@@ -13412,13 +13402,13 @@ export class CompanyIntegrationRecordMap_ {
 //****************************************************************************
 @InputType()
 export class CreateCompanyIntegrationRecordMapInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field()
     ExternalSystemRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -13431,16 +13421,16 @@ export class CreateCompanyIntegrationRecordMapInput {
 //****************************************************************************
 @InputType()
 export class UpdateCompanyIntegrationRecordMapInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field()
     ExternalSystemRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -13631,13 +13621,13 @@ export class RecordMergeLog_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
     SurvivingRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     InitiatedByUserID: number;
 
     @Field()
@@ -13668,16 +13658,16 @@ export class CreateRecordMergeLogInput {
 //****************************************************************************
 @InputType()
 export class UpdateRecordMergeLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
     SurvivingRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     InitiatedByUserID: number;
 
     @Field()
@@ -13862,7 +13852,7 @@ export class RecordMergeDeletionLog_ {
 //****************************************************************************
 @InputType()
 export class CreateRecordMergeDeletionLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     RecordMergeLogID: number;
 
     @Field()
@@ -13881,10 +13871,10 @@ export class CreateRecordMergeDeletionLogInput {
 //****************************************************************************
 @InputType()
 export class UpdateRecordMergeDeletionLogInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     RecordMergeLogID: number;
 
     @Field()
@@ -14083,7 +14073,7 @@ export class QueryField_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryFieldInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     QueryID: number;
 
     @Field()
@@ -14092,7 +14082,7 @@ export class CreateQueryFieldInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
     @Field()
@@ -14107,13 +14097,13 @@ export class CreateQueryFieldInput {
     @Field({ nullable: true })
     SourceFieldName: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsComputed: boolean;
 
     @Field({ nullable: true })
     ComputationDescription: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsSummary: boolean;
 
     @Field({ nullable: true })
@@ -14126,10 +14116,10 @@ export class CreateQueryFieldInput {
 //****************************************************************************
 @InputType()
 export class UpdateQueryFieldInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     QueryID: number;
 
     @Field()
@@ -14138,7 +14128,7 @@ export class UpdateQueryFieldInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Sequence: number;
 
     @Field()
@@ -14153,13 +14143,13 @@ export class UpdateQueryFieldInput {
     @Field({ nullable: true })
     SourceFieldName: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsComputed: boolean;
 
     @Field({ nullable: true })
     ComputationDescription: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsSummary: boolean;
 
     @Field({ nullable: true })
@@ -14340,7 +14330,7 @@ export class CreateQueryCategoryInput {
 //****************************************************************************
 @InputType()
 export class UpdateQueryCategoryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -14552,7 +14542,7 @@ export class CreateQueryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CategoryID: number;
 
     @Field({ nullable: true })
@@ -14577,7 +14567,7 @@ export class CreateQueryInput {
 //****************************************************************************
 @InputType()
 export class UpdateQueryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -14586,7 +14576,7 @@ export class UpdateQueryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CategoryID: number;
 
     @Field({ nullable: true })
@@ -14774,7 +14764,7 @@ export class QueryPermission_ {
 //****************************************************************************
 @InputType()
 export class CreateQueryPermissionInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     QueryID: number;
 
     @Field()
@@ -14787,10 +14777,10 @@ export class CreateQueryPermissionInput {
 //****************************************************************************
 @InputType()
 export class UpdateQueryPermissionInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     QueryID: number;
 
     @Field()
@@ -14962,10 +14952,10 @@ export class CreateVectorIndexInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     VectorDatabaseID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EmbeddingModelID: number;
 }
 
@@ -14975,7 +14965,7 @@ export class CreateVectorIndexInput {
 //****************************************************************************
 @InputType()
 export class UpdateVectorIndexInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -14984,10 +14974,10 @@ export class UpdateVectorIndexInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     VectorDatabaseID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EmbeddingModelID: number;
 }
 
@@ -15152,7 +15142,7 @@ export class CreateEntityDocumentTypeInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentTypeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -15327,7 +15317,7 @@ export class EntityDocumentRun_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityDocumentRunInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityDocumentID: number;
 
     @Field({ nullable: true })
@@ -15346,10 +15336,10 @@ export class CreateEntityDocumentRunInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentRunInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityDocumentID: number;
 
     @Field({ nullable: true })
@@ -15537,7 +15527,7 @@ export class CreateVectorDatabaseInput {
 //****************************************************************************
 @InputType()
 export class UpdateVectorDatabaseInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -15723,7 +15713,7 @@ export class EntityRecordDocument_ {
 //****************************************************************************
 @InputType()
 export class CreateEntityRecordDocumentInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -15732,7 +15722,7 @@ export class CreateEntityRecordDocumentInput {
     @Field({ nullable: true })
     DocumentText: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     VectorIndexID: number;
 
     @Field({ nullable: true })
@@ -15751,10 +15741,10 @@ export class CreateEntityRecordDocumentInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityRecordDocumentInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
     @Field()
@@ -15763,7 +15753,7 @@ export class UpdateEntityRecordDocumentInput {
     @Field({ nullable: true })
     DocumentText: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     VectorIndexID: number;
 
     @Field({ nullable: true })
@@ -15945,10 +15935,10 @@ export class CreateEntityDocumentInput {
     @Field()
     Name: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     TypeID: number;
 
     @Field()
@@ -15964,16 +15954,16 @@ export class CreateEntityDocumentInput {
 //****************************************************************************
 @InputType()
 export class UpdateEntityDocumentInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
     Name: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     EntityID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     TypeID: number;
 
     @Field()
@@ -16175,7 +16165,7 @@ export class DataContextItem_ {
 //****************************************************************************
 @InputType()
 export class CreateDataContextItemInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     DataContextID: number;
 
     @Field()
@@ -16209,10 +16199,10 @@ export class CreateDataContextItemInput {
 //****************************************************************************
 @InputType()
 export class UpdateDataContextItemInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     DataContextID: number;
 
     @Field()
@@ -16405,7 +16395,7 @@ export class CreateDataContextInput {
     @Field()
     Name: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -16421,13 +16411,13 @@ export class CreateDataContextInput {
 //****************************************************************************
 @InputType()
 export class UpdateDataContextInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
     Name: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     UserID: number;
 
     @Field({ nullable: true })
@@ -16627,7 +16617,7 @@ export class CreateUserViewCategoryInput {
 //****************************************************************************
 @InputType()
 export class UpdateUserViewCategoryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -16830,7 +16820,7 @@ export class CreateDashboardCategoryInput {
 //****************************************************************************
 @InputType()
 export class UpdateDashboardCategoryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -17023,7 +17013,7 @@ export class CreateReportCategoryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ParentID: number;
 }
 
@@ -17033,7 +17023,7 @@ export class CreateReportCategoryInput {
 //****************************************************************************
 @InputType()
 export class UpdateReportCategoryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -17042,7 +17032,7 @@ export class UpdateReportCategoryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ParentID: number;
 }
 
@@ -17172,6 +17162,846 @@ export class ReportCategoryResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateReportCategoryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for File Storage Providers
+//****************************************************************************
+@ObjectType()
+export class FileStorageProvider_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(100)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field() 
+    @MaxLength(200)
+    ServerDriverKey: string;
+      
+    @Field() 
+    @MaxLength(200)
+    ClientDriverKey: string;
+      
+    @Field(() => Int) 
+    Priority: number;
+      
+    @Field(() => Boolean) 
+    IsActive: boolean;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+    @Field(() => [mj_core_schema_server_object_types.File_])
+    FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for File Storage Providers   
+//****************************************************************************
+@InputType()
+export class CreateFileStorageProviderInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field()
+    ServerDriverKey: string;
+
+    @Field()
+    ClientDriverKey: string;
+
+    @Field(() => Int)
+    Priority: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for File Storage Providers   
+//****************************************************************************
+@InputType()
+export class UpdateFileStorageProviderInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field()
+    ServerDriverKey: string;
+
+    @Field()
+    ClientDriverKey: string;
+
+    @Field(() => Int)
+    Priority: number;
+
+    @Field(() => Boolean)
+    IsActive: boolean;
+}
+
+//****************************************************************************
+// RESOLVER for File Storage Providers
+//****************************************************************************
+@ObjectType()
+export class RunFileStorageProviderViewResult {
+    @Field(() => [FileStorageProvider_])
+    Results: FileStorageProvider_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(FileStorageProvider_)
+export class FileStorageProviderResolver extends ResolverBase {
+    @Query(() => RunFileStorageProviderViewResult)
+    async RunFileStorageProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileStorageProviderViewResult)
+    async RunFileStorageProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileStorageProviderViewResult)
+    async RunFileStorageProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'File Storage Providers';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => FileStorageProvider_, { nullable: true })
+    async FileStorageProvider(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileStorageProvider_ | null> {
+        this.CheckUserReadPermissions('File Storage Providers', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileStorageProviders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('File Storage Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('File Storage Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [mj_core_schema_server_object_types.File_])
+    async FilesArray(@Root() filestorageprovider_: FileStorageProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Files', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFiles] WHERE [ProviderID]=${filestorageprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => FileStorageProvider_)
+    async CreateFileStorageProvider(
+        @Arg('input', () => CreateFileStorageProviderInput) input: CreateFileStorageProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileStorageProviderEntity>await new Metadata().GetEntityObject('File Storage Providers', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateFileStorageProviderInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateFileStorageProviderInput) {
+    }
+    
+    @Mutation(() => FileStorageProvider_)
+    async UpdateFileStorageProvider(
+        @Arg('input', () => UpdateFileStorageProviderInput) input: UpdateFileStorageProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileStorageProviderEntity>await new Metadata().GetEntityObject('File Storage Providers', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Storage Providers
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Files
+//****************************************************************************
+@ObjectType()
+export class File_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(1000)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int) 
+    ProviderID: number;
+      
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ContentType?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    ProviderKey?: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+      
+    @Field({description: 'Pending, Uploading, Uploaded, Deleting, Deleted'}) 
+    @MaxLength(40)
+    Status: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(100)
+    Provider: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Category?: string;
+    
+    @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
+    FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for Files   
+//****************************************************************************
+@InputType()
+export class CreateFileInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int)
+    ProviderID: number;
+
+    @Field({ nullable: true })
+    ContentType: string;
+
+    @Field({ nullable: true })
+    ProviderKey: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+
+    @Field()
+    Status: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Files   
+//****************************************************************************
+@InputType()
+export class UpdateFileInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int)
+    ProviderID: number;
+
+    @Field({ nullable: true })
+    ContentType: string;
+
+    @Field({ nullable: true })
+    ProviderKey: string;
+
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+
+    @Field()
+    Status: string;
+}
+
+//****************************************************************************
+// RESOLVER for Files
+//****************************************************************************
+@ObjectType()
+export class RunFileViewResult {
+    @Field(() => [File_])
+    Results: File_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(File_)
+export class FileResolver extends ResolverBase {
+    @Query(() => RunFileViewResult)
+    async RunFileViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileViewResult)
+    async RunFileViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileViewResult)
+    async RunFileDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Files';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => File_, { nullable: true })
+    async File(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<File_ | null> {
+        this.CheckUserReadPermissions('Files', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFiles] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Files', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
+    async FileEntityRecordLinksArray(@Root() file_: File_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('File Entity Record Links', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileEntityRecordLinks] WHERE [FileID]=${file_.ID} ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => File_)
+    async CreateFile(
+        @Arg('input', () => CreateFileInput) input: CreateFileInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateFileInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateFileInput) {
+    }
+    
+    @Mutation(() => File_)
+    async UpdateFile(
+        @Arg('input', () => UpdateFileInput) input: UpdateFileInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Files
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for File Categories
+//****************************************************************************
+@ObjectType()
+export class FileCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+      
+    @Field({nullable: true}) 
+    Description?: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+    
+    @Field(() => [mj_core_schema_server_object_types.File_])
+    FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
+
+    @Field(() => [mj_core_schema_server_object_types.FileCategory_])
+    FileCategoriesArray: mj_core_schema_server_object_types.FileCategory_[]; // Link to FileCategories
+
+}
+        
+//****************************************************************************
+// INPUT TYPE for File Categories   
+//****************************************************************************
+@InputType()
+export class CreateFileCategoryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for File Categories   
+//****************************************************************************
+@InputType()
+export class UpdateFileCategoryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+}
+
+//****************************************************************************
+// RESOLVER for File Categories
+//****************************************************************************
+@ObjectType()
+export class RunFileCategoryViewResult {
+    @Field(() => [FileCategory_])
+    Results: FileCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(FileCategory_)
+export class FileCategoryResolver extends ResolverBase {
+    @Query(() => RunFileCategoryViewResult)
+    async RunFileCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileCategoryViewResult)
+    async RunFileCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileCategoryViewResult)
+    async RunFileCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'File Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => FileCategory_, { nullable: true })
+    async FileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileCategory_ | null> {
+        this.CheckUserReadPermissions('File Categories', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+  
+    @FieldResolver(() => [mj_core_schema_server_object_types.File_])
+    async FilesArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Files', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFiles] WHERE [CategoryID]=${filecategory_.ID} ` + this.getRowLevelSecurityWhereClause('Files', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.FileCategory_])
+    async FileCategoriesArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('File Categories', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileCategories] WHERE [ParentID]=${filecategory_.ID} ` + this.getRowLevelSecurityWhereClause('File Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL));
+        return result;
+    }
+    
+    @Mutation(() => FileCategory_)
+    async CreateFileCategory(
+        @Arg('input', () => CreateFileCategoryInput) input: CreateFileCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateFileCategoryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateFileCategoryInput) {
+    }
+    
+    @Mutation(() => FileCategory_)
+    async UpdateFileCategory(
+        @Arg('input', () => UpdateFileCategoryInput) input: UpdateFileCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Categories
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileCategoryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileCategoryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for File Entity Record Links
+//****************************************************************************
+@ObjectType()
+export class FileEntityRecordLink_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    FileID: number;
+      
+    @Field(() => Int) 
+    EntityID: number;
+      
+    @Field() 
+    @MaxLength(510)
+    RecordID: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(1000)
+    File: string;
+      
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for File Entity Record Links   
+//****************************************************************************
+@InputType()
+export class CreateFileEntityRecordLinkInput {
+    @Field(() => Int)
+    FileID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    RecordID: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for File Entity Record Links   
+//****************************************************************************
+@InputType()
+export class UpdateFileEntityRecordLinkInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    FileID: number;
+
+    @Field(() => Int)
+    EntityID: number;
+
+    @Field()
+    RecordID: string;
+}
+
+//****************************************************************************
+// RESOLVER for File Entity Record Links
+//****************************************************************************
+@ObjectType()
+export class RunFileEntityRecordLinkViewResult {
+    @Field(() => [FileEntityRecordLink_])
+    Results: FileEntityRecordLink_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(FileEntityRecordLink_)
+export class FileEntityRecordLinkResolver extends ResolverBase {
+    @Query(() => RunFileEntityRecordLinkViewResult)
+    async RunFileEntityRecordLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileEntityRecordLinkViewResult)
+    async RunFileEntityRecordLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunFileEntityRecordLinkViewResult)
+    async RunFileEntityRecordLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'File Entity Record Links';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => FileEntityRecordLink_, { nullable: true })
+    async FileEntityRecordLink(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<FileEntityRecordLink_ | null> {
+        this.CheckUserReadPermissions('File Entity Record Links', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileEntityRecordLinks] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => FileEntityRecordLink_)
+    async CreateFileEntityRecordLink(
+        @Arg('input', () => CreateFileEntityRecordLinkInput) input: CreateFileEntityRecordLinkInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileEntityRecordLinkEntity>await new Metadata().GetEntityObject('File Entity Record Links', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput) {
+    }
+    
+    @Mutation(() => FileEntityRecordLink_)
+    async UpdateFileEntityRecordLink(
+        @Arg('input', () => UpdateFileEntityRecordLinkInput) input: UpdateFileEntityRecordLinkInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileEntityRecordLinkEntity>await new Metadata().GetEntityObject('File Entity Record Links', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Entity Record Links
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput) {
         const i = input, d = dataSource; // prevent error
     }
 

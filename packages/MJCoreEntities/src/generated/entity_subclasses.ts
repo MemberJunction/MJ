@@ -12991,3 +12991,558 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
     
+    /**
+     * File Storage Providers - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: FileStorageProvider
+     * * Base View: vwFileStorageProviders
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'File Storage Providers')
+    export class FileStorageProviderEntity extends BaseEntity {
+        /**
+        * Loads the File Storage Providers record from the database
+        * @param ID: number - primary key value to load the File Storage Providers record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof FileStorageProviderEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * File Storage Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof FileStorageProviderEntity
+        * @throws {Error} - Delete is not allowed for File Storage Providers, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for File Storage Providers, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ServerDriverKey
+        * * Display Name: Server Driver Key
+        * * SQL Data Type: nvarchar(100)
+        */
+        get ServerDriverKey(): string {  
+            return this.Get('ServerDriverKey');
+        }
+        set ServerDriverKey(value: string) {
+            this.Set('ServerDriverKey', value);
+        }
+        /**
+        * * Field Name: ClientDriverKey
+        * * Display Name: Client Driver Key
+        * * SQL Data Type: nvarchar(100)
+        */
+        get ClientDriverKey(): string {  
+            return this.Get('ClientDriverKey');
+        }
+        set ClientDriverKey(value: string) {
+            this.Set('ClientDriverKey', value);
+        }
+        /**
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        */
+        get Priority(): number {  
+            return this.Get('Priority');
+        }
+        set Priority(value: number) {
+            this.Set('Priority', value);
+        }
+        /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+
+    }
+    
+    /**
+     * Files - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: File
+     * * Base View: vwFiles
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Files')
+    export class FileEntity extends BaseEntity {
+        /**
+        * Loads the Files record from the database
+        * @param ID: number - primary key value to load the Files record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof FileEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Files - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof FileEntity
+        * @throws {Error} - Delete is not allowed for Files, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Files, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(500)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ProviderID
+        * * Display Name: Provider ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: File Storage Providers (vwFileStorageProviders.ID)
+        */
+        get ProviderID(): number {  
+            return this.Get('ProviderID');
+        }
+        set ProviderID(value: number) {
+            this.Set('ProviderID', value);
+        }
+        /**
+        * * Field Name: ContentType
+        * * Display Name: Content Type
+        * * SQL Data Type: nvarchar(50)
+        */
+        get ContentType(): string | null {  
+            return this.Get('ContentType');
+        }
+        set ContentType(value: string | null) {
+            this.Set('ContentType', value);
+        }
+        /**
+        * * Field Name: ProviderKey
+        * * Display Name: Provider Key
+        * * SQL Data Type: nvarchar(500)
+        */
+        get ProviderKey(): string | null {  
+            return this.Get('ProviderKey');
+        }
+        set ProviderKey(value: string | null) {
+            this.Set('ProviderKey', value);
+        }
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
+        */
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Description: Pending, Uploading, Uploaded, Deleting, Deleted
+        */
+        get Status(): string {  
+            return this.Get('Status');
+        }
+        set Status(value: string) {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Provider
+        * * Display Name: Provider
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Provider(): string {  
+            return this.Get('Provider');
+        }
+    
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Category(): string | null {  
+            return this.Get('Category');
+        }
+    
+
+    }
+    
+    /**
+     * File Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: FileCategory
+     * * Base View: vwFileCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'File Categories')
+    export class FileCategoryEntity extends BaseEntity {
+        /**
+        * Loads the File Categories record from the database
+        * @param ID: number - primary key value to load the File Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof FileCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * File Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof FileCategoryEntity
+        * @throws {Error} - Delete is not allowed for File Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for File Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: File Categories (vwFileCategories.ID)
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+    
+
+    }
+    
+    /**
+     * File Entity Record Links - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: FileEntityRecordLink
+     * * Base View: vwFileEntityRecordLinks
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'File Entity Record Links')
+    export class FileEntityRecordLinkEntity extends BaseEntity {
+        /**
+        * Loads the File Entity Record Links record from the database
+        * @param ID: number - primary key value to load the File Entity Record Links record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof FileEntityRecordLinkEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * File Entity Record Links - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof FileEntityRecordLinkEntity
+        * @throws {Error} - Delete is not allowed for File Entity Record Links, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for File Entity Record Links, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Files (vwFiles.ID)
+        */
+        get FileID(): number {  
+            return this.Get('FileID');
+        }
+        set FileID(value: number) {
+            this.Set('FileID', value);
+        }
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(255)
+        */
+        get RecordID(): string {  
+            return this.Get('RecordID');
+        }
+        set RecordID(value: string) {
+            this.Set('RecordID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)
+        */
+        get File(): string {  
+            return this.Get('File');
+        }
+    
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+    
+
+    }
+    
