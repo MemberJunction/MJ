@@ -5,6 +5,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,
+    "composite": true,
+    "declarationMap": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,

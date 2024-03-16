@@ -51,6 +51,9 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Typescript cache
+*.tsbuildinfo
+
 *.env
 mj server info.txt
 member_junction_code_for_documentation.pdf
