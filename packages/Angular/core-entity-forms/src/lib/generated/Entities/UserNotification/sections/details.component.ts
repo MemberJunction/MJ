@@ -24,11 +24,11 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Resource Type ID</label>
-            <kendo-numerictextbox [(value)]="record.ResourceTypeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ResourceTypeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Resource Record ID</label>
-            <kendo-numerictextbox [(value)]="record.ResourceRecordID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ResourceRecordID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Resource Configuration</label>
@@ -40,7 +40,7 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Read At</label>
-            <kendo-datepicker [(value)]="record.ReadAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.ReadAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

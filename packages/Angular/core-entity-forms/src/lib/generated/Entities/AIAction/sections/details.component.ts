@@ -20,7 +20,7 @@ import { AIActionEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Default Model ID</label>
-            <kendo-numerictextbox [(value)]="record.DefaultModelID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DefaultModelID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Default Prompt</label>

@@ -24,7 +24,7 @@ import { DataContextEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Last Refreshed At</label>
-            <kendo-datepicker [(value)]="record.LastRefreshedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LastRefreshedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

@@ -32,7 +32,7 @@ import { UserViewEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Category ID</label>
-            <kendo-numerictextbox [(value)]="record.CategoryID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CategoryID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Is Shared</label>

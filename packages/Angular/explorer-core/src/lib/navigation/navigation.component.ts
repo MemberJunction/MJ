@@ -923,7 +923,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         selected: false,
         text: resourceType,
         path: path,
-        svgIcon: this.sharedService.kendoSVGIcon(icon) 
+        svgIcon: icon ? this.sharedService.kendoSVGIcon(icon) : null
       }
       this.drawerItems.push(drawerItem); 
     }

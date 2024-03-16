@@ -16,23 +16,23 @@ import { ActivityEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Employee ID</label>
-            <kendo-numerictextbox [(value)]="record.EmployeeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.EmployeeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Contact ID</label>
-            <kendo-numerictextbox [(value)]="record.ContactID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ContactID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Account ID</label>
-            <kendo-numerictextbox [(value)]="record.AccountID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.AccountID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Deal ID</label>
-            <kendo-numerictextbox [(value)]="record.DealID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DealID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Activity Date</label>
-            <kendo-datepicker [(value)]="record.ActivityDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.ActivityDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Is Active</label>
@@ -68,7 +68,7 @@ import { ActivityEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Attachment ID</label>
-            <kendo-numerictextbox [(value)]="record.AttachmentID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.AttachmentID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Title</label>

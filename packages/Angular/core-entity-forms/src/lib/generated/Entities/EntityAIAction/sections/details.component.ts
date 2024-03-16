@@ -20,7 +20,7 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">AI Model ID</label>
-            <kendo-numerictextbox [(value)]="record.AIModelID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.AIModelID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Name</label>
@@ -52,7 +52,7 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputEntityID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.OutputEntityID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Comments</label>

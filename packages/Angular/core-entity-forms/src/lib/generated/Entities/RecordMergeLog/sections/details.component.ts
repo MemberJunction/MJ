@@ -28,7 +28,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Approved By User ID</label>
-            <kendo-numerictextbox [(value)]="record.ApprovedByUserID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ApprovedByUserID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Processing Status</label>
@@ -40,7 +40,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Processing Ended At</label>
-            <kendo-datepicker [(value)]="record.ProcessingEndedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.ProcessingEndedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Processing Log</label>

@@ -98,10 +98,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Keywords
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Keywords(): string {  
+        get Keywords(): string | null {  
             return this.Get('Keywords');
         }
-        set Keywords(value: string) {
+        set Keywords(value: string | null) {
             this.Set('Keywords', value);
         }
 
@@ -173,10 +173,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Description(): string {  
+        get Description(): string | null {  
             return this.Get('Description');
         }
-        set Description(value: string) {
+        set Description(value: string | null) {
             this.Set('Description', value);
         }
         /**
@@ -184,10 +184,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Keywords
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Keywords(): string {  
+        get Keywords(): string | null {  
             return this.Get('Keywords');
         }
-        set Keywords(value: string) {
+        set Keywords(value: string | null) {
             this.Set('Keywords', value);
         }
         /**
@@ -279,10 +279,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Description(): string {  
+        get Description(): string | null {  
             return this.Get('Description');
         }
-        set Description(value: string) {
+        set Description(value: string | null) {
             this.Set('Description', value);
         }
         /**
@@ -302,10 +302,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Keywords
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Keywords(): string {  
+        get Keywords(): string | null {  
             return this.Get('Keywords');
         }
-        set Keywords(value: string) {
+        set Keywords(value: string | null) {
             this.Set('Keywords', value);
         }
         /**
@@ -313,10 +313,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Exclude Keywords
         * * SQL Data Type: nvarchar(MAX)
         */
-        get ExcludeKeywords(): string {  
+        get ExcludeKeywords(): string | null {  
             return this.Get('ExcludeKeywords');
         }
-        set ExcludeKeywords(value: string) {
+        set ExcludeKeywords(value: string | null) {
             this.Set('ExcludeKeywords', value);
         }
         /**
@@ -406,10 +406,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Tax ID
         * * SQL Data Type: nvarchar(50)
         */
-        get TaxID(): string {  
+        get TaxID(): string | null {  
             return this.Get('TaxID');
         }
-        set TaxID(value: string) {
+        set TaxID(value: string | null) {
             this.Set('TaxID', value);
         }
         /**
@@ -417,10 +417,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Acronym
         * * SQL Data Type: nvarchar(20)
         */
-        get Acronym(): string {  
+        get Acronym(): string | null {  
             return this.Get('Acronym');
         }
-        set Acronym(value: string) {
+        set Acronym(value: string | null) {
             this.Set('Acronym', value);
         }
         /**
@@ -428,10 +428,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Operating Name
         * * SQL Data Type: nvarchar(255)
         */
-        get OperatingName(): string {  
+        get OperatingName(): string | null {  
             return this.Get('OperatingName');
         }
-        set OperatingName(value: string) {
+        set OperatingName(value: string | null) {
             this.Set('OperatingName', value);
         }
         /**
@@ -439,10 +439,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(250)
         */
-        get DisplayName(): string {  
+        get DisplayName(): string | null {  
             return this.Get('DisplayName');
         }
-        set DisplayName(value: string) {
+        set DisplayName(value: string | null) {
             this.Set('DisplayName', value);
         }
         /**
@@ -450,10 +450,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Description(): string {  
+        get Description(): string | null {  
             return this.Get('Description');
         }
-        set Description(value: string) {
+        set Description(value: string | null) {
             this.Set('Description', value);
         }
         /**
@@ -461,10 +461,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Address Line 1
         * * SQL Data Type: nvarchar(100)
         */
-        get AddressLine1(): string {  
+        get AddressLine1(): string | null {  
             return this.Get('AddressLine1');
         }
-        set AddressLine1(value: string) {
+        set AddressLine1(value: string | null) {
             this.Set('AddressLine1', value);
         }
         /**
@@ -472,10 +472,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Address Line 2
         * * SQL Data Type: nvarchar(100)
         */
-        get AddressLine2(): string {  
+        get AddressLine2(): string | null {  
             return this.Get('AddressLine2');
         }
-        set AddressLine2(value: string) {
+        set AddressLine2(value: string | null) {
             this.Set('AddressLine2', value);
         }
         /**
@@ -483,10 +483,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Address Line 3
         * * SQL Data Type: nvarchar(100)
         */
-        get AddressLine3(): string {  
+        get AddressLine3(): string | null {  
             return this.Get('AddressLine3');
         }
-        set AddressLine3(value: string) {
+        set AddressLine3(value: string | null) {
             this.Set('AddressLine3', value);
         }
         /**
@@ -494,10 +494,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: City
         * * SQL Data Type: nvarchar(100)
         */
-        get City(): string {  
+        get City(): string | null {  
             return this.Get('City');
         }
-        set City(value: string) {
+        set City(value: string | null) {
             this.Set('City', value);
         }
         /**
@@ -505,10 +505,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: State Province
         * * SQL Data Type: nvarchar(50)
         */
-        get StateProvince(): string {  
+        get StateProvince(): string | null {  
             return this.Get('StateProvince');
         }
-        set StateProvince(value: string) {
+        set StateProvince(value: string | null) {
             this.Set('StateProvince', value);
         }
         /**
@@ -516,10 +516,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Postal Code
         * * SQL Data Type: nvarchar(20)
         */
-        get PostalCode(): string {  
+        get PostalCode(): string | null {  
             return this.Get('PostalCode');
         }
-        set PostalCode(value: string) {
+        set PostalCode(value: string | null) {
             this.Set('PostalCode', value);
         }
         /**
@@ -527,10 +527,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Country
         * * SQL Data Type: nvarchar(100)
         */
-        get Country(): string {  
+        get Country(): string | null {  
             return this.Get('Country');
         }
-        set Country(value: string) {
+        set Country(value: string | null) {
             this.Set('Country', value);
         }
         /**
@@ -538,10 +538,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: ISOCountry Code
         * * SQL Data Type: nvarchar(5)
         */
-        get ISOCountryCode(): string {  
+        get ISOCountryCode(): string | null {  
             return this.Get('ISOCountryCode');
         }
-        set ISOCountryCode(value: string) {
+        set ISOCountryCode(value: string | null) {
             this.Set('ISOCountryCode', value);
         }
         /**
@@ -549,10 +549,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Domain
         * * SQL Data Type: nvarchar(255)
         */
-        get Domain(): string {  
+        get Domain(): string | null {  
             return this.Get('Domain');
         }
-        set Domain(value: string) {
+        set Domain(value: string | null) {
             this.Set('Domain', value);
         }
         /**
@@ -560,10 +560,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Website
         * * SQL Data Type: nvarchar(255)
         */
-        get Website(): string {  
+        get Website(): string | null {  
             return this.Get('Website');
         }
-        set Website(value: string) {
+        set Website(value: string | null) {
             this.Set('Website', value);
         }
         /**
@@ -571,10 +571,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Email Pattern
         * * SQL Data Type: nvarchar(255)
         */
-        get EmailPattern(): string {  
+        get EmailPattern(): string | null {  
             return this.Get('EmailPattern');
         }
-        set EmailPattern(value: string) {
+        set EmailPattern(value: string | null) {
             this.Set('EmailPattern', value);
         }
         /**
@@ -582,10 +582,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Logo URL
         * * SQL Data Type: nvarchar(500)
         */
-        get LogoURL(): string {  
+        get LogoURL(): string | null {  
             return this.Get('LogoURL');
         }
-        set LogoURL(value: string) {
+        set LogoURL(value: string | null) {
             this.Set('LogoURL', value);
         }
         /**
@@ -593,10 +593,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Leadership Page URL
         * * SQL Data Type: nvarchar(255)
         */
-        get LeadershipPageURL(): string {  
+        get LeadershipPageURL(): string | null {  
             return this.Get('LeadershipPageURL');
         }
-        set LeadershipPageURL(value: string) {
+        set LeadershipPageURL(value: string | null) {
             this.Set('LeadershipPageURL', value);
         }
         /**
@@ -604,10 +604,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Phone Number
         * * SQL Data Type: nvarchar(50)
         */
-        get PhoneNumber(): string {  
+        get PhoneNumber(): string | null {  
             return this.Get('PhoneNumber');
         }
-        set PhoneNumber(value: string) {
+        set PhoneNumber(value: string | null) {
             this.Set('PhoneNumber', value);
         }
         /**
@@ -615,10 +615,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Linked In
         * * SQL Data Type: nvarchar(255)
         */
-        get LinkedIn(): string {  
+        get LinkedIn(): string | null {  
             return this.Get('LinkedIn');
         }
-        set LinkedIn(value: string) {
+        set LinkedIn(value: string | null) {
             this.Set('LinkedIn', value);
         }
         /**
@@ -626,10 +626,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Facebook
         * * SQL Data Type: nvarchar(255)
         */
-        get Facebook(): string {  
+        get Facebook(): string | null {  
             return this.Get('Facebook');
         }
-        set Facebook(value: string) {
+        set Facebook(value: string | null) {
             this.Set('Facebook', value);
         }
         /**
@@ -637,10 +637,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Logo
         * * SQL Data Type: nvarchar(255)
         */
-        get Logo(): string {  
+        get Logo(): string | null {  
             return this.Get('Logo');
         }
-        set Logo(value: string) {
+        set Logo(value: string | null) {
             this.Set('Logo', value);
         }
         /**
@@ -649,10 +649,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Industries (vwIndustries.ID)
         */
-        get IndustryID(): number {  
+        get IndustryID(): number | null {  
             return this.Get('IndustryID');
         }
-        set IndustryID(value: number) {
+        set IndustryID(value: number | null) {
             this.Set('IndustryID', value);
         }
         /**
@@ -660,10 +660,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Last Reviewed Date
         * * SQL Data Type: datetime
         */
-        get LastReviewedDate(): Date {  
+        get LastReviewedDate(): Date | null {  
             return this.Get('LastReviewedDate');
         }
-        set LastReviewedDate(value: Date) {
+        set LastReviewedDate(value: Date | null) {
             this.Set('LastReviewedDate', value);
         }
         /**
@@ -683,10 +683,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Latest Activity Date
         * * SQL Data Type: datetime
         */
-        get LatestActivityDate(): Date {  
+        get LatestActivityDate(): Date | null {  
             return this.Get('LatestActivityDate');
         }
-        set LatestActivityDate(value: Date) {
+        set LatestActivityDate(value: Date | null) {
             this.Set('LatestActivityDate', value);
         }
         /**
@@ -694,10 +694,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Earliest Activity Date
         * * SQL Data Type: datetime
         */
-        get EarliestActivityDate(): Date {  
+        get EarliestActivityDate(): Date | null {  
             return this.Get('EarliestActivityDate');
         }
-        set EarliestActivityDate(value: Date) {
+        set EarliestActivityDate(value: Date | null) {
             this.Set('EarliestActivityDate', value);
         }
         /**
@@ -705,10 +705,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Record Source
         * * SQL Data Type: nvarchar(50)
         */
-        get RecordSource(): string {  
+        get RecordSource(): string | null {  
             return this.Get('RecordSource');
         }
-        set RecordSource(value: string) {
+        set RecordSource(value: string | null) {
             this.Set('RecordSource', value);
         }
         /**
@@ -736,10 +736,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Last Enriched At
         * * SQL Data Type: datetime
         */
-        get LastEnrichedAt(): Date {  
+        get LastEnrichedAt(): Date | null {  
             return this.Get('LastEnrichedAt');
         }
-        set LastEnrichedAt(value: Date) {
+        set LastEnrichedAt(value: Date | null) {
             this.Set('LastEnrichedAt', value);
         }
 
@@ -821,10 +821,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Nick Name
         * * SQL Data Type: nvarchar(50)
         */
-        get NickName(): string {  
+        get NickName(): string | null {  
             return this.Get('NickName');
         }
-        set NickName(value: string) {
+        set NickName(value: string | null) {
             this.Set('NickName', value);
         }
         /**
@@ -844,10 +844,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
-        get AccountID(): number {  
+        get AccountID(): number | null {  
             return this.Get('AccountID');
         }
-        set AccountID(value: number) {
+        set AccountID(value: number | null) {
             this.Set('AccountID', value);
         }
         /**
@@ -855,10 +855,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Last Reviewed Date
         * * SQL Data Type: datetime
         */
-        get LastReviewedDate(): Date {  
+        get LastReviewedDate(): Date | null {  
             return this.Get('LastReviewedDate');
         }
-        set LastReviewedDate(value: Date) {
+        set LastReviewedDate(value: Date | null) {
             this.Set('LastReviewedDate', value);
         }
         /**
@@ -866,10 +866,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Title
         * * SQL Data Type: nvarchar(200)
         */
-        get Title(): string {  
+        get Title(): string | null {  
             return this.Get('Title');
         }
-        set Title(value: string) {
+        set Title(value: string | null) {
             this.Set('Title', value);
         }
         /**
@@ -877,10 +877,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Email 1
         * * SQL Data Type: nvarchar(100)
         */
-        get Email1(): string {  
+        get Email1(): string | null {  
             return this.Get('Email1');
         }
-        set Email1(value: string) {
+        set Email1(value: string | null) {
             this.Set('Email1', value);
         }
         /**
@@ -888,10 +888,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Email 2
         * * SQL Data Type: nvarchar(100)
         */
-        get Email2(): string {  
+        get Email2(): string | null {  
             return this.Get('Email2');
         }
-        set Email2(value: string) {
+        set Email2(value: string | null) {
             this.Set('Email2', value);
         }
         /**
@@ -899,10 +899,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Email Source
         * * SQL Data Type: nvarchar(50)
         */
-        get EmailSource(): string {  
+        get EmailSource(): string | null {  
             return this.Get('EmailSource');
         }
-        set EmailSource(value: string) {
+        set EmailSource(value: string | null) {
             this.Set('EmailSource', value);
         }
         /**
@@ -910,10 +910,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Phone Number
         * * SQL Data Type: nvarchar(50)
         */
-        get PhoneNumber(): string {  
+        get PhoneNumber(): string | null {  
             return this.Get('PhoneNumber');
         }
-        set PhoneNumber(value: string) {
+        set PhoneNumber(value: string | null) {
             this.Set('PhoneNumber', value);
         }
         /**
@@ -921,10 +921,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Profile Picture URL
         * * SQL Data Type: nvarchar(500)
         */
-        get ProfilePictureURL(): string {  
+        get ProfilePictureURL(): string | null {  
             return this.Get('ProfilePictureURL');
         }
-        set ProfilePictureURL(value: string) {
+        set ProfilePictureURL(value: string | null) {
             this.Set('ProfilePictureURL', value);
         }
         /**
@@ -932,10 +932,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Twitter
         * * SQL Data Type: nvarchar(255)
         */
-        get Twitter(): string {  
+        get Twitter(): string | null {  
             return this.Get('Twitter');
         }
-        set Twitter(value: string) {
+        set Twitter(value: string | null) {
             this.Set('Twitter', value);
         }
         /**
@@ -943,10 +943,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Instagram
         * * SQL Data Type: nvarchar(255)
         */
-        get Instagram(): string {  
+        get Instagram(): string | null {  
             return this.Get('Instagram');
         }
-        set Instagram(value: string) {
+        set Instagram(value: string | null) {
             this.Set('Instagram', value);
         }
         /**
@@ -954,10 +954,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Linked In
         * * SQL Data Type: nvarchar(500)
         */
-        get LinkedIn(): string {  
+        get LinkedIn(): string | null {  
             return this.Get('LinkedIn');
         }
-        set LinkedIn(value: string) {
+        set LinkedIn(value: string | null) {
             this.Set('LinkedIn', value);
         }
         /**
@@ -965,10 +965,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Facebook
         * * SQL Data Type: nvarchar(255)
         */
-        get Facebook(): string {  
+        get Facebook(): string | null {  
             return this.Get('Facebook');
         }
-        set Facebook(value: string) {
+        set Facebook(value: string | null) {
             this.Set('Facebook', value);
         }
         /**
@@ -976,10 +976,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Email Status
         * * SQL Data Type: nvarchar(255)
         */
-        get EmailStatus(): string {  
+        get EmailStatus(): string | null {  
             return this.Get('EmailStatus');
         }
-        set EmailStatus(value: string) {
+        set EmailStatus(value: string | null) {
             this.Set('EmailStatus', value);
         }
         /**
@@ -988,10 +988,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Contact Roles (vwContactRoles.ID)
         */
-        get RoleID(): number {  
+        get RoleID(): number | null {  
             return this.Get('RoleID');
         }
-        set RoleID(value: number) {
+        set RoleID(value: number | null) {
             this.Set('RoleID', value);
         }
         /**
@@ -1000,10 +1000,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Contact Levels (vwContactLevels.ID)
         */
-        get LevelID(): number {  
+        get LevelID(): number | null {  
             return this.Get('LevelID');
         }
-        set LevelID(value: number) {
+        set LevelID(value: number | null) {
             this.Set('LevelID', value);
         }
         /**
@@ -1011,10 +1011,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Prefix
         * * SQL Data Type: nvarchar(20)
         */
-        get Prefix(): string {  
+        get Prefix(): string | null {  
             return this.Get('Prefix');
         }
-        set Prefix(value: string) {
+        set Prefix(value: string | null) {
             this.Set('Prefix', value);
         }
         /**
@@ -1022,10 +1022,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Suffix
         * * SQL Data Type: nvarchar(250)
         */
-        get Suffix(): string {  
+        get Suffix(): string | null {  
             return this.Get('Suffix');
         }
-        set Suffix(value: string) {
+        set Suffix(value: string | null) {
             this.Set('Suffix', value);
         }
         /**
@@ -1033,10 +1033,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Tags
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Tags(): string {  
+        get Tags(): string | null {  
             return this.Get('Tags');
         }
-        set Tags(value: string) {
+        set Tags(value: string | null) {
             this.Set('Tags', value);
         }
         /**
@@ -1044,10 +1044,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         */
-        get Status(): string {  
+        get Status(): string | null {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: string | null) {
             this.Set('Status', value);
         }
         /**
@@ -1067,10 +1067,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Latest Activity Date
         * * SQL Data Type: datetime
         */
-        get LatestActivityDate(): Date {  
+        get LatestActivityDate(): Date | null {  
             return this.Get('LatestActivityDate');
         }
-        set LatestActivityDate(value: Date) {
+        set LatestActivityDate(value: Date | null) {
             this.Set('LatestActivityDate', value);
         }
         /**
@@ -1078,10 +1078,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Earliest Activity Date
         * * SQL Data Type: datetime
         */
-        get EarliestActivityDate(): Date {  
+        get EarliestActivityDate(): Date | null {  
             return this.Get('EarliestActivityDate');
         }
-        set EarliestActivityDate(value: Date) {
+        set EarliestActivityDate(value: Date | null) {
             this.Set('EarliestActivityDate', value);
         }
         /**
@@ -1089,10 +1089,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Record Source
         * * SQL Data Type: nvarchar(50)
         */
-        get RecordSource(): string {  
+        get RecordSource(): string | null {  
             return this.Get('RecordSource');
         }
-        set RecordSource(value: string) {
+        set RecordSource(value: string | null) {
             this.Set('RecordSource', value);
         }
         /**
@@ -1120,10 +1120,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Last Enriched At
         * * SQL Data Type: datetime
         */
-        get LastEnrichedAt(): Date {  
+        get LastEnrichedAt(): Date | null {  
             return this.Get('LastEnrichedAt');
         }
-        set LastEnrichedAt(value: Date) {
+        set LastEnrichedAt(value: Date | null) {
             this.Set('LastEnrichedAt', value);
         }
         /**
@@ -1131,7 +1131,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Account
         * * SQL Data Type: nvarchar(255)
         */
-        get Account(): string {  
+        get Account(): string | null {  
             return this.Get('Account');
         }
     
@@ -1299,10 +1299,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
-        get EmployeeID(): number {  
+        get EmployeeID(): number | null {  
             return this.Get('EmployeeID');
         }
-        set EmployeeID(value: number) {
+        set EmployeeID(value: number | null) {
             this.Set('EmployeeID', value);
         }
         /**
@@ -1311,10 +1311,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Contacts (vwContacts.ID)
         */
-        get ContactID(): number {  
+        get ContactID(): number | null {  
             return this.Get('ContactID');
         }
-        set ContactID(value: number) {
+        set ContactID(value: number | null) {
             this.Set('ContactID', value);
         }
         /**
@@ -1323,10 +1323,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
-        get AccountID(): number {  
+        get AccountID(): number | null {  
             return this.Get('AccountID');
         }
-        set AccountID(value: number) {
+        set AccountID(value: number | null) {
             this.Set('AccountID', value);
         }
         /**
@@ -1335,10 +1335,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Deals (vwDeals.ID)
         */
-        get DealID(): number {  
+        get DealID(): number | null {  
             return this.Get('DealID');
         }
-        set DealID(value: number) {
+        set DealID(value: number | null) {
             this.Set('DealID', value);
         }
         /**
@@ -1347,10 +1347,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: datetime
         * * Default Value: getdate()
         */
-        get ActivityDate(): Date {  
+        get ActivityDate(): Date | null {  
             return this.Get('ActivityDate');
         }
-        set ActivityDate(value: Date) {
+        set ActivityDate(value: Date | null) {
             this.Set('ActivityDate', value);
         }
         /**
@@ -1358,10 +1358,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Active
         * * SQL Data Type: bit
         */
-        get IsActive(): boolean {  
+        get IsActive(): boolean | null {  
             return this.Get('IsActive');
         }
-        set IsActive(value: boolean) {
+        set IsActive(value: boolean | null) {
             this.Set('IsActive', value);
         }
         /**
@@ -1369,10 +1369,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Description(): string {  
+        get Description(): string | null {  
             return this.Get('Description');
         }
-        set Description(value: string) {
+        set Description(value: string | null) {
             this.Set('Description', value);
         }
         /**
@@ -1380,10 +1380,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Type
         * * SQL Data Type: nvarchar(30)
         */
-        get Type(): string {  
+        get Type(): string | null {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: string | null) {
             this.Set('Type', value);
         }
         /**
@@ -1391,10 +1391,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Attachment
         * * SQL Data Type: nvarchar(255)
         */
-        get Attachment(): string {  
+        get Attachment(): string | null {  
             return this.Get('Attachment');
         }
-        set Attachment(value: string) {
+        set Attachment(value: string | null) {
             this.Set('Attachment', value);
         }
         /**
@@ -1414,10 +1414,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: External System Record ID
         * * SQL Data Type: nvarchar(100)
         */
-        get ExternalSystemRecordID(): string {  
+        get ExternalSystemRecordID(): string | null {  
             return this.Get('ExternalSystemRecordID');
         }
-        set ExternalSystemRecordID(value: string) {
+        set ExternalSystemRecordID(value: string | null) {
             this.Set('ExternalSystemRecordID', value);
         }
         /**
@@ -1446,10 +1446,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Activity Attachments (vwActivityAttachments.ID)
         */
-        get AttachmentID(): number {  
+        get AttachmentID(): number | null {  
             return this.Get('AttachmentID');
         }
-        set AttachmentID(value: number) {
+        set AttachmentID(value: number | null) {
             this.Set('AttachmentID', value);
         }
         /**
@@ -1457,10 +1457,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Title
         * * SQL Data Type: nvarchar(255)
         */
-        get Title(): string {  
+        get Title(): string | null {  
             return this.Get('Title');
         }
-        set Title(value: string) {
+        set Title(value: string | null) {
             this.Set('Title', value);
         }
         /**
@@ -1468,10 +1468,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Opened
         * * SQL Data Type: bit
         */
-        get IsOpened(): boolean {  
+        get IsOpened(): boolean | null {  
             return this.Get('IsOpened');
         }
-        set IsOpened(value: boolean) {
+        set IsOpened(value: boolean | null) {
             this.Set('IsOpened', value);
         }
         /**
@@ -1479,10 +1479,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Bounced
         * * SQL Data Type: bit
         */
-        get IsBounced(): boolean {  
+        get IsBounced(): boolean | null {  
             return this.Get('IsBounced');
         }
-        set IsBounced(value: boolean) {
+        set IsBounced(value: boolean | null) {
             this.Set('IsBounced', value);
         }
         /**
@@ -1490,10 +1490,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Replied
         * * SQL Data Type: bit
         */
-        get IsReplied(): boolean {  
+        get IsReplied(): boolean | null {  
             return this.Get('IsReplied');
         }
-        set IsReplied(value: boolean) {
+        set IsReplied(value: boolean | null) {
             this.Set('IsReplied', value);
         }
         /**
@@ -1501,10 +1501,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Summary
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Summary(): string {  
+        get Summary(): string | null {  
             return this.Get('Summary');
         }
-        set Summary(value: string) {
+        set Summary(value: string | null) {
             this.Set('Summary', value);
         }
         /**
@@ -1512,7 +1512,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Account
         * * SQL Data Type: nvarchar(255)
         */
-        get Account(): string {  
+        get Account(): string | null {  
             return this.Get('Account');
         }
     
@@ -1574,10 +1574,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)
         */
-        get Name(): string {  
+        get Name(): string | null {  
             return this.Get('Name');
         }
-        set Name(value: string) {
+        set Name(value: string | null) {
             this.Set('Name', value);
         }
         /**
@@ -1585,10 +1585,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(50)
         */
-        get DisplayName(): string {  
+        get DisplayName(): string | null {  
             return this.Get('DisplayName');
         }
-        set DisplayName(value: string) {
+        set DisplayName(value: string | null) {
             this.Set('DisplayName', value);
         }
         /**
@@ -1714,10 +1714,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Accounts (vwAccounts.ID)
         */
-        get AccountID(): number {  
+        get AccountID(): number | null {  
             return this.Get('AccountID');
         }
-        set AccountID(value: number) {
+        set AccountID(value: number | null) {
             this.Set('AccountID', value);
         }
         /**
@@ -1726,10 +1726,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Contacts (vwContacts.ID)
         */
-        get ContactID(): number {  
+        get ContactID(): number | null {  
             return this.Get('ContactID');
         }
-        set ContactID(value: number) {
+        set ContactID(value: number | null) {
             this.Set('ContactID', value);
         }
         /**
@@ -1737,10 +1737,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Title
         * * SQL Data Type: nvarchar(255)
         */
-        get Title(): string {  
+        get Title(): string | null {  
             return this.Get('Title');
         }
-        set Title(value: string) {
+        set Title(value: string | null) {
             this.Set('Title', value);
         }
         /**
@@ -1748,10 +1748,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Description(): string {  
+        get Description(): string | null {  
             return this.Get('Description');
         }
-        set Description(value: string) {
+        set Description(value: string | null) {
             this.Set('Description', value);
         }
         /**
@@ -1759,10 +1759,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Value
         * * SQL Data Type: money
         */
-        get Value(): number {  
+        get Value(): number | null {  
             return this.Get('Value');
         }
-        set Value(value: number) {
+        set Value(value: number | null) {
             this.Set('Value', value);
         }
         /**
@@ -1770,10 +1770,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Include In Forecast
         * * SQL Data Type: bit
         */
-        get IncludeInForecast(): boolean {  
+        get IncludeInForecast(): boolean | null {  
             return this.Get('IncludeInForecast');
         }
-        set IncludeInForecast(value: boolean) {
+        set IncludeInForecast(value: boolean | null) {
             this.Set('IncludeInForecast', value);
         }
         /**
@@ -1781,10 +1781,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Probability
         * * SQL Data Type: decimal(10, 2)
         */
-        get Probability(): number {  
+        get Probability(): number | null {  
             return this.Get('Probability');
         }
-        set Probability(value: number) {
+        set Probability(value: number | null) {
             this.Set('Probability', value);
         }
         /**
@@ -1792,10 +1792,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Close Date
         * * SQL Data Type: datetime
         */
-        get CloseDate(): Date {  
+        get CloseDate(): Date | null {  
             return this.Get('CloseDate');
         }
-        set CloseDate(value: Date) {
+        set CloseDate(value: Date | null) {
             this.Set('CloseDate', value);
         }
         /**
@@ -1804,10 +1804,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
-        get EmployeeID(): number {  
+        get EmployeeID(): number | null {  
             return this.Get('EmployeeID');
         }
-        set EmployeeID(value: number) {
+        set EmployeeID(value: number | null) {
             this.Set('EmployeeID', value);
         }
         /**
@@ -1815,10 +1815,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Pipeline
         * * SQL Data Type: nvarchar(50)
         */
-        get Pipeline(): string {  
+        get Pipeline(): string | null {  
             return this.Get('Pipeline');
         }
-        set Pipeline(value: string) {
+        set Pipeline(value: string | null) {
             this.Set('Pipeline', value);
         }
         /**
@@ -1826,10 +1826,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Lead Source
         * * SQL Data Type: nvarchar(50)
         */
-        get LeadSource(): string {  
+        get LeadSource(): string | null {  
             return this.Get('LeadSource');
         }
-        set LeadSource(value: string) {
+        set LeadSource(value: string | null) {
             this.Set('LeadSource', value);
         }
         /**
@@ -1837,10 +1837,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Lead Source Detail
         * * SQL Data Type: nvarchar(MAX)
         */
-        get LeadSourceDetail(): string {  
+        get LeadSourceDetail(): string | null {  
             return this.Get('LeadSourceDetail');
         }
-        set LeadSourceDetail(value: string) {
+        set LeadSourceDetail(value: string | null) {
             this.Set('LeadSourceDetail', value);
         }
         /**
@@ -1848,10 +1848,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: External System Created At
         * * SQL Data Type: datetime
         */
-        get ExternalSystemCreatedAt(): Date {  
+        get ExternalSystemCreatedAt(): Date | null {  
             return this.Get('ExternalSystemCreatedAt');
         }
-        set ExternalSystemCreatedAt(value: Date) {
+        set ExternalSystemCreatedAt(value: Date | null) {
             this.Set('ExternalSystemCreatedAt', value);
         }
         /**
@@ -1859,10 +1859,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: External System Updated At
         * * SQL Data Type: datetime
         */
-        get ExternalSystemUpdatedAt(): Date {  
+        get ExternalSystemUpdatedAt(): Date | null {  
             return this.Get('ExternalSystemUpdatedAt');
         }
-        set ExternalSystemUpdatedAt(value: Date) {
+        set ExternalSystemUpdatedAt(value: Date | null) {
             this.Set('ExternalSystemUpdatedAt', value);
         }
         /**
@@ -1891,10 +1891,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Deal Types (vwDealTypes.ID)
         */
-        get DealTypeID(): number {  
+        get DealTypeID(): number | null {  
             return this.Get('DealTypeID');
         }
-        set DealTypeID(value: number) {
+        set DealTypeID(value: number | null) {
             this.Set('DealTypeID', value);
         }
         /**
@@ -1903,10 +1903,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Deal Stages (vwDealStages.ID)
         */
-        get DealStageID(): number {  
+        get DealStageID(): number | null {  
             return this.Get('DealStageID');
         }
-        set DealStageID(value: number) {
+        set DealStageID(value: number | null) {
             this.Set('DealStageID', value);
         }
         /**
@@ -1915,10 +1915,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Deal Forecast Categories (vwDealForecastCategories.ID)
         */
-        get DealForecastCategoryID(): number {  
+        get DealForecastCategoryID(): number | null {  
             return this.Get('DealForecastCategoryID');
         }
-        set DealForecastCategoryID(value: number) {
+        set DealForecastCategoryID(value: number | null) {
             this.Set('DealForecastCategoryID', value);
         }
         /**
@@ -1962,10 +1962,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Forecast Notes
         * * SQL Data Type: nvarchar(MAX)
         */
-        get ForecastNotes(): string {  
+        get ForecastNotes(): string | null {  
             return this.Get('ForecastNotes');
         }
-        set ForecastNotes(value: string) {
+        set ForecastNotes(value: string | null) {
             this.Set('ForecastNotes', value);
         }
         /**
@@ -1985,7 +1985,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Account
         * * SQL Data Type: nvarchar(255)
         */
-        get Account(): string {  
+        get Account(): string | null {  
             return this.Get('Account');
         }
     
@@ -1994,7 +1994,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Deal Type
         * * SQL Data Type: nvarchar(50)
         */
-        get DealType(): string {  
+        get DealType(): string | null {  
             return this.Get('DealType');
         }
     
@@ -2003,7 +2003,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Deal Stage
         * * SQL Data Type: nvarchar(20)
         */
-        get DealStage(): string {  
+        get DealStage(): string | null {  
             return this.Get('DealStage');
         }
     
@@ -2012,7 +2012,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Deal Forecast Category
         * * SQL Data Type: nvarchar(50)
         */
-        get DealForecastCategory(): string {  
+        get DealForecastCategory(): string | null {  
             return this.Get('DealForecastCategory');
         }
     
@@ -2074,10 +2074,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Name
         * * SQL Data Type: nvarchar(50)
         */
-        get Name(): string {  
+        get Name(): string | null {  
             return this.Get('Name');
         }
-        set Name(value: string) {
+        set Name(value: string | null) {
             this.Set('Name', value);
         }
         /**
@@ -2116,10 +2116,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(20)
         */
-        get DisplayName(): string {  
+        get DisplayName(): string | null {  
             return this.Get('DisplayName');
         }
-        set DisplayName(value: string) {
+        set DisplayName(value: string | null) {
             this.Set('DisplayName', value);
         }
 
@@ -2214,10 +2214,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Contacts (vwContacts.ID)
         */
-        get ContactID(): number {  
+        get ContactID(): number | null {  
             return this.Get('ContactID');
         }
-        set ContactID(value: number) {
+        set ContactID(value: number | null) {
             this.Set('ContactID', value);
         }
         /**
@@ -2295,10 +2295,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Posting Date
         * * SQL Data Type: datetime
         */
-        get PostingDate(): Date {  
+        get PostingDate(): Date | null {  
             return this.Get('PostingDate');
         }
-        set PostingDate(value: Date) {
+        set PostingDate(value: Date | null) {
             this.Set('PostingDate', value);
         }
         /**
@@ -2306,10 +2306,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Due Date
         * * SQL Data Type: datetime
         */
-        get DueDate(): Date {  
+        get DueDate(): Date | null {  
             return this.Get('DueDate');
         }
-        set DueDate(value: Date) {
+        set DueDate(value: Date | null) {
             this.Set('DueDate', value);
         }
         /**
@@ -2330,10 +2330,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Payment Terms Types (vwPaymentTermsTypes.ID)
         */
-        get PaymentTermsID(): number {  
+        get PaymentTermsID(): number | null {  
             return this.Get('PaymentTermsID');
         }
-        set PaymentTermsID(value: number) {
+        set PaymentTermsID(value: number | null) {
             this.Set('PaymentTermsID', value);
         }
         /**
@@ -2379,7 +2379,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Payment Terms
         * * SQL Data Type: nvarchar(50)
         */
-        get PaymentTerms(): string {  
+        get PaymentTerms(): string | null {  
             return this.Get('PaymentTerms');
         }
     
@@ -2441,10 +2441,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Attachments
         * * SQL Data Type: nvarchar(255)
         */
-        get Attachments(): string {  
+        get Attachments(): string | null {  
             return this.Get('Attachments');
         }
-        set Attachments(value: string) {
+        set Attachments(value: string | null) {
             this.Set('Attachments', value);
         }
         /**
@@ -2536,10 +2536,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(20)
         */
-        get DisplayName(): string {  
+        get DisplayName(): string | null {  
             return this.Get('DisplayName');
         }
-        set DisplayName(value: string) {
+        set DisplayName(value: string | null) {
             this.Set('DisplayName', value);
         }
         /**
@@ -2547,10 +2547,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Code
         * * SQL Data Type: nvarchar(20)
         */
-        get Code(): string {  
+        get Code(): string | null {  
             return this.Get('Code');
         }
-        set Code(value: string) {
+        set Code(value: string | null) {
             this.Set('Code', value);
         }
         /**
@@ -2558,10 +2558,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Due Date Calculation
         * * SQL Data Type: nvarchar(20)
         */
-        get DueDateCalculation(): string {  
+        get DueDateCalculation(): string | null {  
             return this.Get('DueDateCalculation');
         }
-        set DueDateCalculation(value: string) {
+        set DueDateCalculation(value: string | null) {
             this.Set('DueDateCalculation', value);
         }
         /**
@@ -2569,10 +2569,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Description
         * * SQL Data Type: nvarchar(200)
         */
-        get Description(): string {  
+        get Description(): string | null {  
             return this.Get('Description');
         }
-        set Description(value: string) {
+        set Description(value: string | null) {
             this.Set('Description', value);
         }
         /**
@@ -2601,10 +2601,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Company Integrations (vwCompanyIntegrations.ID)
         */
-        get CompanyIntegrationID(): number {  
+        get CompanyIntegrationID(): number | null {  
             return this.Get('CompanyIntegrationID');
         }
-        set CompanyIntegrationID(value: number) {
+        set CompanyIntegrationID(value: number | null) {
             this.Set('CompanyIntegrationID', value);
         }
         /**
@@ -2612,10 +2612,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: External System Record ID
         * * SQL Data Type: nvarchar(100)
         */
-        get ExternalSystemRecordID(): string {  
+        get ExternalSystemRecordID(): string | null {  
             return this.Get('ExternalSystemRecordID');
         }
-        set ExternalSystemRecordID(value: string) {
+        set ExternalSystemRecordID(value: string | null) {
             this.Set('ExternalSystemRecordID', value);
         }
 

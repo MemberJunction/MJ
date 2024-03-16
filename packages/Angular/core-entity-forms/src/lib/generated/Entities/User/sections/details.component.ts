@@ -44,15 +44,15 @@ import { UserEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Employee</label>
-            <kendo-numerictextbox [(value)]="record.EmployeeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.EmployeeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Linked Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.LinkedEntityID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.LinkedEntityID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Linked Entity Record ID</label>
-            <kendo-numerictextbox [(value)]="record.LinkedEntityRecordID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.LinkedEntityRecordID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

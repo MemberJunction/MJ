@@ -27,6 +27,7 @@ import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { QueryGridModule } from '@memberjunction/ng-query-grid';
+import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 
 // Local Components
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
@@ -141,7 +142,8 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     FilterModule,
     DropDownsModule,
     MemberJunctionSharedModule,
-    AskSkipModule
+    AskSkipModule,
+    EntityPermissionsModule
   ],
   exports: [
     FormToolbarComponent,

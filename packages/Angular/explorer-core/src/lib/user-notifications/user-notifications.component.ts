@@ -38,8 +38,8 @@ export class UserNotificationsComponent implements AfterViewInit {
     // Apply filter if it is not empty
     if (this.currentFilter.trim().length > 0) {
       // check for inclusion of filter value in title or message
-      temp = temp.filter(n => n.Title.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) || 
-                              n.Message.toLowerCase().includes(this.currentFilter.trim().toLowerCase())
+      temp = temp.filter(n => n.Title?.toLowerCase().includes(this.currentFilter.trim().toLowerCase()) || 
+                              n.Message?.toLowerCase().includes(this.currentFilter.trim().toLowerCase())
                         );
     }
 

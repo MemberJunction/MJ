@@ -46,6 +46,7 @@
     "@memberjunction/ng-shared": "^0.9.23",
     "@memberjunction/ng-ask-skip": "^0.9.90",
     "@memberjunction/ng-auth-services": "^0.9.94",
+    "@memberjunction/ng-entity-permissions": "^0.9.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

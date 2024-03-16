@@ -20,7 +20,7 @@ import { DashboardEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Category ID</label>
-            <kendo-numerictextbox [(value)]="record.CategoryID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CategoryID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">UIConfig Details</label>
@@ -28,7 +28,7 @@ import { DashboardEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
-            <kendo-numerictextbox [(value)]="record.UserID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.UserID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Category</label>

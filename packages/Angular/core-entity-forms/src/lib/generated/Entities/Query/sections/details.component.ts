@@ -40,7 +40,7 @@ import { QueryEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Quality Rank</label>
-            <kendo-numerictextbox [(value)]="record.QualityRank" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.QualityRank!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

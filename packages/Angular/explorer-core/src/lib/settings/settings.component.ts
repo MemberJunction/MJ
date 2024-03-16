@@ -6,5 +6,9 @@ import { Component } from '@angular/core';
   styleUrls: ['./settings.component.css']
 })
 export class SettingsComponent {
+  public currentItem: 'EntityPermissions' | 'Users' | 'Roles' = 'EntityPermissions';
 
+  public selectItem(item: 'EntityPermissions' | 'Users' | 'Roles') {
+    this.currentItem = item;
+  }
 }

@@ -40,7 +40,7 @@ import { PaymentTermsTypeEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Company Integration ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyIntegrationID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CompanyIntegrationID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">External System Record ID</label>

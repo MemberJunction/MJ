@@ -108,11 +108,11 @@ import { AccountEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Industry ID</label>
-            <kendo-numerictextbox [(value)]="record.IndustryID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.IndustryID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Last Reviewed Date</label>
-            <kendo-datepicker [(value)]="record.LastReviewedDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LastReviewedDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Activity Count</label>
@@ -120,11 +120,11 @@ import { AccountEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Latest Activity Date</label>
-            <kendo-datepicker [(value)]="record.LatestActivityDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LatestActivityDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Earliest Activity Date</label>
-            <kendo-datepicker [(value)]="record.EarliestActivityDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.EarliestActivityDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Record Source</label>
@@ -140,7 +140,7 @@ import { AccountEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Last Enriched At</label>
-            <kendo-datepicker [(value)]="record.LastEnrichedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LastEnrichedAt!" ></kendo-datepicker>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">

@@ -24,11 +24,11 @@ import { DealEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Account ID</label>
-            <kendo-numerictextbox [(value)]="record.AccountID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.AccountID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Contact ID</label>
-            <kendo-numerictextbox [(value)]="record.ContactID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ContactID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Title</label>
@@ -40,7 +40,7 @@ import { DealEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Value</label>
-            <kendo-numerictextbox [(value)]="record.Value" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.Value!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Include In Forecast</label>
@@ -48,15 +48,15 @@ import { DealEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Probability</label>
-            <kendo-numerictextbox [(value)]="record.Probability" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.Probability!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Close Date</label>
-            <kendo-datepicker [(value)]="record.CloseDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.CloseDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Employee ID</label>
-            <kendo-numerictextbox [(value)]="record.EmployeeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.EmployeeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Pipeline</label>
@@ -72,11 +72,11 @@ import { DealEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">External System Created At</label>
-            <kendo-datepicker [(value)]="record.ExternalSystemCreatedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.ExternalSystemCreatedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">External System Updated At</label>
-            <kendo-datepicker [(value)]="record.ExternalSystemUpdatedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.ExternalSystemUpdatedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
@@ -88,15 +88,15 @@ import { DealEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Deal Type ID</label>
-            <kendo-numerictextbox [(value)]="record.DealTypeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DealTypeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Deal Stage ID</label>
-            <kendo-numerictextbox [(value)]="record.DealStageID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DealStageID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Deal Forecast Category ID</label>
-            <kendo-numerictextbox [(value)]="record.DealForecastCategoryID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DealForecastCategoryID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">MRR</label>

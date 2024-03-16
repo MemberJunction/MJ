@@ -24,7 +24,7 @@ import { InvoiceEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Contact ID</label>
-            <kendo-numerictextbox [(value)]="record.ContactID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ContactID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Sub Total</label>
@@ -52,11 +52,11 @@ import { InvoiceEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Posting Date</label>
-            <kendo-datepicker [(value)]="record.PostingDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.PostingDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Due Date</label>
-            <kendo-datepicker [(value)]="record.DueDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.DueDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status ID</label>
@@ -64,7 +64,7 @@ import { InvoiceEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Payment Terms ID</label>
-            <kendo-numerictextbox [(value)]="record.PaymentTermsID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.PaymentTermsID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

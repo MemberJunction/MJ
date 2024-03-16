@@ -28,11 +28,11 @@ import { ContactEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Account ID</label>
-            <kendo-numerictextbox [(value)]="record.AccountID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.AccountID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Last Reviewed Date</label>
-            <kendo-datepicker [(value)]="record.LastReviewedDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LastReviewedDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Title</label>
@@ -80,11 +80,11 @@ import { ContactEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Role ID</label>
-            <kendo-numerictextbox [(value)]="record.RoleID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.RoleID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Level ID</label>
-            <kendo-numerictextbox [(value)]="record.LevelID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.LevelID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Prefix</label>
@@ -108,11 +108,11 @@ import { ContactEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Latest Activity Date</label>
-            <kendo-datepicker [(value)]="record.LatestActivityDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LatestActivityDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Earliest Activity Date</label>
-            <kendo-datepicker [(value)]="record.EarliestActivityDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.EarliestActivityDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Record Source</label>
@@ -128,7 +128,7 @@ import { ContactEntity } from 'mj_generatedentities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Last Enriched At</label>
-            <kendo-datepicker [(value)]="record.LastEnrichedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LastEnrichedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Account</label>

@@ -104,6 +104,9 @@
             "Name": "Angular/user-view-grid"
         },
         {
+            "Name": "Angular/entity-permissions"
+        },
+        {
             "Name": "Angular/explorer-core"
         },
         {

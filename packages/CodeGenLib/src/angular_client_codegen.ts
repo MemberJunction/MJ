@@ -358,9 +358,9 @@ function generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormS
                     if (field.TSType === EntityFieldTSType.Boolean)
                         editControl = `<input type="checkbox" [(ngModel)]="record.${field.CodeName}" kendoCheckBox />`
                     else if (field.TSType === EntityFieldTSType.Date)
-                        editControl = `<kendo-datepicker [(value)]="record.${field.CodeName}" ></kendo-datepicker>`
+                        editControl = `<kendo-datepicker [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-datepicker>` // if the field allows null, then add the ! to the end of the field name because the datepicker expects a date object, not null
                     else if (field.TSType === EntityFieldTSType.Number)
-                        editControl = `<kendo-numerictextbox [(value)]="record.${field.CodeName}" ></kendo-numerictextbox>`
+                        editControl = `<kendo-numerictextbox [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-numerictextbox>` // if the field allows null, then add the ! to the end of the field name because the numerictextbox expects a number, not null
                     else if (field.TSType === EntityFieldTSType.String) {
                         if (field.MaxLength > 100)
                             editControl = `<kendo-textarea [(ngModel)]="record.${field.CodeName}" ></kendo-textarea>`

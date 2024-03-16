@@ -12,7 +12,7 @@ import { EntityEntity } from '@memberjunction/core-entities';
                   
         <div class="record-form-row">
             <label class="fieldLabel">Parent ID</label>
-            <kendo-numerictextbox [(value)]="record.ParentID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ParentID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Name Suffix</label>
@@ -60,7 +60,7 @@ import { EntityEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">User View Max Rows</label>
-            <kendo-numerictextbox [(value)]="record.UserViewMaxRows" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.UserViewMaxRows!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Cascade Deletes</label>

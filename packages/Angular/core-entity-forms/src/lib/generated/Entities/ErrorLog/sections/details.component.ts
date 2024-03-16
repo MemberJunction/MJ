@@ -12,11 +12,11 @@ import { ErrorLogEntity } from '@memberjunction/core-entities';
                   
         <div class="record-form-row">
             <label class="fieldLabel">CompanyIntegrationRun ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">CompanyIntegrationRunDetail ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunDetailID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunDetailID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Code</label>
