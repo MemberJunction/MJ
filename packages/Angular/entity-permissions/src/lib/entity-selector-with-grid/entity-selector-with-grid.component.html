@@ -8,6 +8,6 @@
         [(value)]="CurrentEntity"
     >
     </kendo-dropdownlist>
-    <mj-entity-permissions-grid class="inner-grid" *ngIf="CurrentEntity" [EntityName]="CurrentEntity.Name"></mj-entity-permissions-grid>
+    <mj-entity-permissions-grid class="inner-grid" *ngIf="CurrentEntity" [EntityName]="CurrentEntity.Name" (PermissionChanged)="handlePermissionChanged($event)"></mj-entity-permissions-grid>
 </div>
  

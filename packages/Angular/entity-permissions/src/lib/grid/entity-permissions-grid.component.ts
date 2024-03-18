@@ -1,11 +1,8 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, SimpleChanges, OnChanges } from '@angular/core';
+import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChanges } from '@angular/core';
 
 import { Metadata, RunView } from '@memberjunction/core';
 import { kendoSVGIcon } from '@memberjunction/ng-shared'
 import { EntityPermissionEntity } from '@memberjunction/core-entities';
-
-import { CellClickEvent, CreateFormGroupArgs, GridComponent} from "@progress/kendo-angular-grid";
-import { FormBuilder, FormGroup } from '@angular/forms';
 
 
 export type EntityPermissionChangedEvent = {
@@ -27,30 +24,16 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
 
   @Output() PermissionChanged = new EventEmitter<EntityPermissionChangedEvent>();
 
-  @ViewChild('kendoGrid', { read: GridComponent }) kendoGridElement: GridComponent | null = null;
-  @ViewChild('kendoGrid', { read: ElementRef }) kendoGridElementRef: ElementRef | null = null;
-
   public permissions: EntityPermissionEntity[] = [];
   public gridHeight: number = 750;
   public isLoading: boolean = false;
 
 
-  public kendoSVGIcon = kendoSVGIcon
+  public kendoSVGIcon = kendoSVGIcon 
 
-  //public formGroup!: FormGroup;
-
-  constructor() {//private formBuilder: FormBuilder) {
-    //this.createFormGroup = this.createFormGroup.bind(this);
+  constructor() { 
   } 
 
-  public async cellClickHandler(args: CellClickEvent) {
-    // to do implement click handler for a query based on the entity field data
-    // bubble up the event to the parent component
-    this.PermissionChanged.emit(
-      args.dataItem
-    );
-  } 
-     
   ngOnInit(): void {
     this.Refresh()
   }
@@ -88,7 +71,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
         const roles = md.Roles;
 
         const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => p.RoleName === r.Name));
-        rolesWithNoPermissions.forEach(async (r) => {
+        for (const r of rolesWithNoPermissions) {
           const p = await md.GetEntityObject<EntityPermissionEntity>('Entity Permissions')
           p.NewRecord();
           p.EntityID = e.ID;
@@ -98,7 +81,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
           p.CanUpdate = false;
           p.CanDelete = false;
           existingPermissions.push(p);
-        })
+        }
         this.permissions = existingPermissions.sort((a, b) => a.RoleName!.localeCompare(b.RoleName!));
       }
       else {
@@ -134,5 +117,36 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
       return true;
     else
       return p.CanRead || p.CanCreate || p.CanUpdate || p.CanDelete; // if we have a new record, only consider it dirty if at least one permission is true
+  }
+
+  public flipPermission(event: MouseEvent, permission: EntityPermissionEntity, type: 'Read' | 'Create' | 'Update' | 'Delete', flipPermission: boolean) {
+    if (flipPermission) {
+      switch (type) {
+        case 'Read':
+          permission.CanRead = !permission.CanRead;
+          break;
+        case 'Create':
+          permission.CanCreate = !permission.CanCreate;
+          break;
+        case 'Update':
+          permission.CanUpdate = !permission.CanUpdate;
+          break;
+        case 'Delete':
+          permission.CanDelete = !permission.CanDelete;
+          break;
+      }
+    }
+    // always fire the event
+    const value = type === 'Read' ? permission.CanRead : type === 'Create' ? permission.CanCreate : type === 'Update' ? permission.CanUpdate : permission.CanDelete;
+    this.PermissionChanged.emit({
+      EntityName: this.EntityName,
+      RoleName: permission.RoleName!,
+      PermissionTypeChanged: type,
+      Value: value,
+      Cancel: false
+    })
+
+    if (!flipPermission)
+      event.stopPropagation();
   }
 }

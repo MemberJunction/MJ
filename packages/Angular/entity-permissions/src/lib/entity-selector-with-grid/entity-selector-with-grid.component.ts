@@ -20,10 +20,17 @@ export class EntityPermissionsSelectorWithGridComponent implements OnInit {
 
   private _md: Metadata | undefined;
   public entityList: EntityInfo[] = [];
-  ngOnInit(): void {
+  public ngOnInit(): void {
     this._md = new Metadata();
     this.entityList = this._md.Entities.sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.entityList?.length > 0)
       this.CurrentEntity = this.entityList[0];
+  }
+
+  public handlePermissionChanged(event: EntityPermissionChangedEvent) {
+    // bubble up the event to our container component
+    this.PermissionChanged.emit(
+      event
+    );
   }
 }

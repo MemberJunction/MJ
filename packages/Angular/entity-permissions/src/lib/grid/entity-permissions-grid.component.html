@@ -16,17 +16,17 @@
         <tbody>
             <tr *ngFor="let permission of permissions">
                 <td>{{ permission.RoleName }}</td>
-                <td (click)="permission.CanRead=!permission.CanRead">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="$event.stopPropagation()">
+                <td (click)="flipPermission($event, permission, 'Read', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
                 </td>
-                <td (click)="permission.CanUpdate=!permission.CanUpdate">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="$event.stopPropagation()">
+                <td (click)="flipPermission($event, permission, 'Update', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
                 </td>
-                <td (click)="permission.CanCreate=!permission.CanCreate">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="$event.stopPropagation()">
+                <td (click)="flipPermission($event, permission, 'Create', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
                 </td>
-                <td (click)="permission.CanDelete=!permission.CanDelete">
-                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="$event.stopPropagation()">
+                <td (click)="flipPermission($event, permission, 'Delete', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
                 </td>
                 </tr>
         </tbody>
