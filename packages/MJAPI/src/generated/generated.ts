@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/17/2024, 7:51:53 PM
+* GENERATED: 3/18/2024, 2:22:24 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2261,6 +2261,32 @@ export class DealForecastCategoryResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDealForecastCategoryInput) {
         const i = input, d = dataSource; // prevent error
+    }
+
+    @Mutation(() => DealForecastCategory_)
+    async DeleteDealForecastCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DealForecastCategoryEntity>await new Metadata().GetEntityObject('Deal Forecast Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
 
 }
