@@ -150,9 +150,9 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
       }
     });
 
-    this.localGridState = JSON.parse(this.record.GridState);
+    this.localGridState = JSON.parse(<string>this.record.GridState);
     const temp = this.localGridState;
-    this.localFilterState = JSON.parse(this.record.FilterState);
+    this.localFilterState = JSON.parse(<string>this.record.FilterState);
     this.defaultFilterState = this.localFilterState; // adding a duplicate filter state for populating the default filter state
     this.appendUnusedColumnsToColumnSettings(this.localGridState);
     this.localGridState.columnSettings.sort((a: any,b:any) => {

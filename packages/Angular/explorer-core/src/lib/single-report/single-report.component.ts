@@ -45,7 +45,7 @@ export class SingleReportComponent implements OnInit {
       const md = new Metadata();
       this.ReportEntity = <ReportEntity>await md.GetEntityObject('Reports');
       await this.ReportEntity.Load(this.reportId);
-      this.Configuration = JSON.parse(this.ReportEntity.Configuration);
+      this.Configuration = JSON.parse(<string>this.ReportEntity.Configuration);
 
       this.loadComplete.emit();
     }
