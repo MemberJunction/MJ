@@ -744,7 +744,14 @@ npm
                         // our query.  
                         if (success && results) { 
                             // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
-                            resolve (entity.PrimaryKey.Value === results)
+                            let success: boolean = true;
+                            for (const pk of entity.PrimaryKeys) {
+                                // check each primary key value to see if it matches the return value of the mutation
+                                if (pk.Value !== results[pk.Name]) {
+                                    success = false;
+                                }
+                            }
+                            resolve (success)
                         }
                         else {
                             // the transaction failed, nothing to update, but we need to call Reject so the 
