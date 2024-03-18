@@ -44,12 +44,12 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
         * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n        * * Display Name: ' + e.DisplayName : ''}
         * * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' +  e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n        * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n        * * Description: ' + e.Description : ''}
         */
-        get ${e.CodeName}(): ${TypeScriptTypeFromSQLType(e.Type)} {  
+        get ${e.CodeName}(): ${TypeScriptTypeFromSQLType(e.Type)}${e.AllowsNull ? ' | null' : ''} {  
             return this.Get('${e.Name}');
         }
     `
             if (!e.ReadOnly) {
-                sRet += `    set ${e.CodeName}(value: ${TypeScriptTypeFromSQLType(e.Type)}) {
+                sRet += `    set ${e.CodeName}(value: ${TypeScriptTypeFromSQLType(e.Type)}${e.AllowsNull ? ' | null' : ''}) {
             this.Set('${e.Name}', value);
         }`
             }

@@ -20,7 +20,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Category ID</label>
-            <kendo-numerictextbox [(value)]="record.CategoryID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CategoryID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">User ID</label>
@@ -32,15 +32,15 @@ import { ReportEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Conversation ID</label>
-            <kendo-numerictextbox [(value)]="record.ConversationID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ConversationID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Conversation Detail ID</label>
-            <kendo-numerictextbox [(value)]="record.ConversationDetailID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ConversationDetailID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Data Context ID</label>
-            <kendo-numerictextbox [(value)]="record.DataContextID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DataContextID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Configuration</label>
@@ -48,19 +48,19 @@ import { ReportEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Trigger Type ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputTriggerTypeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.OutputTriggerTypeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Format Type ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputFormatTypeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.OutputFormatTypeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Delivery Type ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputDeliveryTypeID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.OutputDeliveryTypeID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Event ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputEventID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.OutputEventID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Frequency</label>
@@ -72,7 +72,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Workflow ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputWorkflowID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.OutputWorkflowID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

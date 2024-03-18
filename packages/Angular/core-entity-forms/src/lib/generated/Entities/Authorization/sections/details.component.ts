@@ -12,7 +12,7 @@ import { AuthorizationEntity } from '@memberjunction/core-entities';
                   
         <div class="record-form-row">
             <label class="fieldLabel">Parent ID</label>
-            <kendo-numerictextbox [(value)]="record.ParentID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ParentID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Name</label>

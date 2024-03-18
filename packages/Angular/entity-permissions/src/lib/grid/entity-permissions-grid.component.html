@@ -1,0 +1,35 @@
+<div mjFillContainer>
+    <!-- We are going to do a simple custom grid here because Kendo Grid is way too much for this and doesn't show checkboxes even when not editing, this is cleaner and simpler -->
+    <!-- Assuming your component's selector is 'app-permissions-grid' -->
+    <div *ngIf="isLoading">Loading permissions...</div>
+    <button *ngIf="NumDirtyPermissions > 0" kendoButton (click)="savePermissions()">Save</button>
+    <table *ngIf="!isLoading" class="grid">
+        <thead>
+            <tr>
+            <th>Role</th>
+            <th>Read</th>
+            <th>Update</th>
+            <th>Create</th>
+            <th>Delete</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let permission of permissions">
+                <td>{{ permission.RoleName }}</td>
+                <td (click)="flipPermission($event, permission, 'Read', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
+                </td>
+                <td (click)="flipPermission($event, permission, 'Update', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
+                </td>
+                <td (click)="flipPermission($event, permission, 'Create', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
+                </td>
+                <td (click)="flipPermission($event, permission, 'Delete', true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
+                </td>
+                </tr>
+        </tbody>
+    </table>
+</div>
+ 

@@ -1,0 +1,24 @@
+<div mjFillContainer>
+    <!-- We are going to do a simple custom grid here because Kendo Grid is way too much for this and doesn't show checkboxes even when not editing, this is cleaner and simpler -->
+    <!-- Assuming your component's selector is 'app-permissions-grid' -->
+    <div *ngIf="isLoading">Loading...</div>
+    <button *ngIf="NumDirty > 0" kendoButton (click)="saveUserRoles()">Save</button>
+    <span>{{this.RoleName}}</span>
+    <table *ngIf="!isLoading" class="grid">
+        <thead>
+            <tr>
+            <th>User</th>
+            <th>In Role</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let ur of userRoles">
+                <td>{{ ur.User }}</td>
+                <td (click)="flipState($event, ur, true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="ur.Selected" (click)="flipState($event, ur, false)">
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+ 

@@ -27,6 +27,7 @@ import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { QueryGridModule } from '@memberjunction/ng-query-grid';
+import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 
 // Local Components
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
@@ -68,6 +69,7 @@ import { SingleQueryComponent } from './lib/single-query/single-query.component'
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
+import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 
 @NgModule({
   declarations: [
@@ -144,7 +146,9 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     FilterModule,
     DropDownsModule,
     MemberJunctionSharedModule,
-    AskSkipModule
+    AskSkipModule,
+    EntityPermissionsModule,
+    ExplorerSettingsModule
   ],
   exports: [
     FormToolbarComponent,

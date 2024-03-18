@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/graphql-dataprovider",
-  "version": "0.9.177",
+  "version": "0.9.178",
   "description": "MemberJunction: GraphQL Client Data Provider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,9 +24,9 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.171",
-    "@memberjunction/core-entities": "^0.9.155",
-    "@memberjunction/global": "^0.9.152",
+    "@memberjunction/core": "^0.9.172",
+    "@memberjunction/core-entities": "^0.9.156",
+    "@memberjunction/global": "^0.9.153",
     "graphql": "^16.6.0",
     "graphql-request": "^5.2.0",
     "graphql-ws": "^5.14.0",

@@ -20,15 +20,15 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">View ID</label>
-            <kendo-numerictextbox [(value)]="record.ViewID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ViewID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Query ID</label>
-            <kendo-numerictextbox [(value)]="record.QueryID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.QueryID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.EntityID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Record ID</label>
@@ -44,7 +44,7 @@ import { DataContextItemEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Last Refreshed At</label>
-            <kendo-datepicker [(value)]="record.LastRefreshedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.LastRefreshedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

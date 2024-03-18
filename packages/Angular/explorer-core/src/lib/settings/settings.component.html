@@ -1,3 +1,21 @@
-<div>
-    MemberJunction Explorer - User Settings - Coming Soon...
+<div class="container">
+    <!-- Options container -->
+    <div class="options-container">
+        <div class="option-item" [class.selected]="currentItem === 'Users'"  (click)="selectItem('Users')">Users</div>
+        <div class="option-item" [class.selected]="currentItem === 'Roles'"  (click)="selectItem('Roles')">Roles</div>
+        <div class="option-item" [class.selected]="currentItem === 'EntityPermissions'"  (click)="selectItem('EntityPermissions')">Entity Permissions</div>
+    </div>
+
+    <!-- Display container -->
+    <div class="display-container">
+        <div *ngIf="currentItem === 'EntityPermissions'">
+            <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
+        </div>
+        <div *ngIf="currentItem === 'Users'">
+            Users Component Goes Here
+        </div>
+        <div *ngIf="currentItem === 'Roles'">
+            <mj-single-role RoleName="UI"></mj-single-role>
+        </div>
+    </div>
 </div>

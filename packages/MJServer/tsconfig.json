@@ -7,6 +7,8 @@
     "sourceMap": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true,
+    "composite": true,
+    "declarationMap": true,
     "esModuleInterop": true,
     "lib": ["es2020", "esnext.asynciterable"],
     "moduleResolution": "node",
@@ -21,7 +23,8 @@
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
   "exclude": ["node_modules"],
   "include": ["./src/**/*.ts"]

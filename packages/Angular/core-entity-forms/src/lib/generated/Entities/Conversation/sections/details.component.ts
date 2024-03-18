@@ -36,15 +36,15 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Linked Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.LinkedEntityID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.LinkedEntityID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Linked Record ID</label>
-            <kendo-numerictextbox [(value)]="record.LinkedRecordID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.LinkedRecordID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Data Context ID</label>
-            <kendo-numerictextbox [(value)]="record.DataContextID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DataContextID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

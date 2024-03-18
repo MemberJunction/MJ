@@ -92,7 +92,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Default Column Width</label>
-            <kendo-numerictextbox [(value)]="record.DefaultColumnWidth" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DefaultColumnWidth!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Allow Update API</label>
@@ -132,7 +132,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">RelatedEntity ID</label>
-            <kendo-numerictextbox [(value)]="record.RelatedEntityID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.RelatedEntityID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Related Entity Field Name</label>

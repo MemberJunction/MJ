@@ -191,15 +191,6 @@
     ],
     "commands": [
         {
-            "workingDirectory": "../MJServer",
-            "command": "npm",
-            "args": [
-                "run",
-                "build"
-            ],
-            "when": "after"
-        },
-        {
             "workingDirectory": "../MJCoreEntities",
             "command": "npm",
             "args": [
@@ -210,6 +201,15 @@
         },
         {
             "workingDirectory": "../GeneratedEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../MJServer",
             "command": "npm",
             "args": [
                 "run",

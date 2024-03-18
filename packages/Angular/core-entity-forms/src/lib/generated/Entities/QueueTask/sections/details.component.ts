@@ -20,11 +20,11 @@ import { QueueTaskEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Started At</label>
-            <kendo-datepicker [(value)]="record.StartedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.StartedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Ended At</label>
-            <kendo-datepicker [(value)]="record.EndedAt" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.EndedAt!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Data</label>

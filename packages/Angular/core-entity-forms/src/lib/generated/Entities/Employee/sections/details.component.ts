@@ -44,7 +44,7 @@ import { EmployeeEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Supervisor ID</label>
-            <kendo-numerictextbox [(value)]="record.SupervisorID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.SupervisorID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

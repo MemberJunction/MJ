@@ -28,7 +28,7 @@ import { QueueEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Process PID</label>
-            <kendo-numerictextbox [(value)]="record.ProcessPID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ProcessPID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Process Platform</label>

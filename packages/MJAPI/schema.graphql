@@ -474,7 +474,6 @@ input CreateApplicationEntityInput {
   ApplicationName: String
   DefaultForNewUser: Boolean!
   EntityID: Int!
-  ID: Int!
   Sequence: Int!
 }
 
@@ -751,7 +750,6 @@ input CreateEntityPermissionInput {
   CreateRLSFilterID: Int
   DeleteRLSFilterID: Int
   EntityID: Int!
-  ID: Int!
   ReadRLSFilterID: Int
   RoleName: String
   UpdateRLSFilterID: Int
@@ -782,6 +780,37 @@ input CreateEntityRelationshipInput {
   Type: String!
 }
 
+input CreateFileCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+}
+
+input CreateFileEntityRecordLinkInput {
+  EntityID: Int!
+  FileID: Int!
+  RecordID: String!
+}
+
+input CreateFileInput {
+  CategoryID: Int
+  ContentType: String
+  Description: String
+  Name: String!
+  ProviderID: Int!
+  ProviderKey: String
+  Status: String!
+}
+
+input CreateFileStorageProviderInput {
+  ClientDriverKey: String!
+  Description: String
+  IsActive: Boolean!
+  Name: String!
+  Priority: Int!
+  ServerDriverKey: String!
+}
+
 input CreateIndustryInput {
   Description: String!
   Keywords: String
@@ -810,7 +839,6 @@ input CreateInvoiceStatusTypeInput {
 }
 
 input CreateListDetailInput {
-  ID: Int!
   ListID: Int!
   RecordID: String!
   Sequence: Int!
@@ -821,7 +849,6 @@ input CreateListInput {
   Description: String
   EntityID: Int
   ExternalSystemRecordID: String
-  ID: Int!
   Name: String!
   UserID: Int!
 }
@@ -983,7 +1010,6 @@ input CreateSchemaInfoInput {
 
 input CreateUserApplicationEntityInput {
   EntityID: Int!
-  ID: Int!
   Sequence: Int!
   UserApplicationID: Int!
 }
@@ -1051,13 +1077,11 @@ input CreateUserViewInput {
 }
 
 input CreateUserViewRunDetailInput {
-  ID: Int!
   RecordID: String!
   UserViewRunID: Int!
 }
 
 input CreateUserViewRunInput {
-  ID: Int!
   RunAt: Timestamp!
   RunByUserID: Int!
   UserViewID: Int!
@@ -1592,6 +1616,7 @@ type Entity_ {
   EntityPermissionsArray: [EntityPermission_!]!
   EntityRecordDocumentsArray: [EntityRecordDocument_!]!
   EntityRelationshipsArray: [EntityRelationship_!]!
+  FileEntityRecordLinksArray: [FileEntityRecordLink_!]!
   FullTextCatalog: String
   FullTextCatalogGenerated: Boolean!
   FullTextIndex: String
@@ -1654,6 +1679,60 @@ input FieldMapping {
 type FieldMappingOutput {
   FieldName: String!
   Value: String!
+}
+
+type FileCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  FileCategoriesArray: [FileCategory_!]!
+  FilesArray: [File_!]!
+  ID: Int!
+  Name: String!
+  Parent: String
+  ParentID: Int
+  UpdatedAt: Timestamp!
+}
+
+type FileEntityRecordLink_ {
+  CreatedAt: Timestamp!
+  Entity: String!
+  EntityID: Int!
+  File: String!
+  FileID: Int!
+  ID: Int!
+  RecordID: String!
+  UpdatedAt: Timestamp!
+}
+
+type FileStorageProvider_ {
+  ClientDriverKey: String!
+  CreatedAt: Timestamp!
+  Description: String
+  FilesArray: [File_!]!
+  ID: Int!
+  IsActive: Boolean!
+  Name: String!
+  Priority: Int!
+  ServerDriverKey: String!
+  UpdatedAt: Timestamp!
+}
+
+type File_ {
+  Category: String
+  CategoryID: Int
+  ContentType: String
+  CreatedAt: Timestamp!
+  Description: String
+  FileEntityRecordLinksArray: [FileEntityRecordLink_!]!
+  ID: Int!
+  Name: String!
+  Provider: String!
+  ProviderID: Int!
+  ProviderKey: String
+
+  """Pending, Uploading, Uploaded, Deleting, Deleted"""
+  Status: String!
+  UpdatedAt: Timestamp!
 }
 
 type Industry_ {
@@ -1776,6 +1855,10 @@ type Mutation {
   CreateEntityPermission(input: CreateEntityPermissionInput!): EntityPermission_!
   CreateEntityRecordDocument(input: CreateEntityRecordDocumentInput!): EntityRecordDocument_!
   CreateEntityRelationship(input: CreateEntityRelationshipInput!): EntityRelationship_!
+  CreateFile(input: CreateFileInput!): File_!
+  CreateFileCategory(input: CreateFileCategoryInput!): FileCategory_!
+  CreateFileEntityRecordLink(input: CreateFileEntityRecordLinkInput!): FileEntityRecordLink_!
+  CreateFileStorageProvider(input: CreateFileStorageProviderInput!): FileStorageProvider_!
   CreateIndustry(input: CreateIndustryInput!): Industry_!
   CreateInvoice(input: CreateInvoiceInput!): Invoice_!
   CreateInvoiceStatusType(input: CreateInvoiceStatusTypeInput!): InvoiceStatusType_!
@@ -1824,9 +1907,14 @@ type Mutation {
   DeleteListDetail(ID: Int!): ListDetail_!
   DeleteReport(ID: Int!): Report_!
   DeleteReportSnapshot(ID: Int!): ReportSnapshot_!
+  DeleteUser(ID: Int!): User_!
+  DeleteUserApplication(ID: Int!): UserApplication_!
   DeleteUserApplicationEntity(ID: Int!): UserApplicationEntity_!
   DeleteUserFavorite(ID: Int!): UserFavorite_!
+  DeleteUserNotification(ID: Int!): UserNotification_!
+  DeleteUserRole(ID: Int!): UserRole_!
   DeleteUserView(ID: Int!): UserView_!
+  DeleteUserViewCategory(ID: Int!): UserViewCategory_!
   DeleteWorkspace(ID: Int!): Workspace_!
   DeleteWorkspaceItem(ID: Int!): WorkspaceItem_!
   MergeRecords(request: RecordMergeRequest!): RecordMergeResult!
@@ -1874,6 +1962,10 @@ type Mutation {
   UpdateEntityRecordDocument(input: UpdateEntityRecordDocumentInput!): EntityRecordDocument_!
   UpdateEntityRelationship(input: UpdateEntityRelationshipInput!): EntityRelationship_!
   UpdateErrorLog(input: UpdateErrorLogInput!): ErrorLog_!
+  UpdateFile(input: UpdateFileInput!): File_!
+  UpdateFileCategory(input: UpdateFileCategoryInput!): FileCategory_!
+  UpdateFileEntityRecordLink(input: UpdateFileEntityRecordLinkInput!): FileEntityRecordLink_!
+  UpdateFileStorageProvider(input: UpdateFileStorageProviderInput!): FileStorageProvider_!
   UpdateIndustry(input: UpdateIndustryInput!): Industry_!
   UpdateIntegration(input: UpdateIntegrationInput!): Integration_!
   UpdateIntegrationURLFormat(input: UpdateIntegrationURLFormatInput!): IntegrationURLFormat_!
@@ -2065,6 +2157,10 @@ type Query {
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
+  File(ID: Int!): File_
+  FileCategory(ID: Int!): FileCategory_
+  FileEntityRecordLink(ID: Int!): FileEntityRecordLink_
+  FileStorageProvider(ID: Int!): FileStorageProvider_
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
@@ -2250,6 +2346,18 @@ type Query {
   RunErrorLogDynamicView(input: RunDynamicViewInput!): RunErrorLogViewResult!
   RunErrorLogViewByID(input: RunViewByIDInput!): RunErrorLogViewResult!
   RunErrorLogViewByName(input: RunViewByNameInput!): RunErrorLogViewResult!
+  RunFileCategoryDynamicView(input: RunDynamicViewInput!): RunFileCategoryViewResult!
+  RunFileCategoryViewByID(input: RunViewByIDInput!): RunFileCategoryViewResult!
+  RunFileCategoryViewByName(input: RunViewByNameInput!): RunFileCategoryViewResult!
+  RunFileDynamicView(input: RunDynamicViewInput!): RunFileViewResult!
+  RunFileEntityRecordLinkDynamicView(input: RunDynamicViewInput!): RunFileEntityRecordLinkViewResult!
+  RunFileEntityRecordLinkViewByID(input: RunViewByIDInput!): RunFileEntityRecordLinkViewResult!
+  RunFileEntityRecordLinkViewByName(input: RunViewByNameInput!): RunFileEntityRecordLinkViewResult!
+  RunFileStorageProviderDynamicView(input: RunDynamicViewInput!): RunFileStorageProviderViewResult!
+  RunFileStorageProviderViewByID(input: RunViewByIDInput!): RunFileStorageProviderViewResult!
+  RunFileStorageProviderViewByName(input: RunViewByNameInput!): RunFileStorageProviderViewResult!
+  RunFileViewByID(input: RunViewByIDInput!): RunFileViewResult!
+  RunFileViewByName(input: RunViewByNameInput!): RunFileViewResult!
   RunIndustryDynamicView(input: RunDynamicViewInput!): RunIndustryViewResult!
   RunIndustryViewByID(input: RunViewByIDInput!): RunIndustryViewResult!
   RunIndustryViewByName(input: RunViewByNameInput!): RunIndustryViewResult!
@@ -3243,6 +3351,46 @@ type RunErrorLogViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [ErrorLog_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunFileCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [FileCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunFileEntityRecordLinkViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [FileEntityRecordLink_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunFileStorageProviderViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [FileStorageProvider_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunFileViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [File_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -4467,6 +4615,41 @@ input UpdateErrorLogInput {
   ID: Int!
   Message: String
   Status: String
+}
+
+input UpdateFileCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+}
+
+input UpdateFileEntityRecordLinkInput {
+  EntityID: Int!
+  FileID: Int!
+  ID: Int!
+  RecordID: String!
+}
+
+input UpdateFileInput {
+  CategoryID: Int
+  ContentType: String
+  Description: String
+  ID: Int!
+  Name: String!
+  ProviderID: Int!
+  ProviderKey: String
+  Status: String!
+}
+
+input UpdateFileStorageProviderInput {
+  ClientDriverKey: String!
+  Description: String
+  ID: Int!
+  IsActive: Boolean!
+  Name: String!
+  Priority: Int!
+  ServerDriverKey: String!
 }
 
 input UpdateIndustryInput {

@@ -36,7 +36,7 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Source Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.SourceEntityID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.SourceEntityID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Source Field Name</label>

@@ -1,0 +1,28 @@
+  .container {
+    display: flex;
+  }
+  
+  .options-container {
+    flex: 0 0 150px;
+    padding: 10px;
+  }
+  
+  .option-item {
+    cursor: pointer;
+    margin-bottom: 10px; /* Adds space between the options for better readability */
+    padding: 5px 10px; /* Optional: Adds some padding for a better visual appearance */
+    border-radius: 4px; /* Optional: Adds rounded corners for a more polished look */
+  }
+  
+  .display-container {
+    flex: 1;
+    padding: 10px;
+  }
+
+  .selected {
+    background-color: #007bff; /* A blue background for selected item */
+    color: white; /* White text color for better contrast */
+    padding: 5px 10px; /* Optional: Adds some padding for a better visual appearance */
+    border-radius: 4px; /* Optional: Adds rounded corners for a more polished look */
+  }
+  

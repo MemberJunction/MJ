@@ -36,19 +36,19 @@ import { EntityPermissionEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Read RLSFilter ID</label>
-            <kendo-numerictextbox [(value)]="record.ReadRLSFilterID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.ReadRLSFilterID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Create RLSFilter ID</label>
-            <kendo-numerictextbox [(value)]="record.CreateRLSFilterID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.CreateRLSFilterID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Update RLSFilter ID</label>
-            <kendo-numerictextbox [(value)]="record.UpdateRLSFilterID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.UpdateRLSFilterID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Delete RLSFilter ID</label>
-            <kendo-numerictextbox [(value)]="record.DeleteRLSFilterID" ></kendo-numerictextbox>   
+            <kendo-numerictextbox [(value)]="record.DeleteRLSFilterID!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

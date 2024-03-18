@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/10/2024, 9:40:58 AM
+* GENERATED: 3/17/2024, 7:51:53 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -75,7 +75,7 @@ export class CreateIndustryInput {
 //****************************************************************************
 @InputType()
 export class UpdateIndustryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -263,7 +263,7 @@ export class CreateContactRoleInput {
 //****************************************************************************
 @InputType()
 export class UpdateContactRoleInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -447,7 +447,7 @@ export class CreateContactLevelInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Rank: number;
 
     @Field({ nullable: true })
@@ -463,7 +463,7 @@ export class CreateContactLevelInput {
 //****************************************************************************
 @InputType()
 export class UpdateContactLevelInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -472,7 +472,7 @@ export class UpdateContactLevelInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     Rank: number;
 
     @Field({ nullable: true })
@@ -836,7 +836,7 @@ export class CreateAccountInput {
     @Field({ nullable: true })
     LastReviewedDate: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ActivityCount: number;
 
     @Field({ nullable: true })
@@ -858,7 +858,7 @@ export class CreateAccountInput {
 //****************************************************************************
 @InputType()
 export class UpdateAccountInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -936,7 +936,7 @@ export class UpdateAccountInput {
     @Field({ nullable: true })
     LastReviewedDate: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ActivityCount: number;
 
     @Field({ nullable: true })
@@ -1334,7 +1334,7 @@ export class CreateContactInput {
     @Field({ nullable: true })
     Status: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ActivityCount: number;
 
     @Field({ nullable: true })
@@ -1356,7 +1356,7 @@ export class CreateContactInput {
 //****************************************************************************
 @InputType()
 export class UpdateContactInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -1425,7 +1425,7 @@ export class UpdateContactInput {
     @Field({ nullable: true })
     Status: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ActivityCount: number;
 
     @Field({ nullable: true })
@@ -1627,7 +1627,7 @@ export class CreateDealStageInput {
 //****************************************************************************
 @InputType()
 export class UpdateDealStageInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -1874,7 +1874,7 @@ export class CreateActivityInput {
     @Field({ nullable: true })
     Attachment: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field({ nullable: true })
@@ -1905,7 +1905,7 @@ export class CreateActivityInput {
 //****************************************************************************
 @InputType()
 export class UpdateActivityInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field(() => Int, { nullable: true })
@@ -1935,7 +1935,7 @@ export class UpdateActivityInput {
     @Field({ nullable: true })
     Attachment: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field({ nullable: true })
@@ -2129,7 +2129,7 @@ export class CreateDealForecastCategoryInput {
 //****************************************************************************
 @InputType()
 export class UpdateDealForecastCategoryInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
@@ -2393,7 +2393,7 @@ export class CreateDealInput {
     @Field()
     ExternalSystemRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field(() => Int, { nullable: true })
@@ -2447,19 +2447,19 @@ export class CreateDealInput {
     @Field(() => Int, { nullable: true })
     DealForecastCategoryID: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     MRR: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     OneTimeFees: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ContractTermMonths: number;
 
     @Field({ nullable: true })
     ForecastNotes: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsDeleted: boolean;
 }
 
@@ -2469,13 +2469,13 @@ export class CreateDealInput {
 //****************************************************************************
 @InputType()
 export class UpdateDealInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
     ExternalSystemRecordID: string;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field(() => Int, { nullable: true })
@@ -2529,19 +2529,19 @@ export class UpdateDealInput {
     @Field(() => Int, { nullable: true })
     DealForecastCategoryID: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     MRR: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     OneTimeFees: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     ContractTermMonths: number;
 
     @Field({ nullable: true })
     ForecastNotes: string;
 
-    @Field(() => Boolean, )
+    @Field(() => Boolean)
     IsDeleted: boolean;
 }
 
@@ -2722,7 +2722,7 @@ export class CreateDealTypeInput {
 //****************************************************************************
 @InputType()
 export class UpdateDealTypeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
@@ -2944,22 +2944,22 @@ export class CreateInvoiceInput {
     @Field()
     InvoiceDate: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     AccountID: number;
 
     @Field(() => Int, { nullable: true })
     ContactID: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     SubTotal: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     Tax: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     Total: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field()
@@ -2974,7 +2974,7 @@ export class CreateInvoiceInput {
     @Field({ nullable: true })
     DueDate: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     StatusID: number;
 
     @Field(() => Int, { nullable: true })
@@ -2987,28 +2987,28 @@ export class CreateInvoiceInput {
 //****************************************************************************
 @InputType()
 export class UpdateInvoiceInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
     InvoiceDate: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     AccountID: number;
 
     @Field(() => Int, { nullable: true })
     ContactID: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     SubTotal: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     Tax: number;
 
-    @Field(() => Float, )
+    @Field(() => Float)
     Total: number;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     CompanyIntegrationID: number;
 
     @Field()
@@ -3023,7 +3023,7 @@ export class UpdateInvoiceInput {
     @Field({ nullable: true })
     DueDate: Date;
 
-    @Field(() => Int, )
+    @Field(() => Int)
     StatusID: number;
 
     @Field(() => Int, { nullable: true })
@@ -3185,7 +3185,7 @@ export class CreateActivityAttachmentInput {
 //****************************************************************************
 @InputType()
 export class UpdateActivityAttachmentInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field({ nullable: true })
@@ -3396,7 +3396,7 @@ export class CreatePaymentTermsTypeInput {
 //****************************************************************************
 @InputType()
 export class UpdatePaymentTermsTypeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()
@@ -3591,7 +3591,7 @@ export class CreateInvoiceStatusTypeInput {
 //****************************************************************************
 @InputType()
 export class UpdateInvoiceStatusTypeInput {
-    @Field(() => Int, )
+    @Field(() => Int)
     ID: number;
 
     @Field()

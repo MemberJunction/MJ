@@ -4,13 +4,11 @@
       "module": "es2020",
       "moduleResolution": "node",
       "declaration": true,
+      "declarationMap": true,
       "experimentalDecorators": true,
       "outDir": "./dist",
       "strict": true,
-      "lib": [
-        "es2018",
-        "dom"
-      ]
+      "lib": ["es2018", "dom"]
     },
     "angularCompilerOptions": {
       "skipTemplateCodegen": true,

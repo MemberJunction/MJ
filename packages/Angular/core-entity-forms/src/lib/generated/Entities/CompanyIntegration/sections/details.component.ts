@@ -32,7 +32,7 @@ import { CompanyIntegrationEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Token Expiration Date</label>
-            <kendo-datepicker [(value)]="record.TokenExpirationDate" ></kendo-datepicker>   
+            <kendo-datepicker [(value)]="record.TokenExpirationDate!" ></kendo-datepicker>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">APIKey</label>
