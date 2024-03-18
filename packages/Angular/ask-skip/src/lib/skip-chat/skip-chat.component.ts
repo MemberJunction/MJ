@@ -317,7 +317,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.LinkedEntityRecordID > 0)
       this.Conversations = cachedConversations.filter((c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityRecordID); // ONLY include the linked conversations
     else
-      this.Conversations = cachedConversations.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID > 0)); // filter OUT linked conversations
+      this.Conversations = cachedConversations.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID && c.LinkedRecordID > 0)); // filter OUT linked conversations
 
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
@@ -344,7 +344,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   private _oldConvoName: string = '';
   public editConvo(conversation: ConversationEntity) {
-    this._oldConvoName = conversation.Name;
+    this._oldConvoName = conversation.Name ? conversation.Name : '';
     this.ConversationEditMode = true;
   }
   public cancelConvoEdit(conversation: ConversationEntity) {
@@ -488,7 +488,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       this._processingStatus[conversation.ID] = true;
       this.SelectedConversation = conversation;
       this.SetSelectedConversationUser();
-      this.DataContextID = conversation.DataContextID;
+      this.DataContextID = conversation.DataContextID ? conversation.DataContextID : 0;
     
       const convoAny = <any>conversation;
       if (convoAny._DataContext) {

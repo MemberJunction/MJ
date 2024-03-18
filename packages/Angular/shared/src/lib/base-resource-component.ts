@@ -88,6 +88,6 @@ export class ResourceData {
     }
     public get ResourceIcon(): string {
         const rt = SharedService.Instance.ResourceTypes.find(rt => rt.ID === this.ResourceTypeID);
-        return rt ? rt.Icon : '';
+        return rt && rt.Icon ? rt.Icon : '';
     }
 }
