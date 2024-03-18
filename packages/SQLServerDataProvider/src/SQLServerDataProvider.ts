@@ -1159,7 +1159,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         else
             pVal = paramValue;
 
-        return (paramValue === null || paramValue === undefined) ? null : quoteString + pVal + quoteString
+        return (paramValue === null || paramValue === undefined) ? "NULL" : quoteString + pVal + quoteString
     }
     
     protected GetLogRecordChangeSQL(newData: any, oldData: any, entityName: string, recordID: any, entityInfo: EntityInfo, user: UserInfo, wrapRecordIdInQuotes: boolean) {
