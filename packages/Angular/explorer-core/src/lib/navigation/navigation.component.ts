@@ -860,6 +860,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Queries
     await this.loadResourceType('Queries','Queries','/queries', md.CurrentUser.ID);
 
+    // Files
+    await this.loadFiles(md);
+
     // Settings
     await this.loadSettings(md);
 
@@ -899,6 +902,22 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       svgIcon: this.sharedService.kendoSVGIcon('gear') 
     }
     this.drawerItems.push(drawerItem);
+  }
+
+
+  protected async loadFiles(md: Metadata) {
+    // TODO: Use `md` to see if any providers are configured
+    const filesEnabled = false;
+    if (filesEnabled) {
+      const drawerItem = {
+        id: 'Files',
+        selected: false,
+        text: 'Files',
+        path: '/files',
+        svgIcon: this.sharedService.kendoSVGIcon('folder') 
+      }
+      this.drawerItems.push(drawerItem);
+    }
   }
 
 

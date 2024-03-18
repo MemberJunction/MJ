@@ -110,7 +110,10 @@ export const contextFunction =
     const userPayload = await getUserPayload(bearerToken, sessionId, dataSource, requestDomain?.hostname ? requestDomain.hostname : undefined);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    console.log((req as any).body?.operationName);
+    const operationName: string| undefined = (req as any).body?.operationName;
+    if (operationName !== 'IntrospectionQuery') {
+      console.log({ operationName });
+    } 
 
     return { dataSource, userPayload };
   };

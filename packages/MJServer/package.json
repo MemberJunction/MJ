@@ -30,6 +30,7 @@
     "@memberjunction/global": "^0.9.153",
     "@memberjunction/queue": "^0.9.178",
     "@memberjunction/sqlserver-dataprovider": "^0.9.193",
+    "@memberjunction/storage": "^0.9.1",
     "@memberjunction/skip-types": "^0.9.69",
     "@types/cors": "^2.8.13",
     "@types/jsonwebtoken": "^8.5.9",

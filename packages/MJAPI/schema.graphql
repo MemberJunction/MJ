@@ -802,6 +802,11 @@ input CreateFileInput {
   Status: String!
 }
 
+type CreateFilePayload {
+  File: File_!
+  UploadUrl: String!
+}
+
 input CreateFileStorageProviderInput {
   ClientDriverKey: String!
   Description: String
@@ -1855,7 +1860,7 @@ type Mutation {
   CreateEntityPermission(input: CreateEntityPermissionInput!): EntityPermission_!
   CreateEntityRecordDocument(input: CreateEntityRecordDocumentInput!): EntityRecordDocument_!
   CreateEntityRelationship(input: CreateEntityRelationshipInput!): EntityRelationship_!
-  CreateFile(input: CreateFileInput!): File_!
+  CreateFile(input: CreateFileInput!): CreateFilePayload!
   CreateFileCategory(input: CreateFileCategoryInput!): FileCategory_!
   CreateFileEntityRecordLink(input: CreateFileEntityRecordLinkInput!): FileEntityRecordLink_!
   CreateFileStorageProvider(input: CreateFileStorageProviderInput!): FileStorageProvider_!
