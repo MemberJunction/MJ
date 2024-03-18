@@ -15,14 +15,15 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
+    "@types/mime": "^3.0.4",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/global": "^0.9.152",
-    "@memberjunction/core-entities": "^0.9.155",
     "@azure/identity": "^4.0.1",
     "@azure/storage-blob": "^12.17.0",
+    "@memberjunction/core-entities": "^0.9.155",
+    "@memberjunction/global": "^0.9.152",
     "env-var": "^7.3.0",
     "mime": "^4.0.1"
   }

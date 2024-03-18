@@ -21,6 +21,7 @@
     "@memberjunction/aiengine": "^0.9.57",
     "@memberjunction/core": "^0.9.172",
     "@memberjunction/global": "^0.9.153",
+    "@memberjunction/sqlserver-dataprovider": "^0.9.194",
     "dotenv": "^16.0.3",
     "typeorm": "^0.3.20"
   },
