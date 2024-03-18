@@ -27,7 +27,7 @@ export class FileResolver extends FileResolverBase {
   async CreateFile(@Arg('input', () => CreateFileInput) input: CreateFileInput, @Ctx() { dataSource, userPayload }: AppContext) {
     const { Name, ProviderID } = input;
     const ContentType = input.ContentType ?? mime.getType(Name.split('.').pop()) ?? 'application/octet-stream';
-    const Status = 'DRAFT';
+    const Status = 'Uploading';
 
     // get the provider key from the provider ID
     console.log('Get provider rec', ProviderID);

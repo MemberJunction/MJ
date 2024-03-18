@@ -1910,6 +1910,7 @@ type Mutation {
   DeleteEntityField(ID: Int!): EntityField_!
   DeleteEntityPermission(ID: Int!): EntityPermission_!
   DeleteEntityRelationship(ID: Int!): EntityRelationship_!
+  DeleteFile(ID: Int!): File_!
   DeleteFileCategory(ID: Int!): FileCategory_!
   DeleteList(ID: Int!): List_!
   DeleteListDetail(ID: Int!): ListDetail_!

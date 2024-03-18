@@ -2,38 +2,25 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/18/2024, 2:22:24 PM
+* GENERATED: 3/18/2024, 6:14:50 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 * 
 **********************************************************************************/
-import { EntityPermissionType, Metadata } from '@memberjunction/core';
-import {
-    AppContext,
-    Arg, Ctx,
-    Field,
-    FieldResolver,
-    InputType,
-    Int,
-    Mutation,
-    ObjectType,
-    PubSub, PubSubEngine,
-    Query, Resolver,
-    ResolverBase,
-    Root,
-    RunDynamicViewInput,
-    RunViewByIDInput, RunViewByNameInput
-} from '@memberjunction/server';
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
+         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+import { Metadata, EntityPermissionType } from '@memberjunction/core'
+import { AppContext } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { mj_core_schema } from '../config';
 
-import * as mj_core_schema_server_object_types from '@memberjunction/server';
+import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { AIActionEntity, AIModelActionEntity, AIModelEntity, AIModelTypeEntity, ApplicationEntity, ApplicationEntityEntity, AuditLogEntity, CompanyEntity, CompanyIntegrationEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextEntity, DataContextItemEntity, EmployeeCompanyIntegrationEntity, EmployeeEntity, EmployeeRoleEntity, EmployeeSkillEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentRunEntity, EntityDocumentTypeEntity, EntityEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipEntity, ErrorLogEntity, FileCategoryEntity, FileEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, IntegrationEntity, IntegrationURLFormatEntity, ListDetailEntity, ListEntity, QueryCategoryEntity, QueryEntity, QueryFieldEntity, QueryPermissionEntity, QueueEntity, QueueTaskEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportEntity, ReportSnapshotEntity, RoleEntity, SchemaInfoEntity, UserApplicationEntity, UserApplicationEntityEntity, UserEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewEntity, UserViewRunDetailEntity, UserViewRunEntity, VectorDatabaseEntity, VectorIndexEntity, WorkflowEngineEntity, WorkflowEntity, WorkflowRunEntity, WorkspaceEntity, WorkspaceItemEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -17783,8 +17770,6 @@ export class FileResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        console.log('____HERE"');
-        throw new Error('Got here');
         if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
             await entityObject.NewRecord();
@@ -17838,6 +17823,32 @@ export class FileResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileInput) {
         const i = input, d = dataSource; // prevent error
+    }
+
+    @Mutation(() => File_)
+    async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
 
 }

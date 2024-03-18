@@ -3789,6 +3789,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');
@@ -13052,19 +13053,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * Files - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof FileEntity
-        * @throws {Error} - Delete is not allowed for Files, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Files, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * Display Name: ID
