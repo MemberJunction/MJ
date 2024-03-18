@@ -67,6 +67,7 @@ import { SingleQueryComponent } from './lib/single-query/single-query.component'
 import { QueryResource } from './lib/resource-wrappers/query-resource.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
+import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 
 @NgModule({
   declarations: [
@@ -143,7 +144,8 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     DropDownsModule,
     MemberJunctionSharedModule,
     AskSkipModule,
-    EntityPermissionsModule
+    EntityPermissionsModule,
+    ExplorerSettingsModule
   ],
   exports: [
     FormToolbarComponent,

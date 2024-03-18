@@ -107,6 +107,9 @@
             "Name": "Angular/entity-permissions"
         },
         {
+            "Name": "Angular/explorer-settings"
+        },
+        {
             "Name": "Angular/explorer-core"
         },
         {
