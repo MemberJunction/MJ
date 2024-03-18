@@ -23,7 +23,8 @@
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
   "exclude": ["node_modules"],
   "include": ["./src/**/*.ts"]
