@@ -1907,9 +1907,14 @@ type Mutation {
   DeleteListDetail(ID: Int!): ListDetail_!
   DeleteReport(ID: Int!): Report_!
   DeleteReportSnapshot(ID: Int!): ReportSnapshot_!
+  DeleteUser(ID: Int!): User_!
+  DeleteUserApplication(ID: Int!): UserApplication_!
   DeleteUserApplicationEntity(ID: Int!): UserApplicationEntity_!
   DeleteUserFavorite(ID: Int!): UserFavorite_!
+  DeleteUserNotification(ID: Int!): UserNotification_!
+  DeleteUserRole(ID: Int!): UserRole_!
   DeleteUserView(ID: Int!): UserView_!
+  DeleteUserViewCategory(ID: Int!): UserViewCategory_!
   DeleteWorkspace(ID: Int!): Workspace_!
   DeleteWorkspaceItem(ID: Int!): WorkspaceItem_!
   MergeRecords(request: RecordMergeRequest!): RecordMergeResult!

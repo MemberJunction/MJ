@@ -2663,19 +2663,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * Users - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof UserEntity
-        * @throws {Error} - Delete is not allowed for Users, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Users, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4717,19 +4705,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * User Applications - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof UserApplicationEntity
-        * @throws {Error} - Delete is not allowed for User Applications, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for User Applications, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5918,19 +5894,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * User Roles - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof UserRoleEntity
-        * @throws {Error} - Delete is not allowed for User Roles, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for User Roles, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9256,18 +9220,6 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Tagged Items, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
-        /**
-        * Tagged Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof TaggedItemEntity
-        * @throws {Error} - Delete is not allowed for Tagged Items, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Tagged Items, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
         
             /**
         * * Field Name: ID
@@ -10186,19 +10138,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * User Notifications - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof UserNotificationEntity
-        * @throws {Error} - Delete is not allowed for User Notifications, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for User Notifications, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12671,19 +12611,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * User View Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof UserViewCategoryEntity
-        * @throws {Error} - Delete is not allowed for User View Categories, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for User View Categories, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * Display Name: ID
