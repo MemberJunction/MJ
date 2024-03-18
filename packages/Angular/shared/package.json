@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared",
-  "version": "0.9.25",
+  "version": "0.9.26",
   "description": "MemberJunction: Angular Shared Package - utility functions and other reusable elements used across other MJ Angular packages",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@memberjunction/core": "^0.9.172",
-    "@memberjunction/graphql-dataprovider": "^0.9.178",
+    "@memberjunction/graphql-dataprovider": "^0.9.179",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
