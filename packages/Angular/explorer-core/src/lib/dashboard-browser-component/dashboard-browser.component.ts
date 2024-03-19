@@ -4,7 +4,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { DashboardCategoryEntity, DashboardEntity } from '@memberjunction/core-entities';
 import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
 import { SharedService } from '@memberjunction/ng-shared';
-import { Folder, Item, ItemType, PathData } from '../../generic/Item.types';
+import { Folder, Item, ItemType, PathData, UpdateItemEvent } from '../../generic/Item.types';
 
 @Component({
   selector: 'app-dashboard-browser',
@@ -26,11 +26,9 @@ export class DashboardBrowserComponent {
     this.items = [];
     this.PathData = new PathData(0, "Dashboards", "/dashboards");
     let queryParams: Params | undefined = this.router.getCurrentNavigation()?.extractedUrl.queryParams;
-    console.log(queryParams);
     if(queryParams && queryParams.folderID){
       let folderID: number = Number(queryParams.folderID);
       this.PathData = new PathData(folderID, "Dashboards", "/dashboards?folderID=" + folderID);
-      console.log(queryParams["folderID"]);
       this.selectedFolderID = folderID;
     }
     else{
@@ -51,8 +49,7 @@ export class DashboardBrowserComponent {
     const md = new Metadata()
     const rv = new RunView();
 
-    let folderFilter: string = this.selectedFolderID ? `AND CategoryID = ${this.selectedFolderID}` : "";
-    console.log("dashboard folder filter: ", folderFilter);
+    let folderFilter: string = this.selectedFolderID ? `AND CategoryID = ${this.selectedFolderID}` : "AND CategoryID IS NULL";
     const result = await rv.RunView({
       EntityName: 'Dashboards',
       ExtraFilter: `UserID=${md.CurrentUser.ID}  ${folderFilter}`
@@ -65,10 +62,8 @@ export class DashboardBrowserComponent {
       this.dashboards = [];
     }
 
-    console.log("folder ID: ", this.selectedFolderID);
-    let filterString: string = this.selectedFolderID ? `ID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
+    let filterString: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
     filterString += " AND Name != 'Root'";
-    console.log("category folder filter: ", filterString)
     const folderResult = await rv.RunView({
       EntityName:'Dashboard Categories',
       ExtraFilter: filterString
@@ -81,8 +76,6 @@ export class DashboardBrowserComponent {
         this.parentFolderID = this.folders[0].ParentID;
       }
     }
-
-    console.log(this.selectedFolderID, this.parentFolderID);
 
     this.createItems();
 
@@ -123,12 +116,10 @@ export class DashboardBrowserComponent {
     }
 
     if (item.Type === ItemType.Resource) {
-      console.log(`dashboard clicked: ${item.Name}`);
       let dashboardEntity: DashboardEntity = item.Data as DashboardEntity;
       this.router.navigate(['resource', 'dashboard', dashboardEntity.ID])
     }
     else if(item.Type === ItemType.Folder){
-      console.log(`folder clicked: ${item.Name}`);
       const oldPathData: PathData = this.PathData;
       const newPathData: PathData = new PathData(item.Data.ID, item.Data.Name, `/dashboards?folderID=${item.Data.ID}`);
       
@@ -145,7 +136,6 @@ export class DashboardBrowserComponent {
   }
 
   public onBackButtonClick(): void {
-    console.log("back button clicked");
     const pathData: PathData | undefined  = this.PathData.ParentPathData;
     if(pathData && pathData.ID > 0){
       this.PathData = pathData;
@@ -211,8 +201,24 @@ export class DashboardBrowserComponent {
     }
 
     if(item.Type === ItemType.Folder){
-      //todo - change this to be more robust
-      this.items = this.items.filter(i => i !== item);
+      this.showLoader = true;
+      const md = new Metadata();
+      let folderEntity: DashboardCategoryEntity = <DashboardCategoryEntity>await md.GetEntityObject('Dashboard Categories');
+      let loadResult = await folderEntity.Load(item.Data.ID);
+      if(!loadResult){
+        this.sharedService.CreateSimpleNotification(`unable to fetch folder ${item.Data.Name}`, "error");
+        return;
+      }
+
+      let deleteResult = await folderEntity.Delete();
+      if(!deleteResult){
+        this.sharedService.CreateSimpleNotification(`unable to delete folder ${item.Data.Name}`, "error");
+        return;
+      }
+      else{
+        this.sharedService.CreateSimpleNotification(`successfully deleted folder ${item.Data.Name}`, "info");
+        this.items = this.items.filter(i => i !== item);
+      }
     }
     else if(item.Type === ItemType.Resource){
       this.showLoader = true;
@@ -248,7 +254,6 @@ export class DashboardBrowserComponent {
   }
 
   public async createFolder(folderName: string): Promise<void> {
-    console.log(`creating folder ${folderName}...`);
     const md: Metadata = new Metadata();
     const folderEntity: DashboardCategoryEntity = await md.GetEntityObject<DashboardCategoryEntity>('Dashboard Categories');
     folderEntity.NewRecord();
@@ -267,6 +272,21 @@ export class DashboardBrowserComponent {
     }
     else{
       this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
+    }
+  }
+
+  public onUpdateItem(item: UpdateItemEvent): void {
+    if(item.EventType === "Add"){
+      this.items.push(item.Item);
+    }
+    else if(item.EventType === "Delete"){
+      this.items = this.items.filter(i => i !== item.Item);
+    }
+    else if(item.EventType === "Update"){
+      let index: number = this.items.findIndex(i => i === item.Item);
+      if(index > -1){
+        this.items[index] = item.Item;
+      }
     }
   }
 }

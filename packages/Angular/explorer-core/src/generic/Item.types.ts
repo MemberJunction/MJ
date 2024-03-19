@@ -45,9 +45,9 @@ export class Item<T> {
 
 export class Folder {
     public ID: number;
-    public ParentFolderID?: number;
+    public ParentFolderID?: number | null;
     public Name: string;
-    public Description: string;
+    public Description: string | null;
     public Type: ItemType;
 
     constructor(id: number, folderName: string){
@@ -55,5 +55,21 @@ export class Folder {
         this.Name = folderName;
         this.Description = "";
         this.Type = ItemType.Folder;
+    }
+}
+
+export enum UpdateItemEventType {
+    Add = "Add",
+    Update = "Update",
+    Delete = "Delete"
+}
+
+export class UpdateItemEvent {
+    public Item: Item<any | Folder>;
+    public EventType: UpdateItemEventType;
+
+    constructor(item: Item<any | Folder>, eventType: UpdateItemEventType){
+        this.Item = item;
+        this.EventType = eventType;
     }
 }
