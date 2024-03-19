@@ -12,9 +12,9 @@ export class AzureFileStorage extends FileStorageBase {
   constructor() {
     super();
 
-    this._container = env.get('STORAGE_AZURE_CONTAINER').asString();
-    this._accountName = env.get('STORAGE_AZURE_ACCOUNT_NAME').asString();
-    const accountKey = env.get('STORAGE_AZURE_ACCOUNT_KEY').asString();
+    this._container = env.get('STORAGE_AZURE_CONTAINER').required().asString();
+    this._accountName = env.get('STORAGE_AZURE_ACCOUNT_NAME').required().asString();
+    const accountKey = env.get('STORAGE_AZURE_ACCOUNT_KEY').required().asString();
 
     this._sharedKeyCredential = new StorageSharedKeyCredential(this._accountName, accountKey);
   }
