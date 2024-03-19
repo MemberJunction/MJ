@@ -25,17 +25,18 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
+    "@memberjunction/core": "^0.9.172",
     "@memberjunction/core-entities": "^0.9.157",
     "@memberjunction/global": "^0.9.153",
-    "@memberjunction/core": "^0.9.172",
     "@memberjunction/ng-container-directives": "^0.9.136",
     "@memberjunction/ng-shared": "^0.9.26",
+    "@progress/kendo-angular-buttons": "~15.1.0",
+    "@progress/kendo-angular-dialog": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-treeview": "~15.1.0",
-    "@progress/kendo-angular-buttons": "~15.1.0",
-    "@progress/kendo-angular-dialog": "~15.1.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zod": "^3.22.4"
   },
   "sideEffects": false
 }
