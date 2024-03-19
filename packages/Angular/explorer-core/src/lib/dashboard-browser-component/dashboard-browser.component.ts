@@ -19,7 +19,7 @@ export class DashboardBrowserComponent {
   public items: Item<DashboardEntity | Folder>[];
   public PathData: PathData;
   
-  private selectedFolderID: number | null = null;
+  public selectedFolderID: number | null = null;
   private parentFolderID: number | null = null;
   
   constructor(private router: Router, private activatedRoute: ActivatedRoute, private sharedService: SharedService) {
@@ -62,7 +62,7 @@ export class DashboardBrowserComponent {
       this.dashboards = [];
     }
 
-    let filterString: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
+    let filterString: string = this.selectedFolderID ? `ID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
     filterString += " AND Name != 'Root'";
     const folderResult = await rv.RunView({
       EntityName:'Dashboard Categories',
@@ -74,6 +74,8 @@ export class DashboardBrowserComponent {
 
       if(this.folders.length > 0){
         this.parentFolderID = this.folders[0].ParentID;
+        console.log(this.folders[0]);
+        console.log("on load, parent folder id: " + this.parentFolderID);
       }
     }
 
@@ -138,6 +140,7 @@ export class DashboardBrowserComponent {
   public onBackButtonClick(): void {
     const pathData: PathData | undefined  = this.PathData.ParentPathData;
     if(pathData && pathData.ID > 0){
+      console.log("path data branch");
       this.PathData = pathData;
       //navigation seems like it does nothing but update the URL
       //so just reload all of the data
