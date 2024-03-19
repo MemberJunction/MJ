@@ -5,4 +5,5 @@ export type CreatePreAuthUploadUrlPayload = {
 
 export abstract class FileStorageBase {
   public abstract CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload>;
+  public abstract CreatePreAuthDownloadUrl(objectName: string): Promise<string>;
 }

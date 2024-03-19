@@ -1728,6 +1728,7 @@ type File_ {
   ContentType: String
   CreatedAt: Timestamp!
   Description: String
+  DownloadUrl: String!
   FileEntityRecordLinksArray: [FileEntityRecordLink_!]!
   ID: Int!
   Name: String!

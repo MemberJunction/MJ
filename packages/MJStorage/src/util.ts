@@ -3,24 +3,28 @@ import { MJGlobal } from '@memberjunction/global';
 //import mime from 'mime';
 import { FileStorageBase } from './generic/FileStorageBase';
 
-
 export const createUploadUrl = async <TInput extends { Name: string; ProviderID: number; ContentType?: string; ProviderKey?: string }>(
-  entity: FileStorageProviderEntity,
+  providerEntity: FileStorageProviderEntity,
   input: TInput
 ): Promise<{
   updatedInput: TInput;
   UploadUrl: string;
 }> => {
   const { Name, ProviderID } = input;
-  const ContentType = input.ContentType; 
+  const ContentType = input.ContentType;
   //?? mime.getType(Name.split('.').pop()) ?? 'application/octet-stream';
   const Status = 'Uploading';
 
-  await entity.Load(ProviderID);
-  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, entity.ServerDriverKey);
-  
+  await providerEntity.Load(ProviderID);
+  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+
   const { UploadUrl, ...maybeProviderKey } = await driver.CreatePreAuthUploadUrl(Name);
   const updatedInput = { ...input, ...maybeProviderKey, ContentType, Status };
 
   return { updatedInput, UploadUrl };
+};
+
+export const createDownloadUrl = async (providerEntity: FileStorageProviderEntity, nameOrProviderKey: string): Promise<string> => {
+  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+  return driver.CreatePreAuthDownloadUrl(nameOrProviderKey);
 };
