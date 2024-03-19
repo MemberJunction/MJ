@@ -6,9 +6,19 @@ import {
   ActivatedRouteSnapshot,
   RouterStateSnapshot
 } from '@angular/router';
-import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponent, HomeComponent, 
-         UserNotificationsComponent, SettingsComponent, DataBrowserComponent, ReportBrowserComponent, 
-         DashboardBrowserComponent, AuthGuardService as AuthGuard } from "@memberjunction/ng-explorer-core";
+import {
+  SingleApplicationComponent,
+  SingleEntityComponent,
+  SingleRecordComponent,
+  HomeComponent,
+  UserNotificationsComponent,
+  SettingsComponent,
+  DataBrowserComponent,
+  ReportBrowserComponent,
+  DashboardBrowserComponent,
+  AuthGuardService as AuthGuard,
+  FilesComponent,
+} from '@memberjunction/ng-explorer-core';
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core';
@@ -140,6 +150,7 @@ const routes: Routes = [
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'settings', component: SettingsComponent, canActivate: [AuthGuard] },  
+  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },  
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },  
   { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },

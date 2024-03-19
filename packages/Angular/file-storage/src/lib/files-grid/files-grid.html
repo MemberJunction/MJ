@@ -1,0 +1,14 @@
+<kendo-grid [data]="files" [loading]="isLoading">
+    <kendo-grid-column field="ID" title="ID"> </kendo-grid-column>
+    <kendo-grid-column field="Name" title="Name"> </kendo-grid-column>
+    <kendo-grid-column field="Description" title="Description">
+    </kendo-grid-column>
+    <kendo-grid-column field="Status" title="Status"> </kendo-grid-column>
+    <kendo-grid-column field="Actions">
+        <ng-template kendoGridCellTemplate let-dataItem>
+            <kendo-button [disabled]="dataItem.Status!=='Uploaded'" [svgIcon]="downloadIcon" (click)="downloadFile(dataItem)"></kendo-button>
+            <kendo-button [disabled]="dataItem.Status!=='Uploaded'" [svgIcon]="deleteIcon" (click)="deleteFile(dataItem)"></kendo-button>
+        </ng-template>
+    </kendo-grid-column> 
+</kendo-grid>
+
