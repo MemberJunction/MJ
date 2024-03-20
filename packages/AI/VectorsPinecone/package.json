@@ -1,33 +1,33 @@
 {
-  "name": "@memberjunction/ai-vectors-pinecone",
-  "version": "0.9.9",
-  "description": "MemberJunction: Pinecone Implementation for AI Vectors",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "MemberJunction.com",
-  "license": "ISC",
-  "dependencies": {
-    "@memberjunction/aiengine": "^0.9.58",
-    "@memberjunction/core": "^0.9.172",
-    "@memberjunction/global": "^0.9.153",
-    "@memberjunction/ai-vectors": "^0.9.5",
-    "@pinecone-database/pinecone": "^2.0.1",
-    "dotenv": "^16.0.3",
-    "openai": "^3.2.1",
-    "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
-  },
-  "devDependencies": {
-    "@types/node": "^20.1.7",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
-  }
+    "name":  "@memberjunction/ai-vectors-pinecone",
+    "version":  "0.9.13",
+    "description":  "MemberJunction: Pinecone Implementation for AI Vectors",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "start":  "ts-node-dev src/index.ts",
+                    "build":  "tsc",
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
+                },
+    "author":  "MemberJunction.com",
+    "license":  "ISC",
+    "dependencies":  {
+                         "@memberjunction/aiengine":  "^0.9.63",
+                         "@memberjunction/core":  "^0.9.177",
+                         "@memberjunction/global":  "^0.9.158",
+                         "@memberjunction/ai-vectors":  "^0.9.9",
+                         "@pinecone-database/pinecone":  "^2.0.1",
+                         "dotenv":  "^16.0.3",
+                         "openai":  "^3.2.1",
+                         "rxjs":  "^7.8.1",
+                         "typeorm":  "^0.3.20"
+                     },
+    "devDependencies":  {
+                            "@types/node":  "^20.1.7",
+                            "ts-node-dev":  "^2.0.0",
+                            "typescript":  "^5.3.3"
+                        }
 }

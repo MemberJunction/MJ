@@ -1,53 +1,55 @@
 {
-  "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.200",
-  "description": "MemberJunction Explorer: Core Angular Components",
-  "main": "./dist/public-api.js",
-  "typings": "./dist/public-api.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "@angular/compiler": "~17.2.2",
-    "@angular/compiler-cli": "~17.2.2"
-  },
-  "peerDependencies": {
-    "@angular/common": "~17.2.2",
-    "@angular/core": "~17.2.2",
-    "@angular/forms": "~17.2.2",
-    "@angular/router": "~17.2.2",
-    "@progress/kendo-angular-grid": "~15.1.0",
-    "@progress/kendo-angular-listview": "~15.1.0",
-    "@progress/kendo-angular-notification": "~15.1.0",
-    "@progress/kendo-angular-dialog": "~15.1.0",
-    "@progress/kendo-angular-layout": "~15.1.0",
-    "@progress/kendo-angular-label": "~15.1.0",
-    "@progress/kendo-angular-sortable": "~15.1.0",
-    "@progress/kendo-angular-charts": "~15.1.0",
-    "@progress/kendo-angular-indicators": "~15.1.0",
-    "@progress/kendo-angular-filter": "~15.1.0",
-    "@progress/kendo-svg-icons": "~2.1.0"
-  },
-  "dependencies": {
-    "@memberjunction/global": "^0.9.153",
-    "@memberjunction/core": "^0.9.172",
-    "@memberjunction/ng-compare-records": "^0.9.174",
-    "@memberjunction/ng-record-changes": "^0.9.108",
-    "@memberjunction/ng-container-directives": "^0.9.136",
-    "@memberjunction/ng-user-view-grid": "^0.9.209",
-    "@memberjunction/ng-query-grid": "^0.9.56",
-    "@memberjunction/ng-shared": "^0.9.26",
-    "@memberjunction/ng-ask-skip": "^0.9.94",
-    "@memberjunction/ng-auth-services": "^0.9.95",
-    "@memberjunction/ng-explorer-settings": "^0.9.3",
-    "tslib": "^2.3.0"
-  },
-  "sideEffects": false
+    "name":  "@memberjunction/ng-explorer-core",
+    "version":  "0.9.204",
+    "description":  "MemberJunction Explorer: Core Angular Components",
+    "main":  "./dist/public-api.js",
+    "typings":  "./dist/public-api.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
+                    "build":  "ngc"
+                },
+    "keywords":  [
+
+                 ],
+    "author":  "",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "@angular/compiler":  "~17.2.2",
+                            "@angular/compiler-cli":  "~17.2.2"
+                        },
+    "peerDependencies":  {
+                             "@angular/common":  "~17.2.2",
+                             "@angular/core":  "~17.2.2",
+                             "@angular/forms":  "~17.2.2",
+                             "@angular/router":  "~17.2.2",
+                             "@progress/kendo-angular-grid":  "~15.1.0",
+                             "@progress/kendo-angular-listview":  "~15.1.0",
+                             "@progress/kendo-angular-notification":  "~15.1.0",
+                             "@progress/kendo-angular-dialog":  "~15.1.0",
+                             "@progress/kendo-angular-layout":  "~15.1.0",
+                             "@progress/kendo-angular-label":  "~15.1.0",
+                             "@progress/kendo-angular-sortable":  "~15.1.0",
+                             "@progress/kendo-angular-charts":  "~15.1.0",
+                             "@progress/kendo-angular-indicators":  "~15.1.0",
+                             "@progress/kendo-angular-filter":  "~15.1.0",
+                             "@progress/kendo-svg-icons":  "~2.1.0"
+                         },
+    "dependencies":  {
+                         "@memberjunction/global":  "^0.9.158",
+                         "@memberjunction/core":  "^0.9.177",
+                         "@memberjunction/ng-compare-records":  "^0.9.178",
+                         "@memberjunction/ng-record-changes":  "^0.9.112",
+                         "@memberjunction/ng-container-directives":  "^0.9.140",
+                         "@memberjunction/ng-user-view-grid":  "^0.9.213",
+                         "@memberjunction/ng-query-grid":  "^0.9.60",
+                         "@memberjunction/ng-shared":  "^0.9.30",
+                         "@memberjunction/ng-ask-skip":  "^0.9.98",
+                         "@memberjunction/ng-auth-services":  "^0.9.99",
+                         "@memberjunction/ng-explorer-settings":  "^0.9.7",
+                         "tslib":  "^2.3.0"
+                     },
+    "sideEffects":  false
 }

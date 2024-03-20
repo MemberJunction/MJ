@@ -1,37 +1,39 @@
 {
-  "name": "@memberjunction/ng-record-changes",
-  "version": "0.9.108",
-  "description": "MemberJunction: Angular pop-up window and grid to show changes made to a specific individual record",
-  "main": "./dist/public-api.js",
-  "typings": "./dist/public-api.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "@angular/compiler": "~17.2.2",
-    "@angular/compiler-cli": "~17.2.2"
-  },
-  "peerDependencies": {
-    "@angular/common": "~17.2.2",
-    "@angular/core": "~17.2.2",
-    "@angular/forms": "~17.2.2",
-    "@angular/router": "~17.2.2",
-    "@progress/kendo-angular-grid": "~15.1.0",
-    "@progress/kendo-angular-indicators": "~15.1.0"
-  },
-  "dependencies": {
-    "@memberjunction/core": "^0.9.172",
-    "@memberjunction/global": "^0.9.153",
-    "@memberjunction/ng-compare-records": "^0.9.174",
-    "@memberjunction/ng-container-directives": "^0.9.136",
-    "tslib": "^2.3.0"
-  },
-  "sideEffects": false
+    "name":  "@memberjunction/ng-record-changes",
+    "version":  "0.9.112",
+    "description":  "MemberJunction: Angular pop-up window and grid to show changes made to a specific individual record",
+    "main":  "./dist/public-api.js",
+    "typings":  "./dist/public-api.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
+                    "build":  "ngc"
+                },
+    "keywords":  [
+
+                 ],
+    "author":  "",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "@angular/compiler":  "~17.2.2",
+                            "@angular/compiler-cli":  "~17.2.2"
+                        },
+    "peerDependencies":  {
+                             "@angular/common":  "~17.2.2",
+                             "@angular/core":  "~17.2.2",
+                             "@angular/forms":  "~17.2.2",
+                             "@angular/router":  "~17.2.2",
+                             "@progress/kendo-angular-grid":  "~15.1.0",
+                             "@progress/kendo-angular-indicators":  "~15.1.0"
+                         },
+    "dependencies":  {
+                         "@memberjunction/core":  "^0.9.177",
+                         "@memberjunction/global":  "^0.9.158",
+                         "@memberjunction/ng-compare-records":  "^0.9.178",
+                         "@memberjunction/ng-container-directives":  "^0.9.140",
+                         "tslib":  "^2.3.0"
+                     },
+    "sideEffects":  false
 }
