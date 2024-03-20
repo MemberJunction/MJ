@@ -11251,10 +11251,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
         */
-        get CategoryID(): number {  
+        get CategoryID(): number | null {  
             return this.Get('CategoryID');
         }
-        set CategoryID(value: number) {
+        set CategoryID(value: number | null) {
             this.Set('CategoryID', value);
         }
         /**
@@ -11339,7 +11339,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Category
         * * SQL Data Type: nvarchar(50)
         */
-        get Category(): string {  
+        get Category(): string | null {  
             return this.Get('Category');
         }
     
@@ -12845,10 +12845,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
         */
-        get ParentID(): number {  
+        get ParentID(): number | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number) {
+        set ParentID(value: number | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -12876,7 +12876,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
         */
-        get Parent(): string {  
+        get Parent(): string | null {  
             return this.Get('Parent');
         }
     
@@ -13052,19 +13052,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * Files - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof FileEntity
-        * @throws {Error} - Delete is not allowed for Files, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Files, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * Display Name: ID
