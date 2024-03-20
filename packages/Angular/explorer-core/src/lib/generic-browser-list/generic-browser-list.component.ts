@@ -1,9 +1,9 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
-import { Folder, Item, ItemType, UpdateItemEvent, UpdateItemEventType } from '../../generic/Item.types';
-import { DashboardCategoryEntity, DashboardEntity } from '@memberjunction/core-entities';
-import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
+import { Folder, Item, ItemType  } from '../../generic/Item.types';
+import { BaseEntity, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core';
+import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
 
 @Component({
   selector: 'app-generic-browser-list',
@@ -19,83 +19,83 @@ export class GenericBrowserListComponent {
   @Input() public showAddButton: boolean = false;
   @Input() public addText: string = 'Create New';
   @Input() public backText: string = 'Go Back';
-  @Input() public EntityName: string = '';
-  @Input() public CategoryName: string = '';
+  @Input() public ItemEntityName: string = '';
+  @Input() public CategoryEntityName: string = '';
   @Input() public selectedFolderID: number | null = null;
+  @Input() public showNotifications: boolean = true;
 
-  @Input() public parentWillHandleAddResource: boolean = false;
-  @Input() public parentWillHandleDeleteResource: boolean = false;
-  @Input() public parentWillHandleAddFolder: boolean = false;
-  @Input() public parentWillHandleDeleteFolder: boolean = false;
+  //Before Evewnts
+  @Output() public BeforeAddFolderEvent: EventEmitter<BeforeAddFolderEvent> = new EventEmitter<BeforeAddFolderEvent>();
+  @Output() public BeforeAddItemEvent: EventEmitter<BeforeAddItemEvent> = new EventEmitter<BeforeAddItemEvent>();
+  @Output() public BeforeDeleteFolderEvent: EventEmitter<BeforeDeleteFolderEvent> = new EventEmitter<BeforeDeleteFolderEvent>();
+  @Output() public BeforeDeleteItemEvent: EventEmitter<BeforeDeleteItemEvent> = new EventEmitter<BeforeDeleteItemEvent>();  
+  @Output() public BeforeUpdateFolderEvent: EventEmitter<BeforeUpdateFolderEvent> = new EventEmitter<BeforeUpdateFolderEvent>();
+  @Output() public BeforeUpdateItemEvent: EventEmitter<BeforeUpdateItemEvent> = new EventEmitter<BeforeUpdateItemEvent>();
 
-  @Output() public addButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
-  @Output() public deleteButtonClickEvent: EventEmitter<any> = new EventEmitter<any>();
+  //After Events
+  @Output() public AfterAddFoldervEent: EventEmitter<AfterAddFolderEvent> = new EventEmitter<AfterAddFolderEvent>();
+  @Output() public AfterAddItemEvent: EventEmitter<AfterAddItemEvent> = new EventEmitter<AfterAddItemEvent>();
+  @Output() public AfterDeleteFolderEvent: EventEmitter<AfterDeleteFolderEvent> = new EventEmitter<AfterDeleteFolderEvent>();
+  @Output() public AfterDeleteItemEvent: EventEmitter<AfterDeleteItemEvent> = new EventEmitter<AfterDeleteItemEvent>();  
+  @Output() public AfterUpdateFolderEvent: EventEmitter<AfterUpdateFolderEvent> = new EventEmitter<AfterUpdateFolderEvent>();
+  @Output() public AfterUpdateItemEvent: EventEmitter<AfterUpdateItemEvent> = new EventEmitter<AfterUpdateItemEvent>();
+  
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
-  @Output() public createFolderClickEvent: EventEmitter<string> = new EventEmitter<string>();
-  @Output() public createResourceClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public backButtonClickEvent: EventEmitter<void> = new EventEmitter<void>();
-  @Output() public UpdateItemEvent: EventEmitter<UpdateItemEvent> = new EventEmitter<UpdateItemEvent>();
+
   constructor(public sharedService: SharedService, private router: Router) {
     this.router = router;
   }
 
-  public itemClick(item: Item<any | Folder>) {
-    if (item) {
-      this.itemClickEvent.emit(item);
+
+  //TODO - add property to show or hide notifications
+  //create display notification method
+
+  public itemClick(item: Item): void {
+    if (!item) {
+      return;
     }
+
+    this.itemClickEvent.emit(item);
   }
 
-  public async deleteItem(item: Item<any | Folder>){
-    if(item && this.parentWillHandleDeleteResource){
-      this.deleteButtonClickEvent.emit(item);
-    }
-    else{
-      //No special handling of the folder, so we can delete it 
-      //as normal
-      await this.deleteFolder(item);
-    }
+  public backButtonClicked(){
+    this.backButtonClickEvent.emit();
   }
 
   //todo - show a modal asking the user for a name to give the resource
   public async addResourceButtonClicked() {
-    if(this.parentWillHandleAddResource){
-      this.createResourceClickEvent.emit();
-      return;
-    }
 
-
-    const resourceName: string = "Sample" + this.EntityName;
+    const resourceName: string = "Sample";
     const md: Metadata = new Metadata();
-    const entity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.EntityName);
+    const entity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.ItemEntityName);
 
     entity.NewRecord();
     entity.Set("Name", resourceName);
 
     let saveResult: boolean = await entity.Save();
     if(saveResult){
-      this.sharedService.CreateSimpleNotification(`successfully created ${resourceName}`, "info");
+      this.showNotification(`successfully created ${resourceName}`, "info");
 
-      let item: Item<BaseEntity> = new Item(entity, ItemType.Resource);
+      let item: Item = new Item(entity, ItemType.Entity);
       item.Name = resourceName;
-      const updateItemEvent: UpdateItemEvent = new UpdateItemEvent(item, UpdateItemEventType.Add);
-      this.UpdateItemEvent.emit(updateItemEvent);
+      this.AfterAddItemEvent.emit(new AfterAddItemEvent(item));
     }
     else{
-      this.sharedService.CreateSimpleNotification(`Unable to create folder ${resourceName}`, "error");
+      this.showNotification(`Unable to create folder ${resourceName}`, "error");
     }
 
   }
 
   //todo - show a modal asking the user for a name to give the folder
-  public async createFolder(){
-    if(this.parentWillHandleAddFolder){
-      this.createFolderClickEvent.emit();
-      return;
+  public async createFolder(): Promise<void> {
+    let event: BeforeAddFolderEvent = new BeforeAddFolderEvent("Sample Folder");
+    if(event.Cancel){
     }
 
-    let folderName: string = "sample new folder";
+    let folderName: string = "Sample Folder";
     const md: Metadata = new Metadata();
-    const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryName);
+    const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
 
     folderEntity.NewRecord();
     folderEntity.Set("Name", folderName);
@@ -104,34 +104,52 @@ export class GenericBrowserListComponent {
 
     let saveResult: boolean = await folderEntity.Save();
     if(saveResult){
-      this.sharedService.CreateSimpleNotification(`successfully created folder ${folderName}`, "info");
+      this.showNotification(`successfully created folder ${folderName}`, "info");
 
       let folder: Folder = new Folder(folderEntity.Get("ID"), folderEntity.Get("Name"));
-      let item: Item<Folder> = new Item(folder, ItemType.Folder);
-      item.Description = folderEntity.Get("Description");
-      const updateItemEvent: UpdateItemEvent = new UpdateItemEvent(item, UpdateItemEventType.Add);
-      this.UpdateItemEvent.emit(updateItemEvent);
+      let item: Item = new Item(folder, ItemType.Folder);
+      this.AfterAddFoldervEent.emit(new AfterAddFolderEvent(item));
     }
     else{
       this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
     }
   }
 
-  public goHomeButtonClicked(){
-    this.backButtonClickEvent.emit();
+  public async deleteItem(item: Item){
+    if(!item){
+      return;
+    }
+
+    if(item.Type === ItemType.Folder){
+      let event: BeforeDeleteFolderEvent = new BeforeDeleteFolderEvent(item);
+      this.BeforeDeleteFolderEvent.emit(event);
+      
+      if(event.Cancel){
+        return;
+      }
+
+      await this.deleteFolder(item);
+      let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
+      this.AfterDeleteFolderEvent.emit(deleteFolderEvent);
+
+    }
+    else if(item.Type === ItemType.Entity){
+      let event: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
+      this.BeforeDeleteItemEvent.emit(event);
+      
+      if(event.Cancel){
+        return;
+      }
+
+      await this.deleteResource(item);
+      let deleteItemEvent: AfterDeleteItemEvent = new AfterDeleteItemEvent(item);
+      this.AfterDeleteItemEvent.emit(deleteItemEvent);
+    }
   }
 
-  private async deleteFolder(item: Item<any | Folder>){
-    if(item && item.Type === ItemType.Folder && this.parentWillHandleDeleteFolder){
-      this.deleteButtonClickEvent.emit(item);
-      return;
-    }
-    else if(item && item.Type === ItemType.Resource && !this.parentWillHandleDeleteResource){
-      this.deleteButtonClickEvent.emit(item);
-      return;
-    }
+  private async deleteFolder(item: Item){
 
-    const folder: Folder = item.Data;
+    const folder: Folder = <Folder>item.Data;
 
     //the DB will throw an error if we attempt to delete a folder that has children
     //i.e. sub folders or resources
@@ -139,15 +157,19 @@ export class GenericBrowserListComponent {
     //go through 
     const folderHasChildren: boolean = await this.doesFolderHaveChildren(folder.ID);
     if(folderHasChildren){
-      this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name} because it has children`, "error");
+      this.showNotification(`unable to delete folder ${folder.Name} because it has children`, "error");
       return;
     }
 
     this.showLoader = true;
     const md = new Metadata();
-    let folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryName);
-    //@ts-ignore
-    let loadResult = await folderEntity.Load(folder.ID);
+    let folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
+    let pkv: PrimaryKeyValue = new PrimaryKeyValue();
+    pkv.FieldName = "ID";
+    pkv.Value = folder.ID;
+    //create view browser component - this will be used to display views
+    //then create a new component for applications that wraps around the view browser component 
+    let loadResult = await folderEntity.InnerLoad([pkv]);
     if(!loadResult){
       this.sharedService.CreateSimpleNotification(`unable to fetch folder ${folder.Name}`, "error");
       this.showLoader = false;
@@ -162,9 +184,42 @@ export class GenericBrowserListComponent {
     }
     else{
       this.sharedService.CreateSimpleNotification(`successfully deleted folder ${folder.Name}`, "info");
-      const updateItemEvent: UpdateItemEvent = new UpdateItemEvent(item, UpdateItemEventType.Delete);
-      this.UpdateItemEvent.emit(updateItemEvent);
       this.showLoader = false;
+    }
+  }
+
+  private async deleteResource(item: Item){
+    let dashboardEntity: BaseEntity = <BaseEntity>item.Data;
+
+    if(!dashboardEntity){
+      return;
+    }
+
+    //the only assumption we are making here is that the entityID
+    //is a number
+    const entityID: number = dashboardEntity.Get("ID");
+    if (entityID && entityID > 0) {
+      
+      const md = new Metadata();
+      
+      let entityObject = await md.GetEntityObject(this.ItemEntityName);
+      let pkv: PrimaryKeyValue = new PrimaryKeyValue();
+      pkv.FieldName = "ID";
+      pkv.Value = entityID;
+      let loadResult = await entityObject.InnerLoad([pkv]);
+
+      if(loadResult){
+        let deleteResult = await entityObject.Delete();
+        if(deleteResult){
+          this.showNotification(`successfully deleted dashboard`, "info");
+        }
+        else{
+          this.showNotification(`Unable to delete dashboard`, "error");
+        }
+      }
+      else{
+        this.showNotification(`unable to fetch dashboard`, "error");
+      }
     }
   }
 
@@ -172,10 +227,16 @@ export class GenericBrowserListComponent {
     const md: Metadata = new Metadata();
     const rv: RunView = new RunView();
     const folderResult = await rv.RunView({
-      EntityName:this.CategoryName,
+      EntityName:this.CategoryEntityName,
       ExtraFilter: "ParentID = " + folderID
     });
 
     return folderResult && folderResult.Success && folderResult.Results.length > 0;
+  }
+
+  private showNotification(message: string, type: "none" | "success" | "error" | "warning" | "info" | undefined): void {
+    if(this.showNotifications){
+      this.sharedService.CreateSimpleNotification(message, type);
+    }
   }
 }

@@ -1,3 +1,13 @@
-<app-generic-browse-list title="Queries" iconName="data" itemType="query" [items]="queries" (itemClickEvent)="itemClick($event)" [showLoader]="showLoader">
-
-</app-generic-browse-list>
+<app-generic-browser-list 
+title="Queries" 
+itemType="query"
+iconName="data" 
+[items]="items"
+addText="Create Query"
+ItemEntityName="Queries"
+CategoryEntityName="Query Categories"
+(itemClickEvent)="itemClick($event)"
+(backButtonClickEvent)="onBackButtonClick()"
+[selectedFolderID]="selectedFolderID"
+[showLoader]="showLoader"
+/>

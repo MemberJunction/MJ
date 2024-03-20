@@ -1,3 +1,13 @@
-<app-generic-browse-list title="Reports" iconName="graph" itemType="report" [items]="reports" (itemClickEvent)="itemClick($event)" [showLoader]="showLoader">
-
-</app-generic-browse-list>
+<app-generic-browser-list 
+title="Reports"
+itemType="report"
+iconName="graph" 
+[items]="items"
+addText="Create Report"
+ItemEntityName="Reports"
+CategoryEntityName="Report Categories" 
+(itemClickEvent)="itemClick($event)"
+(backButtonClickEvent)="onBackButtonClick()"
+[selectedFolderID]="selectedFolderID"
+[showLoader]="showLoader"
+/>

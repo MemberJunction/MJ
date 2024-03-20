@@ -1,29 +1,17 @@
+import { BaseEntity } from "@memberjunction/core";
+
 export enum ItemType {
     Folder = "Folder",
-    Resource = "Resource"
+    Entity = "Entity"
 };
 
-export class PathData {
-    public Name: string;
-    public ID: number;
-    public URL: string;
-    public ParentPathData?: PathData;
-    public ChildPatchData?: PathData;
-
-    constructor(id: number, name: string, url: string){
-        this.ID = id;
-        this.Name = name;
-        this.URL = url;
-    }
-}
-
-export class Item<T> {
+export class Item {
     public Name: string;
     public Description: string;
     public Type: ItemType;
-    public Data : T;
+    public Data : BaseEntity | Folder;
 
-    constructor(data: T, type: ItemType){
+    constructor(data: BaseEntity | Folder, type: ItemType){
         this.Type = type;
         this.Data = data;
         this.Name = "";
@@ -55,21 +43,5 @@ export class Folder {
         this.Name = folderName;
         this.Description = "";
         this.Type = ItemType.Folder;
-    }
-}
-
-export enum UpdateItemEventType {
-    Add = "Add",
-    Update = "Update",
-    Delete = "Delete"
-}
-
-export class UpdateItemEvent {
-    public Item: Item<any | Folder>;
-    public EventType: UpdateItemEventType;
-
-    constructor(item: Item<any | Folder>, eventType: UpdateItemEventType){
-        this.Item = item;
-        this.EventType = eventType;
     }
 }
