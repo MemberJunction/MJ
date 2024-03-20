@@ -1,12 +1,13 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
-
+import { SVGIcon, folderIcon } from "@progress/kendo-svg-icons";
 @Component({
   selector: 'app-generic-browse-list',
   templateUrl: './generic-browse-list.component.html',
   styleUrls: ['./generic-browse-list.component.css', '../../shared/first-tab-styles.css']
 })
+
 export class GenericBrowseListComponent {
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
@@ -23,7 +24,10 @@ export class GenericBrowseListComponent {
   constructor(public sharedService: SharedService, private router: Router) {
     this.router = router;
   }
-
+  data = [
+    { text: "Folder" },
+    { text: "Report with Skip" },
+  ];
   public itemClick(item: any) {
     if (item) {
       this.itemClickEvent.emit(item);
