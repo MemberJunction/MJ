@@ -1,54 +1,52 @@
 {
-    "name":  "@memberjunction/ng-ask-skip",
-    "version":  "0.9.98",
-    "description":  "MemberJunction Explorer: Ask Skip UI Components",
-    "main":  "./dist/public-api.js",
-    "typings":  "./dist/public-api.d.ts",
-    "files":  [
-                  "/dist"
-              ],
-    "scripts":  {
-                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
-                    "build":  "ngc"
-                },
-    "keywords":  [
-
-                 ],
-    "author":  "",
-    "license":  "ISC",
-    "devDependencies":  {
-                            "@angular/compiler":  "~17.2.2",
-                            "@angular/compiler-cli":  "~17.2.2"
-                        },
-    "peerDependencies":  {
-                             "@angular/common":  "~17.2.2",
-                             "@angular/core":  "~17.2.2",
-                             "@angular/forms":  "~17.2.2",
-                             "@angular/router":  "~17.2.2",
-                             "@progress/kendo-angular-grid":  "~15.1.0",
-                             "@progress/kendo-angular-listview":  "~15.1.0",
-                             "@progress/kendo-angular-notification":  "~15.1.0",
-                             "@progress/kendo-angular-dialog":  "~15.1.0",
-                             "@progress/kendo-angular-layout":  "~15.1.0",
-                             "@progress/kendo-angular-label":  "~15.1.0",
-                             "@progress/kendo-angular-filter":  "~15.1.0",
-                             "@progress/kendo-angular-indicators":  "~15.1.0",
-                             "@progress/kendo-svg-icons":  "^2.1.0"
-                         },
-    "dependencies":  {
-                         "@memberjunction/global":  "^0.9.158",
-                         "@memberjunction/core":  "^0.9.177",
-                         "@memberjunction/skip-types":  "^0.9.74",
-                         "@memberjunction/ng-container-directives":  "^0.9.140",
-                         "@memberjunction/ng-shared":  "^0.9.30",
-                         "@memberjunction/ng-data-context":  "^0.9.32",
-                         "@memberjunction/ng-user-view-grid":  "^0.9.212",
-                         "tslib":  "^2.3.0",
-                         "angular-plotly.js":  "^5.2.2",
-                         "plotly.js-dist-min":  "^2.3.4",
-                         "@types/plotly.js-dist-min":  "^2.3.4",
-                         "@angular/cdk":  "~17.2.1",
-                         "ngx-markdown":  "^17.1.1"
-                     },
-    "sideEffects":  false
+  "name": "@memberjunction/ng-ask-skip",
+  "version": "0.9.94",
+  "description": "MemberJunction Explorer: Ask Skip UI Components",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "ngc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "~17.2.2",
+    "@angular/compiler-cli": "~17.2.2"
+  },
+  "peerDependencies": {
+    "@angular/common": "~17.2.2",
+    "@angular/core": "~17.2.2",
+    "@angular/forms": "~17.2.2",
+    "@angular/router": "~17.2.2",
+    "@progress/kendo-angular-grid": "~15.1.0",
+    "@progress/kendo-angular-listview": "~15.1.0",
+    "@progress/kendo-angular-notification": "~15.1.0",
+    "@progress/kendo-angular-dialog": "~15.1.0",
+    "@progress/kendo-angular-layout": "~15.1.0",
+    "@progress/kendo-angular-label": "~15.1.0",
+    "@progress/kendo-angular-filter": "~15.1.0",
+    "@progress/kendo-angular-indicators": "~15.1.0",
+    "@progress/kendo-svg-icons": "^2.1.0"
+  },
+  "dependencies": {
+    "@memberjunction/global": "^0.9.153",
+    "@memberjunction/core": "^0.9.172",
+    "@memberjunction/skip-types": "^0.9.70",
+    "@memberjunction/ng-container-directives": "^0.9.136",
+    "@memberjunction/ng-shared": "^0.9.26",
+    "@memberjunction/ng-data-context": "^0.9.28",
+    "@memberjunction/ng-user-view-grid": "^0.9.208",
+    "tslib": "^2.3.0",
+    "angular-plotly.js": "^5.2.2",
+    "plotly.js-dist-min": "^2.3.4",
+    "@types/plotly.js-dist-min": "^2.3.4",
+    "@angular/cdk": "~17.2.1",
+    "ngx-markdown": "^17.1.1"
+  },
+  "sideEffects": false
 }

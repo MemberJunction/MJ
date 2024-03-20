@@ -1,26 +1,26 @@
 {
-    "name":  "@memberjunction/ai-groq",
-    "version":  "0.9.10",
-    "description":  "MemberJunction Wrapper for Groq AI LPU inference engine",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "files":  [
-                  "/dist"
-              ],
-    "scripts":  {
-                    "start":  "ts-node-dev src/index.ts",
-                    "build":  "tsc",
-                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
-                },
-    "author":  "MemberJunction.com",
-    "license":  "ISC",
-    "devDependencies":  {
-                            "ts-node-dev":  "^2.0.0",
-                            "typescript":  "^5.3.3"
-                        },
-    "dependencies":  {
-                         "@memberjunction/ai":  "^0.9.165",
-                         "@memberjunction/global":  "^0.9.158",
-                         "groq-sdk":  "^0.3.2"
-                     }
+  "name": "@memberjunction/ai-groq",
+  "version": "0.9.6",
+  "description": "MemberJunction Wrapper for Groq AI LPU inference engine",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "^0.9.160",
+    "@memberjunction/global": "^0.9.153",
+    "groq-sdk": "^0.3.2"
+  }
 }
