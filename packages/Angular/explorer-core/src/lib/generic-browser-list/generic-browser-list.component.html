@@ -1,0 +1,41 @@
+<div  class="generic-browser-list-container">
+    <div class="card-header-entity">
+        <div class="title-wrap">
+            <h1>{{title}}</h1>
+        </div>
+        <div class="add-item">
+          <button kendoButton (click)="addResourceButtonClicked()" [primary]="true">
+            <span class="k-icon k-font-icon k-i-plus"></span>
+              {{addText}}
+          </button>
+          <button kendoButton (click)="createFolder()" [primary]="true">
+            <span class="k-icon k-font-icon k-i-chevron-left"></span>
+              Create Folder
+          </button>
+          <button kendoButton (click)="backButtonClicked()" [primary]="true">
+            <span class="k-icon k-font-icon k-i-chevron-left"></span>
+              {{backText}}
+          </button>
+        </div>
+    </div>
+    <div class="main-area"> 
+        <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>
+        <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
+          <div *ngFor="let d of items">
+            <kendo-card class="card-wrapper">
+              <kendo-card-header class="k-hstack view-card">
+                <div class="btn-wrapper">
+                  <kendo-button iconClass="fa fa-trash" fillMode="flat" title="Delete Item" (click)="deleteItem(d)"></kendo-button>
+                </div>
+              </kendo-card-header>
+              <kendo-card-body (click)="itemClick(d)">
+                <div class="view-card-content k-cursor-pointer">
+                  <h5 kendoCardTitle>{{ d.Name }}</h5>
+                  <p kendoCardSubtitle>{{ d.Description }}</p>
+                </div>
+              </kendo-card-body>
+            </kendo-card>
+          </div>
+        </div>
+    </div>
+</div>
