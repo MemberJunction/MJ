@@ -2,7 +2,7 @@
     <!-- Options container -->
     <div class="options-container">
         <div class="option-item" [class.selected]="currentItem === 'Users'"  (click)="selectItem('Users')">Users</div>
-        <div class="option-item" [class.selected]="currentItem === 'Roles'"  (click)="selectItem('Roles')">Roles</div>
+        <div class="option-item" [class.selected]="currentItem === 'Roles' || currentItem === 'Role'"  (click)="selectItem('Roles')">Roles</div>
         <div class="option-item" [class.selected]="currentItem === 'EntityPermissions'"  (click)="selectItem('EntityPermissions')">Entity Permissions</div>
     </div>
 
@@ -15,7 +15,10 @@
             Users Component Goes Here
         </div>
         <div *ngIf="currentItem === 'Roles'">
-            <mj-single-role RoleName="UI"></mj-single-role>
+            <mj-roles-list></mj-roles-list>
+        </div>
+        <div *ngIf="currentItem === 'Role'">
+            <mj-single-role [RoleName]="selectedRoleName"></mj-single-role>
         </div>
     </div>
 </div>

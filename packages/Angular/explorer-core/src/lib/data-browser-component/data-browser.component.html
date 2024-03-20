@@ -1,33 +1,33 @@
 <div  class="data-browser-container">
-    <div class="card-header-entity">
-        <div class="title-wrap">
-            <h1>Applications</h1>
+  <div class="card-header-entity">
+      <div class="title-wrap">
+          <h1>Data Applications</h1>
+      </div>
+  </div>
+  <div class="main-area"> 
+      <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>
+      <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
+        <div class="card-item" *ngFor="let app of applications">
+          <kendo-card class="card-wrapper">
+            <!-- <kendo-card-header class="k-hstack view-card">
+              <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
+              <div class="btn-wrapper">
+                <button kendoButton fillMode="flat" (click)="editView(entity)">
+                  <span class="k-icon k-i-edit"></span>
+                </button>
+                <button kendoButton fillMode="flat" (click)="handleDeleteView(entity)"><span
+                    class="k-icon k-i-delete"></span></button>
+              </div> 
+            </kendo-card-header> -->
+  
+            <kendo-card-body (click)="appItemClick(app)">
+              <div class="view-card-content k-cursor-pointer">
+                <h2 kendoCardTitle>{{ app.Name }}</h2>
+                <p kendoCardSubtitle>{{ app.Description }}</p>
+              </div>
+            </kendo-card-body>
+          </kendo-card>
         </div>
-    </div>
-    <div class="main-area"> 
-        <kendo-loader *ngIf="showLoader" type="converging-spinner" ></kendo-loader>
-        <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
-          <div *ngFor="let app of applications">
-            <kendo-card class="card-wrapper">
-              <kendo-card-header class="k-hstack view-card">
-                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
-                <!-- <div class="btn-wrapper">
-                  <button kendoButton fillMode="flat" (click)="editView(entity)">
-                    <span class="k-icon k-i-edit"></span>
-                  </button>
-                  <button kendoButton fillMode="flat" (click)="handleDeleteView(entity)"><span
-                      class="k-icon k-i-delete"></span></button>
-                </div> -->
-              </kendo-card-header>
-    
-              <kendo-card-body (click)="appItemClick(app)">
-                <div class="view-card-content k-cursor-pointer">
-                  <h5 kendoCardTitle>{{ app.Name }}</h5>
-                  <p kendoCardSubtitle>{{ app.Description }}</p>
-                </div>
-              </kendo-card-body>
-            </kendo-card>
-          </div>
-        </div>
-    </div>
+      </div>
+  </div>
 </div>

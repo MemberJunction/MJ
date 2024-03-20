@@ -1,3 +1,5 @@
+@import './variables';
+
 // Normalization
 body,
 h1,
@@ -27,6 +29,24 @@ a {
 
     &.k-drawer-push .k-drawer {
         position: sticky;
+        background: var(--sideNav);
+        padding: 48px 0;
+        .k-drawer-items {
+            .k-drawer-item {
+                padding-block:  18px;
+                font-weight: 400;
+                color: var(--gray-color);
+                &:hover {
+                    color: var(--white-color);
+                    background: var(--menuSelect);
+                }
+                &.k-selected {
+                    font-weight: 500;
+                    color: var(--white-color);
+                    background: var(--menuSelect);
+                }
+            }
+        }
     }
 
     .k-drawer-item {
@@ -187,7 +207,7 @@ a {
 
 // Header
 .header-bg {
-    background-image: url('./../assets/header-bg.png');
+    background: var(--primary-color);
 }
 
 .header {
@@ -196,13 +216,14 @@ a {
     top: 0;
     z-index: 3;
 
-    .nav-container {
+    .nav-container {    
         display: flex;
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
         height: 100%;
         color: $white;
+        padding-right: 45px;
     }
 
     .menu-button {

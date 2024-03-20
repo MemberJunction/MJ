@@ -65,6 +65,7 @@ import { GeneratedFormsModule, LoadGeneratedForms } from './generated/generated-
 import { environment } from 'src/environments/environment';
 import 'hammerjs';
 import { RouteReuseStrategy } from '@angular/router';
+import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 LoadGeneratedForms(); // prevent tree shaking and component loss through this call
 LoadResourceWrappers(); // prevent tree shaking and component loss through this call
 
@@ -104,6 +105,7 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
     DialogsModule,
     FilterModule,
     UserViewGridModule,
+    ExplorerSettingsModule,
     LinkDirectivesModule,
     ContainerDirectivesModule,
     ExplorerCoreModule,

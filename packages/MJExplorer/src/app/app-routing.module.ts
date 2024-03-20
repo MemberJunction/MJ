@@ -7,7 +7,7 @@ import {
   RouterStateSnapshot
 } from '@angular/router';
 import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponent, HomeComponent, 
-         UserNotificationsComponent, SettingsComponent, DataBrowserComponent, ReportBrowserComponent, 
+         UserNotificationsComponent, DataBrowserComponent, ReportBrowserComponent, 
          DashboardBrowserComponent, AuthGuardService as AuthGuard } from "@memberjunction/ng-explorer-core";
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
@@ -17,6 +17,7 @@ import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shar
 
 
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
+import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandle } = {};
@@ -139,7 +140,21 @@ const routes: Routes = [
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'settings', component: SettingsComponent, canActivate: [AuthGuard] },  
+  { path: 'settings', 
+    component: SettingsComponent, 
+    canActivate: [AuthGuard],  
+    children: [
+      {
+        path: '',
+        component: SettingsComponent,
+        pathMatch: 'full'
+      },
+      {
+        path: '**',
+        component: SettingsComponent
+      }
+    ]
+  },  
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },  
   { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },

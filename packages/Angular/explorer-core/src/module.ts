@@ -47,7 +47,6 @@ import { EntityRecordResource } from './lib/resource-wrappers/record-resource.co
 import { ReportResource } from './lib/resource-wrappers/report-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
 import { UserViewResource } from './lib/resource-wrappers/view-resource.component';
-import { SettingsComponent } from './lib/settings/settings.component';
 import { SingleApplicationComponent } from './lib/single-application/single-application.component';
 import { FavoritesComponent } from './lib/favorites/favorites.component';
 import { HeaderComponent } from './lib/header/header.component';
@@ -90,7 +89,6 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
     ReportResource,
     SearchResultsResource,
     UserViewResource,
-    SettingsComponent,
     SingleApplicationComponent,
     FavoritesComponent,
     HeaderComponent,
@@ -167,7 +165,6 @@ import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
     ReportResource,
     SearchResultsResource,
     UserViewResource,
-    SettingsComponent,
     SingleApplicationComponent,
     FavoritesComponent,
     HeaderComponent,
