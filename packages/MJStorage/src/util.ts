@@ -5,16 +5,18 @@ import { FileStorageBase } from './generic/FileStorageBase';
 
 /**
  * Creates an upload URL for a file in the specified file storage provider.
- * 
+ *
  * @param providerEntity - The file storage provider entity.
  * @param input - The input object containing the file details.
  * @returns A promise that resolves to an object with the updated input and the upload URL.
  */
-export const createUploadUrl = async <TInput extends { ID: number; Name: string; ProviderID: number; ContentType?: string; ProviderKey?: string }>(
+export const createUploadUrl = async <
+  TInput extends { ID: number; Name: string; ProviderID: number; ContentType?: string; ProviderKey?: string }
+>(
   providerEntity: FileStorageProviderEntity,
   input: TInput
 ): Promise<{
-  updatedInput: TInput & { Status: string; ContentType: string; };
+  updatedInput: TInput & { Status: string; ContentType: string };
   UploadUrl: string;
 }> => {
   const { ID, ProviderID } = input;
@@ -33,7 +35,7 @@ export const createUploadUrl = async <TInput extends { ID: number; Name: string;
 
 /**
  * Creates a pre-authorized download URL for a file from the specified file storage provider.
- * 
+ *
  * @param {FileStorageProviderEntity} providerEntity - The file storage provider entity.
  * @param {string | number} providerKeyOrID - The provider key or ID.
  * @returns {Promise<string>} - The pre-authorized download URL.
@@ -41,4 +43,9 @@ export const createUploadUrl = async <TInput extends { ID: number; Name: string;
 export const createDownloadUrl = async (providerEntity: FileStorageProviderEntity, providerKeyOrID: string | number): Promise<string> => {
   const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
   return driver.CreatePreAuthDownloadUrl(String(providerKeyOrID));
+};
+
+export const deleteObject = (providerEntity: FileStorageProviderEntity, providerKeyOrID: string | number) => {
+  const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(FileStorageBase, providerEntity.ServerDriverKey);
+  return driver.DeleteObject(String(providerKeyOrID));
 };

@@ -15,7 +15,7 @@ import {
   Resolver,
   Root,
 } from '@memberjunction/server';
-import { createDownloadUrl, createUploadUrl } from '@memberjunction/storage';
+import { createDownloadUrl, createUploadUrl, deleteObject } from '@memberjunction/storage';
 import { CreateFileInput, FileResolver as FileResolverBase, File_ } from '../generated/generated';
 
 @InputType()
@@ -59,7 +59,7 @@ export class FileResolver extends FileResolverBase {
 
     // Create the upload URL and get the record updates (provider key, content type, etc)
     const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileRecord);
-    
+
     // Save the file record with the updated input
     const fileEntity = <FileEntity>await new Metadata().GetEntityObject('Files', userInfo);
     fileEntity.LoadFromData(input);
@@ -81,5 +81,22 @@ export class FileResolver extends FileResolverBase {
     const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.ID);
 
     return url;
+  }
+
+  @Mutation(() => File_)
+  async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    const md = new Metadata();
+    const userInfo = this.GetUserFromPayload(userPayload);
+
+    const entityObject = <FileEntity>await md.GetEntityObject('Files', userInfo);
+    await entityObject.Load(ID);
+    if (!entityObject) {
+      return null;
+    }
+
+    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
+    await deleteObject(providerEntity, entityObject.ProviderKey ?? entityObject.ID);
+
+    return super.DeleteFile(ID, { dataSource, userPayload }, pubSub);
   }
 }

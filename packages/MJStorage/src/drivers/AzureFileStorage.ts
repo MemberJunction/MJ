@@ -1,4 +1,13 @@
-import { AccountSASPermissions, AccountSASResourceTypes, AccountSASServices, AccountSASSignatureValues, SASProtocol, StorageSharedKeyCredential, generateAccountSASQueryParameters } from '@azure/storage-blob';
+import {
+  AccountSASPermissions,
+  AccountSASResourceTypes,
+  AccountSASServices,
+  AccountSASSignatureValues,
+  BlobClient,
+  SASProtocol,
+  StorageSharedKeyCredential,
+  generateAccountSASQueryParameters
+} from '@azure/storage-blob';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import { CreatePreAuthUploadUrlPayload, FileStorageBase } from '../generic/FileStorageBase';
@@ -54,5 +63,12 @@ export class AzureFileStorage extends FileStorageBase {
     const url = `https://${this._accountName}.blob.core.windows.net/${this._container}/${objectName}${queryString}`;
 
     return Promise.resolve(url);
+  }
+
+  public async DeleteObject(objectName: string): Promise<boolean> {
+    const url = `https://${this._accountName}.blob.core.windows.net/${this._container}/${objectName}`;
+    const blobClient = new BlobClient(url, this._sharedKeyCredential);
+    const { succeeded } = await blobClient.deleteIfExists();
+    return succeeded;
   }
 }
