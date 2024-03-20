@@ -885,7 +885,7 @@ input CreateQueryFieldInput {
 }
 
 input CreateQueryInput {
-  CategoryID: Int!
+  CategoryID: Int
   Description: String
   Feedback: String
   Name: String!
@@ -966,7 +966,7 @@ input CreateRecordMergeLogInput {
 input CreateReportCategoryInput {
   Description: String
   Name: String!
-  ParentID: Int!
+  ParentID: Int
 }
 
 input CreateReportInput {
@@ -1905,6 +1905,7 @@ type Mutation {
   DeleteEntityField(ID: Int!): EntityField_!
   DeleteEntityPermission(ID: Int!): EntityPermission_!
   DeleteEntityRelationship(ID: Int!): EntityRelationship_!
+  DeleteFile(ID: Int!): File_!
   DeleteFileCategory(ID: Int!): FileCategory_!
   DeleteList(ID: Int!): List_!
   DeleteListDetail(ID: Int!): ListDetail_!
@@ -2593,8 +2594,8 @@ type QueryPermission_ {
 }
 
 type Query_ {
-  Category: String!
-  CategoryID: Int!
+  Category: String
+  CategoryID: Int
   CreatedAt: Timestamp!
   DataContextItemsArray: [DataContextItem_!]!
   Description: String
@@ -2742,8 +2743,8 @@ type ReportCategory_ {
   Description: String
   ID: Int!
   Name: String!
-  Parent: String!
-  ParentID: Int!
+  Parent: String
+  ParentID: Int
   ReportCategoriesArray: [ReportCategory_!]!
   ReportsArray: [Report_!]!
   UpdatedAt: Timestamp!
@@ -4757,7 +4758,7 @@ input UpdateQueryFieldInput {
 }
 
 input UpdateQueryInput {
-  CategoryID: Int!
+  CategoryID: Int
   Description: String
   Feedback: String
   ID: Int!
@@ -4833,7 +4834,7 @@ input UpdateReportCategoryInput {
   Description: String
   ID: Int!
   Name: String!
-  ParentID: Int!
+  ParentID: Int
 }
 
 input UpdateReportInput {

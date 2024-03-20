@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router'
-import { Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { PathData } from '../../generic/PathData.types';
+import { BaseEvent } from '../../generic/Events.types';
 
 @Component({
   selector: 'app-report-browser',
@@ -64,5 +64,9 @@ export class ReportBrowserComponent extends BaseBrowserComponent{
     if (item) {
       this.router.navigate(['resource', 'report', item.ID])
     }
+  }
+
+  public onEvent(event: BaseEvent): void {
+    super.onEvent(event);    
   }
 }
