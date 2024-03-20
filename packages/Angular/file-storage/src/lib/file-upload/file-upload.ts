@@ -1,4 +1,4 @@
-import { Component, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
@@ -73,6 +73,8 @@ export class FileUploadComponent implements OnInit {
 
   constructor() {}
 
+  @Input() disabled = false;
+  @Output() uploadStarted = new EventEmitter<void>();
   @Output() fileUpload = new EventEmitter<FileUploadEvent>();
 
   ngOnInit(): void {
@@ -112,11 +114,13 @@ export class FileUploadComponent implements OnInit {
       if (parsedResult.success) {
         const { File, UploadUrl } = parsedResult.data.CreateFile;
         try {
+          console.log('type of ', typeof file);
+
           // now upload to the url
           await window.fetch(UploadUrl, {
             method: 'PUT',
             headers: { 'x-ms-blob-type': 'BlockBlob' },
-            body: file as any,
+            body: file.rawFile,
           });
 
           console.log('File uploaded', file);
@@ -133,10 +137,10 @@ export class FileUploadComponent implements OnInit {
         } catch (e) {
           console.error(e);
           // something failed when actually uploading or when updating the API, what do to about pending file?
-          this.fileUpload.emit({ success: false, file })
+          this.fileUpload.emit({ success: false, file });
         }
       } else {
-        console.error('The API had an unexpected result', parsedResult.error);
+        console.error('The API returned an unexpected result', parsedResult.error);
         this.fileUpload.emit({ success: false, file });
       }
     }

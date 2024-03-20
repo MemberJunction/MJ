@@ -94,8 +94,10 @@ export class FileResolver extends FileResolverBase {
       return null;
     }
 
-    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
-    await deleteObject(providerEntity, entityObject.ProviderKey ?? entityObject.ID);
+    if (entityObject.Status === 'Uploaded') { 
+      const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
+      await deleteObject(providerEntity, entityObject.ProviderKey ?? entityObject.ID);
+    }
 
     return super.DeleteFile(ID, { dataSource, userPayload }, pubSub);
   }

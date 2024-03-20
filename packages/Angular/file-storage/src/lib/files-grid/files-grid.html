@@ -8,10 +8,10 @@
         <kendo-grid-column field="Actions">
             <ng-template kendoGridCellTemplate let-dataItem>
                 <kendo-button [disabled]="dataItem.Status!=='Uploaded'" [svgIcon]="kendoSVGIcon('download')" (click)="downloadFile(dataItem)"></kendo-button>
-                <kendo-button [disabled]="dataItem.Status!=='Uploaded'" [svgIcon]="kendoSVGIcon('trash')" (click)="deleteFile(dataItem)"></kendo-button>
+                <kendo-button [disabled]="!canBeDeleted(dataItem)" [svgIcon]="kendoSVGIcon('trash')" (click)="deleteFile(dataItem)"></kendo-button>
             </ng-template>
         </kendo-grid-column> 
     </kendo-grid>
 
-    <mj-files-file-upload (fileUpload)="handleFileUpload($event)"></mj-files-file-upload>
+    <mj-files-file-upload [disabled]="isLoading" (uploadStarted)="isLoading = true" (fileUpload)="handleFileUpload($event)"></mj-files-file-upload>
 </div>

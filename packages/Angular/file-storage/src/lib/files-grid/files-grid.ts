@@ -7,19 +7,41 @@ import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
 import { z } from 'zod';
 import { FileUploadEvent } from '../file-upload/file-upload';
 
-const downloadFromUrl = (url: string, fileName: string) => {
+/**
+ * Downloads a file from the provided URL.
+ *
+ * @param url - The URL of the file to be downloaded.
+ * @param fileName - The name to be given to the downloaded file.
+ * @param contentType - The content type of the file. Defaults to 'application/octet-stream'.
+ * @returns Promise<void> - A promise that resolves when the file download is complete.
+ */
+const downloadFromUrl = async (url: string, fileName: string, contentType?: string | null) => {
+
+  // First, fetch the data and create a blob with the correct content type
+  const response = await fetch(url);
+  if (!response.ok) {
+    return false;
+  }
+  const rawBlob = await response.blob();
+  const blob = new Blob([rawBlob], { type: contentType || 'application/octet-stream' });
+
+  // Then add a temporary link to the document and click it
   const link = document.createElement('a');
-  link.href = url;
-  link.id = url;
-  link.download = fileName;
+  const blobUrl = window.URL.createObjectURL(blob);
+  link.href = blobUrl;
+  link.setAttribute('download', fileName);
   document.body.appendChild(link);
   link.click();
   link.parentNode?.removeChild(link);
+  window.URL.revokeObjectURL(blobUrl);
+
+  return true;
 };
 
 const FileDownloadQuery = gql`
   query FileDownloadUrl($FileID: Int!) {
     File(ID: $FileID) {
+      ContentType
       DownloadUrl
     }
   }
@@ -27,6 +49,7 @@ const FileDownloadQuery = gql`
 
 const FileDownloadQuerySchema = z.object({
   File: z.object({
+    ContentType: z.string().optional(),
     DownloadUrl: z.string(),
   }),
 });
@@ -55,6 +78,7 @@ export class FilesGridComponent implements OnInit {
    * @throws Error - If there is an error during the file download process.
    */
   public downloadFile = async (file: FileEntity) => {
+    this.isLoading = true;
     const result = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, {
       FileID: file.ID,
     });
@@ -62,12 +86,23 @@ export class FilesGridComponent implements OnInit {
 
     if (parsedResult.success) {
       const downloadUrl = parsedResult.data.File.DownloadUrl;
-      downloadFromUrl(downloadUrl, file.Name);
+      const success = downloadFromUrl(downloadUrl, file.Name, file.ContentType);
+      if (!success) {
+        this.sharedService.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');
+      }
     } else {
       console.error(parsedResult.error);
       this.sharedService.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');
     }
+    this.isLoading = false;
   };
+
+  public canBeDeleted(file: FileEntity): boolean {
+    const status = file.Status;
+    const deletable = status === 'Uploaded' || Date.now() - +file.CreatedAt > 10 * 60 * 60;
+    console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt })
+    return deletable;
+  }
 
   /**
    * Deletes a file using the provided FileEntity.
@@ -77,6 +112,7 @@ export class FilesGridComponent implements OnInit {
    * @throws Error - If there is an error during the file deletion process.
    */
   public deleteFile = async (file: FileEntity) => {
+    this.isLoading = true;
     let deleteResult = await file.Delete();
     if (deleteResult) {
       this.sharedService.CreateSimpleNotification(`Successfully deleted file ${file.ID} ${file.Name}`, 'info');
@@ -84,6 +120,7 @@ export class FilesGridComponent implements OnInit {
     } else {
       this.sharedService.CreateSimpleNotification(`Unable to delete file ${file.ID} ${file.Name}`, 'error');
     }
+    this.isLoading = false;
   };
 
   /**
@@ -99,6 +136,7 @@ export class FilesGridComponent implements OnInit {
     }
 
     this.files.push(e.file);
+    this.isLoading = false;
   }
 
   /**
