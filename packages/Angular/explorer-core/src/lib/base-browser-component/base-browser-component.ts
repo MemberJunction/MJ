@@ -13,6 +13,9 @@ export class BaseBrowserComponent {
     public selectedFolderID: number | null = null;
     protected parentFolderID: number | null = null;
 
+    private EntityItemFilter: string | undefined;
+    private CategoryItemFilter: string | undefined;
+
     protected pageName: string = "";
     protected routeName: string = "";
     protected routeNameSingular: string = "";
@@ -36,19 +39,24 @@ export class BaseBrowserComponent {
         }
     }
 
-    protected async LoadData(): Promise<void> {
+    protected async LoadData(entityItemFilter?:string, categoryItemFilter?: string): Promise<void> {
+        
+        //cache these values so that we can reused them 
+        //in the Navigate function
+        this.EntityItemFilter = entityItemFilter;
+        this.CategoryItemFilter = categoryItemFilter;
+
         this.showLoader = true;
-        await this.GetCategories();
-        await this.GetEntityData();
+        await this.GetEntityData(entityItemFilter);
+        await this.GetCategories(categoryItemFilter);
         this.CreateItemsList();
         this.showLoader = false;
     }
 
     protected async GetCategories(extraFilter?: string): Promise<void> {
-        console.log("GetCategories");
         const rv = new RunView();
 
-        let filterString: string = this.selectedFolderID ? `ID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
+        let filterString: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
         filterString += " AND Name != 'Root'";
         const folderResult = await rv.RunView({
             EntityName: this.categoryEntityName,
@@ -64,13 +72,10 @@ export class BaseBrowserComponent {
     }
 
     protected async GetEntityData(extraFilter? :string): Promise<void> {
-        const md = new Metadata()
         const rv = new RunView();
-
-        let folderFilter: string = this.selectedFolderID ? `AND CategoryID = ${this.selectedFolderID}` : "AND CategoryID IS NULL";
         const result = await rv.RunView({
             EntityName: this.itemEntityName,
-            ExtraFilter: extraFilter ||`UserID=${md.CurrentUser.ID}  ${folderFilter}`
+            ExtraFilter: extraFilter
         });
 
         if (result && result.Success){
@@ -79,6 +84,7 @@ export class BaseBrowserComponent {
     }
 
     protected CreateItemsList(): void {
+        this.items = [];
         for(const data of this.entityData){
             let item: Item = new Item(data, ItemType.Entity);
             this.items.push(item);
@@ -120,7 +126,7 @@ export class BaseBrowserComponent {
         //so just reload all of the data
         router.navigate([this.routeName], {queryParams: {folderID: folder.ID}});
         this.selectedFolderID = folder.ID;
-        this.LoadData();
+        this.LoadData(this.EntityItemFilter, this.CategoryItemFilter);
         }
     }
 
