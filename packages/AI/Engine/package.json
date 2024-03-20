@@ -1,32 +1,32 @@
 {
-    "name":  "@memberjunction/aiengine",
-    "version":  "0.9.63",
-    "description":  "MemberJunction: AI Engine Package - handles automatic execution of Entity AI Actions using AI Models",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "files":  [
-                  "/dist"
-              ],
-    "scripts":  {
-                    "start":  "ts-node-dev src/index.ts",
-                    "build":  "tsc",
-                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
-                },
-    "author":  "MemberJunction.com",
-    "license":  "ISC",
-    "dependencies":  {
-                         "@memberjunction/core":  "^0.9.177",
-                         "@memberjunction/global":  "^0.9.158",
-                         "@memberjunction/core-entities":  "^0.9.162",
-                         "@memberjunction/ai":  "^0.9.165",
-                         "dotenv":  "^16.0.3",
-                         "openai":  "^3.2.1",
-                         "rxjs":  "^7.8.1",
-                         "typeorm":  "^0.3.16"
-                     },
-    "devDependencies":  {
-                            "@types/node":  "^20.1.7",
-                            "ts-node-dev":  "^2.0.0",
-                            "typescript":  "^5.3.3"
-                        }
+  "name": "@memberjunction/aiengine",
+  "version": "0.9.58",
+  "description": "MemberJunction: AI Engine Package - handles automatic execution of Entity AI Actions using AI Models",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "^0.9.172",
+    "@memberjunction/global": "^0.9.153",
+    "@memberjunction/core-entities": "^0.9.157",
+    "@memberjunction/ai": "^0.9.160",
+    "dotenv": "^16.0.3",
+    "openai": "^3.2.1",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.16"
+  },
+  "devDependencies": {
+    "@types/node": "^20.1.7",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  }
 }

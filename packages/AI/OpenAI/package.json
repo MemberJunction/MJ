@@ -1,26 +1,26 @@
 {
-    "name":  "@memberjunction/ai-openai",
-    "version":  "0.9.23",
-    "description":  "MemberJunction Wrapper for OpenAI AI Models",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "files":  [
-                  "/dist"
-              ],
-    "scripts":  {
-                    "start":  "ts-node-dev src/index.ts",
-                    "build":  "tsc",
-                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
-                },
-    "author":  "MemberJunction.com",
-    "license":  "ISC",
-    "devDependencies":  {
-                            "ts-node-dev":  "^2.0.0",
-                            "typescript":  "^5.3.3"
-                        },
-    "dependencies":  {
-                         "@memberjunction/ai":  "^0.9.165",
-                         "@memberjunction/global":  "^0.9.158",
-                         "openai":  "^4.28.4"
-                     }
+  "name": "@memberjunction/ai-openai",
+  "version": "0.9.19",
+  "description": "MemberJunction Wrapper for OpenAI AI Models",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "^0.9.160",
+    "@memberjunction/global": "^0.9.153",
+    "openai": "^4.28.4"
+  }
 }

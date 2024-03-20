@@ -1,32 +1,32 @@
 {
-    "name":  "@memberjunction/sqlserver-dataprovider",
-    "version":  "0.9.199",
-    "description":  "MemberJunction: SQL Server Client Data Provider",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "files":  [
-                  "/dist"
-              ],
-    "scripts":  {
-                    "start":  "ts-node-dev src/index.ts",
-                    "build":  "tsc",
-                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
-                },
-    "author":  "MemberJunction.com",
-    "license":  "ISC",
-    "devDependencies":  {
-                            "ts-node-dev":  "^2.0.0",
-                            "typescript":  "^5.3.3"
-                        },
-    "dependencies":  {
-                         "@memberjunction/ai":  "^0.9.165",
-                         "@memberjunction/aiengine":  "^0.9.63",
-                         "@memberjunction/core":  "^0.9.177",
-                         "@memberjunction/core-entities":  "^0.9.162",
-                         "@memberjunction/global":  "^0.9.158",
-                         "@memberjunction/queue":  "^0.9.183",
-                         "@memberjunction/ai-vector-dupe":  "^0.9.14",
-                         "mssql":  "^10.0.2",
-                         "typeorm":  "^0.3.20"
-                     }
+  "name": "@memberjunction/sqlserver-dataprovider",
+  "version": "0.9.195",
+  "description": "MemberJunction: SQL Server Client Data Provider",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@memberjunction/ai": "^0.9.160",
+    "@memberjunction/aiengine": "^0.9.58",
+    "@memberjunction/core": "^0.9.172",
+    "@memberjunction/core-entities": "^0.9.157",
+    "@memberjunction/global": "^0.9.153",
+    "@memberjunction/queue": "^0.9.179",
+    "@memberjunction/ai-vector-dupe": "^0.9.10",
+    "mssql": "^10.0.2",
+    "typeorm": "^0.3.20"
+  }
 }

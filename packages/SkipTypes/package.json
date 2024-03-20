@@ -1,25 +1,25 @@
 {
-    "name":  "@memberjunction/skip-types",
-    "version":  "0.9.74",
-    "description":  "MemberJunction: Skip AI Assistant - Types that are used between the MJAPI and the Skip API as well as the UI within MemberJunction Explorer",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "files":  [
-                  "/dist"
-              ],
-    "scripts":  {
-                    "start":  "ts-node-dev src/index.ts",
-                    "build":  "tsc",
-                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
-                },
-    "author":  "MemberJunction.com",
-    "license":  "ISC",
-    "devDependencies":  {
-                            "ts-node-dev":  "^2.0.0",
-                            "typescript":  "^5.3.3"
-                        },
-    "dependencies":  {
-                         "@memberjunction/core-entities":  "^0.9.162",
-                         "@memberjunction/data-context":  "^0.9.49"
-                     }
+  "name": "@memberjunction/skip-types",
+  "version": "0.9.70",
+  "description": "MemberJunction: Skip AI Assistant - Types that are used between the MJAPI and the Skip API as well as the UI within MemberJunction Explorer",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@memberjunction/core-entities": "^0.9.157",
+    "@memberjunction/data-context": "^0.9.45"
+  }
 }
