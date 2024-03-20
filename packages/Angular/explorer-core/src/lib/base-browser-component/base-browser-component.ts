@@ -2,6 +2,7 @@ import { Metadata, RunView } from "@memberjunction/core";
 import { Folder, Item, ItemType } from "../../generic/Item.types";
 import { PathData } from "../../generic/PathData.types";
 import { Router, Params } from '@angular/router';
+import { BaseEvent, EventTypes, AfterAddFolderEvent, AfterDeleteItemEvent } from "../../generic/Events.types";
 
 export class BaseBrowserComponent {
     public showLoader: boolean = false;
@@ -120,6 +121,17 @@ export class BaseBrowserComponent {
         router.navigate([this.routeName], {queryParams: {folderID: folder.ID}});
         this.selectedFolderID = folder.ID;
         this.LoadData();
+        }
+    }
+
+    protected onEvent(event: BaseEvent): void {
+        if(event.EventType === EventTypes.AfterAddFolder || event.EventType === EventTypes.AfterAddItem){
+          let addEvent: AfterAddFolderEvent = event as AfterAddFolderEvent;
+          this.items.push(addEvent.Item);
+        }
+        else if(event.EventType === EventTypes.AfterDeleteItem || event.EventType === EventTypes.AfterDeleteFolder){
+          let deleteEvent: AfterDeleteItemEvent = event as AfterDeleteItemEvent;
+          this.items = this.items.filter((item: Item) => item !== deleteEvent.Item);
         }
     }
 }

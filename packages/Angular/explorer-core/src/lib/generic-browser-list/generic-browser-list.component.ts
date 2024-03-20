@@ -16,13 +16,14 @@ export class GenericBrowserListComponent {
   @Input() public title: string = '';
   @Input() public items: any[] = [];
   @Input() public iconName: string = 'view';
-  @Input() public showAddButton: boolean = false;
+  @Input() public disableAddButton: boolean = false;
   @Input() public addText: string = 'Create New';
   @Input() public backText: string = 'Go Back';
   @Input() public ItemEntityName: string = '';
   @Input() public CategoryEntityName: string = '';
   @Input() public selectedFolderID: number | null = null;
   @Input() public showNotifications: boolean = true;
+
 
   //Before Evewnts
   @Output() public BeforeAddFolderEvent: EventEmitter<BeforeAddFolderEvent> = new EventEmitter<BeforeAddFolderEvent>();
