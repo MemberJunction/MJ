@@ -1,7 +1,7 @@
 
 
 // Google Gemini Import
-import { GoogleGenerativeAI, InputContent, Part } from "@google/generative-ai";
+import { Content, GoogleGenerativeAI, Part, TextPart } from "@google/generative-ai";
 
 // MJ stuff
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, EmbedParams, EmbedResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
@@ -18,17 +18,17 @@ export class GeminiLLM extends BaseLLM {
         }
     }
 
-    protected geminiMessageSpacing(messages: ChatMessage[]): ChatMessage[] {
+    protected geminiMessageSpacing(messages: Content[]): Content[] {
         // this method is simple, it makes sure that we alternate messages between user and assistant, otherwise Anthropic will
         // have a problem. If we find two user messages in a row, we insert an assistant message between them with just "OK"
-        const result: ChatMessage[] = [];
-        let lastRole = "assistant";
+        const result: any[] = [];
+        let lastRole = "model";
         for (let i = 0; i < messages.length; i++) {
             if (messages[i].role === lastRole) {
                 result.push({
-                    role: "assistant", // we are using the ChatMessage type from the MJ package, so we need to use the role "assistant" instead of "model"
+                    role: "model", // we are using the ChatMessage type from the MJ package, so we need to use the role "assistant" instead of "model"
                                        // later on the role will be converted to "model" in the MapMJMessageToGeminiHistoryEntry method
-                    content: "OK"
+                    parts: [{text: "OK"}]
                 });
             }
             result.push(messages[i]);
@@ -43,11 +43,12 @@ export class GeminiLLM extends BaseLLM {
             const config = {
                 temperature: params.temperature || 0.5,
             };
-            const model = GeminiLLM._gemini.getGenerativeModel({ model: params.model || "gemini-pro", generationConfig: config});
-            const allMessagesButLast = params.messages.slice(0, -1);
-            const tempMessages = this.geminiMessageSpacing(allMessagesButLast);
+            const model = GeminiLLM._gemini.getGenerativeModel({ model: params.model || "gemini-pro", generationConfig: config}, {apiVersion: "v1beta"});
+            const allMessagesButLast = params.messages.slice(0, params.messages.length - 1);
+            const convertedMessages = allMessagesButLast.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m))
+            const tempMessages = this.geminiMessageSpacing(convertedMessages);
             const chat = model.startChat({
-                history: tempMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m))
+                history: tempMessages
             });
             const latestMessage = params.messages[params.messages.length - 1].content;
             const result = await chat.sendMessage(latestMessage);
@@ -102,10 +103,13 @@ export class GeminiLLM extends BaseLLM {
         throw new Error("Method not implemented.");   
     }
 
-    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): InputContent {
+    public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
+        const textPart: TextPart = {
+            text: message.content
+        }
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
-            parts: message.content
+            parts: [textPart]
         }
     }
 }
