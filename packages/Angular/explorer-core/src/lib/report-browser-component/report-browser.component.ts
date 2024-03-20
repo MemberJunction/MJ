@@ -1,28 +1,21 @@
 import { Component } from '@angular/core';
 import { Router, Params  } from '@angular/router';
-import { Metadata, RunView } from '@memberjunction/core';
-import { ReportCategoryEntity, ReportEntity } from '@memberjunction/core-entities';
-import { Folder, Item, ItemType } from '../../generic/Item.types';
+import { ReportEntity } from '@memberjunction/core-entities';
 import { PathData } from '../../generic/PathData.types';
 import { SharedService } from '@memberjunction/ng-shared';
+import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 
 @Component({
   selector: 'app-report-browser',
   templateUrl: './report-browser.component.html',
   styleUrls: ['./report-browser.component.css', '../../shared/first-tab-styles.css']
 })
-export class ReportBrowserComponent {
-  public reports: ReportEntity[] = [];
-  public showLoader: boolean = false;
+export class ReportBrowserComponent extends BaseBrowserComponent {
 
-  public folders: ReportCategoryEntity[] = [];
-  public items: Item[];
-  public PathData: PathData;
-  public selectedFolderID: number | null = null;
-  private parentFolderID: number | null = null;
 
   constructor(private router: Router, private sharedService: SharedService) {
-    this.items = [];
+    super();
+
     this.PathData = new PathData(0, "Reports", "/reports");
     let queryParams: Params | undefined = this.router.getCurrentNavigation()?.extractedUrl.queryParams;
     if(queryParams && queryParams.folderID){
@@ -35,10 +28,17 @@ export class ReportBrowserComponent {
     }
   }
 
-  ngOnInit(): void {
-    this.LoadData();
+  async ngOnInit(): Promise<void> {
+    await this.GetData();
+  }
+
+  async GetData(): Promise<void> {
+    this.showLoader = true;
+    super.LoadData("Reports", "Report Categories");
+    this.showLoader = false;
   }
   
+  /*
   async LoadData() {
     this.showLoader = true;
 
@@ -77,29 +77,7 @@ export class ReportBrowserComponent {
 
     this.showLoader = false;
   }
-
-  private createItems(): void {
-    for(const dashboard of this.reports){
-      let item: Item = new Item(dashboard, ItemType.Entity);
-      this.items.push(item);
-    }
-
-    for(const folder of this.folders){
-      const dashboardFolder: Folder = new Folder(folder.ID, folder.Name);
-      dashboardFolder.ParentFolderID = folder.ParentID;
-      dashboardFolder.Description = folder.Description;
-      let item: Item = new Item(dashboardFolder, ItemType.Folder);
-      this.items.push(item);
-    }
-
-    this.items.sort(function(a, b){
-      if(a.Name < b.Name) { return -1; }
-      if(a.Name > b.Name) { return 1; }
-      return 0;
-    });
-
-  }
-
+  */
 
   public itemClick(item: ReportEntity) {
     if (item) {
@@ -115,14 +93,14 @@ export class ReportBrowserComponent {
       //so just reload all of the data
       this.router.navigate(['reports'], {queryParams: {folderID: pathData.ID}});
       this.selectedFolderID = pathData.ID;
-      this.LoadData();
+      this.GetData();
       
     }
     else if(this.parentFolderID || !this.parentFolderID && this.selectedFolderID){
       this.router.navigate(['reports'], {queryParams: {folderID: this.parentFolderID}});
       this.selectedFolderID = this.parentFolderID;
       this.parentFolderID = null;
-      this.LoadData();
+      this.GetData();
     }
     else{
       //no parent path, so just go home
