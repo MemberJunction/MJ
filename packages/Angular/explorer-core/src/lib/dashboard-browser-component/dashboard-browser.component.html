@@ -1,3 +1,17 @@
-<app-generic-browse-list title="Dashboards" itemType="dashboard" iconName="aggregateFields" [items]="dashboards" (itemClickEvent)="itemClick($event)" (addButtonClickEvent)="addNew()" (deleteButtonClickEvent)="deleteItem($event)" [showLoader]="showLoader">
-
-</app-generic-browse-list>
+<app-generic-browser-list 
+title="Dashboards" 
+itemType="dashboard" 
+iconName="aggregateFields" 
+[items]="items" 
+addText="Create Dashboard"
+ItemEntityName="Dashboards"
+CategoryEntityName="Dashboard Categories"
+(itemClickEvent)="itemClick($event)" 
+(backButtonClickEvent)="onBackButtonClick()"
+(AfterAddFolderEvent)="onEvent($event)"
+(AfterAddItemEvent)="onEvent($event)"
+(AfterDeleteItemEvent)="onEvent($event)"
+(AfterDeleteFolderEvent)="onEvent($event)"
+[selectedFolderID]="selectedFolderID"
+[showLoader]="showLoader"
+/>
