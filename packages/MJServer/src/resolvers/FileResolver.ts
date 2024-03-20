@@ -1,5 +1,5 @@
 import { Metadata } from '@memberjunction/core';
-import { FileStorageProviderEntity } from '@memberjunction/core-entities';
+import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
   Arg,
@@ -47,15 +47,25 @@ export class FileResolver extends FileResolverBase {
     @PubSub() pubSub: PubSubEngine
   ) {
     const md = new Metadata();
-    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>(
-      'File Storage Providers',
-      this.GetUserFromPayload(userPayload)
-    );
+    const userInfo = this.GetUserFromPayload(userPayload);
+    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
 
-    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, input);
+    const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, { dataSource, userPayload }, pubSub)) as File_;
 
-    const resolver = new FileResolverBase();
-    const File = await resolver.CreateFile(updatedInput, { dataSource, userPayload }, pubSub);
+    // If there's a problem creating the file record, the base resolver will return null
+    if (!fileRecord) {
+      return null;
+    }
+
+    // Create the upload URL and get the record updates (provider key, content type, etc)
+    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileRecord);
+    
+    // Save the file record with the updated input
+    const fileEntity = <FileEntity>await new Metadata().GetEntityObject('Files', userInfo);
+    fileEntity.LoadFromData(input);
+    fileEntity.SetMany(updatedInput);
+    await fileEntity.Save();
+    const File = fileEntity.GetAll();
 
     return { File, UploadUrl };
   }
@@ -68,7 +78,7 @@ export class FileResolver extends FileResolverBase {
       this.GetUserFromPayload(userPayload)
     );
 
-    const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.Name);
+    const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.ID);
 
     return url;
   }
