@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/18/2024, 2:22:24 PM
+* GENERATED: 3/20/2024, 2:43:34 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -14619,8 +14619,8 @@ export class Query_ {
     @Field({nullable: true}) 
     Description?: string;
       
-    @Field(() => Int) 
-    CategoryID: number;
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
       
     @Field({nullable: true}) 
     SQL?: string;
@@ -14646,9 +14646,9 @@ export class Query_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    Category: string;
+    Category?: string;
     
     @Field(() => [mj_core_schema_server_object_types.QueryField_])
     QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
@@ -14672,7 +14672,7 @@ export class CreateQueryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     CategoryID: number;
 
     @Field({ nullable: true })
@@ -14706,7 +14706,7 @@ export class UpdateQueryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     CategoryID: number;
 
     @Field({ nullable: true })
@@ -17161,8 +17161,8 @@ export class ReportCategory_ {
     @Field({nullable: true}) 
     Description?: string;
       
-    @Field(() => Int) 
-    ParentID: number;
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
       
     @Field() 
     @MaxLength(8)
@@ -17172,9 +17172,9 @@ export class ReportCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(200)
-    Parent: string;
+    Parent?: string;
     
     @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
     ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
@@ -17195,7 +17195,7 @@ export class CreateReportCategoryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     ParentID: number;
 }
 
@@ -17214,7 +17214,7 @@ export class UpdateReportCategoryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     ParentID: number;
 }
 
@@ -17823,6 +17823,32 @@ export class FileResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileInput) {
         const i = input, d = dataSource; // prevent error
+    }
+
+    @Mutation(() => File_)
+    async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
 
 }
