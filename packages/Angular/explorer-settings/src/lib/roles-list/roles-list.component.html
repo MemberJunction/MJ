@@ -1,0 +1,18 @@
+<div mjFillContainer>
+    <div *ngIf="isLoading">Loading...</div>
+    <table *ngIf="!isLoading" class="grid">
+        <thead>
+            <tr>
+            <th>Role</th>
+            <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let r of roles" (click)="selectRole(r)">
+                <td>{{ r.Name }}</td>
+                <td>{{ r.Description }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+ 
