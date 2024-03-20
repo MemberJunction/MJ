@@ -31,17 +31,20 @@ export class Item {
     }
 }
 
+/**
+ * A folder is a wrapper class for the various Category
+ * entities that we have, e.g. Dashboard Categories, 
+ * Report Categories, Query Categories, etc.
+ */
 export class Folder {
     public ID: number;
     public ParentFolderID?: number | null;
     public Name: string;
     public Description: string | null;
-    public Type: ItemType;
 
     constructor(id: number, folderName: string){
         this.ID = id;
         this.Name = folderName;
         this.Description = "";
-        this.Type = ItemType.Folder;
     }
 }

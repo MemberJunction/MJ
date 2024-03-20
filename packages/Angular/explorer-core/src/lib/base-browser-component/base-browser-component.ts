@@ -1,41 +1,57 @@
-import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
+import { Metadata, RunView } from "@memberjunction/core";
 import { Folder, Item, ItemType } from "../../generic/Item.types";
 import { PathData } from "../../generic/PathData.types";
+import { Router, Params } from '@angular/router';
 
 export class BaseBrowserComponent {
     public showLoader: boolean = false;
     public items: Item[];
-    public folders: BaseEntity[];
-    public entityData: BaseEntity[];
+    public folders: Folder[];
+    public entityData: any[];
     public PathData: PathData;
     public selectedFolderID: number | null = null;
     protected parentFolderID: number | null = null;
+
+    protected pageName: string = "";
+    protected routeName: string = "";
+    protected routeNameSingular: string = "";
+    protected itemEntityName: string = "";
+    protected categoryEntityName: string = "";
     
     constructor() {
         this.items = [];
         this.folders = [];
         this.entityData = [];
-
-        //child component must override this
         this.PathData = new PathData(0, "", "");
     }
 
-    protected async LoadData(itemEntityName: string, categoryEntityName: string): Promise<void> {
+    protected InitPathData(queryParams: Params | undefined): void {
+        this.PathData = new PathData(-1, this.pageName, this.routeName);
+
+        if(queryParams && queryParams.folderID){
+            let folderID: number = Number(queryParams.folderID);
+            this.PathData = new PathData(folderID, this.pageName, `/${this.routeName}?folderID=${folderID}`);
+            this.selectedFolderID = folderID;
+        }
+    }
+
+    protected async LoadData(): Promise<void> {
         this.showLoader = true;
-        await this.GetCategories(categoryEntityName);
-        await this.GetEntityData(itemEntityName);
-        this.createItemsList();
+        await this.GetCategories();
+        await this.GetEntityData();
+        this.CreateItemsList();
         this.showLoader = false;
     }
 
-    protected async GetCategories(entityName: string, extraFilter?: string): Promise<void> {
+    protected async GetCategories(extraFilter?: string): Promise<void> {
+        console.log("GetCategories");
         const rv = new RunView();
 
         let filterString: string = this.selectedFolderID ? `ID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
         filterString += " AND Name != 'Root'";
         const folderResult = await rv.RunView({
-            EntityName: entityName,
-            ExtraFilter: filterString
+            EntityName: this.categoryEntityName,
+            ExtraFilter: extraFilter || filterString
         });
 
         if(folderResult && folderResult.Success){
@@ -46,39 +62,64 @@ export class BaseBrowserComponent {
         }
     }
 
-    protected async GetEntityData(entityName: string, extraFilter? :string): Promise<void> {
+    protected async GetEntityData(extraFilter? :string): Promise<void> {
         const md = new Metadata()
         const rv = new RunView();
 
         let folderFilter: string = this.selectedFolderID ? `AND CategoryID = ${this.selectedFolderID}` : "AND CategoryID IS NULL";
         const result = await rv.RunView({
-            EntityName: entityName,
+            EntityName: this.itemEntityName,
             ExtraFilter: extraFilter ||`UserID=${md.CurrentUser.ID}  ${folderFilter}`
-        })
+        });
 
         if (result && result.Success){
             this.entityData = result.Results;
         }
     }
 
-    protected createItemsList(): void {
-        for(const dashboard of this.entityData){
-            let item: Item = new Item(dashboard, ItemType.Entity);
+    protected CreateItemsList(): void {
+        for(const data of this.entityData){
+            let item: Item = new Item(data, ItemType.Entity);
             this.items.push(item);
-          }
+        }
       
-          for(const folder of this.folders){
-            const dashboardFolder: Folder = new Folder(folder.Get("ID"), folder.Get("Name"));
-            dashboardFolder.ParentFolderID = folder.Get("ParentID");
-            dashboardFolder.Description = folder.Get("Description");
+        for(const folder of this.folders){
+            const dashboardFolder: Folder = new Folder(folder.ID, folder.Name);
+            dashboardFolder.ParentFolderID = folder.ParentFolderID;
+            dashboardFolder.Description = folder.Description;
             let item: Item = new Item(dashboardFolder, ItemType.Folder);
             this.items.push(item);
-          }
+        }
       
-          this.items.sort(function(a, b){
-            if(a.Name < b.Name) { return -1; }
-            if(a.Name > b.Name) { return 1; }
-            return 0;
-          });
+        this.items.sort(function(a, b){
+        if(a.Name < b.Name) { return -1; }
+        if(a.Name > b.Name) { return 1; }
+        return 0;
+        });
+    }
+
+    protected Navigate(item: Item, router: Router, dataID: string): void {
+        if(!item){
+            return
+        }
+      
+        if (item.Type === ItemType.Entity) {
+            router.navigate(['resource', this.routeNameSingular, dataID]);
+        }
+        else if(item.Type === ItemType.Folder){
+        const folder: Folder = <Folder>item.Data;
+        const oldPathData: PathData = this.PathData;
+        const newPathData: PathData = new PathData(folder.ID, folder.Name, `/${this.routeName}?folderID=${folder.ID}`);
+        
+        oldPathData.ChildPathData = newPathData;
+        newPathData.ParentPathData = oldPathData;
+        this.PathData = newPathData;
+        
+        //navigation seems like it does nothing but update the URL
+        //so just reload all of the data
+        router.navigate([this.routeName], {queryParams: {folderID: folder.ID}});
+        this.selectedFolderID = folder.ID;
+        this.LoadData();
+        }
     }
 }
