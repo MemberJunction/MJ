@@ -33,7 +33,7 @@ export class GenericBrowserListComponent {
   @Output() public BeforeUpdateItemEvent: EventEmitter<BeforeUpdateItemEvent> = new EventEmitter<BeforeUpdateItemEvent>();
 
   //After Events
-  @Output() public AfterAddFoldervEent: EventEmitter<AfterAddFolderEvent> = new EventEmitter<AfterAddFolderEvent>();
+  @Output() public AfterAddFolderEvent: EventEmitter<AfterAddFolderEvent> = new EventEmitter<AfterAddFolderEvent>();
   @Output() public AfterAddItemEvent: EventEmitter<AfterAddItemEvent> = new EventEmitter<AfterAddItemEvent>();
   @Output() public AfterDeleteFolderEvent: EventEmitter<AfterDeleteFolderEvent> = new EventEmitter<AfterDeleteFolderEvent>();
   @Output() public AfterDeleteItemEvent: EventEmitter<AfterDeleteItemEvent> = new EventEmitter<AfterDeleteItemEvent>();  
@@ -108,7 +108,7 @@ export class GenericBrowserListComponent {
 
       let folder: Folder = new Folder(folderEntity.Get("ID"), folderEntity.Get("Name"));
       let item: Item = new Item(folder, ItemType.Folder);
-      this.AfterAddFoldervEent.emit(new AfterAddFolderEvent(item));
+      this.AfterAddFolderEvent.emit(new AfterAddFolderEvent(item));
     }
     else{
       this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
@@ -128,9 +128,11 @@ export class GenericBrowserListComponent {
         return;
       }
 
-      await this.deleteFolder(item);
-      let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
-      this.AfterDeleteFolderEvent.emit(deleteFolderEvent);
+      let deleteResult = await this.deleteFolder(item);
+      if(deleteResult){
+        let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
+        this.AfterDeleteFolderEvent.emit(deleteFolderEvent);
+      }
 
     }
     else if(item.Type === ItemType.Entity){
@@ -147,7 +149,7 @@ export class GenericBrowserListComponent {
     }
   }
 
-  private async deleteFolder(item: Item){
+  private async deleteFolder(item: Item): Promise<boolean>{
 
     const folder: Folder = <Folder>item.Data;
 
@@ -158,7 +160,7 @@ export class GenericBrowserListComponent {
     const folderHasChildren: boolean = await this.doesFolderHaveChildren(folder.ID);
     if(folderHasChildren){
       this.showNotification(`unable to delete folder ${folder.Name} because it has children`, "error");
-      return;
+      return false;
     }
 
     this.showLoader = true;
@@ -173,31 +175,32 @@ export class GenericBrowserListComponent {
     if(!loadResult){
       this.sharedService.CreateSimpleNotification(`unable to fetch folder ${folder.Name}`, "error");
       this.showLoader = false;
-      return;
+      return false;
     }
 
     let deleteResult = await folderEntity.Delete();
     if(!deleteResult){
       this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name}`, "error");
       this.showLoader = false;
-      return;
+      return false;
     }
     else{
       this.sharedService.CreateSimpleNotification(`successfully deleted folder ${folder.Name}`, "info");
       this.showLoader = false;
     }
+    return true;
   }
 
-  private async deleteResource(item: Item){
-    let dashboardEntity: BaseEntity = <BaseEntity>item.Data;
+  private async deleteResource(item: Item): Promise<boolean> {
+    let genericEntity: BaseEntity = <BaseEntity>item.Data;
 
-    if(!dashboardEntity){
-      return;
+    if(!genericEntity){
+      return false;
     }
 
     //the only assumption we are making here is that the entityID
     //is a number
-    const entityID: number = dashboardEntity.Get("ID");
+    const entityID: number = this.TryGetID(genericEntity);
     if (entityID && entityID > 0) {
       
       const md = new Metadata();
@@ -212,6 +215,7 @@ export class GenericBrowserListComponent {
         let deleteResult = await entityObject.Delete();
         if(deleteResult){
           this.showNotification(`successfully deleted dashboard`, "info");
+          return true;
         }
         else{
           this.showNotification(`Unable to delete dashboard`, "error");
@@ -221,6 +225,8 @@ export class GenericBrowserListComponent {
         this.showNotification(`unable to fetch dashboard`, "error");
       }
     }
+
+    return false;
   }
 
   private async doesFolderHaveChildren(folderID: number): Promise<boolean>{
@@ -239,4 +245,13 @@ export class GenericBrowserListComponent {
       this.sharedService.CreateSimpleNotification(message, type);
     }
   }
+
+  private TryGetID(data: any): any{
+    if(data && data.ID){
+        return data.ID;
+    }
+    else if(typeof data.Get === "function"){
+        return data.Get("ID");
+    }
+}
 }
