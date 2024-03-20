@@ -3,9 +3,9 @@ import { Component, OnInit } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { FileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
-import { SharedService } from '@memberjunction/ng-shared';
-import { SVGIcon, downloadIcon, trashIcon } from '@progress/kendo-svg-icons';
+import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
 import { z } from 'zod';
+import { FileUploadEvent } from '../file-upload/file-upload';
 
 const downloadFromUrl = (url: string, fileName: string) => {
   const link = document.createElement('a');
@@ -39,8 +39,7 @@ const FileDownloadQuerySchema = z.object({
 export class FilesGridComponent implements OnInit {
   public files: FileEntity[] = [];
   public isLoading: boolean = false;
-  public downloadIcon: SVGIcon = downloadIcon;
-  public deleteIcon: SVGIcon = trashIcon;
+  public kendoSVGIcon = kendoSVGIcon;
 
   constructor(private sharedService: SharedService) {}
 
@@ -59,7 +58,6 @@ export class FilesGridComponent implements OnInit {
     const result = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, {
       FileID: file.ID,
     });
-    console.log({ result });
     const parsedResult = FileDownloadQuerySchema.safeParse(result);
 
     if (parsedResult.success) {
@@ -88,12 +86,32 @@ export class FilesGridComponent implements OnInit {
     }
   };
 
+  /**
+   * Handles the file upload event, sending a notification in case of failure and otherwise adding
+   * the newly uploaded files to the files currently displayed.
+   *
+   * @param e - The file upload event.
+   */
+  public handleFileUpload(e: FileUploadEvent) {
+    if (!e.success) {
+      this.sharedService.CreateSimpleNotification(`Unable to upload file '${e.file.name}'`, 'error');
+      return;
+    }
+
+    this.files.push(e.file);
+  }
+
+  /**
+   * Refreshes the data by running a view and loading the files.
+   * @returns {Promise<void>} - A promise that resolves when the data is refreshed.
+   */
   async Refresh() {
     this.isLoading = true;
 
     const rv = new RunView();
     const result = await rv.RunView({
       EntityName: 'Files',
+      // TODO: Apply the category filter here
       // ExtraFilter: `LEFT(Status, 1)<>'D'`, //'CategoryID=' + e.ID,
       ResultType: 'entity_object',
     });

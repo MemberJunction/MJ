@@ -17,14 +17,13 @@ import { FormsModule } from '@angular/forms';
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
+import { UploadsModule } from '@progress/kendo-angular-upload';
 import { CategoryTreeComponent } from './category-tree/category-tree';
+import { FileUploadComponent } from './file-upload/file-upload';
 import { FilesGridComponent } from './files-grid/files-grid';
 
 @NgModule({
-  declarations: [
-    CategoryTreeComponent,
-    FilesGridComponent,
-  ],
+  declarations: [CategoryTreeComponent, FilesGridComponent, FileUploadComponent],
   imports: [
     CommonModule,
     TreeViewModule,
@@ -39,11 +38,9 @@ import { FilesGridComponent } from './files-grid/files-grid';
     DropDownsModule,
     BrowserModule,
     BrowserAnimationsModule,
-    InputsModule
+    InputsModule,
+    UploadsModule,
   ],
-  exports: [
-    CategoryTreeComponent,
-    FilesGridComponent,
-  ]
+  exports: [CategoryTreeComponent, FilesGridComponent],
 })
-export class FileStorageModule { }
+export class FileStorageModule {}

@@ -35,6 +35,7 @@
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-treeview": "~15.1.0",
+    "@progress/kendo-angular-upload": "~15.1.0",
     "tslib": "^2.3.0",
     "zod": "^3.22.4"
   },

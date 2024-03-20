@@ -861,7 +861,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     await this.loadResourceType('Queries','Queries','/queries', md.CurrentUser.ID);
 
     // Files
-    await this.loadFiles(md);
+    await this.loadFiles();
 
     // Settings
     await this.loadSettings(md);
@@ -905,7 +905,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
 
-  protected async loadFiles(md: Metadata) {
+  protected async loadFiles() {
     const rv = new RunView();
     const viewResults = await rv.RunView({ EntityName: 'File Storage Providers' });
     const filesEnabled = viewResults.RowCount > 0;
