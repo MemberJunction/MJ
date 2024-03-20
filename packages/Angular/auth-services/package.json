@@ -1,34 +1,36 @@
 {
-  "name": "@memberjunction/ng-auth-services",
-  "version": "0.9.95",
-  "description": "MemberJunction Explorer: Authentication Services",
-  "main": "./dist/public-api.js",
-  "typings": "./dist/public-api.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "@angular/compiler": "~17.2.2",
-    "@angular/compiler-cli": "~17.2.2"
-  },
-  "peerDependencies": {
-    "@angular/common": "~17.2.2",
-    "@angular/core": "~17.2.2",
-    "@angular/forms": "~17.2.2",
-    "@angular/router": "~17.2.2",
-    "@auth0/auth0-angular": "^2.2.1",
-    "@azure/msal-angular": "^3.0.11"
-  },
-  "dependencies": {
-    "@memberjunction/core": "^0.9.172",
-    "tslib": "^2.3.0"
-  },
-  "sideEffects": false
+    "name":  "@memberjunction/ng-auth-services",
+    "version":  "0.9.99",
+    "description":  "MemberJunction Explorer: Authentication Services",
+    "main":  "./dist/public-api.js",
+    "typings":  "./dist/public-api.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
+                    "build":  "ngc"
+                },
+    "keywords":  [
+
+                 ],
+    "author":  "",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "@angular/compiler":  "~17.2.2",
+                            "@angular/compiler-cli":  "~17.2.2"
+                        },
+    "peerDependencies":  {
+                             "@angular/common":  "~17.2.2",
+                             "@angular/core":  "~17.2.2",
+                             "@angular/forms":  "~17.2.2",
+                             "@angular/router":  "~17.2.2",
+                             "@auth0/auth0-angular":  "^2.2.1",
+                             "@azure/msal-angular":  "^3.0.11"
+                         },
+    "dependencies":  {
+                         "@memberjunction/core":  "^0.9.177",
+                         "tslib":  "^2.3.0"
+                     },
+    "sideEffects":  false
 }

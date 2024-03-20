@@ -1,25 +1,25 @@
 {
-  "name": "@memberjunction/data-context",
-  "version": "0.9.45",
-  "description": "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "MemberJunction.com",
-  "license": "ISC",
-  "devDependencies": {
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "@memberjunction/global": "^0.9.153",
-    "@memberjunction/core-entities": "^0.9.157"
-  }
+    "name":  "@memberjunction/data-context",
+    "version":  "0.9.49",
+    "description":  "This library provides a set of objects that handle run-time loading of data contexts as well as types to be able to use across application tiers for interacting with data contexts.",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "start":  "ts-node-dev src/index.ts",
+                    "build":  "tsc",
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
+                },
+    "author":  "MemberJunction.com",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "ts-node-dev":  "^2.0.0",
+                            "typescript":  "^5.3.3"
+                        },
+    "dependencies":  {
+                         "@memberjunction/global":  "^0.9.158",
+                         "@memberjunction/core-entities":  "^0.9.162"
+                     }
 }

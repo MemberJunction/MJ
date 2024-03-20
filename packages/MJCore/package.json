@@ -1,24 +1,24 @@
 {
-  "name": "@memberjunction/core",
-  "version": "0.9.172",
-  "description": "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "/dist"
-  ],
-  "scripts": {
-    "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "MemberJunction.com",
-  "license": "ISC",
-  "devDependencies": {
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "@memberjunction/global": "^0.9.153"
-  }
+    "name":  "@memberjunction/core",
+    "version":  "0.9.177",
+    "description":  "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "files":  [
+                  "/dist"
+              ],
+    "scripts":  {
+                    "start":  "ts-node-dev src/index.ts",
+                    "build":  "tsc",
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
+                },
+    "author":  "MemberJunction.com",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "ts-node-dev":  "^2.0.0",
+                            "typescript":  "^5.3.3"
+                        },
+    "dependencies":  {
+                         "@memberjunction/global":  "^0.9.158"
+                     }
 }

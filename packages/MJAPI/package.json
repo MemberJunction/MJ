@@ -1,37 +1,39 @@
 {
-  "name": "@memberjunction/api",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "private": true,
-  "scripts": {
-    "clean": "rimraf dist",
-    "build": "rimraf dist && tsc",
-    "start": "ts-node-dev -r dotenv/config src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "codegen": "cpy --flat ../codegen/output/entities/*.ts src/generated",
-    "check-types": "tsc -noEmit",
-    "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "cpy-cli": "^5.0.0",
-    "rimraf": "^4.4.0",
-    "ts-node": "^10.9.1",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "@memberjunction/ai": "^0.9.160",
-    "@memberjunction/core": "^0.9.172",
-    "@memberjunction/global": "^0.9.153",
-    "@memberjunction/server": "^0.9.238",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.195",
-    "axios": "^1.5.1",
-    "class-validator": "^0.14.0",
-    "mj_generatedentities": "file:../GeneratedEntities",
-    "typeorm": "^0.3.17"
-  }
+    "name":  "@memberjunction/api",
+    "version":  "1.0.0",
+    "description":  "",
+    "main":  "index.js",
+    "private":  true,
+    "scripts":  {
+                    "clean":  "rimraf dist",
+                    "build":  "rimraf dist \u0026\u0026 tsc",
+                    "start":  "ts-node-dev -r dotenv/config src/index.ts",
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
+                    "codegen":  "cpy --flat ../codegen/output/entities/*.ts src/generated",
+                    "check-types":  "tsc -noEmit",
+                    "zip":  "zip -qr deploy.zip ./node_modules ./dist ./package.json ./config.json"
+                },
+    "keywords":  [
+
+                 ],
+    "author":  "",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "cpy-cli":  "^5.0.0",
+                            "rimraf":  "^4.4.0",
+                            "ts-node":  "^10.9.1",
+                            "ts-node-dev":  "^2.0.0",
+                            "typescript":  "^5.3.3"
+                        },
+    "dependencies":  {
+                         "@memberjunction/ai":  "^0.9.165",
+                         "@memberjunction/core":  "^0.9.177",
+                         "@memberjunction/global":  "^0.9.158",
+                         "@memberjunction/server":  "^0.9.242",
+                         "@memberjunction/sqlserver-dataprovider":  "^0.9.199",
+                         "axios":  "^1.5.1",
+                         "class-validator":  "^0.14.0",
+                         "mj_generatedentities":  "file:../GeneratedEntities",
+                         "typeorm":  "^0.3.17"
+                     }
 }
