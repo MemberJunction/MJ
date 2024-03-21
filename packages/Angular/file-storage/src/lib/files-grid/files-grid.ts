@@ -71,11 +71,26 @@ export class FilesGridComponent implements OnInit {
     this.Refresh();
   }
 
+  /**
+   * Resets the edited file.
+   *
+   * This method reverts any changes made to the edited file by calling the Revert method of the FileEntity class. It then sets the editFile property to undefined, indicating that there is no longer an edited file.
+   *
+   * @returns void
+   */
   public resetEditFile() {
     this.editFile?.Revert();
     this.editFile = undefined;
   }
 
+  /**
+   * Saves the edited file.
+   *
+   * This method saves the changes made to the edited file. It first checks if there is an edited file available. If so, it sets the isLoading property to true to indicate that the save operation is in progress. Then, it calls the Save method of the edited file to save the changes. If the save operation is successful, it creates a success notification using the sharedService.CreateSimpleNotification method. The notification message includes the ID and name of the saved file. Finally, it sets the edited file to undefined and sets the isLoading property to false to indicate that the save operation is complete.
+   *
+   * @returns Promise<void> - A promise that resolves when the save operation is complete.
+   * @throws Error - If there is an error during the save operation.
+   */
   public async saveEditFile() {
     if (this.editFile) {
       this.isLoading = true;
@@ -118,6 +133,12 @@ export class FilesGridComponent implements OnInit {
     this.isLoading = false;
   };
 
+  /**
+   * Determines whether a file can be deleted based on its status and creation time.
+   *
+   * @param file - The FileEntity representing the file to be checked.
+   * @returns boolean - True if the file can be deleted, false otherwise.
+   */
   public canBeDeleted(file: FileEntity): boolean {
     const status = file.Status;
     const deletable = status === 'Uploaded' || Date.now() - +file.CreatedAt > 10 * 60 * 60;
@@ -139,7 +160,7 @@ export class FilesGridComponent implements OnInit {
     let deleteResult = await file.Delete();
     if (deleteResult) {
       this.sharedService.CreateSimpleNotification(`Successfully deleted file ${ID} ${Name}`, 'info');
-      this.files = this.files.filter((f) => f.ID != ID);
+      this.files = this.files.filter((f) => typeof f.ID === 'number' && f.ID != ID);
     } else {
       this.sharedService.CreateSimpleNotification(`Unable to delete file ${ID} ${Name}`, 'error');
     }
