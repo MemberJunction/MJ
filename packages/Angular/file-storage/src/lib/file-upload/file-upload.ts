@@ -83,7 +83,7 @@ export class FileUploadComponent implements OnInit {
 
   async Refresh() {
     const rv = new RunView();
-    const viewResults = await rv.RunView({ EntityName: 'File Storage Providers' });
+    const viewResults = await rv.RunView({ EntityName: 'File Storage Providers', ExtraFilter: 'IsActive = 1' });
     const provider: FileStorageProviderEntity | undefined = viewResults.Results[0];
     if (typeof provider?.ID === 'number') {
       this.defaultProviderID = provider.ID;
