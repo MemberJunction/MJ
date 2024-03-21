@@ -77,6 +77,7 @@ export class FileResolver extends FileResolverBase {
       'File Storage Providers',
       this.GetUserFromPayload(userPayload)
     );
+    await providerEntity.Load(file.ProviderID);
 
     const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.ID);
 
@@ -88,15 +89,16 @@ export class FileResolver extends FileResolverBase {
     const md = new Metadata();
     const userInfo = this.GetUserFromPayload(userPayload);
 
-    const entityObject = <FileEntity>await md.GetEntityObject('Files', userInfo);
-    await entityObject.Load(ID);
-    if (!entityObject) {
+    const fileEntity = <FileEntity>await md.GetEntityObject('Files', userInfo);
+    await fileEntity.Load(ID);
+    if (!fileEntity) {
       return null;
     }
 
-    if (entityObject.Status === 'Uploaded') { 
+    if (fileEntity.Status === 'Uploaded') { 
       const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
-      await deleteObject(providerEntity, entityObject.ProviderKey ?? entityObject.ID);
+      await providerEntity.Load(fileEntity.ProviderID);
+      await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.ID);
     }
 
     return super.DeleteFile(ID, { dataSource, userPayload }, pubSub);
