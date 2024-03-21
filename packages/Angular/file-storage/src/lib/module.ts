@@ -10,6 +10,7 @@ import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { IconsModule } from '@progress/kendo-angular-icons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
+import { LabelModule } from '@progress/kendo-angular-label';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 
 
@@ -34,6 +35,7 @@ import { FilesGridComponent } from './files-grid/files-grid';
     ContainerDirectivesModule,
     ButtonsModule,
     IconsModule,
+    LabelModule,
     GridModule,
     DropDownsModule,
     BrowserModule,

@@ -62,12 +62,33 @@ const FileDownloadQuerySchema = z.object({
 export class FilesGridComponent implements OnInit {
   public files: FileEntity[] = [];
   public isLoading: boolean = false;
+  public editFile: FileEntity | undefined;
   public kendoSVGIcon = kendoSVGIcon;
 
   constructor(private sharedService: SharedService) {}
 
   ngOnInit(): void {
     this.Refresh();
+  }
+
+  public resetEditFile() {
+    this.editFile?.Revert();
+    this.editFile = undefined;
+  }
+
+  public async saveEditFile() {
+    if (this.editFile) {
+      this.isLoading = true;
+      //
+      const success = await this.editFile.Save();
+      if (success) {
+        this.sharedService.CreateSimpleNotification(`Successfully saved file ${this.editFile.ID} ${this.editFile.Name}`, 'success');
+        this.editFile = undefined;
+      } else {
+        this.sharedService.CreateSimpleNotification(`Unable to save file ${this.editFile.ID} ${this.editFile.Name}`, 'error');
+      }
+      this.isLoading = false;
+    }
   }
 
   /**
@@ -100,7 +121,7 @@ export class FilesGridComponent implements OnInit {
   public canBeDeleted(file: FileEntity): boolean {
     const status = file.Status;
     const deletable = status === 'Uploaded' || Date.now() - +file.CreatedAt > 10 * 60 * 60;
-    console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt })
+    console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt });
     return deletable;
   }
 
