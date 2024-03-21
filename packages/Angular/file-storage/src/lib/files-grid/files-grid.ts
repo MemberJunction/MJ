@@ -121,7 +121,7 @@ export class FilesGridComponent implements OnInit {
   public canBeDeleted(file: FileEntity): boolean {
     const status = file.Status;
     const deletable = status === 'Uploaded' || Date.now() - +file.CreatedAt > 10 * 60 * 60;
-    console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt });
+    // console.log({ status, deletable, ID: file.ID, CreatedAt: file.CreatedAt });
     return deletable;
   }
 
@@ -134,12 +134,14 @@ export class FilesGridComponent implements OnInit {
    */
   public deleteFile = async (file: FileEntity) => {
     this.isLoading = true;
+    const ID = file.ID;
+    const Name = file.Name;
     let deleteResult = await file.Delete();
     if (deleteResult) {
-      this.sharedService.CreateSimpleNotification(`Successfully deleted file ${file.ID} ${file.Name}`, 'info');
-      this.files = this.files.filter((f) => f.ID != file.ID);
+      this.sharedService.CreateSimpleNotification(`Successfully deleted file ${ID} ${Name}`, 'info');
+      this.files = this.files.filter((f) => f.ID != ID);
     } else {
-      this.sharedService.CreateSimpleNotification(`Unable to delete file ${file.ID} ${file.Name}`, 'error');
+      this.sharedService.CreateSimpleNotification(`Unable to delete file ${ID} ${Name}`, 'error');
     }
     this.isLoading = false;
   };

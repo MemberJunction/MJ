@@ -12,13 +12,13 @@ import {
   SingleRecordComponent,
   HomeComponent,
   UserNotificationsComponent,
-  SettingsComponent,
   DataBrowserComponent,
   ReportBrowserComponent,
   DashboardBrowserComponent,
   AuthGuardService as AuthGuard,
   FilesComponent,
 } from '@memberjunction/ng-explorer-core';
+import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core';
