@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/18/2024, 6:14:50 PM
+* GENERATED: 3/20/2024, 6:20:14 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -14632,8 +14632,8 @@ export class Query_ {
     @Field({nullable: true}) 
     Description?: string;
       
-    @Field(() => Int) 
-    CategoryID: number;
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
       
     @Field({nullable: true}) 
     SQL?: string;
@@ -14659,9 +14659,9 @@ export class Query_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    Category: string;
+    Category?: string;
     
     @Field(() => [mj_core_schema_server_object_types.QueryField_])
     QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
@@ -14685,7 +14685,7 @@ export class CreateQueryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     CategoryID: number;
 
     @Field({ nullable: true })
@@ -14719,7 +14719,7 @@ export class UpdateQueryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     CategoryID: number;
 
     @Field({ nullable: true })
@@ -17174,8 +17174,8 @@ export class ReportCategory_ {
     @Field({nullable: true}) 
     Description?: string;
       
-    @Field(() => Int) 
-    ParentID: number;
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
       
     @Field() 
     @MaxLength(8)
@@ -17185,9 +17185,9 @@ export class ReportCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(200)
-    Parent: string;
+    Parent?: string;
     
     @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
     ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
@@ -17208,7 +17208,7 @@ export class CreateReportCategoryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     ParentID: number;
 }
 
@@ -17227,7 +17227,7 @@ export class UpdateReportCategoryInput {
     @Field({ nullable: true })
     Description: string;
 
-    @Field(() => Int)
+    @Field(() => Int, { nullable: true })
     ParentID: number;
 }
 

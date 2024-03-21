@@ -149,8 +149,22 @@ const routes: Routes = [
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'settings', component: SettingsComponent, canActivate: [AuthGuard] },  
   { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },  
+  { path: 'settings', 
+    component: SettingsComponent, 
+    canActivate: [AuthGuard],  
+    children: [
+      {
+        path: '',
+        component: SettingsComponent,
+        pathMatch: 'full'
+      },
+      {
+        path: '**',
+        component: SettingsComponent
+      }
+    ]
+  },  
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },  
   { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },

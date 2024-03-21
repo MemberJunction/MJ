@@ -11252,10 +11252,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Query Categories (vwQueryCategories.ID)
         */
-        get CategoryID(): number {  
+        get CategoryID(): number | null {  
             return this.Get('CategoryID');
         }
-        set CategoryID(value: number) {
+        set CategoryID(value: number | null) {
             this.Set('CategoryID', value);
         }
         /**
@@ -11340,7 +11340,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Category
         * * SQL Data Type: nvarchar(50)
         */
-        get Category(): string {  
+        get Category(): string | null {  
             return this.Get('Category');
         }
     
@@ -12846,10 +12846,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Report Categories (vwReportCategories.ID)
         */
-        get ParentID(): number {  
+        get ParentID(): number | null {  
             return this.Get('ParentID');
         }
-        set ParentID(value: number) {
+        set ParentID(value: number | null) {
             this.Set('ParentID', value);
         }
         /**
@@ -12877,7 +12877,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
         */
-        get Parent(): string {  
+        get Parent(): string | null {  
             return this.Get('Parent');
         }
     

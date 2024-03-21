@@ -30,6 +30,7 @@
     "@memberjunction/core": "^0.9.172",
     "@memberjunction/ng-container-directives": "^0.9.136",
     "@memberjunction/ng-shared": "^0.9.26",
+    "@memberjunction/ng-entity-permissions": "^0.9.3",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",
