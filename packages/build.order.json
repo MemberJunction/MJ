@@ -46,6 +46,9 @@
             "Name": "MJQueue"
         },
         {
+            "Name": "MJStorage"
+        },
+        {
             "Name": "MJDataContext"
         },
         {
@@ -102,6 +105,9 @@
         },
         {
             "Name": "Angular/user-view-grid"
+        },
+        {
+            "Name": "Angular/file-storage"
         },
         {
             "Name": "Angular/entity-permissions"
