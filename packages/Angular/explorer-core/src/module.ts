@@ -43,6 +43,7 @@ import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
 import { SectionLoaderComponent } from './lib/generic/section-loader-component';
 import { HeaderComponent } from './lib/header/header.component';
+import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
 import { HomeComponent } from './lib/home-component/home.component';
 import { JoinGridComponent } from './lib/join-grid/join-grid.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
@@ -54,7 +55,6 @@ import { EntityRecordResource } from './lib/resource-wrappers/record-resource.co
 import { ReportResource } from './lib/resource-wrappers/report-resource.component';
 import { SearchResultsResource } from './lib/resource-wrappers/search-results-resource.component';
 import { UserViewResource } from './lib/resource-wrappers/view-resource.component';
-import { SettingsComponent } from './lib/settings/settings.component';
 import { SingleApplicationComponent } from './lib/single-application/single-application.component';
 import { AddItemComponent } from './lib/single-dashboard/Components/add-item/add-item.component';
 import { DeleteItemComponent } from './lib/single-dashboard/Components/delete-item/delete-item.component';
@@ -79,6 +79,7 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
     DashboardBrowserComponent,
     DataBrowserComponent,
     GenericBrowseListComponent,
+    GenericBrowserListComponent,
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,
@@ -88,7 +89,6 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
     ReportResource,
     SearchResultsResource,
     UserViewResource,
-    SettingsComponent,
     FilesComponent,
     SingleApplicationComponent,
     FavoritesComponent,
@@ -158,6 +158,7 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
     DashboardBrowserComponent,
     DataBrowserComponent,
     GenericBrowseListComponent,
+    GenericBrowserListComponent,
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,
@@ -166,7 +167,6 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
     ReportResource,
     SearchResultsResource,
     UserViewResource,
-    SettingsComponent,
     SingleApplicationComponent,
     FavoritesComponent,
     HeaderComponent,

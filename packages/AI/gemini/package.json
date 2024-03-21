@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-gemini",
-  "version": "0.9.17",
+  "version": "0.9.24",
   "description": "MemberJunction Wrapper for Google Gemini AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,6 +21,6 @@
   "dependencies": {
     "@memberjunction/ai": "^0.9.160",
     "@memberjunction/global": "^0.9.153",
-    "@google/generative-ai": "~0.2.1"
+    "@google/generative-ai": "~0.3.1"
   }
 }

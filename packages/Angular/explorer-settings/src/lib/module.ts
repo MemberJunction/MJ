@@ -13,10 +13,15 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { FormsModule } from '@angular/forms';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { SingleRoleComponent } from './single-role/single-role.component';
+import { SettingsComponent } from './settings/settings.component';
+import { RolesListComponent } from './roles-list/roles-list.component';
+import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 
 @NgModule({
   declarations: [
-    SingleRoleComponent
+    SingleRoleComponent,
+    SettingsComponent,
+    RolesListComponent
   ],
   imports: [
     CommonModule,
@@ -28,10 +33,13 @@ import { SingleRoleComponent } from './single-role/single-role.component';
     ContainerDirectivesModule,
     ButtonsModule,
     IconsModule,
-    DropDownsModule
+    DropDownsModule,
+    EntityPermissionsModule
   ],
   exports: [
-    SingleRoleComponent
+    SingleRoleComponent,
+    SettingsComponent,
+    RolesListComponent
   ]
 })
 export class ExplorerSettingsModule { }

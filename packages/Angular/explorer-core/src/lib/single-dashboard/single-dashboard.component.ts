@@ -292,6 +292,9 @@ export class SingleDashboardComponent implements OnInit {
     this.selectedComponent = null;
   }
 
+  //Apply this style to the component we're hovering over
+  //so that it is not offset by a wide margin when we click/drag it
+  //https://github.com/telerik/kendo-angular/issues/3492
   getSelectedComponentStyle(component: SingleDashboardComponent): string {
     return this.selectedComponent === component ? "position: unset" : "";
   }

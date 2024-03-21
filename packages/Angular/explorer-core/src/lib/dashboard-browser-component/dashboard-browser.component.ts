@@ -1,102 +1,73 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router'
-import { Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntity } from '@memberjunction/core-entities';
-import { DashboardConfigDetails } from '../single-dashboard/single-dashboard.component';
 import { SharedService } from '@memberjunction/ng-shared';
+import { Item } from '../../generic/Item.types';
+import { PathData } from '../../generic/PathData.types';
+import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
+import { DashboardEntity } from '@memberjunction/core-entities';
+import { BaseEvent } from '../../generic/Events.types';
 
 @Component({
   selector: 'app-dashboard-browser',
   templateUrl: './dashboard-browser.component.html',
   styleUrls: ['./dashboard-browser.component.css', '../../shared/first-tab-styles.css']
 })
-export class DashboardBrowserComponent {
-  public dashboards: DashboardEntity[] = [];
-  public showLoader: boolean = false;
 
-  constructor(private router: Router, private sharedService: SharedService) {}
+export class DashboardBrowserComponent extends BaseBrowserComponent{
 
-  ngOnInit(): void {
-    this.LoadData();
+  constructor(private router: Router, private sharedService: SharedService) {
+    super();
+
+    this.pageName = "Dashboards";
+    this.routeName = "dashboards";
+    this.routeNameSingular = "dashboard";
+    this.itemEntityName = "Dashboards";
+    this.categoryEntityName = "Dashboard Categories";
+
+    const params = this.router.getCurrentNavigation()?.extractedUrl.queryParams
+    this.InitPathData(params);
   }
-  async LoadData() {
-    this.showLoader = true;
 
-    const md = new Metadata()
-    const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: 'Dashboards',
-      ExtraFilter: `UserID=${md.CurrentUser.ID}`
-    })
-    if (result && result.Success){
-      this.dashboards = result.Results;
+  async ngOnInit(): Promise<void> {
+    await super.LoadData();
+  }
+
+  public itemClick(item: Item) {
+    let dataID: string = "";
+
+    if(item.Type === "Entity"){
+      let dashboard: DashboardEntity = item.Data as DashboardEntity;
+      dataID = dashboard.ID.toString();
+    }
+
+    super.Navigate(item, this.router, dataID);
+  }
+
+  public onBackButtonClick(): void {
+    const pathData: PathData | null = this.PathData.ParentPathData;
+    if(pathData && pathData.ID > 0){
+      this.PathData = pathData;
+      //navigation seems like it does nothing but update the URL
+      //so just reload all of the data
+      this.router.navigate(['dashboards'], {queryParams: {folderID: pathData.ID}});
+      this.selectedFolderID = pathData.ID;
+      this.LoadData();
+      
+    }
+    else if(this.parentFolderID || !this.parentFolderID && this.selectedFolderID){
+      this.router.navigate(['dashboards'], {queryParams: {folderID: this.parentFolderID}});
+      this.selectedFolderID = this.parentFolderID;
+      this.parentFolderID = null;
+      this.LoadData();
     }
     else{
-      this.dashboards = [];
-    }
-
-    this.showLoader = false;
-  }
-  public itemClick(item: DashboardEntity) {
-    if (item) {
-      this.router.navigate(['resource', 'dashboard', item.ID])
-    }
-  }
-
-  public async addNew(): Promise<void> {
-    this.showLoader = true;
-    const metadata: Metadata = new Metadata();
-    let dashboardEntity = <DashboardEntity>await metadata.GetEntityObject('Dashboards');
-    dashboardEntity.NewRecord();
-    dashboardEntity.UserID = metadata.CurrentUser.ID;
-
-    let dashboardCount: number = this.dashboards.length; 
-    let nameSuffix: string = dashboardCount > 0 ? `${dashboardCount + 1}` : "";
-    dashboardEntity.Name = "New Dashboard " + nameSuffix;
-
-    let defaultConfigDetails: DashboardConfigDetails = new DashboardConfigDetails();
-    const config = {
-      columns: defaultConfigDetails.columns,
-      rowHeight: defaultConfigDetails.rowHeight,
-      resizable: defaultConfigDetails.resizable,
-      reorderable: defaultConfigDetails.reorderable,
-      items: []
-    }
-    const configJSON = JSON.stringify(config);
-    dashboardEntity.UIConfigDetails = configJSON;
-
-    const result = await dashboardEntity.Save();
-    if(result){
-      this.dashboards.push(dashboardEntity);
-    }
-    else{
-      this.sharedService.CreateSimpleNotification("Error creating new dashboard entity", "error");
+      //no parent path, so just go home
+      this.router.navigate(['']);
     }
     this.showLoader = false;
   }
 
-  public async deleteItem(item: DashboardEntity): Promise<void> {
-    this.showLoader = true;
-    if (item && item.ID && item.ID > 0) {
-      const md = new Metadata();
-      let dashboardEntity = <DashboardEntity>await md.GetEntityObject('Dashboards');
-      let loadResult = await dashboardEntity.Load(item.ID);
-
-      if(loadResult){
-        let deleteResult = await dashboardEntity.Delete();
-        if(deleteResult){
-          //todo - change these to use the shared
-          this.sharedService.CreateSimpleNotification(`successfully deleted dashboard record ${item.ID}`, "info");
-          this.dashboards = this.dashboards.filter(i => i.ID != item.ID);
-        }
-        else{
-          this.sharedService.CreateSimpleNotification(`Unable to delete dashboard record ${item.ID}`, "error");
-        }
-      }
-      else{
-        this.sharedService.CreateSimpleNotification(`unable to fetch dashboard record ${item.ID}`, "error");
-      }
-    }
-    this.showLoader = false;
+  public onEvent(event: BaseEvent): void {
+    super.onEvent(event);    
   }
 }

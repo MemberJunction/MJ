@@ -37,8 +37,9 @@ export class AnthropicLLM extends BaseLLM {
 
     public async ChatCompletion(params: ChatParams): Promise<ChatResult>{
         const startTime = new Date();
+        let result: any = null;
         try {
-            const result = await AnthropicLLM._anthropic.messages.create({
+            result = await AnthropicLLM._anthropic.messages.create({
                 model: params.model,
                 max_tokens: 4096, // max claude output tokens
                 system: params.messages.find(m => m.role === "system").content,
@@ -89,7 +90,7 @@ export class AnthropicLLM extends BaseLLM {
                 endTime: endTime,
                 timeElapsed: endTime.getTime() - startTime.getTime(),
                 errorMessage: e?.message,
-                exception: e
+                exception: {exception: e, llmResult: result}
             };
         
         }

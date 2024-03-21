@@ -26,19 +26,23 @@
   background-color: #f1f1f1;
 }
 ::ng-deep .navigation-wrap .drawer-container {
-  padding: 20px;
-  background: #FAFAFA;
+  background: var(--gray-color);
 }
 ::ng-deep .navigation-wrap .drawer-container .k-content {
   padding: 25px;
 }
 ::ng-deep .navigation-wrap .drawer-container .k-tabstrip-items-wrapper {
-  background: #fafafa;
+  background: var(--med-gray);
+  padding-left: 20px;
 }
 ::ng-deep .navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item.k-active {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--light-gray);
+  background: var(--light-gray);
+  border-radius: 8px 8px 0 0;
+  color: var(--blue-text);
 }
 ::ng-deep .navigation-wrap .drawer-container .k-tabstrip-items-wrapper .k-item {
-  background: #fafafa;
+  background: var(--med-gray);
   border-radius: 0;
+  border-right: 1px solid #909090;
 }

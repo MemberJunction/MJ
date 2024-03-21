@@ -6,8 +6,8 @@
       </div>
 
       <div class="title">
-        <img kendoCardMedia src="assets/MJ-Logo.png" height="45px" class="app-logo" />
-        <h1 class="k-ml-2.5">{{appName}}</h1>
+        <img kendoCardMedia src="assets/MJ_logo.svg" height="45px" class="app-logo" />
+        <!-- <h1 class="k-ml-2.5">{{appName}}</h1> -->
       </div>
 
       <div class="user-info-wrapper">
@@ -34,8 +34,8 @@
           <span class="k-icon" style="cursor: pointer;"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('inbox')"></kendo-svgicon></span>
           <span class="notification" *ngIf="UnreadNotificationCount > 0">{{UnreadNotificationCount}}</span>
       </div>
-        <kendo-avatar class="k-m-0" style="margin: 0;" [imageSrc]="userImageURL" shape="circle"> </kendo-avatar>
-        <div class="user-info">
+      <div class="user-info">
+          <kendo-avatar class="k-m-0" style="margin: 0;" [imageSrc]="userImageURL" shape="circle"> </kendo-avatar>
           <div class="example-col">
               <kendo-dropdownlist [data]="menuItems"  [value]="selectedMenuItem" (valueChange)="valueChange($event)">
               </kendo-dropdownlist>
