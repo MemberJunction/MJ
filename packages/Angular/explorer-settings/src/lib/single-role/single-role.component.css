@@ -8,6 +8,7 @@ table {
 button {
     margin-left: 5px;
     margin-top: 5px;
+    width: 125px;
 }
  
 table th {
@@ -42,4 +43,11 @@ table tr:nth-child(odd) {
 
 table tr:nth-child(even) {
     background-color: #e7f4ff; /* Light blue for even rows */
+}
+
+.role-name {
+    font-weight: bold;
+    font-size: 20px;
+    margin-left: 5px;
+    margin-top: 5px;
 }

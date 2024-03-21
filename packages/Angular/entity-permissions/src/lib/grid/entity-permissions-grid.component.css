@@ -8,12 +8,18 @@ table {
 button {
     margin-left: 5px;
     margin-top: 5px;
+    width: 125px;
 }
  
 table th {
     background-color: #f2f2f2; /* Light gray background for headers */
     color: black; /* Black text color for headers */
     font-weight: bold; /* Bold font weight for headers */
+    cursor: pointer;
+}
+
+.permission-left-col {
+    cursor: pointer;
 }
 
 /* Style for all table cells */
@@ -26,7 +32,7 @@ table th, table td {
 
 /* Specific styles for the first column */
 table th:first-child, table td:first-child {
-    width: 150px; /* Set width for the first column */
+    min-width: 150px; /* Set width for the first column */
     text-align: left;
 }
 
@@ -43,3 +49,9 @@ table tr:nth-child(odd) {
 table tr:nth-child(even) {
     background-color: #e7f4ff; /* Light blue for even rows */
 }
+
+table tr.dirty-row {
+    font-style: italic;
+    background-color: #ffcccc;
+}
+

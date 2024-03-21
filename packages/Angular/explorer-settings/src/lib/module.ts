@@ -16,6 +16,7 @@ import { SingleRoleComponent } from './single-role/single-role.component';
 import { SettingsComponent } from './settings/settings.component';
 import { RolesListComponent } from './roles-list/roles-list.component';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
+import { TabStripModule } from '@progress/kendo-angular-layout';
 
 @NgModule({
   declarations: [
@@ -34,7 +35,8 @@ import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
     ButtonsModule,
     IconsModule,
     DropDownsModule,
-    EntityPermissionsModule
+    EntityPermissionsModule,
+    TabStripModule
   ],
   exports: [
     SingleRoleComponent,
