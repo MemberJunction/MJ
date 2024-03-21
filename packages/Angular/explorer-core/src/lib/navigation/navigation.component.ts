@@ -907,7 +907,10 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
   protected async loadFiles() {
     const rv = new RunView();
-    const viewResults = await rv.RunView({ EntityName: 'File Storage Providers' });
+    const viewResults = await rv.RunView({
+      EntityName: 'File Storage Providers',
+      ExtraFilter: 'IsActive = 1',
+    });
     const filesEnabled = viewResults.RowCount > 0;
     
     if (filesEnabled) {

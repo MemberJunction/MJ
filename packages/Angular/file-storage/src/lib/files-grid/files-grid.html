@@ -32,19 +32,21 @@
                     [showSuccessIcon]="editFile.Name.length > 0"
                     showErrorIcon="initial"
                     required
+                    [disabled]="isLoading"
                 ></kendo-textbox>
             </kendo-label>
             <kendo-label class="k-form" text="Description">
                 <kendo-textbox
                     name="description"
                     [(ngModel)]="editFile.Description"
+                    [disabled]="isLoading"
                 ></kendo-textbox>
             </kendo-label>
         </form>
     </div>
       <kendo-dialog-actions>
-        <button kendoButton (click)="resetEditFile()">Cancel</button>
-        <button kendoButton (click)="saveEditFile()" themeColor="primary">
+        <button kendoButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
+        <button kendoButton (click)="saveEditFile()" [disabled]="isLoading || !editFile.Dirty" themeColor="primary">
           Save
         </button>
       </kendo-dialog-actions>
