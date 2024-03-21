@@ -2920,6 +2920,19 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityID', value);
         }
         /**
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown
+        */
+        get Sequence(): number {  
+            return this.Get('Sequence');
+        }
+        set Sequence(value: number) {
+            this.Set('Sequence', value);
+        }
+        /**
         * * Field Name: RelatedEntityID
         * * Display Name: Related Entity ID
         * * SQL Data Type: int
@@ -3789,7 +3802,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');

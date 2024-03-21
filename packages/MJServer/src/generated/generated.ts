@@ -2,38 +2,25 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/20/2024, 6:20:14 PM
+* GENERATED: 3/21/2024, 5:44:24 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 * 
 **********************************************************************************/
-import { EntityPermissionType, Metadata } from '@memberjunction/core';
-import {
-    AppContext,
-    Arg, Ctx,
-    Field,
-    FieldResolver,
-    InputType,
-    Int,
-    Mutation,
-    ObjectType,
-    PubSub, PubSubEngine,
-    Query, Resolver,
-    ResolverBase,
-    Root,
-    RunDynamicViewInput,
-    RunViewByIDInput, RunViewByNameInput
-} from '@memberjunction/server';
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
+         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+import { Metadata, EntityPermissionType } from '@memberjunction/core'
+import { AppContext } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 import { mj_core_schema } from '../config';
 
-import * as mj_core_schema_server_object_types from '@memberjunction/server';
+import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { AIActionEntity, AIModelActionEntity, AIModelEntity, AIModelTypeEntity, ApplicationEntity, ApplicationEntityEntity, AuditLogEntity, CompanyEntity, CompanyIntegrationEntity, CompanyIntegrationRecordMapEntity, CompanyIntegrationRunAPILogEntity, CompanyIntegrationRunDetailEntity, CompanyIntegrationRunEntity, ConversationDetailEntity, ConversationEntity, DashboardCategoryEntity, DashboardEntity, DataContextEntity, DataContextItemEntity, EmployeeCompanyIntegrationEntity, EmployeeEntity, EmployeeRoleEntity, EmployeeSkillEntity, EntityAIActionEntity, EntityDocumentEntity, EntityDocumentRunEntity, EntityDocumentTypeEntity, EntityEntity, EntityFieldEntity, EntityPermissionEntity, EntityRecordDocumentEntity, EntityRelationshipEntity, ErrorLogEntity, FileCategoryEntity, FileEntity, FileEntityRecordLinkEntity, FileStorageProviderEntity, IntegrationEntity, IntegrationURLFormatEntity, ListDetailEntity, ListEntity, QueryCategoryEntity, QueryEntity, QueryFieldEntity, QueryPermissionEntity, QueueEntity, QueueTaskEntity, RecordChangeEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, ReportCategoryEntity, ReportEntity, ReportSnapshotEntity, RoleEntity, SchemaInfoEntity, UserApplicationEntity, UserApplicationEntityEntity, UserEntity, UserFavoriteEntity, UserNotificationEntity, UserRecordLogEntity, UserRoleEntity, UserViewCategoryEntity, UserViewEntity, UserViewRunDetailEntity, UserViewRunEntity, VectorDatabaseEntity, VectorIndexEntity, WorkflowEngineEntity, WorkflowEntity, WorkflowRunEntity, WorkspaceEntity, WorkspaceItemEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -4025,6 +4012,9 @@ export class EntityRelationship_ {
     @Field(() => Int) 
     EntityID: number;
       
+    @Field(() => Int, {description: 'Used for display order in generated forms and in other places in the UI where relationships for an entity are shown'}) 
+    Sequence: number;
+      
     @Field(() => Int) 
     RelatedEntityID: number;
       
@@ -4131,6 +4121,9 @@ export class CreateEntityRelationshipInput {
     EntityID: number;
 
     @Field(() => Int)
+    Sequence: number;
+
+    @Field(() => Int)
     RelatedEntityID: number;
 
     @Field(() => Boolean)
@@ -4175,6 +4168,9 @@ export class UpdateEntityRelationshipInput {
 
     @Field(() => Int)
     EntityID: number;
+
+    @Field(() => Int)
+    Sequence: number;
 
     @Field(() => Int)
     RelatedEntityID: number;

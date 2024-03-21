@@ -777,6 +777,7 @@ input CreateEntityRelationshipInput {
   JoinView: String
   RelatedEntityID: Int!
   RelatedEntityJoinField: String!
+  Sequence: Int!
   Type: String!
 }
 
@@ -1578,6 +1579,11 @@ type EntityRelationship_ {
   RelatedEntityCodeName: String
   RelatedEntityID: Int!
   RelatedEntityJoinField: String!
+
+  """
+  Used for display order in generated forms and in other places in the UI where relationships for an entity are shown
+  """
+  Sequence: Int!
   Type: String!
   UpdatedAt: Timestamp!
 }
@@ -4614,6 +4620,7 @@ input UpdateEntityRelationshipInput {
   JoinView: String
   RelatedEntityID: Int!
   RelatedEntityJoinField: String!
+  Sequence: Int!
   Type: String!
 }
 

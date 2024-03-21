@@ -2,38 +2,24 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/20/2024, 6:20:14 PM
-* GENERATED: 3/20/2024, 2:43:34 PM
+* GENERATED: 3/21/2024, 5:44:24 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 * 
 **********************************************************************************/
-import { EntityPermissionType, Metadata } from '@memberjunction/core';
-import {
-    AppContext,
-    Arg, Ctx,
-    Field,
-    FieldResolver,
-    Float,
-    InputType,
-    Int,
-    Mutation,
-    ObjectType,
-    PubSub, PubSubEngine,
-    Query, Resolver,
-    ResolverBase,
-    Root,
-    RunDynamicViewInput,
-    RunViewByIDInput, RunViewByNameInput
-} from '@memberjunction/server';
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
+         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+import { Metadata, EntityPermissionType } from '@memberjunction/core'
+import { AppContext } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
+import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { AccountEntity, ActivityAttachmentEntity, ActivityEntity, ContactEntity, ContactLevelEntity, ContactRoleEntity, DealEntity, DealForecastCategoryEntity, DealStageEntity, DealTypeEntity, IndustryEntity, InvoiceEntity, InvoiceStatusTypeEntity, PaymentTermsTypeEntity } from 'mj_generatedentities';
+import { IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity } from 'mj_generatedentities';
 
 
 //****************************************************************************

@@ -15,6 +15,10 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
             <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Sequence</label>
+            <kendo-numerictextbox [(value)]="record.Sequence" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Related Entity ID</label>
             <kendo-numerictextbox [(value)]="record.RelatedEntityID" ></kendo-numerictextbox>   
         </div>               
@@ -120,6 +124,10 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Entity ID</label>
             <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Sequence</label>
+            <span >{{FormatValue('Sequence', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Related Entity ID</label>

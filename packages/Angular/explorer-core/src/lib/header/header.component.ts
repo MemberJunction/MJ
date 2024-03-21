@@ -108,7 +108,8 @@ export class HeaderComponent implements OnInit {
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: 'Entities',
-            ExtraFilter: 'AllowUserSearchAPI = 1'
+            ExtraFilter: 'AllowUserSearchAPI = 1',
+            OrderBy: 'Name'
         })
         if (result && result.Success) {
             this.searchableEntities = result.Results;

@@ -54,6 +54,7 @@ export class RecordChange extends BaseInfo {
  */
 export class EntityRelationshipInfo extends BaseInfo  {
     EntityID: number = null 
+    Sequence: number = null
     RelatedEntityID: number = null
     BundleInAPI: boolean = null
     IncludeInParentAllQuery: boolean = null
@@ -823,6 +824,26 @@ export class EntityInfo extends BaseInfo {
             this._RelatedEntities = [];
             const er = initData.EntityRelationships || initData._RelatedEntities;
             if (er) {
+                // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
+                // if we have any sequence values populated we want to sort by that sequence, and we want to consider null to be a high number
+                // so that it sorts to the end of the list
+                let bHasSequence: boolean = false;
+                for (const j of er) {
+                    if (j.Sequence !== null && j.Sequence !== undefined && j.Sequence !== 0) {
+                        bHasSequence = true;
+                        break;
+                    }
+                }
+                if (bHasSequence) {
+                    // sort by sequence if we have any populated sequence values
+                    er.sort((a, b) => {
+                        const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 999999;
+                        const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 999999;
+                        return aSeq - bSeq
+                    }); 
+                }
+
+                // now that we have prepared the er array by sorting it, if needed, let's load up the related entities
                 for (let j = 0; j < er.length; j++) {
                     this._RelatedEntities.push(new EntityRelationshipInfo(er[j]));
                 }
