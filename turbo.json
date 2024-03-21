@@ -9,7 +9,6 @@
     },
     "start": {
       "cache": false,
-      "dependsOn": ["build"],
       "persistent": true
     },
     "watch": {
