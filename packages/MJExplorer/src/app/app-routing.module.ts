@@ -6,9 +6,19 @@ import {
   ActivatedRouteSnapshot,
   RouterStateSnapshot
 } from '@angular/router';
-import { SingleApplicationComponent, SingleEntityComponent, SingleRecordComponent, HomeComponent, 
-         UserNotificationsComponent, DataBrowserComponent, ReportBrowserComponent, 
-         DashboardBrowserComponent, AuthGuardService as AuthGuard } from "@memberjunction/ng-explorer-core";
+import {
+  SingleApplicationComponent,
+  SingleEntityComponent,
+  SingleRecordComponent,
+  HomeComponent,
+  UserNotificationsComponent,
+  SettingsComponent,
+  DataBrowserComponent,
+  ReportBrowserComponent,
+  DashboardBrowserComponent,
+  AuthGuardService as AuthGuard,
+  FilesComponent,
+} from '@memberjunction/ng-explorer-core';
 import { LogError} from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core';
@@ -17,7 +27,6 @@ import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shar
 
 
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
-import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
   storedRoutes: { [key: string]: DetachedRouteHandle } = {};
@@ -140,6 +149,7 @@ const routes: Routes = [
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
+  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },  
   { path: 'settings', 
     component: SettingsComponent, 
     canActivate: [AuthGuard],  

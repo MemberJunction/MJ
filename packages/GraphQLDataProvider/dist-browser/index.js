@@ -4,12 +4,14 @@
         if (v !== undefined) module.exports = v;
     }
     else if (typeof define === "function" && define.amd) {
-        define(["require", "exports", "./config", "./graphQLDataProvider"], factory);
+        define(["require", "exports", "graphql-request", "./config", "./graphQLDataProvider"], factory);
     }
 })(function (require, exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.GraphQLProviderConfigData = exports.GraphQLDataProvider = exports.setupGraphQLClient = void 0;
+    exports.GraphQLProviderConfigData = exports.GraphQLDataProvider = exports.setupGraphQLClient = exports.gql = void 0;
+    var graphql_request_1 = require("graphql-request");
+    Object.defineProperty(exports, "gql", { enumerable: true, get: function () { return graphql_request_1.gql; } });
     var config_1 = require("./config");
     Object.defineProperty(exports, "setupGraphQLClient", { enumerable: true, get: function () { return config_1.setupGraphQLClient; } });
     var graphQLDataProvider_1 = require("./graphQLDataProvider");

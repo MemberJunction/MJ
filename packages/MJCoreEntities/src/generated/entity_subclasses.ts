@@ -3789,6 +3789,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');

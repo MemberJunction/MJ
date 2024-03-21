@@ -1,0 +1,31 @@
+{
+  "name": "@memberjunction/storage",
+  "version": "0.9.1",
+  "description": "This library provides a set of objects that handle the interface between the server-side API and various cloud storage providers.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.0.1",
+    "@azure/storage-blob": "^12.17.0",
+    "@memberjunction/core": "^0.9.172",
+    "@memberjunction/core-entities": "^0.9.155",
+    "@memberjunction/global": "^0.9.152",
+    "env-var": "^7.3.0",
+    "mime-types": "^2.1.35"
+  }
+}

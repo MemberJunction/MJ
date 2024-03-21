@@ -7,8 +7,13 @@
     "packages/Angular/*",
     "packages/AngularElements/*"
   ],
-  "scripts": {},
+  "scripts": {
+    "build": "turbo build --filter=!mj_explorer"
+  },
   "dependencies": {
     "archiver": "^7.0.0"
+  },
+  "devDependencies": {
+    "turbo": "^1.12.5"
   }
 }

@@ -28,6 +28,7 @@
     "@memberjunction/data-context": "^0.9.45",
     "@memberjunction/data-context-server": "^0.9.41",
     "@memberjunction/global": "^0.9.153",
+    "@memberjunction/storage": "^0.9.1",
     "@memberjunction/queue": "^0.9.179",
     "@memberjunction/sqlserver-dataprovider": "^0.9.195",
     "@memberjunction/skip-types": "^0.9.70",

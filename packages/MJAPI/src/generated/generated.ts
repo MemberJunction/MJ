@@ -10,17 +10,30 @@
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 * 
 **********************************************************************************/
-import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
-import { Metadata, EntityPermissionType } from '@memberjunction/core'
-import { AppContext } from '@memberjunction/server';
+import { EntityPermissionType, Metadata } from '@memberjunction/core';
+import {
+    AppContext,
+    Arg, Ctx,
+    Field,
+    FieldResolver,
+    Float,
+    InputType,
+    Int,
+    Mutation,
+    ObjectType,
+    PubSub, PubSubEngine,
+    Query, Resolver,
+    ResolverBase,
+    Root,
+    RunDynamicViewInput,
+    RunViewByIDInput, RunViewByNameInput
+} from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
 
-import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity } from 'mj_generatedentities';
+import { AccountEntity, ActivityAttachmentEntity, ActivityEntity, ContactEntity, ContactLevelEntity, ContactRoleEntity, DealEntity, DealForecastCategoryEntity, DealStageEntity, DealTypeEntity, IndustryEntity, InvoiceEntity, InvoiceStatusTypeEntity, PaymentTermsTypeEntity } from 'mj_generatedentities';
 
 
 //****************************************************************************

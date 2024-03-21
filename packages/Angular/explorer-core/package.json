@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "ngc"
+    "build": "ngc",
+    "watch": "ngc -w"
   },
   "keywords": [],
   "author": "",
@@ -39,6 +40,7 @@
     "@memberjunction/global": "^0.9.153",
     "@memberjunction/core": "^0.9.172",
     "@memberjunction/ng-compare-records": "^0.9.174",
+    "@memberjunction/ng-file-storage": "^0.9.1",
     "@memberjunction/ng-record-changes": "^0.9.108",
     "@memberjunction/ng-container-directives": "^0.9.136",
     "@memberjunction/ng-user-view-grid": "^0.9.209",

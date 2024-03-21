@@ -860,6 +860,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Queries
     await this.loadResourceType('Queries','Queries','/queries', md.CurrentUser.ID);
 
+    // Files
+    await this.loadFiles();
+
     // Settings
     await this.loadSettings(md);
 
@@ -899,6 +902,24 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       svgIcon: this.sharedService.kendoSVGIcon('gear') 
     }
     this.drawerItems.push(drawerItem);
+  }
+
+
+  protected async loadFiles() {
+    const rv = new RunView();
+    const viewResults = await rv.RunView({ EntityName: 'File Storage Providers' });
+    const filesEnabled = viewResults.RowCount > 0;
+    
+    if (filesEnabled) {
+      const drawerItem = {
+        id: 'Files',
+        selected: false,
+        text: 'Files',
+        path: '/files',
+        svgIcon: this.sharedService.kendoSVGIcon('folder'),
+      };
+      this.drawerItems.push(drawerItem);
+    }
   }
 
 
