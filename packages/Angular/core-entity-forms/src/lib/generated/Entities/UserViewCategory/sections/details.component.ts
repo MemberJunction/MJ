@@ -31,6 +31,10 @@ import { UserViewCategoryEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Entity ID</label>
+            <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Parent</label>
             <span >{{FormatValue('Parent', 0)}}</span>   
         </div> 
@@ -56,6 +60,10 @@ import { UserViewCategoryEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity ID</label>
+            <span >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Parent</label>
