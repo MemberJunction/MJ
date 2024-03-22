@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/21/2024, 5:44:24 PM
+* GENERATED: 3/22/2024, 1:17:14 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -16723,6 +16723,9 @@ export class UserViewCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
+    @Field(() => Int) 
+    EntityID: number;
+      
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -16748,6 +16751,9 @@ export class CreateUserViewCategoryInput {
 
     @Field(() => Int, { nullable: true })
     ParentID: number;
+
+    @Field(() => Int)
+    EntityID: number;
 }
 
         
@@ -16767,6 +16773,9 @@ export class UpdateUserViewCategoryInput {
 
     @Field(() => Int, { nullable: true })
     ParentID: number;
+
+    @Field(() => Int)
+    EntityID: number;
 }
 
 //****************************************************************************
