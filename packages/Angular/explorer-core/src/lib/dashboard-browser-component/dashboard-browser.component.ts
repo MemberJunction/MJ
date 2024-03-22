@@ -29,7 +29,8 @@ export class DashboardBrowserComponent extends BaseBrowserComponent{
   }
 
   async ngOnInit(): Promise<void> {
-    await super.LoadData();
+    const categoryEntityFilter: string = "ParentID IS NULL";
+    await super.LoadData({categoryItemFilter: categoryEntityFilter});
   }
 
   public itemClick(item: Item) {

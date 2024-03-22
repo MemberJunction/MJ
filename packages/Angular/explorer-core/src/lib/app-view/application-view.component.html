@@ -1,0 +1,46 @@
+<div  class="app-container">
+    <div class="card-header-entity cloumn">
+        <div>
+            Breadcrumb goes here
+        </div>
+        <div class="title-wrap">
+            <h1>{{appName}}</h1>
+        </div>
+        <div class="row">
+            <div class="col-xs-12 col-sm-6 example-col">
+                <kendo-buttongroup selection="single">
+                    <button
+                        *ngFor="let button of AppEntityButtons"
+                        kendoButton
+                        [toggleable]="true"
+                        [selected]="button.Selected"
+                        (click)="onAppEntityButtonClicked(button)"
+                    >
+                        <span>
+                            {{button.Name}}
+                        </span>
+                    </button>
+
+                </kendo-buttongroup>
+            </div>
+        </div>
+    </div>
+    <div class="main-area">
+        <app-generic-browser-list 
+            iconName="aggregateFields" 
+            [items]="items"
+            [categoryEntityID]="categoryEntityID"
+            addText="Create New View"
+            ItemEntityName="User Views"
+            [CategoryEntityName]="categoryEntityName"
+            (itemClickEvent)="itemClick($event)" 
+            [selectedFolderID]="selectedFolderID"
+            [showLoader]="showLoader"
+            [viewingResource]=false
+            (AfterAddFolderEvent)="onEvent($event)"
+            (AfterAddItemEvent)="onEvent($event)"
+            (AfterDeleteItemEvent)="onEvent($event)"
+            (AfterDeleteFolderEvent)="onEvent($event)"
+        />
+    </div>
+</div>

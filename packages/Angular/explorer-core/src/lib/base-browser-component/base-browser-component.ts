@@ -39,70 +39,99 @@ export class BaseBrowserComponent {
         }
     }
 
-    protected async LoadData(entityItemFilter?:string, categoryItemFilter?: string): Promise<void> {
+    protected async LoadData(params?: LoadDataParams): Promise<void> {
         
         //cache these values so that we can reused them 
         //in the Navigate function
-        this.EntityItemFilter = entityItemFilter;
-        this.CategoryItemFilter = categoryItemFilter;
+        this.EntityItemFilter = params?.entityItemFilter || this.EntityItemFilter;
+        this.CategoryItemFilter = params?.categoryItemFilter || this.CategoryItemFilter;
 
-        this.showLoader = true;
-        await this.GetEntityData(entityItemFilter);
-        await this.GetCategories(categoryItemFilter);
-        this.CreateItemsList();
+        if(params?.showLoader){
+            this.showLoader = true;
+        }
+        
+
+        this.items = [];
+        if(!params?.skiploadEntityData){
+            const entityData: any[] = await this.GetEntityData();
+            this.items.push(...this.createItemsFromEntityData(entityData));
+            this.entityData = entityData;
+        }
+
+        if(!params?.skipLoadCategoryData){
+            const categories: Folder[] = await this.GetCategories();
+            this.items.push(...this.createItemsFromFolders(categories));
+            this.folders = categories;
+        }
+        
+        if(params?.sortItemsAfterLoad){
+            this.sortItems();
+        }
+
         this.showLoader = false;
     }
 
-    protected async GetCategories(extraFilter?: string): Promise<void> {
-        const rv = new RunView();
-
-        let filterString: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : "ParentID IS NULL"; 
-        filterString += " AND Name != 'Root'";
-        const folderResult = await rv.RunView({
-            EntityName: this.categoryEntityName,
-            ExtraFilter: extraFilter || filterString
+    //maybe pass in a sort function for custom sorting?
+    protected sortItems(): void {
+        this.items.sort(function(a, b){
+            if(a.Name < b.Name) { return -1; }
+            if(a.Name > b.Name) { return 1; }
+            return 0;
         });
-
-        if(folderResult && folderResult.Success){
-            this.folders = folderResult.Results;
-        }
-        else{
-            this.folders = [];
-        }
     }
 
-    protected async GetEntityData(extraFilter? :string): Promise<void> {
+    protected async GetEntityData(): Promise<any[]> {
         const rv = new RunView();
         const result = await rv.RunView({
             EntityName: this.itemEntityName,
-            ExtraFilter: extraFilter
+            ExtraFilter: this.EntityItemFilter
         });
 
         if (result && result.Success){
-            this.entityData = result.Results;
+            return result.Results;
+        }
+        else{
+            return[];
         }
     }
 
-    protected CreateItemsList(): void {
-        this.items = [];
-        for(const data of this.entityData){
-            let item: Item = new Item(data, ItemType.Entity);
-            this.items.push(item);
+    protected async GetCategories(): Promise<Folder[]> {
+        const rv = new RunView();
+
+        const folderResult = await rv.RunView({
+            EntityName: this.categoryEntityName,
+            ExtraFilter: this.CategoryItemFilter
+        });
+
+        if(folderResult && folderResult.Success){
+            return folderResult.Results;
         }
-      
-        for(const folder of this.folders){
+        else{
+            return [];
+        }
+    }
+
+    protected createItemsFromEntityData(entityData: any[]): Item[] {
+        let items: Item[] = [];
+        for(const data of entityData){
+            let item: Item = new Item(data, ItemType.Entity);
+            items.push(item);
+        }
+
+        return items;
+    }
+
+    protected createItemsFromFolders(folders: Folder[]): Item[] {
+        let items: Item[] = [];
+        for(const folder of folders){
             const dashboardFolder: Folder = new Folder(folder.ID, folder.Name);
             dashboardFolder.ParentFolderID = folder.ParentFolderID;
             dashboardFolder.Description = folder.Description;
             let item: Item = new Item(dashboardFolder, ItemType.Folder);
-            this.items.push(item);
+            items.push(item);
         }
-      
-        this.items.sort(function(a, b){
-        if(a.Name < b.Name) { return -1; }
-        if(a.Name > b.Name) { return 1; }
-        return 0;
-        });
+
+        return items;
     }
 
     protected Navigate(item: Item, router: Router, dataID: string): void {
@@ -126,18 +155,29 @@ export class BaseBrowserComponent {
         //so just reload all of the data
         router.navigate([this.routeName], {queryParams: {folderID: folder.ID}});
         this.selectedFolderID = folder.ID;
-        this.LoadData(this.EntityItemFilter, this.CategoryItemFilter);
+        this.LoadData({});
         }
     }
 
-    protected onEvent(event: BaseEvent): void {
+    public onEvent(event: BaseEvent): void {
         if(event.EventType === EventTypes.AfterAddFolder || event.EventType === EventTypes.AfterAddItem){
-          let addEvent: AfterAddFolderEvent = event as AfterAddFolderEvent;
-          this.items.push(addEvent.Item);
+            //specific type does not matter, we just need a type that has the Item property
+            let addEvent: AfterAddFolderEvent = event as AfterAddFolderEvent;
+            this.items.push(addEvent.Item);
         }
         else if(event.EventType === EventTypes.AfterDeleteItem || event.EventType === EventTypes.AfterDeleteFolder){
-          let deleteEvent: AfterDeleteItemEvent = event as AfterDeleteItemEvent;
-          this.items = this.items.filter((item: Item) => item !== deleteEvent.Item);
+            //specific type does not matter, we just need a type that has the Item property
+            let deleteEvent: AfterDeleteItemEvent = event as AfterDeleteItemEvent;
+            this.items = this.items.filter((item: Item) => item !== deleteEvent.Item);
         }
     }
+}
+
+export type LoadDataParams = {
+    entityItemFilter?: string,
+    categoryItemFilter?: string,
+    skiploadEntityData?: boolean,
+    skipLoadCategoryData?: boolean,
+    sortItemsAfterLoad?: boolean,
+    showLoader?: boolean
 }
