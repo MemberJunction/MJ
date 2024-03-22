@@ -1,0 +1,21 @@
+<div class="wrapper">
+    <kendo-expansionpanel
+        *ngFor="let item of items; index as i"
+        [title]="item.Name"
+    >
+        <div class="content">
+            <kendo-listview
+                [height]="400"
+                [data]="item.Children"
+                containerClass="k-d-flex k-flex-col k-flex-nowrap"
+            >
+                <ng-template
+                    kendoListViewItemTemplate
+                    let-dataItem="dataItem"
+                >
+                    <h3>{{dataItem.Name}}</h3>
+                </ng-template>
+            </kendo-listview>
+        </div>
+    </kendo-expansionpanel>
+</div>

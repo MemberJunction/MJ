@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, input } from '@angular/core';
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
@@ -23,6 +23,18 @@ export class GenericBrowserListComponent {
   @Input() public CategoryEntityName: string = '';
   @Input() public selectedFolderID: number | null = null;
   @Input() public showNotifications: boolean = true;
+  @Input() public categoryEntityID: number | null = null;
+  /**
+   * If we are viewing a reesource, such as dashboards, reports, queries, etc
+   * then the UI will need to change abit to accomodate this like 
+   * showing the name of the resouce as a header
+   */
+  @Input() public viewingResource: boolean = false;
+  /**
+   * Indicates if the items should be displayed as a list
+   * or as a grid of icons
+   */
+  @Input() public displayItemsAsList: boolean = false;
 
 
   //Before Evewnts
@@ -94,20 +106,28 @@ export class GenericBrowserListComponent {
     if(event.Cancel){
     }
 
-    let folderName: string = "Sample Folder";
+    let folderName: string = "Sample Folder " + this.ItemEntityName;
+    let description: string = `Sub folder of ${(this.selectedFolderID ? this.selectedFolderID : "root")} inside ${this.ItemEntityName}`;
+    
     const md: Metadata = new Metadata();
     const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
 
     folderEntity.NewRecord();
     folderEntity.Set("Name", folderName);
     folderEntity.Set("ParentID", this.selectedFolderID);
-    folderEntity.Set("Description", "Sample Description");
+    folderEntity.Set("Description", description);
+    
+    if(this.categoryEntityID){
+      folderEntity.Set("EntityID", this.categoryEntityID);
+    }
 
     let saveResult: boolean = await folderEntity.Save();
     if(saveResult){
       this.showNotification(`successfully created folder ${folderName}`, "info");
 
       let folder: Folder = new Folder(folderEntity.Get("ID"), folderEntity.Get("Name"));
+      folder.Description = folderEntity.Get("Description");
+
       let item: Item = new Item(folder, ItemType.Folder);
       this.AfterAddFolderEvent.emit(new AfterAddFolderEvent(item));
     }

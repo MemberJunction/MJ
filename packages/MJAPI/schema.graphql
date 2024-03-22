@@ -1058,6 +1058,7 @@ input CreateUserRoleInput {
 
 input CreateUserViewCategoryInput {
   Description: String
+  EntityID: Int!
   Name: String!
   ParentID: Int
 }
@@ -4954,6 +4955,7 @@ input UpdateUserRecordLogInput {
 
 input UpdateUserViewCategoryInput {
   Description: String
+  EntityID: Int!
   ID: Int!
   Name: String!
   ParentID: Int
@@ -5151,6 +5153,7 @@ type UserRole_ {
 type UserViewCategory_ {
   CreatedAt: Timestamp!
   Description: String
+  EntityID: Int!
   ID: Int!
   Name: String!
   Parent: String

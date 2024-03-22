@@ -69,6 +69,8 @@ import { SingleViewComponent } from './lib/single-view/single-view.component';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
 import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-properties-dialog.component';
+import {ExpansionPanelComponent} from './lib/expansion-panel-component/expansion-panel-component';
+import {ApplicationViewComponent} from './lib/app-view/application-view.component';
 
 @NgModule({
   declarations: [
@@ -108,6 +110,8 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
     EditDashboardComponent,
     UserNotificationsComponent,
     QueryResource,
+    ExpansionPanelComponent,
+    ApplicationViewComponent
   ],
   imports: [
     CommonModule,
@@ -183,6 +187,8 @@ import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-p
     DeleteItemComponent,
     EditDashboardComponent,
     UserNotificationsComponent,
+    ExpansionPanelComponent,
+    ApplicationViewComponent
   ],
 })
 export class ExplorerCoreModule {}

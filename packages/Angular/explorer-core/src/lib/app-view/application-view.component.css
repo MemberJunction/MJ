@@ -1,0 +1,14 @@
+.app-container {
+    margin: 10px;
+ }
+ 
+.entity-list {
+     width: 500px;
+}
+.favorites-list {
+     width: 400px;
+}
+
+.cloumn {
+    flex-direction: column;
+}

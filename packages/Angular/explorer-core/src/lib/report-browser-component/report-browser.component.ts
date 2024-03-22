@@ -29,11 +29,8 @@ export class ReportBrowserComponent extends BaseBrowserComponent{
   }
 
   async ngOnInit(): Promise<void> {
-    await this.GetData();
-  }
-
-  async GetData(): Promise<void> {
-    await super.LoadData();
+    const categoryEntityFilter: string = "ParentID IS NULL";
+    await super.LoadData({categoryItemFilter: categoryEntityFilter});
   }
 
   public onBackButtonClick(): void {

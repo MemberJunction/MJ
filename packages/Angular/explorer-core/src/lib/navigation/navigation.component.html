@@ -1,7 +1,7 @@
 <div class="navigation-wrap" [ngClass]="{'waiting': loader}"  #drawerWrapper>
   <kendo-loader *ngIf="loading" type="converging-spinner" ></kendo-loader>
   <kendo-drawer-container *ngIf="!loading" >
-      <kendo-drawer
+    <kendo-drawer
       #drawer
       [items]="drawerItems"
       [mode]="mode"
@@ -9,8 +9,10 @@
       [animation]="false"
       (select)="onDrawerSelect($event)"
       [autoCollapse]="false"
-    >
-    </kendo-drawer>
+    />
+    <div *ngIf="showExpansionPanel">
+      <expansion-panel-component [items]="stubData" />
+    </div>
     <kendo-drawer-content mjFillContainer>
       <kendo-tabstrip mjFillContainer class="drawer-container" [scrollable]="true" [keepTabContent]="true" (tabClose)="onClose($event)" (tabSelect)="onTabSelect($event)" [animate]="false" #tabstrip>
         <kendo-tabstrip-tab [selected]="activeTabIndex === 0" [closable]="false">
