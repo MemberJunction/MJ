@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef } from '@angular/core';
+import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef, viewChildren, ViewChildren, QueryList } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
@@ -9,6 +9,7 @@ import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { Title } from '@angular/platform-browser';
+import { StubData } from '../../generic/app-nav-view.types';
 
 export interface Tab {
   id?: number;
@@ -50,6 +51,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public selectedTabIndex: number = 0;
   private workSpace: any = {};
   private workSpaceItems: WorkspaceItemEntity[] = [];
+  public stubData: StubData[] = [];
+
+  public showExpansionPanel: boolean = false;
 
   private routeSub: Subscription | null = null;
   @HostBinding('class.mobile-screen') isMobileScreen: boolean = false;
@@ -297,7 +301,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
   selectDrawerItem(index: number) {
     this.selectedDrawerItem = this.drawerItems[index];
-
+    this.showExpansionPanel = index === 2;
     // Get the <ul> element that contains the <li> elements
     const ulElement = this.drawerWrapper.nativeElement.querySelector('ul');
     
@@ -785,7 +789,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.tabstrip.selectTab(0);
       //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
     }
-    
+
     this.setAppTitle(ev.item.text);
   }
 
@@ -817,7 +821,16 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
  
   async loadApp() {
+
+    //setting the stubdata here because at this point
+    //the provider is defined within the MetaData class
+    //and the applications property is populated
     const md: Metadata = new Metadata();
+    const applications: ApplicationInfo[] = md.Applications;
+    this.stubData = applications.map(app => 
+      new StubData(app.Name, app.ApplicationEntities.map(entity => 
+        new StubData(entity.Entity, []))));
+
     await this.LoadDrawer();
 
     this.setDrawerConfig();

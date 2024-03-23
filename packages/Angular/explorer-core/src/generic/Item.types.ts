@@ -1,5 +1,3 @@
-import { BaseEntity } from "@memberjunction/core";
-
 export enum ItemType {
     Folder = "Folder",
     Entity = "Entity"
@@ -9,9 +7,9 @@ export class Item {
     public Name: string;
     public Description: string;
     public Type: ItemType;
-    public Data : BaseEntity | Folder;
+    public Data : any | Folder;
 
-    constructor(data: BaseEntity | Folder, type: ItemType){
+    constructor(data: any | Folder, type: ItemType){
         this.Type = type;
         this.Data = data;
         this.Name = "";

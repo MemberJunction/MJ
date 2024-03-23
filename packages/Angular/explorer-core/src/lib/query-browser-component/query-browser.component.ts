@@ -27,10 +27,11 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
     this.InitPathData(params);
   }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
 
     let entityFilter: string = "ID > 0";
-    this.LoadData(entityFilter, undefined);
+    const categoryEntityFilter: string = "ParentID IS NULL";
+    super.LoadData({entityItemFilter: entityFilter,  categoryItemFilter: categoryEntityFilter});
   }
 
   public itemClick(item: Item) {
