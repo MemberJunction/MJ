@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-settings",
-  "version": "0.9.8",
+  "version": "0.9.10",
   "description": "MemberJunction: Reusable Angular components for the settings section of the MJ Explorer App",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^0.9.163",
+    "@memberjunction/core-entities": "^0.9.165",
     "@memberjunction/global": "^0.9.156",
     "@memberjunction/core": "^0.9.177",
     "@memberjunction/ng-container-directives": "^0.9.141",
-    "@memberjunction/ng-shared": "^0.9.31",
-    "@memberjunction/ng-entity-permissions": "^0.9.8",
+    "@memberjunction/ng-shared": "^0.9.33",
+    "@memberjunction/ng-entity-permissions": "^0.9.10",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",

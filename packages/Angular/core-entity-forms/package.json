@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-core-entity-forms",
-  "version": "0.9.144",
+  "version": "0.9.146",
   "description": "MemberJunction Core Entity Angular Forms",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@memberjunction/core": "^0.9.177",
-    "@memberjunction/core-entities": "^0.9.163",
-    "@memberjunction/ng-explorer-core": "^0.9.205",
+    "@memberjunction/core-entities": "^0.9.165",
+    "@memberjunction/ng-explorer-core": "^0.9.207",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

@@ -6,6 +6,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Company
      * * Base View: vwCompanies
+     * * @description A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -118,6 +119,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Employee
      * * Base View: vwEmployees
+     * * @description A list of employees across all units of your organization
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -320,6 +322,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: UserFavorite
      * * Base View: vwUserFavorites
+     * * @description Records that each user can mark as a favorite for easy access
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -772,6 +775,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Role
      * * Base View: vwRoles
+     * * @description Roles are used for security administration and can have zero to many Users as members
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -828,7 +832,8 @@ import { RegisterClass } from "@memberjunction/global";
         }
         /**
         * * Field Name: Description
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the role
         */
         get Description(): string | null {  
             return this.Get('Description');
@@ -837,24 +842,26 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
-        * * Field Name: AzureID
-        * * Display Name: Azure
-        * * SQL Data Type: nvarchar(50)
+        * * Field Name: DirectoryID
+        * * Display Name: Directory ID
+        * * SQL Data Type: nvarchar(250)
+        * * Description: The unique ID of the role in the directory being used for authentication, for example an ID in Azure.
         */
-        get AzureID(): string | null {  
-            return this.Get('AzureID');
+        get DirectoryID(): string | null {  
+            return this.Get('DirectoryID');
         }
-        set AzureID(value: string | null) {
-            this.Set('AzureID', value);
+        set DirectoryID(value: string | null) {
+            this.Set('DirectoryID', value);
         }
         /**
         * * Field Name: SQLName
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(250)
+        * * Description: The name of the role in the database, this is used for auto-generating permission statements by CodeGen
         */
-        get SQLName(): string {  
+        get SQLName(): string | null {  
             return this.Get('SQLName');
         }
-        set SQLName(value: string) {
+        set SQLName(value: string | null) {
             this.Set('SQLName', value);
         }
         /**
@@ -885,6 +892,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Skill
      * * Base View: vwSkills
+     * * @description A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -1000,6 +1008,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: IntegrationURLFormat
      * * Base View: vwIntegrationURLFormats
+     * * @description Used to generate web links for end users to easily access resources in a source system. URL Formats support templating to inject various field values at run-time to take a user directly to a resource in a source system.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -1122,6 +1131,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Integration
      * * Base View: vwIntegrations
+     * * @description Catalog of all integrations that have been configured in the system.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -1271,6 +1281,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: CompanyIntegration
      * * Base View: vwCompanyIntegrations
+     * * @description Links individual company records to specific integrations
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -1556,6 +1567,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: EntityField
      * * Base View: vwEntityFields
+     * * @description List of all fields within each entity with metadata about each field
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -2088,6 +2100,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Entity
      * * Base View: vwEntities
+     * * @description Catalog of all entities across all schemas
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -2640,6 +2653,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: User
      * * Base View: vwUsers
+     * * @description A list of all users who have or had access to the system
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -2875,6 +2889,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: EntityRelationship
      * * Base View: vwEntityRelationships
+     * * @description Metadata about relationships between entities including display preferences for the UI
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -3370,6 +3385,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: UserView
      * * Base View: vwUserViews
+     * * @description Views are sets of records within a given entity defined by filtering rules. Views can be used programatically to retrieve dynamic sets of data and in user interfaces like MJ Explorer for end-user consumption.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -4110,6 +4126,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Application
      * * Base View: vwApplications
+     * * @description Applications are used to group entities in the user interface for ease of user access
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -4202,6 +4219,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: ApplicationEntity
      * * Base View: vwApplicationEntities
+     * * @description List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -4360,6 +4378,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: EntityPermission
      * * Base View: vwEntityPermissions
+     * * @description Security settings for each entity
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -4543,9 +4562,9 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RoleSQLName
         * * Display Name: Role SQLName
-        * * SQL Data Type: nvarchar(50)
+        * * SQL Data Type: nvarchar(250)
         */
-        get RoleSQLName(): string {  
+        get RoleSQLName(): string | null {  
             return this.Get('RoleSQLName');
         }
     
@@ -4919,6 +4938,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: List
      * * Base View: vwLists
+     * * @description Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -5064,6 +5084,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: ListDetail
      * * Base View: vwListDetails
+     * * @description Tracks the records within each list.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -5138,6 +5159,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: UserViewRun
      * * Base View: vwUserViewRuns
+     * * @description User Views can be logged when run to capture the date and user that ran the view as well as the output results.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -5243,6 +5265,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: UserViewRunDetail
      * * Base View: vwUserViewRunDetails
+     * * @description Tracks the set of records that were included in each run of a given user view.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -5713,6 +5736,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: RecordChange
      * * Base View: vwRecordChanges
+     * * @description For entities that have TrackRecordChanges=1, Record Changes will store the history of all changes made within the system. For integrations you can directly add values here if you have inbound signals indicating records were changed in a source system. This entity only automatically captures Record Changes if they were made within the system.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -6860,6 +6884,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: AIModel
      * * Base View: vwAIModels
+     * * @description Catalog of all AI Models configured in the system.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -7012,6 +7037,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: AIAction
      * * Base View: vwAIActions
+     * * @description List of all actions that are possible across all AI Models
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -7151,6 +7177,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: AIModelAction
      * * Base View: vwAIModelActions
+     * * @description Tracks the actions supported by each AI Model
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -7278,6 +7305,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: EntityAIAction
      * * Base View: vwEntityAIActions
+     * * @description Tracks the AI actions that should be invoked based on changes to records within a given entity.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -7506,6 +7534,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: AIModelType
      * * Base View: vwAIModelTypes
+     * * @description Types of AI Models
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -7702,6 +7731,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Queue
      * * Base View: vwQueues
+     * * @description Queues can be used to async execute long running tasks
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -8117,6 +8147,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Dashboard
      * * Base View: vwDashboards
+     * * @description Dashboards are used to group resources into a single display pane for an end-user
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -9079,6 +9110,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Tag
      * * Base View: vwTags
+     * * @description Tags are used to arbitrarily associate any record in any entity with addtional information.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -9198,6 +9230,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: TaggedItem
      * * Base View: vwTaggedItems
+     * * @description Tracks the links between any record in any entity with Tags
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -9304,6 +9337,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Workspace
      * * Base View: vwWorkspaces
+     * * @description A user can have one or more workspaces
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -9388,6 +9422,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: WorkspaceItem
      * * Base View: vwWorkspaceItems
+     * * @description Tracks the resources that are active within a given worksapce
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -9526,6 +9561,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Dataset
      * * Base View: vwDatasets
+     * * @description Cacheable sets of data that can span one or more items
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -9633,6 +9669,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: DatasetItem
      * * Base View: vwDatasetItems
+     * * @description A single item in a Dataset and can be sourced from multiple methods.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -10288,6 +10325,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: SchemaInfo
      * * Base View: vwSchemaInfos
+     * * @description Tracks the schemas in the system and the ID ranges that are valid for entities within each schema.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -11191,6 +11229,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: Query
      * * Base View: vwQueries
+     * * @description Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class

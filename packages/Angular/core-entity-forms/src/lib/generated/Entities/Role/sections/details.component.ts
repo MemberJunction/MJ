@@ -16,15 +16,15 @@ import { RoleEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Description</label>
-            <kendo-textarea [(ngModel)]="record.Description" ></kendo-textarea>   
+            <kendo-textbox [(ngModel)]="record.Description"  />   
         </div>               
         <div class="record-form-row">
-            <label class="fieldLabel">Azure</label>
-            <kendo-textbox [(ngModel)]="record.AzureID"  />   
+            <label class="fieldLabel">Directory ID</label>
+            <kendo-textarea [(ngModel)]="record.DirectoryID" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">SQLName</label>
-            <kendo-textbox [(ngModel)]="record.SQLName"  />   
+            <kendo-textarea [(ngModel)]="record.SQLName" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
@@ -46,8 +46,8 @@ import { RoleEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('Description', 0)}}</span>
         </div>              
         <div class="record-form-row">
-            <label class="fieldLabel">Azure</label>
-            <span >{{FormatValue('AzureID', 0)}}</span>
+            <label class="fieldLabel">Directory ID</label>
+            <span >{{FormatValue('DirectoryID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">SQLName</label>

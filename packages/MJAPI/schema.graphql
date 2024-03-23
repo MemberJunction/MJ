@@ -1058,6 +1058,7 @@ input CreateUserRoleInput {
 
 input CreateUserViewCategoryInput {
   Description: String
+  EntityID: Int!
   Name: String!
   ParentID: Int
 }
@@ -1521,7 +1522,7 @@ type EntityPermission_ {
   ReadRLSFilter: String
   ReadRLSFilterID: Int
   RoleName: String
-  RoleSQLName: String!
+  RoleSQLName: String
   UpdateRLSFilter: String
   UpdateRLSFilterID: Int
   UpdatedAt: Timestamp!
@@ -2818,15 +2819,25 @@ type ResourceType_ {
 
 type Role_ {
   AuthorizationRolesArray: [AuthorizationRole_!]!
-  AzureID: String
   CreatedAt: Timestamp!
+
+  """Description of the role"""
   Description: String
+
+  """
+  The unique ID of the role in the directory being used for authentication, for example an ID in Azure.
+  """
+  DirectoryID: String
   EmployeeRolesArray: [EmployeeRole_!]!
   EntityPermissionsArray: [EntityPermission_!]!
   ID: Int!
   Name: String!
   QueryPermissionsArray: [QueryPermission_!]!
-  SQLName: String!
+
+  """
+  The name of the role in the database, this is used for auto-generating permission statements by CodeGen
+  """
+  SQLName: String
   UpdatedAt: Timestamp!
   UserRolesArray: [UserRole_!]!
 }
@@ -4878,11 +4889,11 @@ input UpdateReportSnapshotInput {
 }
 
 input UpdateRoleInput {
-  AzureID: String
   Description: String
+  DirectoryID: String
   ID: Int!
   Name: String!
-  SQLName: String!
+  SQLName: String
 }
 
 input UpdateSchemaInfoInput {
@@ -4954,6 +4965,7 @@ input UpdateUserRecordLogInput {
 
 input UpdateUserViewCategoryInput {
   Description: String
+  EntityID: Int!
   ID: Int!
   Name: String!
   ParentID: Int
@@ -5151,6 +5163,7 @@ type UserRole_ {
 type UserViewCategory_ {
   CreatedAt: Timestamp!
   Description: String
+  EntityID: Int!
   ID: Int!
   Name: String!
   Parent: String

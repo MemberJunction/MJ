@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/22/2024, 1:17:14 PM
+* GENERATED: 3/23/2024, 10:41:24 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -26,7 +26,7 @@ import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyInteg
 //****************************************************************************
 // ENTITY CLASS for Companies
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.' })
 export class Company_ {  
     @Field(() => Int) 
     ID: number;
@@ -292,7 +292,7 @@ export class CompanyResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Employees
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'A list of employees across all units of your organization' })
 export class Employee_ {  
     @Field(() => Int) 
     ID: number;
@@ -620,7 +620,7 @@ export class EmployeeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Favorites
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Records that each user can mark as a favorite for easy access' })
 export class UserFavorite_ {  
     @Field(() => Int) 
     ID: number;
@@ -1228,7 +1228,7 @@ export class EmployeeSkillResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Roles
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Roles are used for security administration and can have zero to many Users as members' })
 export class Role_ {  
     @Field(() => Int) 
     ID: number;
@@ -1237,17 +1237,16 @@ export class Role_ {
     @MaxLength(100)
     Name: string;
       
-    @Field({nullable: true}) 
-    @MaxLength(1000)
+    @Field({nullable: true, description: 'Description of the role'}) 
     Description?: string;
       
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    AzureID?: string;
+    @Field({nullable: true, description: 'The unique ID of the role in the directory being used for authentication, for example an ID in Azure.'}) 
+    @MaxLength(500)
+    DirectoryID?: string;
       
-    @Field() 
-    @MaxLength(100)
-    SQLName: string;
+    @Field({nullable: true, description: 'The name of the role in the database, this is used for auto-generating permission statements by CodeGen'}) 
+    @MaxLength(500)
+    SQLName?: string;
       
     @Field() 
     @MaxLength(8)
@@ -1289,9 +1288,9 @@ export class UpdateRoleInput {
     Description: string;
 
     @Field({ nullable: true })
-    AzureID: string;
+    DirectoryID: string;
 
-    @Field()
+    @Field({ nullable: true })
     SQLName: string;
 }
 
@@ -1431,7 +1430,7 @@ export class RoleResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Skills
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity' })
 export class Skill_ {  
     @Field(() => Int) 
     ID: number;
@@ -1543,7 +1542,7 @@ export class SkillResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Integration URL Formats
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Used to generate web links for end users to easily access resources in a source system. URL Formats support templating to inject various field values at run-time to take a user directly to a resource in a source system.' })
 export class IntegrationURLFormat_ {  
     @Field(() => Int) 
     ID: number;
@@ -1690,7 +1689,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Integrations
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Catalog of all integrations that have been configured in the system.' })
 export class Integration_ {  
     @Field(() => Int) 
     ID: number;
@@ -1879,7 +1878,7 @@ export class IntegrationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Company Integrations
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Links individual company records to specific integrations' })
 export class CompanyIntegration_ {  
     @Field(() => Int) 
     ID: number;
@@ -2150,7 +2149,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Fields
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'List of all fields within each entity with metadata about each field' })
 export class EntityField_ {  
     @Field(() => Int) 
     ID: number;
@@ -2643,7 +2642,7 @@ export class EntityFieldResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entities
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Catalog of all entities across all schemas' })
 export class Entity_ {  
     @Field(() => Int) 
     ID: number;
@@ -3493,7 +3492,7 @@ export class EntityResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Users
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'A list of all users who have or had access to the system' })
 export class User_ {  
     @Field(() => Int) 
     ID: number;
@@ -4004,7 +4003,7 @@ export class UserResolverBase extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Relationships
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Metadata about relationships between entities including display preferences for the UI' })
 export class EntityRelationship_ {  
     @Field(() => Int) 
     ID: number;
@@ -4525,7 +4524,7 @@ export class UserRecordLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User Views
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Views are sets of records within a given entity defined by filtering rules. Views can be used programatically to retrieve dynamic sets of data and in user interfaces like MJ Explorer for end-user consumption.' })
 export class UserView_ {  
     @Field(() => Int) 
     ID: number;
@@ -5428,7 +5427,7 @@ export class ErrorLogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Applications
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Applications are used to group entities in the user interface for ease of user access' })
 export class Application_ {  
     @Field(() => Int) 
     ID: number;
@@ -5584,7 +5583,7 @@ export class ApplicationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Application Entities
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.' })
 export class ApplicationEntity_ {  
     @Field(() => Int) 
     ID: number;
@@ -5820,7 +5819,7 @@ export class ApplicationEntityResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity Permissions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Security settings for each entity' })
 export class EntityPermission_ {  
     @Field(() => Int) 
     ID: number;
@@ -5868,9 +5867,9 @@ export class EntityPermission_ {
     @MaxLength(510)
     Entity: string;
       
-    @Field() 
-    @MaxLength(100)
-    RoleSQLName: string;
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RoleSQLName?: string;
       
     @Field({nullable: true}) 
     @MaxLength(200)
@@ -6639,7 +6638,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Lists
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.' })
 export class List_ {  
     @Field(() => Int) 
     ID: number;
@@ -6889,7 +6888,7 @@ export class ListResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for List Details
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the records within each list.' })
 export class ListDetail_ {  
     @Field(() => Int) 
     ID: number;
@@ -7084,7 +7083,7 @@ export class ListDetailResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User View Runs
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'User Views can be logged when run to capture the date and user that ran the view as well as the output results.' })
 export class UserViewRun_ {  
     @Field(() => Int) 
     ID: number;
@@ -7272,7 +7271,7 @@ export class UserViewRunResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for User View Run Details
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the set of records that were included in each run of a given user view.' })
 export class UserViewRunDetail_ {  
     @Field(() => Int) 
     ID: number;
@@ -7909,7 +7908,7 @@ export class WorkflowEngineResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Record Changes
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'For entities that have TrackRecordChanges=1, Record Changes will store the history of all changes made within the system. For integrations you can directly add values here if you have inbound signals indicating records were changed in a source system. This entity only automatically captures Record Changes if they were made within the system.' })
 export class RecordChange_ {  
     @Field(() => Int) 
     ID: number;
@@ -9019,7 +9018,7 @@ export class EntityFieldValueResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Models
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Catalog of all AI Models configured in the system.' })
 export class AIModel_ {  
     @Field(() => Int) 
     ID: number;
@@ -9229,7 +9228,7 @@ export class AIModelResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Actions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'List of all actions that are possible across all AI Models' })
 export class AIAction_ {  
     @Field(() => Int) 
     ID: number;
@@ -9406,7 +9405,7 @@ export class AIActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Model Actions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the actions supported by each AI Model' })
 export class AIModelAction_ {  
     @Field(() => Int) 
     ID: number;
@@ -9552,7 +9551,7 @@ export class AIModelActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Entity AI Actions
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the AI actions that should be invoked based on changes to records within a given entity.' })
 export class EntityAIAction_ {  
     @Field(() => Int) 
     ID: number;
@@ -9756,7 +9755,7 @@ export class EntityAIActionResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Model Types
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Types of AI Models' })
 export class AIModelType_ {  
     @Field(() => Int) 
     ID: number;
@@ -9984,7 +9983,7 @@ export class QueueTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queues
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Queues can be used to async execute long running tasks' })
 export class Queue_ {  
     @Field(() => Int) 
     ID: number;
@@ -10529,7 +10528,7 @@ export class QueueTaskResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Dashboards
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Dashboards are used to group resources into a single display pane for an end-user' })
 export class Dashboard_ {  
     @Field(() => Int) 
     ID: number;
@@ -11677,7 +11676,7 @@ export class ResourceTypeResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Tags
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tags are used to arbitrarily associate any record in any entity with addtional information.' })
 export class Tag_ {  
     @Field(() => Int) 
     ID: number;
@@ -11781,7 +11780,7 @@ export class TagResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Tagged Items
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the links between any record in any entity with Tags' })
 export class TaggedItem_ {  
     @Field(() => Int) 
     ID: number;
@@ -11863,7 +11862,7 @@ export class TaggedItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workspaces
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'A user can have one or more workspaces' })
 export class Workspace_ {  
     @Field(() => Int) 
     ID: number;
@@ -12074,7 +12073,7 @@ export class WorkspaceResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Workspace Items
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the resources that are active within a given worksapce' })
 export class WorkspaceItem_ {  
     @Field(() => Int) 
     ID: number;
@@ -12315,7 +12314,7 @@ export class WorkspaceItemResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Datasets
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Cacheable sets of data that can span one or more items' })
 export class Dataset_ {  
     @Field(() => Int) 
     ID: number;
@@ -12404,7 +12403,7 @@ export class DatasetResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Dataset Items
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'A single item in a Dataset and can be sourced from multiple methods.' })
 export class DatasetItem_ {  
     @Field(() => Int) 
     ID: number;
@@ -13291,7 +13290,7 @@ export class UserNotificationResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Schema Info
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Tracks the schemas in the system and the ID ranges that are valid for entities within each schema.' })
 export class SchemaInfo_ {  
     @Field(() => Int) 
     ID: number;
@@ -14616,7 +14615,7 @@ export class QueryCategoryResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for Queries
 //****************************************************************************
-@ObjectType()
+@ObjectType({ description: 'Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.' })
 export class Query_ {  
     @Field(() => Int) 
     ID: number;

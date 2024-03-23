@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/storage",
-  "version": "0.9.8",
+  "version": "0.9.10",
   "description": "This library provides a set of objects that handle the interface between the server-side API and various cloud storage providers.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,7 +26,7 @@
     "@azure/storage-blob": "^12.17.0",
     "@google-cloud/storage": "^7.9.0",
     "@memberjunction/core": "^0.9.177",
-    "@memberjunction/core-entities": "^0.9.163",
+    "@memberjunction/core-entities": "^0.9.165",
     "@memberjunction/global": "^0.9.156",
     "env-var": "^7.3.0",
     "mime-types": "^2.1.35"

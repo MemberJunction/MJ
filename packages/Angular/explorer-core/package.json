@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.205",
+  "version": "0.9.207",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -39,16 +39,16 @@
   "dependencies": {
     "@memberjunction/global": "^0.9.156",
     "@memberjunction/core": "^0.9.177",
-    "@memberjunction/ng-compare-records": "^0.9.179",
-    "@memberjunction/ng-file-storage": "^0.9.5",
-    "@memberjunction/ng-record-changes": "^0.9.113",
+    "@memberjunction/ng-compare-records": "^0.9.181",
+    "@memberjunction/ng-file-storage": "^0.9.7",
+    "@memberjunction/ng-record-changes": "^0.9.115",
     "@memberjunction/ng-container-directives": "^0.9.141",
-    "@memberjunction/ng-user-view-grid": "^0.9.213",
-    "@memberjunction/ng-query-grid": "^0.9.61",
-    "@memberjunction/ng-shared": "^0.9.31",
-    "@memberjunction/ng-ask-skip": "^0.9.100",
+    "@memberjunction/ng-user-view-grid": "^0.9.215",
+    "@memberjunction/ng-query-grid": "^0.9.63",
+    "@memberjunction/ng-shared": "^0.9.33",
+    "@memberjunction/ng-ask-skip": "^0.9.102",
     "@memberjunction/ng-auth-services": "^0.9.100",
-    "@memberjunction/ng-explorer-settings": "^0.9.8",
+    "@memberjunction/ng-explorer-settings": "^0.9.10",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
