@@ -8,6 +8,7 @@ import { TabStripModule } from '@progress/kendo-angular-layout';
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { FormToolbarComponent } from './lib/form-toolbar';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
+import { ButtonsModule } from '@progress/kendo-angular-buttons';
 
 @NgModule({
   declarations: [
@@ -18,7 +19,8 @@ import { RecordChangesModule } from '@memberjunction/ng-record-changes';
     CommonModule,
     FormsModule,
     TabStripModule,
-    RecordChangesModule
+    RecordChangesModule,
+    ButtonsModule
   ],
   exports: [
     SectionLoaderComponent,

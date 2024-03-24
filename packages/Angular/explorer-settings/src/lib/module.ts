@@ -22,13 +22,17 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { SingleUserComponent } from './single-user/single-user.component';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
+import { SingleApplicationComponent } from './single-application/single-application.component';
+import { ApplicationEntitiesGridComponent } from './application-entities-grid/application-entities-grid.component';
 
 @NgModule({
   declarations: [
     SingleRoleComponent,
     SettingsComponent,
     UserRolesGridComponent,
-    SingleUserComponent
+    SingleUserComponent,
+    SingleApplicationComponent,
+    ApplicationEntitiesGridComponent
   ],
   imports: [
     CommonModule,
@@ -53,7 +57,9 @@ import { SimpleRecordListModule } from '@memberjunction/ng-simple-record-list';
     SingleRoleComponent,
     SettingsComponent,
     UserRolesGridComponent,
-    SingleUserComponent
+    SingleUserComponent,
+    SingleApplicationComponent,
+    ApplicationEntitiesGridComponent
   ]
 })
 export class ExplorerSettingsModule { }

@@ -1,9 +1,11 @@
 <div class="container" mjFillContainer [fillWidth]="false" [bottomMargin]="5">
     <!-- Options container -->
     <div class="options-container">
-        <div class="option-item" [class.selected]="currentItem === 'Users'"  (click)="selectItem('Users')">Users</div>
-        <div class="option-item" [class.selected]="currentItem === 'Roles' || currentItem === 'Role'"  (click)="selectItem('Roles')">Roles</div>
-        <div class="option-item" [class.selected]="currentItem === 'EntityPermissions'"  (click)="selectItem('EntityPermissions')">Entity Permissions</div>
+        <div *ngFor="let o of options"
+            class="option-item"
+            [class.selected]="leftNavItemSelected(o)"
+            (click)="selectItem(o.value)"
+        >{{o.label}}</div>
     </div>
 
     <!-- Display container -->
@@ -11,6 +13,7 @@
         <div *ngIf="currentItem === 'EntityPermissions'">
             <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
         </div>
+
         <div *ngIf="currentItem === 'Users'">
             <mj-simple-record-list
                 EntityName="Users"
@@ -22,6 +25,7 @@
         <div *ngIf="currentItem === 'User'">
             <mj-single-user [UserID]="selectedUserID"></mj-single-user>
         </div>
+
         <div *ngIf="currentItem === 'Roles'">
             <mj-simple-record-list
                 EntityName="Roles"
@@ -33,5 +37,17 @@
         <div *ngIf="currentItem === 'Role'">
             <mj-single-role [RoleName]="selectedRoleName"></mj-single-role>
         </div>
+
+        <div *ngIf="currentItem === 'Applications'">
+            <mj-simple-record-list
+                EntityName="Applications"
+                SortBy="Name"
+                [Columns]="['Name', 'Description']"
+                (RecordSelected)="selectApplication($event)"
+            ></mj-simple-record-list>
+        </div>
+        <div *ngIf="currentItem === 'Application'">
+            <mj-single-application [ApplicationName]="selectedApplicationName"></mj-single-application>
+        </div>        
     </div>
 </div>

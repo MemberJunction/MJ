@@ -491,6 +491,11 @@ input CreateApplicationEntityInput {
   Sequence: Int!
 }
 
+input CreateApplicationInput {
+  Description: String
+  Name: String!
+}
+
 input CreateAuditLogInput {
   AuditLogTypeName: String
   AuthorizationName: String
@@ -1886,6 +1891,7 @@ type Mutation {
   CreateAccount(input: CreateAccountInput!): Account_!
   CreateActivity(input: CreateActivityInput!): Activity_!
   CreateActivityAttachment(input: CreateActivityAttachmentInput!): ActivityAttachment_!
+  CreateApplication(input: CreateApplicationInput!): Application_!
   CreateApplicationEntity(input: CreateApplicationEntityInput!): ApplicationEntity_!
   CreateAuditLog(input: CreateAuditLogInput!): AuditLog_!
   CreateCompany(input: CreateCompanyInput!): Company_!
@@ -1951,6 +1957,7 @@ type Mutation {
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   DeleteAccount(ID: Int!): Account_!
+  DeleteApplication(ID: Int!): Application_!
   DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
   DeleteCompany(ID: Int!): Company_!
   DeleteConversation(ID: Int!): Conversation_!

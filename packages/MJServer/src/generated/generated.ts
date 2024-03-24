@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/23/2024, 4:22:49 PM
+* GENERATED: 3/24/2024, 11:43:36 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -5535,6 +5535,19 @@ export class Application_ {
 // INPUT TYPE for Applications   
 //****************************************************************************
 @InputType()
+export class CreateApplicationInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Applications   
+//****************************************************************************
+@InputType()
 export class UpdateApplicationInput {
     @Field(() => Int)
     ID: number;
@@ -5623,6 +5636,36 @@ export class ApplicationResolver extends ResolverBase {
     }
     
     @Mutation(() => Application_)
+    async CreateApplication(
+        @Arg('input', () => CreateApplicationInput) input: CreateApplicationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationInput) {
+    }
+    
+    @Mutation(() => Application_)
     async UpdateApplication(
         @Arg('input', () => UpdateApplicationInput) input: UpdateApplicationInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -5630,9 +5673,9 @@ export class ApplicationResolver extends ResolverBase {
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Applications
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
                 // save worked, fire afterevent and return all the data
                 await this.AfterUpdate(dataSource, input); // fire event
                 return entityObject.GetAll();
@@ -5651,6 +5694,32 @@ export class ApplicationResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationInput) {
         const i = input, d = dataSource; // prevent error
+    }
+
+    @Mutation(() => Application_)
+    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
 
 }

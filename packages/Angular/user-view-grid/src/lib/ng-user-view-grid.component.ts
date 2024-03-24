@@ -122,6 +122,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
   public EditingComplete(): Promise<boolean> {
     if (this.InEditMode) {
+      // tell our grid to close the cell that is currently being edited
+      this.kendoGridElement?.closeCell();
+      this.kendoGridElement?.closeRow(); // close the row too
+
       // we need to wait for edit mode to end before we can return true
       return new Promise((resolve, reject) => {
         const subscription = this.editModeEnded.subscribe(() => {
@@ -161,7 +165,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             if (c && c.EntityField && this.viewData[i] && this.viewData[i][c.EntityField.Name]) {
               if (!c.hidden && c.EntityField.Name !== 'ID') {
                 const ef = c.EntityField;
-                return {field: c.EntityField.Name, value: ef.FormatValue(this.viewData[i][c.EntityField.Name], 0, undefined, 300)}
+                let formattedValue: any = null;
+                if (c.EntityField.TSType === EntityFieldTSType.Boolean) {
+                  formattedValue = this.viewData[i][c.EntityField.Name] ? '✓' : ''; // show a check mark if true, nothing if false
+                }
+                else {
+                  formattedValue = ef.FormatValue(this.viewData[i][c.EntityField.Name], 0, undefined, 300);
+                }
+
+                return {field: c.EntityField.Name, value: formattedValue}
               }
               else
                 return {field: c.EntityField.Name, value: this.viewData[i][c.EntityField.Name]} // hidden column, so just return the value, don't bother formatting
@@ -353,7 +365,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
   public async cellClickHandler(args: CellClickEvent) {
-    if(this.compareMode || this.mergeMode) return;
+    if(this.compareMode || this.mergeMode ) return;
     
     if (this._entityInfo) {
       const pkeyVals: PrimaryKeyValue[] = [];
@@ -375,11 +387,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         }
       }
 
-      if (!this.InEditMode && this.AutoNavigate) {
+      if (this.EditMode==='None' && this.AutoNavigate) {
         // tell app router to go to this record
         const pkVals: string =  this.GeneratePrimaryKeyValueString(pkeyVals);
         this.router.navigate(['resource', 'record', pkVals], { queryParams: { Entity: this._entityInfo.Name } })
-    }
+      }
     } 
   } 
 
@@ -416,7 +428,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public async cellCloseHandler(args: CellCloseEvent) {
     try {
       if (this._entityInfo && this.EditMode !== "None") {
-        const { formGroup, dataItem } = args;
+        const { formGroup, dataItem, column } = args;
   
         if (!formGroup.valid) {
           // prevent closing the edited cell if there are invalid values.
@@ -461,16 +473,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
                                          row: args.rowIndex, 
                                          dataItem}); // don't save - put the changed record on a queue for saving later by our container
             }
-            // go through the formGroup and only set the values that exist as columns in the grid
-            const keys = Object.keys(formGroup.value);
-            keys.forEach((k: string) => {
-              const vc = this.viewColumns.find((vc: ViewColumnInfo) => vc.Name === k && vc.hidden === false);
-              if (vc) {
-                record!.Set(k, formGroup.value[k]);
+            // now, based on the column that we're in, update the record with the new value
+            record.Set(column.field, formGroup.value[column.field]);
+            // if a boolean value, modify what is in the grid so it is formatted properly
+            if (column.field && column.field.length > 0) {
+              const ef = this._entityInfo.Fields.find(f => f.Name === column.field);
+              if (ef && ef.TSType === EntityFieldTSType.Boolean) {
+                dataItem[column.field] = record.Get(column.field) ? '✓' : '';
               }
-            })
-
-            //record.SetMany(formGroup.value);
+            }
           }
   
           this.rowEdited.emit({

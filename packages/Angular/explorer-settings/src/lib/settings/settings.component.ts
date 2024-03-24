@@ -1,8 +1,18 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { BaseEntity } from '@memberjunction/core';
-import { RoleEntity, UserEntity } from '@memberjunction/core-entities';
+import { ApplicationEntity, ApplicationEntityEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { filter } from 'rxjs/operators';
+
+export enum SettingsItem {
+  EntityPermissions = 'EntityPermissions',
+  Users = 'Users',
+  User = 'User',
+  Roles = 'Roles',
+  Role = 'Role',
+  Applications = 'Applications',
+  Application = 'Application'
+}
 
 @Component({
   selector: 'mj-settings',
@@ -10,14 +20,27 @@ import { filter } from 'rxjs/operators';
   styleUrls: ['./settings.component.css']
 })
 export class SettingsComponent implements OnInit {
-  public currentItem: 'EntityPermissions' | 'Users' | 'User' | 'Roles' | 'Role' = 'EntityPermissions';
+  public currentItem: SettingsItem = SettingsItem.Users;
   public baseRoute: string = '/settings';
 
   public selectedRoleName: string = '';
   public selectedUserID: number = 0;
+  public selectedApplicationName: string = '';
 
-  public selectItem(item: 'EntityPermissions' | 'Users' | 'User' | 'Roles' | 'Role', changeRoute: boolean = true) {
-    this.currentItem = item;
+  public options = [
+    { label: 'Users', value: SettingsItem.Users },
+    { label: 'Roles', value: SettingsItem.Roles },
+    { label: 'Applications', value: SettingsItem.Applications },
+    { label: 'Entity Permissions', value: SettingsItem.EntityPermissions }
+  ];
+
+
+  public selectItem(item: SettingsItem | string, changeRoute: boolean = true) {
+    if (typeof item === 'string')
+      this.currentItem = SettingsItem[item as keyof typeof SettingsItem];
+    else
+      this.currentItem = item;
+
     if (changeRoute)
         this.changeRoute(item.toLowerCase());
   }
@@ -53,32 +76,50 @@ export class SettingsComponent implements OnInit {
     const firstSegment = segments.length > 1 ? segments[1] : '';
     switch (firstSegment.trim().toLowerCase()) {
       case 'entitypermissions':
-        this.selectItem('EntityPermissions', false);
+        this.selectItem(SettingsItem.EntityPermissions, false);
+        break;
+      case 'applications':
+        this.selectItem(SettingsItem.Applications, false);
+        break;
+      case 'application':
+        this.selectedApplicationName = segments.length > 2 ? segments[2] : '';
+        this.selectItem(SettingsItem.Application, false);
         break;
       case 'users':
-        this.selectItem('Users', false);
-        break;
-      case 'roles':
-        this.selectItem('Roles', false);
-        break;
-      case 'role':
-        this.selectedRoleName = segments.length > 2 ? segments[2] : '';
-        this.selectItem('Role', false);
+        this.selectItem(SettingsItem.Users, false);
         break;
       case 'user':
         this.selectedUserID = segments.length > 2 ? parseInt(segments[2]) : 0;
-        this.selectItem('User', false);
+        this.selectItem(SettingsItem.User, false);
+        break;
+      case 'roles':
+        this.selectItem(SettingsItem.Roles, false);
+        break;
+      case 'role':
+        this.selectedRoleName = segments.length > 2 ? segments[2] : '';
+        this.selectItem(SettingsItem.Role, false);
         break;
       default:
         break;
     }
   }
+
+  public selectApplication(a: BaseEntity) {
+    this.selectRoute('/settings/application', (<ApplicationEntity>a).Name);
+  }
   public selectRole(r: BaseEntity) {
-    // change the route to point to the /settings/role/{r.Name} route
-    this.router.navigate(['/settings/role', (<RoleEntity>r).Name]);
+    this.selectRoute('/settings/role', (<RoleEntity>r).Name);
   }
   public selectUser(r: BaseEntity) {
-    // change the route to point to the /settings/user/{r.ID} route
-    this.router.navigate(['/settings/user', (<UserEntity>r).ID]);
+    this.selectRoute('/settings/user', (<UserEntity>r).ID);
+  }
+  public selectRoute(route: string, value: any) {
+    this.router.navigate([route, value]);    
+  }
+
+  public leftNavItemSelected(option: {label: string, value: any}) {
+    // if the currentItem matches it directly or if adding an S to the current item matches it, then return true
+    // for example for Application/Applications we want to match so the left nav item is highlighted
+    return option.value === this.currentItem || option.value === this.currentItem + 's';
   }
 }

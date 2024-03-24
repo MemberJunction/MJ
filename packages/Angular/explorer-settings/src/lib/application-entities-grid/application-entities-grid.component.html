@@ -1,0 +1,23 @@
+<div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+<div class="content" *ngIf="!isLoading">
+    <button [disabled]="NumDirty === 0" kendoButton (click)="save()">Save</button>
+    <button [disabled]="NumDirty === 0" kendoButton (click)="cancelEdit()">Cancel</button>
+    <table *ngIf="!isLoading" class="grid">
+        <thead>
+            <tr>
+                <th *ngIf="Mode === 'Applications'">Entity</th>
+                <th *ngIf="Mode === 'Entities'">Application</th>
+                <th (click)="flipAll()">In Application</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let r of rows">
+                <td *ngIf="Mode === 'Applications'">{{ r.Entity }}</td>
+                <td *ngIf="Mode === 'Entities'">{{ r.Application }}</td>
+                <td (click)="flipState($event, r, true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="r.Selected" (click)="flipState($event, r, false)">
+                </td>
+            </tr>
+        </tbody>
+    </table>            
+</div>

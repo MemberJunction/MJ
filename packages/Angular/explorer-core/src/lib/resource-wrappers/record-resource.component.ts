@@ -15,12 +15,15 @@ export function LoadRecordResource() {
 })
 export class EntityRecordResource extends BaseResourceComponent {
     public get primaryKeyValues(): PrimaryKeyValue[] {
+        return EntityRecordResource.GetPrimaryKeyValues(this.Data);
+    }
+    public static GetPrimaryKeyValues(data: ResourceData): PrimaryKeyValue[] {
         const md = new Metadata();
-        const e = md.Entities.find(e => e.Name.trim().toLowerCase() === this.Data.Configuration.Entity.trim().toLowerCase());
+        const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
         if (!e)
-            throw new Error(`Entity ${this.Data.Configuration.Entity} not found in metadata`);
+            throw new Error(`Entity ${data.Configuration.Entity} not found in metadata`);
 
-        const pKeys = SharedService.ParsePrimaryKeys(e, this.Data.ResourceRecordID)
+        const pKeys = SharedService.ParsePrimaryKeys(e, data.ResourceRecordID)
         return pKeys;
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -28,11 +31,8 @@ export class EntityRecordResource extends BaseResourceComponent {
             return ''
         else {
             const md = new Metadata();
-            const name = await md.GetEntityRecordName(data.Configuration.Entity, [{FieldName: "ID", Value: data.ResourceRecordID}]);
-            const e = md.Entities.find(e => e.Name === data.Configuration.Entity);
-            if (!e)
-                throw new Error(`Entity ${data.Configuration.Entity} not found in metadata`);
-            const pKeys = SharedService.ParsePrimaryKeys(e, data.ResourceRecordID)   
+            const pKeys = EntityRecordResource.GetPrimaryKeyValues(data);  
+            const name = await md.GetEntityRecordName(data.Configuration.Entity, pKeys);
             const displayId = pKeys.length > 1 ? pKeys.map(p => p.Value).join(', ') : pKeys[0].Value;         
             return (name ? name : data.Configuration.Entity) + ` (${displayId})`;
         }

@@ -68,8 +68,8 @@ export class SingleRoleComponent implements OnInit {
   }
 
   protected async Refresh() {
+    this.isLoading = true;
     const md = new Metadata();
-    this.RoleRecord = await md.GetEntityObject<RoleEntity>('Roles');
     let r = md.Roles.find(r => r.Name === this.RoleName);
     if (!r) {
       // sometime we are creating a new role, so attempt to refresh our metadata
@@ -79,7 +79,9 @@ export class SingleRoleComponent implements OnInit {
         throw new Error(`Role ${this.RoleName} not found`);
     }
 
+    this.RoleRecord = await md.GetEntityObject<RoleEntity>('Roles');
     await this.RoleRecord.Load(r.ID);  
+    this.isLoading = false;
   }
  
 

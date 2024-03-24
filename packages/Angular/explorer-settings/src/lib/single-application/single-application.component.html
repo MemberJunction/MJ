@@ -1,0 +1,40 @@
+<div mjFillContainer>
+    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+    <div *ngIf="!isLoading && Record">
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th scope="row">Application</th>
+                    <td>{{Record.Name}}<kendo-svgicon class='edit-icon' [icon]="kendoSVGIcon('pencil')" (click)="EditRecord()"></kendo-svgicon></td>
+                </tr>
+                <tr>
+                    <th scope="row">Description</th>
+                    <td>{{Record.Description}}</td>
+                </tr>
+            </tbody>
+        </table>         
+        <kendo-tabstrip
+            [keepTabContent]="true"
+            [animate]="false" 
+            >    
+            <kendo-tabstrip-tab title="Entities" [selected]="true">
+                <ng-template kendoTabContent>
+                    <mj-application-entities-grid *ngIf="ApplicationName && Record" Mode="Applications" [ApplicationName]="ApplicationName" [ApplicationRecord]="Record"></mj-application-entities-grid>
+                </ng-template>
+            </kendo-tabstrip-tab>
+        </kendo-tabstrip>
+    </div>
+</div>
+
+
+<mj-entity-form-dialog #entityForm 
+    [Record]="Record" 
+    SectionName="details" 
+    Mode="section" 
+    [Visible]="showEntityEditingForm" 
+    [AutoRevertOnCancel]="true"
+    [HandleSave]="true"
+    [Width]="550"
+    [Height]="450"
+    (close)="onEntityFormClosed($event)">
+</mj-entity-form-dialog>

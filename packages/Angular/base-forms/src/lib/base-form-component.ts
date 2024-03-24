@@ -57,7 +57,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             // now resize after a pause to allow the UI to settle
             setTimeout(() => {
               this.sharedService.InvokeManualResize();
-            }, 100);  
+            }, 250);  
           }
         }
       }
@@ -224,6 +224,20 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
     try {
+      try {
+        // atempt to blur the active element to force any pending changes to be committed
+        (document.activeElement as HTMLElement).blur(); 
+        if (this.userViewGridComponents.length > 0) {
+          // tell all our grids to finish up their editing
+          // if we have grids, create a slight delay, ensuring focus is lost on components that require that to update the model
+          this.userViewGridComponents.forEach(grid => {grid.EditingComplete()});
+          await this.Wait(100);
+        }
+      }
+      catch (e2) {
+        // ignore
+      }
+      
       if (this.record) {
         await this.PopulatePendingRecords(); // do this before we validate as we must validate pending records too
         const valResults = this.Validate();
