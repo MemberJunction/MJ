@@ -12,23 +12,23 @@
             <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
         </div>
         <div *ngIf="currentItem === 'Users'">
-            <mj-record-list
+            <mj-simple-record-list
                 EntityName="Users"
                 SortBy="Name"
                 [Columns]="['Name', 'Email', 'IsActive', 'Type']"
                 (RecordSelected)="selectUser($event)"
-            ></mj-record-list>
+            ></mj-simple-record-list>
         </div>
         <div *ngIf="currentItem === 'User'">
             <mj-single-user [UserID]="selectedUserID"></mj-single-user>
         </div>
         <div *ngIf="currentItem === 'Roles'">
-            <mj-record-list
+            <mj-simple-record-list
                 EntityName="Roles"
                 SortBy="Name"
                 [Columns]="['Name', 'Description']"
                 (RecordSelected)="selectRole($event)"
-            ></mj-record-list>
+            ></mj-simple-record-list>
         </div>
         <div *ngIf="currentItem === 'Role'">
             <mj-single-role [RoleName]="selectedRoleName"></mj-single-role>

@@ -1,16 +1,16 @@
-import { Component, OnInit, Input, SimpleChanges, OnChanges, EventEmitter, Output } from '@angular/core';
+import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
-import { BaseEntity, EntityFieldInfo, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
 import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
  
  
 @Component({
-  selector: 'mj-record-list',
-  templateUrl: './record-list.component.html',
-  styleUrls: ['./record-list.component.css']
+  selector: 'mj-simple-record-list',
+  templateUrl: './simple-record-list.component.html',
+  styleUrls: ['./simple-record-list.component.css']
 })
-export class RecordListComponent implements OnInit {
+export class SimpleRecordListComponent implements OnInit {
   @Input() EntityName: string = '';
   @Input() Columns: string[] = [];
   @Input() SortBy: string = '';

@@ -113,6 +113,9 @@
             "Name": "Angular/entity-form-dialog"
         },
         {
+            "Name": "Angular/simple-record-list"
+        },
+        {
             "Name": "Angular/file-storage"
         },
         {
