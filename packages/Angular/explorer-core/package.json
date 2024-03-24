@@ -49,6 +49,7 @@
     "@memberjunction/ng-ask-skip": "^0.9.102",
     "@memberjunction/ng-auth-services": "^0.9.100",
     "@memberjunction/ng-explorer-settings": "^0.9.10",
+    "@memberjunction/ng-base-forms": "^0.9.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

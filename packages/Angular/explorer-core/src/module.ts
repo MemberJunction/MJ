@@ -26,6 +26,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryGridModule } from '@memberjunction/ng-query-grid';
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 
@@ -141,6 +142,7 @@ import {ApplicationViewComponent} from './lib/app-view/application-view.componen
     CompareRecordsModule,
     RecordChangesModule,
     ContainerDirectivesModule,
+    BaseFormsModule,
     ListViewModule,
     UserViewGridModule,
     QueryGridModule,

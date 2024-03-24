@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadEntityDetailsComponent } from "./sections/details.component"
 import { LoadEntityTopComponent } from "./sections/top.component"
 import { LoadEntityAuditComponent } from "./sections/audit.component"

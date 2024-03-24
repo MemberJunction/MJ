@@ -28,6 +28,7 @@
     "@memberjunction/core": "^0.9.177",
     "@memberjunction/core-entities": "^0.9.165",
     "@memberjunction/ng-explorer-core": "^0.9.207",
+    "@memberjunction/ng-base-forms": "^0.9.1",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

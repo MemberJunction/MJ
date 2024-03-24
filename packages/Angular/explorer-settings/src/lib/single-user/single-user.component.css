@@ -1,0 +1,49 @@
+button {
+    margin-left: 5px;
+    margin-top: 5px;
+    width: 125px;
+}
+
+
+
+.name {
+    font-weight: bold;
+    font-size: 20px;
+    margin-left: 5px;
+    margin-top: 5px;
+}
+
+.info-table {
+    width: 100%; /* Take up the full width of the container */
+    border-collapse: collapse; /* For a cleaner look */
+    margin-bottom: 10px;
+}
+
+.info-table th {
+    width: 150px; /* Adjust this fixed width as needed */
+    font-weight: bold; /* Make header labels bold */
+    text-align: left; /* Align text to the left */
+    padding: 8px; /* Add some padding for spacing */
+    border: none; /* Removes the borders */
+    background-color: transparent; /* Removes any background color */
+}
+
+.info-table td {
+    text-align: left; /* Align text to the left */
+    padding: 8px; /* Add some padding for spacing */
+    border: none; /* Removes the borders */
+    background-color: transparent; /* Removes any background color */
+    overflow: hidden; /* Prevents content from overflowing */
+    text-overflow: ellipsis; /* Adds an ellipsis if the text overflows */
+}
+
+/* Style for SVG icon */
+.edit-icon {
+    margin-left: 20px; 
+    vertical-align: middle;;
+    cursor: pointer; /* Changes the cursor to a pointer */
+}
+
+.edit-icon:hover {
+    fill: #007bff; /* Changes the color on hover, set to the color you prefer */
+}

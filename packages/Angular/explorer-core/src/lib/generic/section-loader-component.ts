@@ -1,6 +1,6 @@
 import { Component, Input, OnDestroy, ViewChild, ViewContainerRef, AfterViewInit, OnChanges, SimpleChanges } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseFormSectionComponent } from './base-form-section-component';
+import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { BaseEntity } from '@memberjunction/core';
 
 @Component({

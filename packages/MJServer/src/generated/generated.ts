@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/23/2024, 10:41:24 AM
+* GENERATED: 3/23/2024, 4:22:49 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -1277,6 +1277,25 @@ export class Role_ {
 // INPUT TYPE for Roles   
 //****************************************************************************
 @InputType()
+export class CreateRoleInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description: string;
+
+    @Field({ nullable: true })
+    DirectoryID: string;
+
+    @Field({ nullable: true })
+    SQLName: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Roles   
+//****************************************************************************
+@InputType()
 export class UpdateRoleInput {
     @Field(() => Int)
     ID: number;
@@ -1395,6 +1414,36 @@ export class RoleResolver extends ResolverBase {
     }
     
     @Mutation(() => Role_)
+    async CreateRole(
+        @Arg('input', () => CreateRoleInput) input: CreateRoleInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateRoleInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateRoleInput) {
+    }
+    
+    @Mutation(() => Role_)
     async UpdateRole(
         @Arg('input', () => UpdateRoleInput) input: UpdateRoleInput,
         @Ctx() { dataSource, userPayload }: AppContext,
@@ -1423,6 +1472,32 @@ export class RoleResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateRoleInput) {
         const i = input, d = dataSource; // prevent error
+    }
+
+    @Mutation(() => Role_)
+    async DeleteRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
 
 }

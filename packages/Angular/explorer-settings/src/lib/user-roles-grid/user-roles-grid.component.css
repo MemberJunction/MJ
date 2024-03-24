@@ -1,0 +1,54 @@
+button {
+    margin-left: 5px;
+    margin-top: 5px;
+    width: 125px;
+}
+
+/* Styles for the table with the 'grid' class */
+.grid {
+    margin-left: 5px;
+    margin-top: 5px;
+    border-collapse: collapse;
+}
+
+/* Styles for th elements within the table with the 'grid' class */
+.grid th {
+    background-color: #f2f2f2;
+    color: black;
+    font-weight: bold;
+    text-align: center;
+    border: 1px solid gray;
+    padding: 0 8px;
+    cursor: pointer;
+}
+
+/* Styles for td elements within the table with the 'grid' class */
+.grid td {
+    border: 1px solid gray;
+    height: 36px;
+    text-align: center;
+    padding: 0 8px;
+}
+
+/* Styles for the first child th and td within the table with the 'grid' class */
+.grid th:first-child,
+.grid td:first-child {
+    width: 150px;
+    text-align: left;
+}
+
+/* Styles for non-first-child th and td elements within the table with the 'grid' class */
+.grid th:not(:first-child),
+.grid td:not(:first-child) {
+    width: 100px;
+}
+
+/* Alternating row background colors for the table with the 'grid' class */
+.grid tr:nth-child(odd) {
+    background-color: white;
+}
+
+.grid tr:nth-child(even) {
+    background-color: #e7f4ff;
+}
+

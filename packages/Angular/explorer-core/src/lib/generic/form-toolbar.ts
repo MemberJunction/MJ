@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { BaseFormComponent } from './base-form-component';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 
 @Component({

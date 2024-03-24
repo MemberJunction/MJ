@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { DealForecastCategoryEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadDealForecastCategoryDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Deal Forecast Categories') // Tell MemberJunction about this class
 @Component({

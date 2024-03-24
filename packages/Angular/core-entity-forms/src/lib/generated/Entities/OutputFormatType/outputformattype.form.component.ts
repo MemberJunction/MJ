@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { OutputFormatTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadOutputFormatTypeDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Output Format Types') // Tell MemberJunction about this class
 @Component({

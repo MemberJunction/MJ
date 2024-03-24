@@ -1,5 +1,6 @@
-<div mjFillContainer>
-    <div *ngIf="isLoading">Loading...</div>
+<div mjFillContainer class="wrapper">
+    <button kendoButton (click)="createNewRole()">New Role</button>
+    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
     <table *ngIf="!isLoading" class="grid">
         <thead>
             <tr>
@@ -8,11 +9,43 @@
             </tr>
         </thead>
         <tbody>
-            <tr *ngFor="let r of roles" (click)="selectRole(r)">
-                <td>{{ r.Name }}</td>
-                <td>{{ r.Description }}</td>
+            <tr *ngFor="let r of roles" (click)="selectRole(undefined, r)">
+                <td>
+                    <span>{{ r.Name }}</span>  
+                    <span>
+                        <!-- <kendo-svgicon class='icon' [icon]="kendoSVGIcon('pencil')" (click)="selectRole($event, r)"></kendo-svgicon> -->
+                        <kendo-svgicon class='icon' [icon]="kendoSVGIcon('trash')" (click)="deleteRole($event, r)"></kendo-svgicon>
+                    </span>
+                </td>
+                <td><span>{{ r.Description }}</span></td>
             </tr>
         </tbody>
     </table>
 </div>
  
+<mj-entity-form-dialog #entityForm 
+    [Record]="newRoleRecord" 
+    SectionName="details" 
+    Mode="section" 
+    [Visible]="showNewRoleForm" 
+    [AutoRevertOnCancel]="true"
+    [HandleSave]="true"
+    [Width]="550"
+    [Height]="450"
+    (close)="onNewRoleFormClosed($event)">
+</mj-entity-form-dialog>
+
+<kendo-dialog
+        *ngIf="deleteRoleDialogVisible && deleteRoleRecord" 
+        title="Delete Role?" 
+        [width]="300"
+        [height]="200"
+        (close)="closeDeleteRoleDialog('No')" >
+    <div>
+        Are you sure you want to delete the role '{{deleteRoleRecord.Name}}'?
+    </div>
+    <kendo-dialog-actions>
+        <button kendoButton (click)="closeDeleteRoleDialog('Yes')"  themeColor="primary">Yes</button>
+        <button kendoButton (click)="closeDeleteRoleDialog('No')">No</button>
+    </kendo-dialog-actions>
+</kendo-dialog>

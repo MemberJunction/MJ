@@ -3,7 +3,7 @@ import { ActivatedRoute } from '@angular/router'
 import { Metadata, PotentialDuplicateRequest, PrimaryKeyValue } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
-import { BaseFormComponent } from '../generic/base-form-component';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 
 @Component({

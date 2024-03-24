@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from "@angular/router";
 import { Metadata, EntityFieldInfo, EntityInfo } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
-import { BaseFormComponent } from '../generic/base-form-component';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { ResourceData } from '@memberjunction/ng-shared';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { TabComponent } from '@progress/kendo-angular-layout';
@@ -11,9 +11,7 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
 import { TextBoxComponent } from '@progress/kendo-angular-inputs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
-import { FormGroup, FormControl, Validators, FormBuilder } from "@angular/forms";
-import { AddEvent, CancelEvent, CellClickEvent, CellCloseEvent, RemoveEvent, SaveEvent } from '@progress/kendo-angular-grid';
-import { Keys } from '@progress/kendo-angular-common';
+import { FormBuilder } from "@angular/forms";
 
 @Component({
   selector: 'app-view-properties-dialog',

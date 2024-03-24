@@ -2,9 +2,6 @@
  * Public API Surface 
  */
 
-export * from './lib/generic/base-form-component';
-export * from './lib/generic/base-form-section-component';
-export * from './lib/generic/base-record-component';
 export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 export * from './lib/generic/section-loader-component';

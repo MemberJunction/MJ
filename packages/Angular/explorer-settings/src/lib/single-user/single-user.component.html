@@ -1,0 +1,67 @@
+<div mjFillContainer>
+    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+    <div *ngIf="!isLoading && UserRecord">
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th scope="row">User</th>
+                    <td>{{UserRecord.Name}}<kendo-svgicon class='edit-icon' [icon]="kendoSVGIcon('pencil')" (click)="EditRecord()"></kendo-svgicon></td>
+                </tr>
+                <tr>
+                    <th scope="row">First Name</th>
+                    <td>{{UserRecord.FirstName}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Last Name</th>
+                    <td>{{UserRecord.LastName}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Title</th>
+                    <td>{{UserRecord.Title}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Email</th>
+                    <td>{{UserRecord.Email}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Type</th>
+                    <td>{{UserRecord.Type}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Is Active</th>
+                    <td>{{UserRecord.IsActive}}</td>
+                </tr>
+            </tbody>
+        </table>         
+        <kendo-tabstrip
+            [keepTabContent]="true"
+            [animate]="false" 
+            >    
+            <kendo-tabstrip-tab title="Roles" [selected]="true">
+                <ng-template kendoTabContent>
+                    <mj-user-roles-grid Mode="Users" [UserID]="UserID" [UserRecord]="UserRecord"></mj-user-roles-grid>
+                </ng-template>
+            </kendo-tabstrip-tab>
+            <kendo-tabstrip-tab title="Views">
+                <ng-template kendoTabContent>
+                    <div class="content">
+                        <mj-user-view-grid *ngIf="UserViewsParams" [Params]="UserViewsParams"></mj-user-view-grid>
+                    </div>
+                </ng-template>
+            </kendo-tabstrip-tab>
+        </kendo-tabstrip>
+    </div>
+</div>
+
+
+<mj-entity-form-dialog #entityForm 
+    [Record]="UserRecord" 
+    SectionName="details" 
+    Mode="section" 
+    [Visible]="showEntityEditingForm" 
+    [AutoRevertOnCancel]="true"
+    [HandleSave]="true"
+    [Width]="550"
+    [Height]="450"
+    (close)="onEntityFormClosed($event)">
+</mj-entity-form-dialog>

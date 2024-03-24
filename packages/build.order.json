@@ -107,6 +107,12 @@
             "Name": "Angular/user-view-grid"
         },
         {
+            "Name": "Angular/base-forms"
+        },
+        {
+            "Name": "Angular/entity-form-dialog"
+        },
+        {
             "Name": "Angular/file-storage"
         },
         {

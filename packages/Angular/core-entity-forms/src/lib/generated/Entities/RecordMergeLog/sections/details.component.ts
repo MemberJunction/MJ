@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormSectionComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { RecordMergeLogEntity } from '@memberjunction/core-entities';
 
 @RegisterClass(BaseFormSectionComponent, 'Record Merge Logs.details') // Tell MemberJunction about this class 

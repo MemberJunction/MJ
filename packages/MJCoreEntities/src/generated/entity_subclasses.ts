@@ -799,19 +799,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
-        /**
-        * Roles - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof RoleEntity
-        * @throws {Error} - Delete is not allowed for Roles, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Roles, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-        
+    
             /**
         * * Field Name: ID
         * * SQL Data Type: int

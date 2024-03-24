@@ -1,0 +1,23 @@
+<div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+<div class="content" *ngIf="!isLoading">
+    <button [disabled]="NumDirty === 0" kendoButton (click)="saveUserRoles()">Save</button>
+    <button [disabled]="NumDirty === 0" kendoButton (click)="cancelEdit()">Cancel</button>
+    <table *ngIf="!isLoading" class="grid">
+        <thead>
+            <tr>
+                <th *ngIf="Mode === 'Roles'">User</th>
+                <th *ngIf="Mode === 'Users'">Role</th>
+                <th (click)="flipAll()">In Role</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let ur of userRoles">
+                <td *ngIf="Mode === 'Roles'">{{ ur.User }}</td>
+                <td *ngIf="Mode === 'Users'">{{ ur.RoleName }}</td>
+                <td (click)="flipState($event, ur, true)">
+                    <input type="checkbox" kendoCheckBox [(ngModel)]="ur.Selected" (click)="flipState($event, ur, false)">
+                </td>
+            </tr>
+        </tbody>
+    </table>            
+</div>

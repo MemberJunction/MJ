@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadConversationDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Conversations') // Tell MemberJunction about this class
 @Component({

@@ -17,12 +17,21 @@ import { SettingsComponent } from './settings/settings.component';
 import { RolesListComponent } from './roles-list/roles-list.component';
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { TabStripModule } from '@progress/kendo-angular-layout';
+import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
+import { RecordListComponent } from './record-list/record-list.component';
+import { UserRolesGridComponent } from './user-roles-grid/user-roles-grid.component';
+import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { SingleUserComponent } from './single-user/single-user.component';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 
 @NgModule({
   declarations: [
     SingleRoleComponent,
     SettingsComponent,
-    RolesListComponent
+    RolesListComponent,
+    RecordListComponent,
+    UserRolesGridComponent,
+    SingleUserComponent
   ],
   imports: [
     CommonModule,
@@ -36,12 +45,19 @@ import { TabStripModule } from '@progress/kendo-angular-layout';
     IconsModule,
     DropDownsModule,
     EntityPermissionsModule,
-    TabStripModule
+    TabStripModule,
+    DialogsModule,
+    EntityFormDialogModule,
+    IndicatorsModule,
+    UserViewGridModule
   ],
   exports: [
     SingleRoleComponent,
     SettingsComponent,
-    RolesListComponent
+    RolesListComponent,
+    RecordListComponent,
+    UserRolesGridComponent,
+    SingleUserComponent
   ]
 })
 export class ExplorerSettingsModule { }

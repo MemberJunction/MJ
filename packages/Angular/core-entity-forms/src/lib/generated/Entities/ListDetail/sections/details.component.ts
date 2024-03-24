@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormSectionComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { ListDetailEntity } from '@memberjunction/core-entities';
 
 @RegisterClass(BaseFormSectionComponent, 'List Details.details') // Tell MemberJunction about this class 

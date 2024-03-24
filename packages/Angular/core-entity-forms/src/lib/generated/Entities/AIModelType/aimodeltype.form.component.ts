@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { AIModelTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadAIModelTypeDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'AI Model Types') // Tell MemberJunction about this class
 @Component({

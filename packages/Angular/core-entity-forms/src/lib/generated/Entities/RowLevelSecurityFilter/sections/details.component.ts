@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormSectionComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { RowLevelSecurityFilterEntity } from '@memberjunction/core-entities';
 
 @RegisterClass(BaseFormSectionComponent, 'Row Level Security Filters.details') // Tell MemberJunction about this class 

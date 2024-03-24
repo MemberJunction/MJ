@@ -31,11 +31,15 @@
     "@memberjunction/ng-container-directives": "^0.9.141",
     "@memberjunction/ng-shared": "^0.9.33",
     "@memberjunction/ng-entity-permissions": "^0.9.10",
+    "@memberjunction/ng-base-forms": "^0.9.1",
+    "@memberjunction/ng-entity-form-dialog": "^0.9.1",
+    "@memberjunction/ng-user-view-grid": "0.9.215",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-dialog": "~15.1.0",
     "@progress/kendo-angular-layout": "~15.1.0",
+    "@progress/kendo-angular-indicators": "~15.1.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { WorkflowEngineEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadWorkflowEngineDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Workflow Engines') // Tell MemberJunction about this class
 @Component({

@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { PaymentTermsTypeEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadPaymentTermsTypeDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Payment Terms Types') // Tell MemberJunction about this class
 @Component({

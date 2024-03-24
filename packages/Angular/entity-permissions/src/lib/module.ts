@@ -14,6 +14,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { FormsModule } from '@angular/forms';
 import { EntityPermissionsSelectorWithGridComponent } from './entity-selector-with-grid/entity-selector-with-grid.component';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
+import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 @NgModule({
   declarations: [
@@ -30,7 +31,8 @@ import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
     ContainerDirectivesModule,
     ButtonsModule,
     IconsModule,
-    DropDownsModule
+    DropDownsModule,
+    IndicatorsModule
   ],
   exports: [
     EntityPermissionsGridComponent,

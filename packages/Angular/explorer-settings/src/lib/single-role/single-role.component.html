@@ -1,41 +1,54 @@
 <div mjFillContainer>
-    <div *ngIf="isLoading">Loading...</div>
-    <kendo-tabstrip
-        [keepTabContent]="true"
-        [animate]="false"
-        >    
-        <kendo-tabstrip-tab title="Users" [selected]="true">
-            <ng-template kendoTabContent>
-              <div class="content">
-                <div class="role-name">Role: {{this.RoleName}}</div>
-                <button [disabled]="NumDirty === 0" kendoButton (click)="saveUserRoles()">Save</button>
-                <table *ngIf="!isLoading" class="grid">
-                    <thead>
-                        <tr>
-                        <th>User</th>
-                        <th>In Role</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr *ngFor="let ur of userRoles">
-                            <td>{{ ur.User }}</td>
-                            <td (click)="flipState($event, ur, true)">
-                                <input type="checkbox" kendoCheckBox [(ngModel)]="ur.Selected" (click)="flipState($event, ur, false)">
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>            
-              </div>
-            </ng-template>
-        </kendo-tabstrip-tab>
-        <kendo-tabstrip-tab title="Entity Permissions">
-            <ng-template kendoTabContent>
-                <div class="content">
-                    <div class="role-name">Role: {{this.RoleName}}</div>
-                    <mj-entity-permissions-grid Mode="Role" [RoleName]="this.RoleName" ></mj-entity-permissions-grid>
-                </div>
-              </ng-template>
-          </kendo-tabstrip-tab>
-    </kendo-tabstrip>
+    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
+    <div *ngIf="!isLoading && RoleRecord">
+        <table class="role-info-table">
+            <tbody>
+                <tr>
+                    <th scope="row">Role</th>
+                    <td>{{RoleRecord.Name}}<kendo-svgicon class='edit-icon' [icon]="kendoSVGIcon('pencil')" (click)="EditRecord()"></kendo-svgicon></td>
+                </tr>
+                <tr>
+                    <th scope="row">Description</th>
+                    <td>{{RoleRecord.Description}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">Directory ID</th>
+                    <td>{{RoleRecord.DirectoryID}}</td>
+                </tr>
+                <tr>
+                    <th scope="row">SQL Name</th>
+                    <td>{{RoleRecord.SQLName}}</td>
+                </tr>
+            </tbody>
+        </table>         
+        <kendo-tabstrip
+            [keepTabContent]="true"
+            [animate]="false" 
+            >    
+            <kendo-tabstrip-tab title="Users" [selected]="true">
+                <ng-template kendoTabContent>
+                    <mj-user-roles-grid Mode="Roles" [RoleName]="RoleName" [RoleRecord]="RoleRecord"></mj-user-roles-grid>
+                </ng-template>
+            </kendo-tabstrip-tab>
+            <kendo-tabstrip-tab title="Entity Permissions">
+                <ng-template kendoTabContent>
+                    <div class="content">
+                        <mj-entity-permissions-grid *ngIf="RoleRecord && RoleRecord.Name" Mode="Role" [RoleName]="RoleRecord.Name" ></mj-entity-permissions-grid>
+                    </div>
+                </ng-template>
+            </kendo-tabstrip-tab>
+        </kendo-tabstrip>
+    </div>
 </div>
  
+<mj-entity-form-dialog #entityForm 
+        [Record]="RoleRecord" 
+        SectionName="details" 
+        Mode="section" 
+        [Visible]="showEntityEditingForm" 
+        [AutoRevertOnCancel]="true"
+        [HandleSave]="true"
+        [Width]="550"
+        [Height]="450"
+        (close)="onEntityFormClosed($event)">
+</mj-entity-form-dialog>

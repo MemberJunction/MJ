@@ -1,4 +1,4 @@
-<div class="container">
+<div class="container" mjFillContainer [fillWidth]="false" [bottomMargin]="5">
     <!-- Options container -->
     <div class="options-container">
         <div class="option-item" [class.selected]="currentItem === 'Users'"  (click)="selectItem('Users')">Users</div>
@@ -12,10 +12,23 @@
             <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
         </div>
         <div *ngIf="currentItem === 'Users'">
-            Users Component Goes Here
+            <mj-record-list
+                EntityName="Users"
+                SortBy="Name"
+                [Columns]="['Name', 'Email', 'IsActive', 'Type']"
+                (RecordSelected)="selectUser($event)"
+            ></mj-record-list>
+        </div>
+        <div *ngIf="currentItem === 'User'">
+            <mj-single-user [UserID]="selectedUserID"></mj-single-user>
         </div>
         <div *ngIf="currentItem === 'Roles'">
-            <mj-roles-list></mj-roles-list>
+            <mj-record-list
+                EntityName="Roles"
+                SortBy="Name"
+                [Columns]="['Name', 'Description']"
+                (RecordSelected)="selectRole($event)"
+            ></mj-record-list>
         </div>
         <div *ngIf="currentItem === 'Role'">
             <mj-single-role [RoleName]="selectedRoleName"></mj-single-role>

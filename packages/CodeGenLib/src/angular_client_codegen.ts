@@ -100,7 +100,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { ExplorerCoreModule } from '@memberjunction/ng-explorer-core';
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
@@ -181,9 +181,9 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    ExplorerCoreModule,
     UserViewGridModule,
-    LinkDirectivesModule
+    LinkDirectivesModule,
+    BaseFormsModule
 ],
 exports: [
 ]
@@ -200,7 +200,7 @@ function generateSingleEntityTypeScriptForAngular(entity: EntityInfo, sections: 
     return `import { Component } from '@angular/core';
 import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 ${sectionImports}
 @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
 @Component({
@@ -284,7 +284,7 @@ function generateAngularAdditionalSections(entity: EntityInfo, startIndex: numbe
 
         section.ComponentCode = `import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormSectionComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { ${entity.ClassName}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
 
 @RegisterClass(BaseFormSectionComponent, '${entity.Name}.${sectionName}') // Tell MemberJunction about this class 

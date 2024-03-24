@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { QueueEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadQueueDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Queues') // Tell MemberJunction about this class
 @Component({

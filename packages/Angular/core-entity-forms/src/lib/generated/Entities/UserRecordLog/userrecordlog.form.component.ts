@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { UserRecordLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadUserRecordLogDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'User Record Logs') // Tell MemberJunction about this class
 @Component({

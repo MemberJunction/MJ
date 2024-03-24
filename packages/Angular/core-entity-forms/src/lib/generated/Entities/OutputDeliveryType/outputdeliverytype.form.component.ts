@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { OutputDeliveryTypeEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-explorer-core';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { LoadOutputDeliveryTypeDetailsComponent } from "./sections/details.component"
 @RegisterClass(BaseFormComponent, 'Output Delivery Types') // Tell MemberJunction about this class
 @Component({

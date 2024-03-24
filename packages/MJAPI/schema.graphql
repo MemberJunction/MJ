@@ -3,6 +3,7 @@
 # !!!   DO NOT MODIFY THIS FILE BY YOURSELF   !!!
 # -----------------------------------------------
 
+"""List of all actions that are possible across all AI Models"""
 type AIAction_ {
   AIModelActionsArray: [AIModelAction_!]!
   CreatedAt: Timestamp!
@@ -17,6 +18,7 @@ type AIAction_ {
   UpdatedAt: Timestamp!
 }
 
+"""Tracks the actions supported by each AI Model"""
 type AIModelAction_ {
   AIAction: String!
   AIActionID: Int!
@@ -28,6 +30,7 @@ type AIModelAction_ {
   UpdatedAt: Timestamp!
 }
 
+"""Types of AI Models"""
 type AIModelType_ {
   AIModelsArray: [AIModel_!]!
   Description: String
@@ -35,6 +38,7 @@ type AIModelType_ {
   Name: String!
 }
 
+"""Catalog of all AI Models configured in the system."""
 type AIModel_ {
   AIActionsArray: [AIAction_!]!
   AIModelActionsArray: [AIModelAction_!]!
@@ -126,6 +130,9 @@ type Activity_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+List of entities within each application. An application can have any number of entities and an entity can be part of any number of applications.
+"""
 type ApplicationEntity_ {
   Application: String!
   ApplicationName: String
@@ -142,6 +149,9 @@ type ApplicationEntity_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+Applications are used to group entities in the user interface for ease of user access
+"""
 type Application_ {
   ApplicationEntitiesArray: [ApplicationEntity_!]!
   CreatedAt: Timestamp!
@@ -275,6 +285,7 @@ type CompanyIntegrationRun_ {
   TotalRecords: Int!
 }
 
+"""Links individual company records to specific integrations"""
 type CompanyIntegration_ {
   APIKey: String
   AccessToken: String
@@ -306,6 +317,9 @@ type CompanyIntegration_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.
+"""
 type Company_ {
   CompanyIntegrationsArray: [CompanyIntegration_!]!
   CreatedAt: Timestamp!
@@ -1007,6 +1021,13 @@ input CreateReportSnapshotInput {
   UserID: Int
 }
 
+input CreateRoleInput {
+  Description: String
+  DirectoryID: String
+  Name: String!
+  SQLName: String
+}
+
 input CreateSchemaInfoInput {
   Comments: String
   EntityIDMax: Int!
@@ -1136,6 +1157,9 @@ type DashboardCategory_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+Dashboards are used to group resources into a single display pane for an end-user
+"""
 type Dashboard_ {
   Category: String
   CategoryID: Int
@@ -1216,6 +1240,7 @@ input DatasetItemFilterTypeGQL {
   ItemCode: String!
 }
 
+"""A single item in a Dataset and can be sourced from multiple methods."""
 type DatasetItem_ {
   Code: String!
   CreatedAt: Timestamp!
@@ -1248,6 +1273,7 @@ type DatasetStatusResultType {
   Success: Boolean!
 }
 
+"""Cacheable sets of data that can span one or more items"""
 type Dataset_ {
   CreatedAt: Timestamp!
   DatasetItemsArray: [DatasetItem_!]!
@@ -1350,6 +1376,7 @@ type EmployeeSkill_ {
   UpdatedAt: Timestamp!
 }
 
+"""A list of employees across all units of your organization"""
 type Employee_ {
   Active: Boolean!
   BCMID: String!
@@ -1374,6 +1401,9 @@ type Employee_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+Tracks the AI actions that should be invoked based on changes to records within a given entity.
+"""
 type EntityAIAction_ {
   AIAction: String!
   AIActionID: Int!
@@ -1449,6 +1479,7 @@ type EntityFieldValue_ {
   Value: String!
 }
 
+"""List of all fields within each entity with metadata about each field"""
 type EntityField_ {
   AllowUpdateAPI: Boolean!
   AllowUpdateInView: Boolean!
@@ -1506,6 +1537,7 @@ type EntityField_ {
   ViewCellTemplate: String
 }
 
+"""Security settings for each entity"""
 type EntityPermission_ {
   CanCreate: Boolean!
   CanDelete: Boolean!
@@ -1554,6 +1586,9 @@ type EntityRecordNameResult {
   Success: Boolean!
 }
 
+"""
+Metadata about relationships between entities including display preferences for the UI
+"""
 type EntityRelationship_ {
   BundleInAPI: Boolean!
   CreatedAt: Timestamp!
@@ -1589,6 +1624,7 @@ type EntityRelationship_ {
   UpdatedAt: Timestamp!
 }
 
+"""Catalog of all entities across all schemas"""
 type Entity_ {
   AllowAllRowsAPI: Boolean!
   AllowCreateAPI: Boolean!
@@ -1758,6 +1794,9 @@ type Industry_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+Used to generate web links for end users to easily access resources in a source system. URL Formats support templating to inject various field values at run-time to take a user directly to a resource in a source system.
+"""
 type IntegrationURLFormat_ {
   EntityID: Int!
   FullURLFormat: String
@@ -1769,6 +1808,7 @@ type IntegrationURLFormat_ {
   URLFormat: String!
 }
 
+"""Catalog of all integrations that have been configured in the system."""
 type Integration_ {
   BatchMaxRequestCount: Int!
   BatchRequestWaitTime: Int!
@@ -1816,6 +1856,7 @@ type Invoice_ {
   UpdatedAt: Timestamp!
 }
 
+"""Tracks the records within each list."""
 type ListDetail_ {
   ID: Int!
   ListID: Int!
@@ -1823,6 +1864,9 @@ type ListDetail_ {
   Sequence: Int!
 }
 
+"""
+Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.
+"""
 type List_ {
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
@@ -1891,6 +1935,7 @@ type Mutation {
   CreateReportCategory(input: CreateReportCategoryInput!): ReportCategory_!
   CreateReportFromConversationDetailID(ConversationDetailID: Int!): CreateReportResultType!
   CreateReportSnapshot(input: CreateReportSnapshotInput!): ReportSnapshot_!
+  CreateRole(input: CreateRoleInput!): Role_!
   CreateSchemaInfo(input: CreateSchemaInfoInput!): SchemaInfo_!
   CreateUser(input: CreateUserInput!): User_!
   CreateUserApplicationEntity(input: CreateUserApplicationEntityInput!): UserApplicationEntity_!
@@ -1926,6 +1971,7 @@ type Mutation {
   DeleteReport(ID: Int!): Report_!
   DeleteReportCategory(ID: Int!): ReportCategory_!
   DeleteReportSnapshot(ID: Int!): ReportSnapshot_!
+  DeleteRole(ID: Int!): Role_!
   DeleteUser(ID: Int!): User_!
   DeleteUserApplication(ID: Int!): UserApplication_!
   DeleteUserApplicationEntity(ID: Int!): UserApplicationEntity_!
@@ -2606,6 +2652,9 @@ type QueryPermission_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.
+"""
 type Query_ {
   Category: String
   CategoryID: Int
@@ -2647,6 +2696,7 @@ type QueueType_ {
   QueuesArray: [Queue_!]!
 }
 
+"""Queues can be used to async execute long running tasks"""
 type Queue_ {
   CreatedAt: Timestamp!
   Description: String
@@ -2671,6 +2721,9 @@ type Queue_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+For entities that have TrackRecordChanges=1, Record Changes will store the history of all changes made within the system. For integrations you can directly add values here if you have inbound signals indicating records were changed in a source system. This entity only automatically captures Record Changes if they were made within the system.
+"""
 type RecordChange_ {
   ChangedAt: Timestamp!
   ChangesDescription: String!
@@ -2817,6 +2870,9 @@ type ResourceType_ {
   WorkspaceItemsArray: [WorkspaceItem_!]!
 }
 
+"""
+Roles are used for security administration and can have zero to many Users as members
+"""
 type Role_ {
   AuthorizationRolesArray: [AuthorizationRole_!]!
   CreatedAt: Timestamp!
@@ -4058,6 +4114,9 @@ type RunWorkspaceViewResult {
   UserViewRunID: Int
 }
 
+"""
+Tracks the schemas in the system and the ID ranges that are valid for entities within each schema.
+"""
 type SchemaInfo_ {
   Comments: String
   CreatedAt: Timestamp!
@@ -4068,6 +4127,9 @@ type SchemaInfo_ {
   UpdatedAt: Timestamp!
 }
 
+"""
+A hierarchical list of possible skills that are linked to Employees and can also be linked to any other entity
+"""
 type Skill_ {
   CreatedAt: Timestamp!
   EmployeeSkillsArray: [EmployeeSkill_!]!
@@ -4093,6 +4155,9 @@ type Subscription {
   statusUpdates(sessionId: String!): PushStatusNotification!
 }
 
+"""
+Tags are used to arbitrarily associate any record in any entity with addtional information.
+"""
 type Tag_ {
   Description: String
   DisplayName: String!
@@ -4104,6 +4169,7 @@ type Tag_ {
   TagsArray: [Tag_!]!
 }
 
+"""Tracks the links between any record in any entity with Tags"""
 type TaggedItem_ {
   Entity: String!
   EntityID: Int!
@@ -5108,6 +5174,7 @@ input UserFavoriteSetParams {
   UserID: Int!
 }
 
+"""Records that each user can mark as a favorite for easy access"""
 type UserFavorite_ {
   CreatedAt: Timestamp!
   Entity: String!
@@ -5173,6 +5240,9 @@ type UserViewCategory_ {
   UserViewsArray: [UserView_!]!
 }
 
+"""
+Tracks the set of records that were included in each run of a given user view.
+"""
 type UserViewRunDetail_ {
   EntityID: Int!
   ID: Int!
@@ -5181,6 +5251,9 @@ type UserViewRunDetail_ {
   UserViewRunID: Int!
 }
 
+"""
+User Views can be logged when run to capture the date and user that ran the view as well as the output results.
+"""
 type UserViewRun_ {
   ID: Int!
   RunAt: Timestamp!
@@ -5191,6 +5264,9 @@ type UserViewRun_ {
   UserViewRunDetailsArray: [UserViewRunDetail_!]!
 }
 
+"""
+Views are sets of records within a given entity defined by filtering rules. Views can be used programatically to retrieve dynamic sets of data and in user interfaces like MJ Explorer for end-user consumption.
+"""
 type UserView_ {
   CategoryID: Int
   CreatedAt: Timestamp
@@ -5224,6 +5300,7 @@ type UserView_ {
   WhereClause: String
 }
 
+"""A list of all users who have or had access to the system"""
 type User_ {
   AuditLogsArray: [AuditLog_!]!
   CompanyIntegrationRunsArray: [CompanyIntegrationRun_!]!
@@ -5324,6 +5401,7 @@ type Workflow_ {
   WorkflowRunsArray: [WorkflowRun_!]!
 }
 
+"""Tracks the resources that are active within a given worksapce"""
 type WorkspaceItem_ {
   Configuration: String
   Description: String
@@ -5337,6 +5415,7 @@ type WorkspaceItem_ {
   WorkSpaceID: Int!
 }
 
+"""A user can have one or more workspaces"""
 type Workspace_ {
   Description: String
   ID: Int!

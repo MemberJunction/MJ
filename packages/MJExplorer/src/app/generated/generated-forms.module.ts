@@ -12,7 +12,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { ExplorerCoreModule } from '@memberjunction/ng-explorer-core';
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
@@ -76,9 +76,9 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    ExplorerCoreModule,
     UserViewGridModule,
-    LinkDirectivesModule
+    LinkDirectivesModule,
+    BaseFormsModule
 ],
 exports: [
 ]
@@ -104,9 +104,9 @@ imports: [
     InputsModule,
     ButtonsModule,
     DateInputsModule,
-    ExplorerCoreModule,
     UserViewGridModule,
-    LinkDirectivesModule
+    LinkDirectivesModule,
+    BaseFormsModule
 ],
 exports: [
 ]
