@@ -3,6 +3,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity } from '@memberjunction/core-entities';
 
 import { kendoSVGIcon } from '@memberjunction/ng-shared';
+import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
 
 @Component({
   selector: 'mj-files-category-tree',
@@ -15,6 +16,7 @@ export class CategoryTreeComponent implements OnInit {
   public isLoading: boolean = false;
   public showNew: boolean = false;
   public newCategoryName = '';
+  public renameFileCategory: FileCategoryEntity | undefined;
 
   public kendoSVGIcon = kendoSVGIcon;
 
@@ -44,6 +46,27 @@ export class CategoryTreeComponent implements OnInit {
     await categoryEntity?.Save();
     this.categoriesData = [...this.categoriesData, categoryEntity];
     this.showNew = false;
+    this.isLoading = false;
+  }
+
+  handleMenuSelect(e: ContextMenuSelectEvent) {
+    if (e.item.text?.toLowerCase() === 'rename') {
+      this.renameFileCategory = e.item.data;
+    }
+    console.log('action: ', e.item.text);
+    console.log('renaem this one: ', e.item.data.Name);
+    console.log('File categrory', e.item.data instanceof FileCategoryEntity);
+  }
+
+  cancelRename() {
+    this.renameFileCategory?.Revert();
+    this.renameFileCategory = undefined;
+  }
+
+  async saveRename() {
+    this.isLoading = true;
+    await this.renameFileCategory?.Save();
+    this.renameFileCategory = undefined;
     this.isLoading = false;
   }
 

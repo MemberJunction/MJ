@@ -11,8 +11,17 @@
     idField="ID"
     parentIdField="ParentID"
     (selectionChange)="categorySelected.emit($event.dataItem.ID)"
-  ></kendo-treeview>
-  <kendo-dialog title="New File Category" *ngIf="showNew" (close)="cancelNewCategory()" [minWidth]="250" [width]="450">
+  >
+    <ng-template kendoTreeViewNodeTemplate let-dataItem>
+      <span #target>{{ dataItem.Name }} </span>
+      <kendo-contextmenu [target]="target" (select)="handleMenuSelect($event)">
+        <kendo-menu-item text="Rename" [data]="dataItem"> </kendo-menu-item>
+        <kendo-menu-item text="Delete" [data]="dataItem" [disabled]="true"> </kendo-menu-item>
+      </kendo-contextmenu>
+    </ng-template>
+  </kendo-treeview>
+
+  <kendo-dialog title="New file category" *ngIf="showNew" (close)="cancelNewCategory()" [minWidth]="250" [width]="450">
     <div class="container">
       <form #templateForm="ngForm">
         <kendo-label class="k-form" text="Name">
@@ -29,7 +38,34 @@
     </div>
     <kendo-dialog-actions>
       <button kendoButton (click)="cancelNewCategory()" [disabled]="isLoading">Cancel</button>
-      <button kendoButton (click)="saveNewCategory()" [disabled]="isLoading" themeColor="primary">Save</button>
+      <button kendoButton (click)="saveNewCategory()" [disabled]="isLoading" themeColor="primary">
+        Save
+        <kendo-loader *ngIf="isLoading"></kendo-loader>
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+
+  <kendo-dialog title="Rename file category" *ngIf="!!renameFileCategory" (close)="cancelRename()" [minWidth]="250" [width]="450">
+    <div class="container">
+      <form #templateForm="ngForm">
+        <kendo-label class="k-form" text="Name">
+          <kendo-textbox
+            name="Name"
+            [(ngModel)]="renameFileCategory.Name"
+            [showSuccessIcon]="renameFileCategory.Name.length > 0"
+            showErrorIcon="initial"
+            required
+            [disabled]="isLoading"
+          ></kendo-textbox>
+        </kendo-label>
+      </form>
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="cancelRename()" [disabled]="isLoading">Cancel</button>
+      <button kendoButton (click)="saveRename()" [disabled]="isLoading || !renameFileCategory.Dirty" themeColor="primary">
+        Save
+        <kendo-loader *ngIf="isLoading"></kendo-loader>
+      </button>
     </kendo-dialog-actions>
   </kendo-dialog>
 </div>
