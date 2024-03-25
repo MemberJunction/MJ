@@ -1,4 +1,4 @@
-import { Metadata, RunView } from "@memberjunction/core";
+import { RunView } from "@memberjunction/core";
 import { Folder, Item, ItemType } from "../../generic/Item.types";
 import { PathData } from "../../generic/PathData.types";
 import { Router, Params } from '@angular/router';

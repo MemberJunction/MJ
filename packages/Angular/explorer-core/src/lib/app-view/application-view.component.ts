@@ -1,10 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { ApplicationEntityInfo, Metadata } from '@memberjunction/core';
+import { ApplicationEntityInfo, Metadata, LogStatus } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Item, ItemType } from '../../generic/Item.types';
-import { ViewInfo, UserViewEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
 
@@ -35,7 +34,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const entityName = params.get('entityName');
             const folderID = params.get('folderID'); 
 
-            console.log("appName:", appName, "entityName:", entityName, "folderID:", folderID);
+            LogStatus("appName: " + appName + " entityName: " + entityName + " folderID: " + folderID);
             if(folderID){
                 this.selectedFolderID = parseInt(folderID) || null;
             }
@@ -98,34 +97,14 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         const categoryIDFilter: string = this.selectedFolderID ? `CategoryID=${this.selectedFolderID}` : 'CategoryID IS NULL';
         const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${appEntityButton.Data.EntityID} AND ` + categoryIDFilter;
 
-        console.log("categoryFilter:", categoryFilter, "userViewFilter:", userViewFilter);
+        LogStatus("categoryFilter: " + categoryFilter + " userViewFilter: " + userViewFilter);
         await super.LoadData({
             sortItemsAfterLoad: true, 
             categoryItemFilter: categoryFilter, 
             entityItemFilter: userViewFilter, 
             showLoader: true
         });
-
-        /*
-        await this.GetViewsForUser(appEntityButton.Data);
-        super.sortItems();
-        */
         this.showLoader = false;
-    }
-
-    private async GetViewsForUser(entityInfo: ApplicationEntityInfo): Promise<void> {
-        if(!entityInfo){
-            return;
-        }
-        
-        const md = new Metadata();
-        const entity = md.Entities.find(e => e.Name == entityInfo.Entity)
-        if (entity) {
-            const entityViews = <UserViewEntity[]>await ViewInfo.GetViewsForUser(entity.ID);
-            for(const view of entityViews){
-                this.items.push(new Item(view, ItemType.Entity));
-            }
-        }
     }
 
     public onItemClick(item: Item) {
@@ -176,7 +155,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             }
         }
 
-        console.log("URL components:", url);
         this.router.navigate(url);
     }
 } 
