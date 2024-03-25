@@ -53,13 +53,13 @@ export class BaseBrowserComponent {
 
         this.items = [];
         if(!params?.skiploadEntityData){
-            const entityData: any[] = await this.GetEntityData();
+            const entityData: any[] = await this.RunView(this.itemEntityName, this.EntityItemFilter);
             this.items.push(...this.createItemsFromEntityData(entityData));
             this.entityData = entityData;
         }
 
         if(!params?.skipLoadCategoryData){
-            const categories: Folder[] = await this.GetCategories();
+            const categories: Folder[] = await this.RunView(this.categoryEntityName, this.CategoryItemFilter);
             this.items.push(...this.createItemsFromFolders(categories));
             this.folders = categories;
         }
@@ -80,11 +80,11 @@ export class BaseBrowserComponent {
         });
     }
 
-    protected async GetEntityData(): Promise<any[]> {
+    protected async RunView(entityName: string, extraFilter: string | undefined): Promise<any[]> {
         const rv = new RunView();
         const result = await rv.RunView({
-            EntityName: this.itemEntityName,
-            ExtraFilter: this.EntityItemFilter
+            EntityName: entityName,
+            ExtraFilter: extraFilter
         });
 
         if (result && result.Success){
@@ -92,22 +92,6 @@ export class BaseBrowserComponent {
         }
         else{
             return[];
-        }
-    }
-
-    protected async GetCategories(): Promise<Folder[]> {
-        const rv = new RunView();
-
-        const folderResult = await rv.RunView({
-            EntityName: this.categoryEntityName,
-            ExtraFilter: this.CategoryItemFilter
-        });
-
-        if(folderResult && folderResult.Success){
-            return folderResult.Results;
-        }
-        else{
-            return [];
         }
     }
 

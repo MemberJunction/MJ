@@ -165,8 +165,10 @@ const routes: Routes = [
       }
     ]
   },  
-  { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },  
+  { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
+  { path: 'app/:appName/:entityName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
+  { path: 'app/:appName/:entityName/:folderID', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
   { 
     path: 'resource/:resourceType/:resourceRecordId', 
