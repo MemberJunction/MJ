@@ -23,7 +23,7 @@ export class MistralClient {
 
     constructor(config: {apiKey?: string, endpoint?: string}) {
         this.endpoint = config.endpoint || this.ENDPOINT;
-        this.apiKey = config.apiKey || process.env.MISTRAL_API_KEY;
+        this.apiKey = config.apiKey;
 
         this.textDecoder = new TextDecoder();
 
