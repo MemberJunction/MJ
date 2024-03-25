@@ -4,6 +4,7 @@ import { FileCategoryEntity } from '@memberjunction/core-entities';
 
 import { kendoSVGIcon } from '@memberjunction/ng-shared';
 import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
+import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
 
 @Component({
   selector: 'mj-files-category-tree',
@@ -36,6 +37,17 @@ export class CategoryTreeComponent implements OnInit {
 
   cancelNewCategory() {
     this.showNew = false;
+  }
+
+  async handleDrop(e: TreeItemAddRemoveArgs) {
+    console.log(e);
+    const sourceCategory: FileCategoryEntity = e.sourceItem.item.dataItem;
+    const targetCategory: FileCategoryEntity = e.destinationItem.item.dataItem;
+    sourceCategory.ParentID = targetCategory.ID;
+
+    this.isLoading = true;
+    await sourceCategory.Save();
+    this.isLoading = false;
   }
 
   async saveNewCategory() {

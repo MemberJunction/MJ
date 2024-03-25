@@ -11,6 +11,8 @@
     idField="ID"
     parentIdField="ParentID"
     (selectionChange)="categorySelected.emit($event.dataItem.ID)"
+    kendoTreeViewDragAndDrop
+    (addItem)="handleDrop($event)"
   >
     <ng-template kendoTreeViewNodeTemplate let-dataItem>
       <span #target>{{ dataItem.Name }} </span>
@@ -38,10 +40,7 @@
     </div>
     <kendo-dialog-actions>
       <button kendoButton (click)="cancelNewCategory()" [disabled]="isLoading">Cancel</button>
-      <button kendoButton (click)="saveNewCategory()" [disabled]="isLoading" themeColor="primary">
-        Save
-        <kendo-loader *ngIf="isLoading"></kendo-loader>
-      </button>
+      <button kendoButton (click)="saveNewCategory()" [disabled]="isLoading" themeColor="primary">Save</button>
     </kendo-dialog-actions>
   </kendo-dialog>
 
@@ -62,10 +61,7 @@
     </div>
     <kendo-dialog-actions>
       <button kendoButton (click)="cancelRename()" [disabled]="isLoading">Cancel</button>
-      <button kendoButton (click)="saveRename()" [disabled]="isLoading || !renameFileCategory.Dirty" themeColor="primary">
-        Save
-        <kendo-loader *ngIf="isLoading"></kendo-loader>
-      </button>
+      <button kendoButton (click)="saveRename()" [disabled]="isLoading || !renameFileCategory.Dirty" themeColor="primary">Save</button>
     </kendo-dialog-actions>
   </kendo-dialog>
 </div>
