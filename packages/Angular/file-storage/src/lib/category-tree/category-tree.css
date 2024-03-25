@@ -1,5 +1,29 @@
 /* Styles for category tree */
+.container {
+  display: flex;
+  flex-direction: column;
+}
 
 kendo-treeview {
   width: 250px;
+}
+
+.tree-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-right: 4px;
+}
+
+kendo-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  column-gap: 12px;
+  margin-bottom: 4px;
+}
+
+kendo-label kendo-textbox {
+  width: 100%;
 }

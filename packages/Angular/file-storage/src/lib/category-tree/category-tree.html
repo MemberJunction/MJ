@@ -1,10 +1,35 @@
 <div class="container">
-  <kendo-treeview 
-      [nodes]="categoriesData"
-      textField="Name"
-      kendoTreeViewExpandable
-      kendoTreeViewFlatDataBinding
-      idField="ID"
-      parentIdField="ParentID"
+  <div class="tree-header">
+    <kendo-button (click)="categorySelected.emit(undefined)">Root</kendo-button>
+    <kendo-button (click)="createNewCategory()" size="small">Add category</kendo-button>
+  </div>
+  <kendo-treeview
+    [nodes]="categoriesData"
+    textField="Name"
+    kendoTreeViewExpandable
+    kendoTreeViewFlatDataBinding
+    idField="ID"
+    parentIdField="ParentID"
+    (selectionChange)="categorySelected.emit($event.dataItem.ID)"
   ></kendo-treeview>
+  <kendo-dialog title="New File Category" *ngIf="showNew" (close)="cancelNewCategory()" [minWidth]="250" [width]="450">
+    <div class="container">
+      <form #templateForm="ngForm">
+        <kendo-label class="k-form" text="Name">
+          <kendo-textbox
+            name="name"
+            [(ngModel)]="newCategoryName"
+            [showSuccessIcon]="newCategoryName.length > 0"
+            showErrorIcon="initial"
+            required
+            [disabled]="isLoading"
+          ></kendo-textbox>
+        </kendo-label>
+      </form>
+    </div>
+    <kendo-dialog-actions>
+      <button kendoButton (click)="cancelNewCategory()" [disabled]="isLoading">Cancel</button>
+      <button kendoButton (click)="saveNewCategory()" [disabled]="isLoading" themeColor="primary">Save</button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
 </div>
