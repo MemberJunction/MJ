@@ -11,3 +11,10 @@ kendo-expansionpanel {
 .content {
     display: flex;
 }
+
+.panelbar-wrapper {
+    width: 300px;
+    margin: 0 auto;
+    max-height: 1200px;
+    overflow-y: scroll;
+}

@@ -1,6 +1,10 @@
 export enum ItemType {
     Folder = "Folder",
-    Entity = "Entity"
+    Entity = "Entity",
+    Resource = "Resource",
+    UserView = "UserView",
+    Application = "Application",
+    StubData = "StubData"
 };
 
 export class Item {
@@ -29,6 +33,14 @@ export class Item {
     }
 }
 
+export class TreeItem extends Item {
+    public ChildItems: TreeItem[] = [];
+
+    constructor(data: any | Folder, type: ItemType){
+        super(data, type);
+    }
+}
+
 /**
  * A folder is a wrapper class for the various Category
  * entities that we have, e.g. Dashboard Categories, 
@@ -44,5 +56,14 @@ export class Folder {
         this.ID = id;
         this.Name = folderName;
         this.Description = "";
+    }
+}
+
+export class TreeFolder extends Folder {
+    public EntityID: number;
+
+    constructor(entityID: number, id: number, folderName: string){
+        super(id, folderName);
+        this.EntityID = entityID;
     }
 }

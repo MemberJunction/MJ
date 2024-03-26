@@ -11,7 +11,7 @@
       [autoCollapse]="false"
     />
     <div *ngIf="showExpansionPanel">
-      <expansion-panel-component [items]="stubData" />
+      <expansion-panel-component [items]="panelItems" />
     </div>
     <kendo-drawer-content mjFillContainer>
       <kendo-tabstrip mjFillContainer class="drawer-container" [scrollable]="true" [keepTabContent]="true" (tabClose)="onClose($event)" (tabSelect)="onTabSelect($event)" [animate]="false" #tabstrip>
