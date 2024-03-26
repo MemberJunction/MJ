@@ -18,7 +18,7 @@ import { LabelModule } from '@progress/kendo-angular-label';
 import { LayoutModule, TabStripModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { SortableModule } from "@progress/kendo-angular-sortable";
-
+import { TreeViewModule } from "@progress/kendo-angular-treeview";
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
@@ -144,6 +144,7 @@ import {ApplicationViewComponent} from './lib/app-view/application-view.componen
     ContainerDirectivesModule,
     BaseFormsModule,
     ListViewModule,
+    TreeViewModule,
     UserViewGridModule,
     QueryGridModule,
     SortableModule,

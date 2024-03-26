@@ -2,7 +2,7 @@ import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, Host
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
-import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -10,6 +10,7 @@ import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntity, ViewInfo } from '
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { Title } from '@angular/platform-browser';
 import { StubData } from '../../generic/app-nav-view.types';
+import { Item, ItemType, TreeItem } from '../../generic/Item.types';
 
 export interface Tab {
   id?: number;
@@ -51,7 +52,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public selectedTabIndex: number = 0;
   private workSpace: any = {};
   private workSpaceItems: WorkspaceItemEntity[] = [];
-  public stubData: StubData[] = [];
+  public panelItems: TreeItem[] = [];
 
   public showExpansionPanel: boolean = false;
 
@@ -822,14 +823,21 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
  
   async loadApp() {
 
-    //setting the stubdata here because at this point
-    //the provider is defined within the MetaData class
+    //setting the panelItems here because by this point
+    //the provider class is set within the MetaData class
     //and the applications property is populated
     const md: Metadata = new Metadata();
     const applications: ApplicationInfo[] = md.Applications;
-    this.stubData = applications.map(app => 
-      new StubData(app.Name, app.ApplicationEntities.map(entity => 
-        new StubData(entity.Entity, []))));
+    this.panelItems = applications.map((app: ApplicationInfo) => {
+      let item = new TreeItem(app, ItemType.Application);
+      item.ChildItems = app.ApplicationEntities.map((entity: ApplicationEntityInfo) => {
+        let childItem: TreeItem = new TreeItem(entity, ItemType.Entity);
+        childItem.Name = entity.Entity;
+        childItem.ChildItems.push(new TreeItem({ Name: 'Stub Node' }, ItemType.StubData));
+        return childItem;
+      });
+      return item;
+    });
 
     await this.LoadDrawer();
 
