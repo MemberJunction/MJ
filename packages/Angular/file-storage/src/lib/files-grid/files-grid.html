@@ -1,6 +1,7 @@
 <div class="container">
   <kendo-grid [data]="files" [loading]="isLoading">
     <kendo-grid-column field="ID" title="ID"> </kendo-grid-column>
+    <kendo-grid-column field="Category" title="Category"> </kendo-grid-column>
     <kendo-grid-column field="Name" title="Name"> </kendo-grid-column>
     <kendo-grid-column field="Description" title="Description"> </kendo-grid-column>
     <kendo-grid-column field="Status" title="Status"> </kendo-grid-column>
@@ -22,6 +23,7 @@
   </kendo-grid>
 
   <mj-files-file-upload
+    [CategoryID]="CategoryID"
     [disabled]="isLoading"
     (uploadStarted)="isLoading = true"
     (fileUpload)="handleFileUpload($event)"

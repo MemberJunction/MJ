@@ -1,4 +1,4 @@
-import { Metadata } from '@memberjunction/core';
+import { EntityPermissionType, Metadata } from '@memberjunction/core';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
@@ -47,8 +47,10 @@ export class FileResolver extends FileResolverBase {
     @PubSub() pubSub: PubSubEngine
   ) {
     const md = new Metadata();
-    const userInfo = this.GetUserFromPayload(userPayload);
-    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
+    const user = this.GetUserFromPayload(userPayload);
+    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
+    fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, { dataSource, userPayload }, pubSub)) as File_;
 
@@ -61,7 +63,6 @@ export class FileResolver extends FileResolverBase {
     const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileRecord);
 
     // Save the file record with the updated input
-    const fileEntity = <FileEntity>await new Metadata().GetEntityObject('Files', userInfo);
     fileEntity.LoadFromData(input);
     fileEntity.SetMany(updatedInput);
     await fileEntity.Save();
@@ -73,10 +74,11 @@ export class FileResolver extends FileResolverBase {
   @FieldResolver(() => String)
   async DownloadUrl(@Root() file: File_, @Ctx() { userPayload }: AppContext) {
     const md = new Metadata();
-    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>(
-      'File Storage Providers',
-      this.GetUserFromPayload(userPayload)
-    );
+    const user = this.GetUserFromPayload(userPayload);
+    const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
+    fileEntity.CheckPermissions(EntityPermissionType.Read, true);
+
+    const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
     await providerEntity.Load(file.ProviderID);
 
     const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.ID);
@@ -89,13 +91,15 @@ export class FileResolver extends FileResolverBase {
     const md = new Metadata();
     const userInfo = this.GetUserFromPayload(userPayload);
 
-    const fileEntity = <FileEntity>await md.GetEntityObject('Files', userInfo);
+    const fileEntity = await md.GetEntityObject<FileEntity>('Files', userInfo);
     await fileEntity.Load(ID);
     if (!fileEntity) {
       return null;
     }
+    fileEntity.CheckPermissions(EntityPermissionType.Delete, true);
 
-    if (fileEntity.Status === 'Uploaded') { 
+    // Only delete the object from the provider if it's actually been uploaded
+    if (fileEntity.Status === 'Uploaded') {
       const providerEntity = await md.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', userInfo);
       await providerEntity.Load(fileEntity.ProviderID);
       await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.ID);

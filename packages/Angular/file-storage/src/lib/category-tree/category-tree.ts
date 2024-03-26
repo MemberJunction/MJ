@@ -1,8 +1,8 @@
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity } from '@memberjunction/core-entities';
+import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
 
-import { kendoSVGIcon } from '@memberjunction/ng-shared';
 import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
 import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
 
@@ -17,6 +17,7 @@ export class CategoryTreeComponent implements OnInit {
   public isLoading: boolean = false;
   public showNew: boolean = false;
   public newCategoryName = '';
+  public selectedKeys = [];
   public renameFileCategory: FileCategoryEntity | undefined;
 
   public kendoSVGIcon = kendoSVGIcon;
@@ -25,7 +26,7 @@ export class CategoryTreeComponent implements OnInit {
 
   private md = new Metadata();
 
-  constructor() {}
+  constructor(private sharedService: SharedService) {}
 
   ngOnInit(): void {
     this.Refresh();
@@ -61,13 +62,40 @@ export class CategoryTreeComponent implements OnInit {
     this.isLoading = false;
   }
 
-  handleMenuSelect(e: ContextMenuSelectEvent) {
-    if (e.item.text?.toLowerCase() === 'rename') {
-      this.renameFileCategory = e.item.data;
+  async deleteCategory(fileCategory: FileCategoryEntity) {
+    this.isLoading = true;
+    const { ID } = fileCategory;
+    const success = await fileCategory.Delete();
+    if (!success) {
+      console.error('Unable to delete file category', fileCategory);
+      this.sharedService.CreateSimpleNotification(`Unable to delete category '${fileCategory.Name}'`, 'error');
+      return;
     }
-    console.log('action: ', e.item.text);
-    console.log('renaem this one: ', e.item.data.Name);
-    console.log('File categrory', e.item.data instanceof FileCategoryEntity);
+
+    this.categoriesData = this.categoriesData.filter((c) => c.ID !== ID);
+    this.clearSelection();
+    this.isLoading = false;
+  }
+
+  clearSelection() {
+    this.selectedKeys = [];
+    this.categorySelected.emit(undefined);
+  }
+
+  handleMenuSelect(e: ContextMenuSelectEvent) {
+    const action = e.item?.text?.toLowerCase() ?? '';
+    switch (action) {
+      case 'rename':
+        this.renameFileCategory = e.item.data;
+        break;
+
+      case 'delete':
+        this.deleteCategory(e.item.data);
+        break;
+
+      default:
+        break;
+    }
   }
 
   cancelRename() {
@@ -90,6 +118,7 @@ export class CategoryTreeComponent implements OnInit {
       EntityName: 'File Categories',
       ResultType: 'entity_object',
     });
+
     if (result.Success) {
       this.categoriesData = <FileCategoryEntity[]>result.Results;
     } else {

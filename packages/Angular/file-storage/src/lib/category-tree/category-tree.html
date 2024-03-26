@@ -1,6 +1,6 @@
 <div class="container">
   <div class="tree-header">
-    <kendo-button (click)="categorySelected.emit(undefined)">Root</kendo-button>
+    <kendo-button (click)="clearSelection()">All Files</kendo-button>
     <kendo-button (click)="createNewCategory()" size="small">Add category</kendo-button>
   </div>
   <kendo-treeview
@@ -12,7 +12,9 @@
     parentIdField="ParentID"
     (selectionChange)="categorySelected.emit($event.dataItem.ID)"
     kendoTreeViewDragAndDrop
+    kendoTreeViewSelectable
     (addItem)="handleDrop($event)"
+    [selectedKeys]="selectedKeys"
   >
     <ng-template kendoTreeViewNodeTemplate let-dataItem>
       <span #target>{{ dataItem.Name }} </span>

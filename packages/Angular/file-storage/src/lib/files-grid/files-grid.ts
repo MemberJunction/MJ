@@ -201,7 +201,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
     const result = await rv.RunView({
       EntityName: 'Files',
       ResultType: 'entity_object',
-      ...(typeof this.CategoryID === 'number' && { ExtraFilter: `CategoryID=${this.CategoryID}` }),
+      ...(this.CategoryID !== undefined && { ExtraFilter: `CategoryID=${this.CategoryID}` }),
     });
     if (result.Success) {
       this.files = <FileEntity[]>result.Results ?? [];

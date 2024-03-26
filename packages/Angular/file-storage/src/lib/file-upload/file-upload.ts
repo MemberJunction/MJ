@@ -7,9 +7,7 @@ import { kendoSVGIcon } from '@memberjunction/ng-shared';
 import { FileInfo, SelectEvent } from '@progress/kendo-angular-upload';
 import { z } from 'zod';
 
-export type FileUploadEvent = 
-  | { success: true, file: FileEntity }
-  | { success: false, file: FileInfo }
+export type FileUploadEvent = { success: true; file: FileEntity } | { success: false; file: FileInfo };
 
 const FileFieldsFragment = gql`
   fragment FileFields on File_ {
@@ -74,6 +72,7 @@ export class FileUploadComponent implements OnInit {
   constructor() {}
 
   @Input() disabled = false;
+  @Input() CategoryID: number | undefined = undefined;
   @Output() uploadStarted = new EventEmitter<void>();
   @Output() fileUpload = new EventEmitter<FileUploadEvent>();
 
@@ -92,39 +91,32 @@ export class FileUploadComponent implements OnInit {
 
   async selectEventHandler(e: SelectEvent) {
     e.preventDefault();
-    console.log('Files were selected', e);
-
     this.isUploading = true;
     this.uploadStarted.emit();
 
     // for each selected file to upload
     for (const file of e.files) {
+      const input = {
+        Name: file.name,
+        ProviderID: this.defaultProviderID,
+        Status: 'Pending',
+        CategoryID: this.CategoryID,
+      };
+
       // call the gql
-      const result = await GraphQLDataProvider.ExecuteGQL(FileUploadMutation, {
-        input: {
-          Name: file.name,
-          ProviderID: this.defaultProviderID,
-          Status: 'Pending',
-          // TODO: Get this from outside this component
-          // CategoryID
-        },
-      });
+      const result = await GraphQLDataProvider.ExecuteGQL(FileUploadMutation, { input });
 
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
       if (parsedResult.success) {
         const { File, UploadUrl } = parsedResult.data.CreateFile;
         try {
-          console.log('type of ', typeof file);
-
           // now upload to the url
           await window.fetch(UploadUrl, {
             method: 'PUT',
             headers: { 'x-ms-blob-type': 'BlockBlob' },
             body: file.rawFile,
           });
-
-          console.log('File uploaded', file);
 
           // now update that file to set status
           const fileEntity: FileEntity = await this.md.GetEntityObject('Files');
