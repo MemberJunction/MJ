@@ -38,7 +38,7 @@
           <kendo-svgicon [icon]="sharedService.kendoSVGIcon('plus')"></kendo-svgicon>
           Add Item
         </kendo-button>
-        <kendo-button (click)="toggleEditDashboard(true)" [primary]="true">
+        <kendo-button (click)="toggleEditDashboard(true)" >
           <kendo-svgicon [icon]="sharedService.kendoSVGIcon('gear')"></kendo-svgicon>
           Edit Dashboard
         </kendo-button>
@@ -59,10 +59,10 @@
           {{item.title}}
           <div *ngIf="!isEditingDashboard">
             <div class="btn-wrapper">
-              <button kendoButton fillMode="flat" (click)="toggleEditDashboard(true)">
+              <button kendoButton (click)="toggleEditDashboard(true)">
                 <span class="k-icon k-i-edit"></span>
               </button>
-              <button kendoButton fillMode="flat" (click)="showConfirmDeleteDashboardItem(item)"><span
+              <button kendoButton (click)="showConfirmDeleteDashboardItem(item)"><span
                   class="k-icon k-i-delete"></span></button>
             </div>
           </div>

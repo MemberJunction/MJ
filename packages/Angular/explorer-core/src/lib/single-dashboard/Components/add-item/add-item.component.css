@@ -1,43 +1,47 @@
 .popup-actions {
-    width: 100%;
-    padding: 10px;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-  }
-  ::ng-deep .modal-body-wrap .k-window-content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    flex: 1;
-    padding: 0;
-  }
-  .resource-wrap {
-    flex: 1;
-    padding: 24px;
-    margin: 16px;
-    border-radius: 4px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    box-sizing: border-box;
+  width: 100%;
+  padding: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+::ng-deep .modal-body-wrap .k-window-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  padding: 0;
+}
+.resource-wrap {
+  flex: 1;
+  padding: 24px;
+  margin: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.user-view-wrap {
     display: flex;
     flex-direction: column;
     gap: 20px;
-  }
-  .user-view-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-  }
-  ::ng-deep .resource-wrap .k-label {
-    color: #424242;
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 20px;
-  }
-  ::ng-deep .resource-wrap .k-dropdownlist {
-    border-radius: 4px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    background: transparent;
-    line-height: 32px;
-    margin: 0;
-  }
-  
+}
+::ng-deep .resource-wrap .k-label {
+  color: #424242;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 20px;
+}
+::ng-deep .resource-wrap .k-dropdownlist {
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  line-height: 32px;
+  margin: 0;
+}
+::ng-deep .customBtn button {
+  flex: 1;
+  border-radius: 10px;
+  line-height: 34px;
+}

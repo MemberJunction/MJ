@@ -1,3 +1,157 @@
-.generic-browse-list-container {
-    margin: 10px;
+::ng-deep .card-header-entity .title-wrap h1 {
+    margin: 0 !important;
+    font-size: 36px !important;
+    line-height: 42px !important;
+    color: var(--black) !important;
+}
+ ::ng-deep .card-header-entity .add-item .k-button {
+    border: 1px solid var(--border-blue) !important;
+    background: var(--white-color) !important;
+    color: var(--border-blue);
+    font-weight: 500 ;
+    font-size: 16px ;
+    border-radius: 10px;
+    line-height: 34px;
+}
+::ng-deep .card-header-entity .add-item .k-button:hover {
+    background: var(--border-blue) !important;
+    color: var(--white-color);
+}
+::ng-deep .card-header-entity .add-item .k-button:hover .k-button-text svg path {
+    fill: var(--white-color) !important;
+}
+ .title-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--med-gray);
+}
+ .title-wrapper h4 {
+    margin: 0;
+    font-size: 24px;
+    line-height: 28px;
+ }
+ .main-fav-wrapper {
+    background: #fff;
+    padding: 20px;
+ }
+ .filter-wrapper {
+    display: flex;
+    justify-content: flex-start;
+    gap: 14px;
+    align-items: center;
+}
+ .title-wrapper .search  input {
+    width: 100%;
+    height: 100%;
+    font-size: 16px;
+    background: transparent;
+    border: none;
+    box-sizing: border-box;
+    padding-left: 40px;
+
+ }
+    .title-wrapper .search  {
+    background: var(--light-shade);
+    width: 360px;
+    height: 44px;
+    position: relative;
+    border-radius: 10px;
+ }
+ .title-wrapper .search svg {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 12px;
+}
+::ng-deep .main-fav-wrapper .title-wrapper .k-dropdown-button .k-button {
+    background: var(--border-blue);
+    color: var(--white-color);
+    font-size: 16px;
+    border: none;
+    padding: 8px 25px;
+    border-radius: 10px;
+}
+::ng-deep .main-fav-wrapper .title-wrapper .k-dropdown-button .k-button .k-button-text, ::ng-deep .card-header-entity .add-item .k-button .k-button-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-cmn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    background: transparent;
+    border-radius: 8px;
+    border: 1px solid var(--gray-color);
+}
+.btn-cmn.active {
+    border: 1px solid var(--border-blue);
+}
+::ng-deep .main-fav-wrapper .title-wrapper .filter-wrapper .k-dropdown-button .k-button {
+    border: 1px solid var(--gray-color);
+    border-radius: 8px;   padding: 10px 25px;
+    background: var(--white-color);
+    color: var(--sideNav);
+}
+::ng-deep .main-area .card-list .card-wrapper .k-card-body {
+    padding: 16px !important;
+    position: relative;
+}
+::ng-deep .main-area .card-list .card-wrapper .k-card-body .list-item-icon {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    top:12px;
+    right: 12px;
+}
+::ng-deep .main-area .card-list .card-wrapper .k-card-body .list-item-icon .common-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border: 1px solid var(--gray-color);
+    border-radius: 8px; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: transparent;
+}
+::ng-deep .main-area .card-list .card-wrapper:hover {
+    box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
+    border: 1px solid var(--border-active);
+}
+::ng-deep .main-area .card-list .card-wrapper:hover .k-card-body .view-card-content-list h5 {
+    color: var(--border-blue);
+}
+::ng-deep .main-area .card-list .card-wrapper .k-card-body .view-card-content-list p {
+    color: var(--sideNav);
+    font-size: 14px;
+    line-height: 16px;
+    height: auto;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+
+}
+::ng-deep .main-area .card-list .card-wrapper .k-card-body .view-card-content-list h5 {
+    font-size: 18px;
+    line-height: 21px;
+    color: var(--text-darked);
+    font-weight: 600;
+}
+.breadcrumb-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0;
+}
+.breadcrumb-wrap span {
+    font-size: 16px;
+    line-height: 18px;
+    font-weight: 400;
+    color: var(--black);
 }

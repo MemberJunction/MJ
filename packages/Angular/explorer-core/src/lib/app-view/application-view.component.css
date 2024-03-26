@@ -1,14 +1,21 @@
 .app-container {
-    margin: 10px;
+     margin: 10px;
+  }
+  
+ .entity-list {
+      width: 500px;
+ }
+ .favorites-list {
+      width: 400px;
  }
  
-.entity-list {
-     width: 500px;
-}
-.favorites-list {
-     width: 400px;
-}
-
-.cloumn {
-    flex-direction: column;
-}
+ .cloumn {
+     flex-direction: column;
+ }
+ .example-col .k-selected  {
+      font-weight: 800;
+      color: var(--tdata-color);
+      border-bottom: 3px solid var(--border-blue) !important;
+      background: var(--white-color);
+ 
+ }

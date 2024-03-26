@@ -146,7 +146,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     this.skip = event.skip;
     this.virtualLoadData();
   }
-
+  data = [
+    { text: "Folder" },
+    { text: "Report with Skip" },
+  ];
   private virtualLoadData(): void {
     // check to see if we have already formatted the slice of the data we need right now
     // we are storing the formattted data in the formattedData array and it has same set
