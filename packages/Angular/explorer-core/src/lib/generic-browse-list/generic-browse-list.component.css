@@ -11,14 +11,14 @@
     font-weight: 500;
     font-size: 16px;
 }
-.generic-browse-list-container .title-wrapper {
+.generic-browse-list-container .main-fav-wrapper .title-wrapper {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 14px 0;
     border-bottom: 1px solid var(--med-gray);
 }
-.generic-browse-list-container .title-wrapper h4 {
+.generic-browse-list-container .main-fav-wrapper .title-wrapper h4 {
     margin: 0;
     font-size: 24px;
     line-height: 28px;

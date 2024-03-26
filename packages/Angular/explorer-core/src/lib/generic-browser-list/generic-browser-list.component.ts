@@ -60,7 +60,10 @@ export class GenericBrowserListComponent {
     this.router = router;
   }
 
-
+  data = [
+    { text: "Folder" },
+    { text: "Report with Skip" },
+  ];
   //TODO - add property to show or hide notifications
   //create display notification method
 

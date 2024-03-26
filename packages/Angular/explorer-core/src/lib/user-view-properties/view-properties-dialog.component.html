@@ -1,7 +1,7 @@
 <div>
   <button *ngIf="ShowPropertiesButton"
     kendoButton
-    [primary]="true"
+    themeColor="info"
     (click)="this.Open()"
     class="view-properties-button"
   >
@@ -9,7 +9,7 @@
   Properties</button>
   <div class="k-overlay" *ngIf="isDialogOpened"></div>
   <kendo-window
-    [width]="700"
+    [width]="668"
     [height]="525"
     [minHeight]="300"
     [minWidth]="400"
@@ -164,12 +164,13 @@
 
         </kendo-tabstrip>
   
-        <div class="k-actions k-actions-end popup-actions">
-          <button kendoButton (click)="saveProperties()" themeColor="primary">
+        <div class="k-actions k-actions-end customBtn popup-actions">
+          <button fillMode="outline" themeColor="info" kendoButton (click)="closePropertiesDialog()">Cancel</button>
+          <button kendoButton (click)="saveProperties()" themeColor="info">
             <kendo-svgicon [icon]="sharedService.kendoSVGIcon('save')"></kendo-svgicon>
             Save
           </button>
-          <button kendoButton (click)="closePropertiesDialog()">Cancel</button>
+      
         </div>
       </div>
     </div>

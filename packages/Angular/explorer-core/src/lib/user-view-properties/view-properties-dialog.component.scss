@@ -76,3 +76,19 @@
 {
   margin-bottom: 10px;
 }
+::ng-deep .customBtn button {
+  flex: 1;
+  border-radius: 10px;
+  line-height: 34px;
+}
+::ng-deep .popup-content .k-tabstrip-items-wrapper {
+  background: var(--white-color) !important;
+  padding-left: 0 !important;
+}
+::ng-deep .popup-content .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item.k-active {
+  border-bottom: 3px solid var(--border-blue) !important;
+}
+  ::ng-deep .popup-content .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item {
+  background: var(--white-color) !important;
+  border-right: 0 !important;
+}

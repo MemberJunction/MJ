@@ -12,6 +12,7 @@
                     <button
                         *ngFor="let button of AppEntityButtons"
                         kendoButton
+                        fillMode="flat"
                         [toggleable]="true"
                         [selected]="button.Selected"
                         (click)="onAppEntityButtonClicked(button)"
