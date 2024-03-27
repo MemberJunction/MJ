@@ -6,7 +6,7 @@
         <div class="title-wrap">
             <h1>{{appName}}</h1>
         </div>
-        <div class="row">
+        <div class="row" #entityRow style="max-width: 100%;">
             <div class="col-xs-12 col-sm-6 example-col">
                 <kendo-buttongroup selection="single">
                     <button
@@ -38,6 +38,7 @@
             [selectedFolderID]="selectedFolderID"
             [showLoader]="showLoader"
             [viewingResource]=false
+            [displayAsGrid]="displayAsGrid"
             (AfterAddFolderEvent)="onEvent($event)"
             (AfterAddItemEvent)="onEvent($event)"
             (AfterDeleteItemEvent)="onEvent($event)"

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
@@ -14,6 +14,8 @@ import {Location} from '@angular/common';
 })
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
 
+    @ViewChild('entityRow') entityRowRef: Element | undefined;
+
     private appNameFromURL: string = '';
     public appName: string = ''
     public appDescription: string = ''
@@ -21,11 +23,17 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public AppEntityButtons: ApplicationEntityButton[] = []
     private selectedAppEntity: ApplicationEntityInfo | null = null;
     public categoryEntityID: number | null = null;
+    public displayAsGrid: boolean = false;
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService){
         super();
         this.categoryEntityName = "User View Categories";
         this.itemEntityName = "User Views";
+
+        const params = this.router.getCurrentNavigation()?.extractedUrl.queryParams
+        if (params) {
+            this.displayAsGrid = params.viewMode === "grid";
+        }
     }
 
     async ngOnInit(): Promise<void> {
@@ -105,6 +113,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             showLoader: true
         });
         this.showLoader = false;
+        console.log("is overflown?", this.isOverflown(this.entityRowRef as Element) ? "yes" : "no");
     }
 
     public onItemClick(item: Item) {
@@ -156,6 +165,13 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         }
 
         this.router.navigate(url);
+    }
+
+    private isOverflown(element: any) {
+        console.log("element: ", element);
+        let e: any = element.nativeElement;
+        console.log("element.scrollHeight: ", e.nativeScrollHeight, " element.clientHeight: ", e.clientHeight, " element.scrollWidth: ", e.scrollWidth, " element.clientWidth: ", e.clientWidth)
+        return e.scrollHeight > e.clientHeight || e.scrollWidth > e.clientWidth;
     }
 } 
 
