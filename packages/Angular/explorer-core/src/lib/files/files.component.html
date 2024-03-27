@@ -1,4 +1,4 @@
 <div class="container">
-    <mj-files-category-tree></mj-files-category-tree>
-    <mj-files-grid></mj-files-grid>
+  <mj-files-category-tree (categorySelected)="categorySelected($event)"></mj-files-category-tree>
+  <mj-files-grid [CategoryID]="CategoryID"></mj-files-grid>
 </div>

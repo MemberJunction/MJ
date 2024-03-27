@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 
 import { RunView } from '@memberjunction/core';
 import { FileEntity } from '@memberjunction/core-entities';
@@ -16,7 +16,6 @@ import { FileUploadEvent } from '../file-upload/file-upload';
  * @returns Promise<void> - A promise that resolves when the file download is complete.
  */
 const downloadFromUrl = async (url: string, fileName: string, contentType?: string | null) => {
-
   // First, fetch the data and create a blob with the correct content type
   const response = await fetch(url);
   if (!response.ok) {
@@ -59,7 +58,7 @@ const FileDownloadQuerySchema = z.object({
   templateUrl: './files-grid.html',
   styleUrls: ['./files-grid.css'],
 })
-export class FilesGridComponent implements OnInit {
+export class FilesGridComponent implements OnInit, OnChanges {
   public files: FileEntity[] = [];
   public isLoading: boolean = false;
   public editFile: FileEntity | undefined;
@@ -67,8 +66,16 @@ export class FilesGridComponent implements OnInit {
 
   constructor(private sharedService: SharedService) {}
 
+  @Input() CategoryID: number | undefined = undefined;
+
   ngOnInit(): void {
     this.Refresh();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['CategoryID']) {
+      this.Refresh();
+    }
   }
 
   /**
@@ -193,12 +200,11 @@ export class FilesGridComponent implements OnInit {
     const rv = new RunView();
     const result = await rv.RunView({
       EntityName: 'Files',
-      // TODO: Apply the category filter here
-      // ExtraFilter: `LEFT(Status, 1)<>'D'`, //'CategoryID=' + e.ID,
       ResultType: 'entity_object',
+      ...(this.CategoryID !== undefined && { ExtraFilter: `CategoryID=${this.CategoryID}` }),
     });
     if (result.Success) {
-      this.files = <FileEntity[]>result.Results;
+      this.files = <FileEntity[]>result.Results ?? [];
     } else {
       throw new Error('Error loading files: ' + result.ErrorMessage);
     }
