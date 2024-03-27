@@ -24,6 +24,7 @@ export class GenericBrowserListComponent {
   @Input() public selectedFolderID: number | null = null;
   @Input() public showNotifications: boolean = true;
   @Input() public categoryEntityID: number | null = null;
+  @Input() public displayAsGrid: boolean = false;
   /**
    * If we are viewing a reesource, such as dashboards, reports, queries, etc
    * then the UI will need to change abit to accomodate this like 
