@@ -127,19 +127,19 @@ export class BaseBrowserComponent {
             router.navigate(['resource', this.routeNameSingular, dataID]);
         }
         else if(item.Type === ItemType.Folder){
-        const folder: Folder = <Folder>item.Data;
-        const oldPathData: PathData = this.PathData;
-        const newPathData: PathData = new PathData(folder.ID, folder.Name, `/${this.routeName}?folderID=${folder.ID}`);
-        
-        oldPathData.ChildPathData = newPathData;
-        newPathData.ParentPathData = oldPathData;
-        this.PathData = newPathData;
-        
-        //navigation seems like it does nothing but update the URL
-        //so just reload all of the data
-        router.navigate([this.routeName], {queryParams: {folderID: folder.ID}});
-        this.selectedFolderID = folder.ID;
-        this.LoadData({});
+            const folder: Folder = <Folder>item.Data;
+            const oldPathData: PathData = this.PathData;
+            const newPathData: PathData = new PathData(folder.ID, folder.Name, `/${this.routeName}?folderID=${folder.ID}`);
+            
+            oldPathData.ChildPathData = newPathData;
+            newPathData.ParentPathData = oldPathData;
+            this.PathData = newPathData;
+            
+            //navigation seems like it does nothing but update the URL
+            //so just reload all of the data
+            router.navigate([this.routeName], {queryParams: {folderID: folder.ID}});
+            this.selectedFolderID = folder.ID;
+            this.LoadData({});
         }
     }
 

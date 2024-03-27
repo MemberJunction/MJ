@@ -1,9 +1,11 @@
-import { Component, EventEmitter, Input, Output, input } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, input } from '@angular/core';
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
 import { BaseEntity, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core';
 import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
+import { Subscription, Subject, debounceTime } from 'rxjs';
+import { CellClickEvent } from '@progress/kendo-angular-grid';
 
 @Component({
   selector: 'app-generic-browser-list',
@@ -57,18 +59,34 @@ export class GenericBrowserListComponent {
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public backButtonClickEvent: EventEmitter<void> = new EventEmitter<void>();
 
-  constructor(public sharedService: SharedService, private router: Router) {
-    this.router = router;
-  }
+  @Output() public viewModeChangeEvent: EventEmitter<'grid' | 'list'> = new EventEmitter<'grid' | 'list'>();
+
+  private _resizeDebounceTime: number = 250;
+  private _resizeEndDebounceTime: number = 500;
+  private saveChangesSubject: Subject<any> = new Subject();
+  private filter: string = '';
+  private sourceItems: Item[] | null = null;
 
   data = [
     { text: "Folder" },
     { text: "Report with Skip" },
   ];
-  //TODO - add property to show or hide notifications
-  //create display notification method
 
-  public itemClick(item: Item): void {
+  constructor(public sharedService: SharedService, private router: Router) {
+    this.router = router;
+
+    this.saveChangesSubject
+        .pipe(debounceTime(this._resizeDebounceTime))
+        .subscribe(() => this.filterItems(this.filter));
+  }
+
+  //wrapper function for the grid view
+  public onCellItemClicked(event: CellClickEvent): void {
+    console.log("onCellItemClicked: ", event);
+    this.itemClick(event.dataItem);
+  }
+
+  public itemClick(item: any): void {
     if (!item) {
       return;
     }
@@ -278,5 +296,81 @@ export class GenericBrowserListComponent {
     else if(typeof data.Get === "function"){
         return data.Get("ID");
     }
-}
+  }
+
+  public changeViewMode(mode: 'grid' | 'list'){
+    this.displayAsGrid = mode === 'grid';
+    this.viewModeChangeEvent.emit(mode);
+  }
+
+  public onKeyup(Value: any): void {
+    this.filter = Value;
+    this.saveChangesSubject.next(true);
+  }
+
+  private filterItems(filter: string): void {
+    console.log("filtering items");
+
+    if(!this.sourceItems){
+      this.sourceItems = [...this.items];
+    }
+
+    if (!filter) {
+      this.items = [...this.sourceItems];
+      return;
+    }
+
+    this.items = this.sourceItems.filter(item => {
+      return item.Name.toLowerCase().includes(filter.toLowerCase());
+    });
+  }
+
+  public async SetFavoriteStatus(item: any) {
+    if(!item){
+      return;
+    }
+
+    console.log("????");
+    console.log(item);
+    console.log("setting favorite status for item: ", item.Name);
+    item.Favorite = !item.Favorite;
+    const md: Metadata = new Metadata();
+    let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
+    let pkv: PrimaryKeyValue[] = [{FieldName: "ID", Value: item.Data.ID}];
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, pkv, item.Favorite);
+    console.log("favorite status set for item: ", item.Favorite);
+  }
+
+  public editItem(item: Item): void {
+    if(!item){
+      return;
+    }
+
+    console.log("on edit item clicked: ", item.Name);
+
+    if(item.Type === ItemType.Folder){
+      let event: BeforeUpdateFolderEvent = new BeforeUpdateFolderEvent(item);
+      this.BeforeUpdateFolderEvent.emit(event);
+      
+      if(event.Cancel){
+        return;
+      }
+    }
+    else{
+      let event: BeforeUpdateItemEvent = new BeforeUpdateItemEvent(item);
+      this.BeforeUpdateItemEvent.emit(event);
+      
+      if(event.Cancel){
+        return;
+      }
+    }
+  }
+
+  public async onDropdownItemClick(data: {text: string}): Promise<void>{
+    console.log("onDropdownItemClick: ", data.text);
+
+    if(data.text === "Folder"){
+      await this.createFolder();
+    }
+  }
 }
