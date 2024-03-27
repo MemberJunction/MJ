@@ -24,6 +24,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     private selectedAppEntity: ApplicationEntityInfo | null = null;
     public categoryEntityID: number | null = null;
     public displayAsGrid: boolean = false;
+    private viewMode: string = "list";
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService){
         super();
@@ -32,6 +33,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
         const params = this.router.getCurrentNavigation()?.extractedUrl.queryParams
         if (params) {
+            this.viewMode = params.viewMode || "list";
             this.displayAsGrid = params.viewMode === "grid";
         }
     }
@@ -42,7 +44,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             const entityName = params.get('entityName');
             const folderID = params.get('folderID'); 
 
-            LogStatus("appName: " + appName + " entityName: " + entityName + " folderID: " + folderID);
             if(folderID){
                 this.selectedFolderID = parseInt(folderID) || null;
             }
@@ -113,7 +114,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             showLoader: true
         });
         this.showLoader = false;
-        console.log("is overflown?", this.isOverflown(this.entityRowRef as Element) ? "yes" : "no");
     }
 
     public onItemClick(item: Item) {
@@ -122,7 +122,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         }
 
         if(item.Type == ItemType.Entity){
-            this.router.navigate(['resource', 'view', item.Data.ID]);
+            this.router.navigate(['resource', 'view', item.Data.ID], {queryParams: {viewMode: this.viewMode}});
         }
         else if(item.Type == ItemType.Folder){
             this.selectedFolderID = item.Data.ID;
@@ -133,7 +133,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     entityItemClick(info: ApplicationEntityInfo) {
         if (info) {
             const paramsArray = ['entity', info.Entity];
-            this.router.navigate(paramsArray)  
+            this.router.navigate(paramsArray, {queryParams: {viewMode: this.viewMode}})
         }
     }
 
@@ -141,10 +141,10 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         if (fav) {
             if (fav.Entity === 'User Views') {
                 // opening a view, different route
-                this.router.navigate(['resource', 'view', fav.RecordID]);
+                this.router.navigate(['resource', 'view', fav.RecordID], {queryParams: {viewMode: this.viewMode}});
             }
             else {
-                this.router.navigate(['resource', 'record', fav.RecordID], { queryParams: { Entity: fav.Entity } })
+                this.router.navigate(['resource', 'record', fav.RecordID], { queryParams: { Entity: fav.Entity, viewMode: this.viewMode } })
             }
         }
     }
@@ -164,14 +164,16 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             }
         }
 
-        this.router.navigate(url);
+        this.router.navigate(url, {queryParams: {viewMode: this.viewMode}});
     }
 
     private isOverflown(element: any) {
-        console.log("element: ", element);
         let e: any = element.nativeElement;
-        console.log("element.scrollHeight: ", e.nativeScrollHeight, " element.clientHeight: ", e.clientHeight, " element.scrollWidth: ", e.scrollWidth, " element.clientWidth: ", e.clientWidth)
         return e.scrollHeight > e.clientHeight || e.scrollWidth > e.clientWidth;
+    }
+
+    public onViewModeChange(viewMode: string): void {
+        this.viewMode = viewMode;
     }
 } 
 

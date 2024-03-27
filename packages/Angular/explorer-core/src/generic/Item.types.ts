@@ -11,6 +11,7 @@ export class Item {
     public Name: string;
     public Description: string;
     public Type: ItemType;
+    public Favorite: boolean = false;
     public Data : any | Folder;
 
     constructor(data: any | Folder, type: ItemType){
