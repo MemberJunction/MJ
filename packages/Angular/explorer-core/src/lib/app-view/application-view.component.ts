@@ -23,19 +23,11 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     public AppEntityButtons: ApplicationEntityButton[] = []
     private selectedAppEntity: ApplicationEntityInfo | null = null;
     public categoryEntityID: number | null = null;
-    public displayAsGrid: boolean = false;
-    private viewMode: string = "list";
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService){
         super();
         this.categoryEntityName = "User View Categories";
         this.itemEntityName = "User Views";
-
-        const params = this.router.getCurrentNavigation()?.extractedUrl.queryParams
-        if (params) {
-            this.viewMode = params.viewMode || "list";
-            this.displayAsGrid = params.viewMode === "grid";
-        }
     }
 
     async ngOnInit(): Promise<void> {
@@ -85,6 +77,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             return;
         }
 
+        this.selectedFolderID = null;
         this.selectedAppEntity = appEntityButton.Data;
         this.navigateToCurrentPage();
     }

@@ -1,11 +1,9 @@
 import { Component } from '@angular/core';
-import { Router } from '@angular/router'
-import { QueryEntity } from '@memberjunction/core-entities';
+import { ActivatedRoute, Router } from '@angular/router'
 import { Item } from '../../generic/Item.types';
-import { PathData } from '../../generic/PathData.types';
 import { SharedService } from '@memberjunction/ng-shared';
-import { BaseEvent } from '../../generic/Events.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
+import { BaseEntity } from '@memberjunction/core';
 
 @Component({
   selector: 'app-query-browser',
@@ -14,7 +12,7 @@ import { BaseBrowserComponent } from '../base-browser-component/base-browser-com
 })
 export class QueryBrowserComponent extends BaseBrowserComponent {
 
-  constructor(private router: Router, private sharedService: SharedService) {
+  constructor(private router: Router, private route: ActivatedRoute, private sharedService: SharedService) {
     super();
 
     this.pageName = "Queries";
@@ -23,52 +21,25 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
     this.itemEntityName = "Queries";
     this.categoryEntityName = "Query Categories";
 
-    const params = this.router.getCurrentNavigation()?.extractedUrl.queryParams
-    this.InitPathData(params);
+    const params = this.router.getCurrentNavigation()?.extractedUrl.queryParams;
+    super.InitPathAndQueryData(params, this.route);
   }
 
   async ngOnInit(): Promise<void> {
-
-    let entityFilter: string = "ID > 0";
-    const categoryEntityFilter: string = "ParentID IS NULL";
-    super.LoadData({entityItemFilter: entityFilter,  categoryItemFilter: categoryEntityFilter});
+    super.InitForResource(this.route);
   }
 
+  //this could exist in the BaseBrowserComponent class, but 
+  //the class would need a reference or dependency on the router
+  //which i dont think is needed
   public itemClick(item: Item) {
     let dataID: string = "";
 
     if(item.Type === "Entity"){
-      let dashboard: QueryEntity = item.Data as QueryEntity;
-      dataID = dashboard.ID.toString();
+      let dashboard: BaseEntity = item.Data as BaseEntity;
+      dataID = dashboard.Get("ID").toString();
     }
 
     super.Navigate(item, this.router, dataID);
-  }
-
-  public onBackButtonClick(): void {
-    const pathData: PathData | null = this.PathData.ParentPathData;
-    if(pathData && pathData.ID > 0){
-      this.PathData = pathData;
-      //navigation seems like it does nothing but update the URL
-      //so just reload all of the data
-      this.router.navigate(['reports'], {queryParams: {folderID: pathData.ID}});
-      this.selectedFolderID = pathData.ID;
-      this.LoadData();
-      
-    }
-    else if(this.parentFolderID || !this.parentFolderID && this.selectedFolderID){
-      this.router.navigate(['reports'], {queryParams: {folderID: this.parentFolderID}});
-      this.selectedFolderID = this.parentFolderID;
-      this.parentFolderID = null;
-      this.LoadData();
-    }
-    else{
-      //no parent path, so just go home
-      this.router.navigate(['']);
-    }
-  }
-
-  public onEvent(event: BaseEvent): void {
-    super.onEvent(event);
   }
 }
