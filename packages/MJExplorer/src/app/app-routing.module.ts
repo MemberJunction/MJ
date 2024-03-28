@@ -137,17 +137,17 @@ export class ResourceResolver implements Resolve<void> {
   }
 }
 
-
-
-
 const routes: Routes = [
   { path: '', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },  
   { path: 'askskip', component: SkipChatComponent, canActivate: [AuthGuard] },
   { path: 'askskip/:conversationId', component: SkipChatComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },  
+  { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
+  { path: 'reports/:folderID', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
+  { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },  
   { path: 'settings', 
