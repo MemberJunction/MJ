@@ -12,6 +12,9 @@
  .cloumn {
      flex-direction: column;
  }
+ .example-col {
+     overflow-x: auto;
+ }
  .example-col .k-selected  {
       font-weight: 800;
       color: var(--tdata-color);
