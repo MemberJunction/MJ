@@ -37,6 +37,22 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Enabled</label>
+            <input type="checkbox" [(ngModel)]="record.AutoRunEnabled" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Interval Units</label>
+            <kendo-textbox [(ngModel)]="record.AutoRunIntervalUnits"  />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Interval</label>
+            <kendo-numerictextbox [(value)]="record.AutoRunInterval!" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Subclass Name</label>
+            <kendo-textarea [(ngModel)]="record.SubclassName" ></kendo-textarea>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -68,6 +84,22 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Enabled</label>
+            <span >{{FormatValue('AutoRunEnabled', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Interval Units</label>
+            <span >{{FormatValue('AutoRunIntervalUnits', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Interval</label>
+            <span >{{FormatValue('AutoRunInterval', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Subclass Name</label>
+            <span >{{FormatValue('SubclassName', 0)}}</span>
         </div>
     </div>
 </div>

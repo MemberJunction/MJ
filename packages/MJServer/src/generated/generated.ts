@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/24/2024, 11:43:36 AM
+* GENERATED: 3/29/2024, 3:49:37 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity } from '@memberjunction/core-entities';
 
 
 //****************************************************************************
@@ -7765,6 +7765,20 @@ export class Workflow_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+      
+    @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'}) 
+    AutoRunEnabled: boolean;
+      
+    @Field({nullable: true, description: 'Minutes, Hours, Days, Weeks, Months, Years'}) 
+    @MaxLength(40)
+    AutoRunIntervalUnits?: string;
+      
+    @Field(() => Int, {nullable: true, description: 'The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.'}) 
+    AutoRunInterval?: number;
+      
+    @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
+    @MaxLength(400)
+    SubclassName?: string;
     
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -7796,6 +7810,18 @@ export class UpdateWorkflowInput {
 
     @Field()
     ExternalSystemRecordID: string;
+
+    @Field(() => Boolean)
+    AutoRunEnabled: boolean;
+
+    @Field({ nullable: true })
+    AutoRunIntervalUnits: string;
+
+    @Field(() => Int, { nullable: true })
+    AutoRunInterval: number;
+
+    @Field({ nullable: true })
+    SubclassName: string;
 }
 
 //****************************************************************************
@@ -18423,6 +18449,230 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+
+}
+
+//****************************************************************************
+// ENTITY CLASS for Version Installations
+//****************************************************************************
+@ObjectType()
+export class VersionInstallation_ {  
+    @Field(() => Int) 
+    ID: number;
+      
+    @Field(() => Int) 
+    MajorVersion: number;
+      
+    @Field(() => Int) 
+    MinorVersion: number;
+      
+    @Field(() => Int) 
+    PatchVersion: number;
+      
+    @Field({nullable: true, description: 'What type of installation was applied'}) 
+    @MaxLength(40)
+    Type?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    InstalledAt: Date;
+      
+    @Field({description: 'Pending, Complete, Failed'}) 
+    @MaxLength(40)
+    Status: string;
+      
+    @Field({nullable: true, description: 'Any logging that was saved from the installation process'}) 
+    InstallLog?: string;
+      
+    @Field({nullable: true, description: 'Optional, comments the administrator wants to save for each installed version'}) 
+    Comments?: string;
+      
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+      
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Version Installations   
+//****************************************************************************
+@InputType()
+export class CreateVersionInstallationInput {
+    @Field(() => Int)
+    MajorVersion: number;
+
+    @Field(() => Int)
+    MinorVersion: number;
+
+    @Field(() => Int)
+    PatchVersion: number;
+
+    @Field({ nullable: true })
+    Type: string;
+
+    @Field()
+    InstalledAt: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    InstallLog: string;
+
+    @Field({ nullable: true })
+    Comments: string;
+}
+
+        
+//****************************************************************************
+// INPUT TYPE for Version Installations   
+//****************************************************************************
+@InputType()
+export class UpdateVersionInstallationInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    MajorVersion: number;
+
+    @Field(() => Int)
+    MinorVersion: number;
+
+    @Field(() => Int)
+    PatchVersion: number;
+
+    @Field({ nullable: true })
+    Type: string;
+
+    @Field()
+    InstalledAt: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    InstallLog: string;
+
+    @Field({ nullable: true })
+    Comments: string;
+}
+
+//****************************************************************************
+// RESOLVER for Version Installations
+//****************************************************************************
+@ObjectType()
+export class RunVersionInstallationViewResult {
+    @Field(() => [VersionInstallation_])
+    Results: VersionInstallation_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(VersionInstallation_)
+export class VersionInstallationResolver extends ResolverBase {
+    @Query(() => RunVersionInstallationViewResult)
+    async RunVersionInstallationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunVersionInstallationViewResult)
+    async RunVersionInstallationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunVersionInstallationViewResult)
+    async RunVersionInstallationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Version Installations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => VersionInstallation_, { nullable: true })
+    async VersionInstallation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<VersionInstallation_ | null> {
+        this.CheckUserReadPermissions('Version Installations', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwVersionInstallations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Version Installations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Version Installations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+
+    @Mutation(() => VersionInstallation_)
+    async CreateVersionInstallation(
+        @Arg('input', () => CreateVersionInstallationInput) input: CreateVersionInstallationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <VersionInstallationEntity>await new Metadata().GetEntityObject('Version Installations', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateVersionInstallationInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateVersionInstallationInput) {
+    }
+    
+    @Mutation(() => VersionInstallation_)
+    async UpdateVersionInstallation(
+        @Arg('input', () => UpdateVersionInstallationInput) input: UpdateVersionInstallationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <VersionInstallationEntity>await new Metadata().GetEntityObject('Version Installations', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Version Installations
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput) {
         const i = input, d = dataSource; // prevent error
     }
 

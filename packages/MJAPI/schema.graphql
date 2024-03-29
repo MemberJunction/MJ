@@ -1134,6 +1134,17 @@ input CreateVectorIndexInput {
   VectorDatabaseID: Int!
 }
 
+input CreateVersionInstallationInput {
+  Comments: String
+  InstallLog: String
+  InstalledAt: Timestamp!
+  MajorVersion: Int!
+  MinorVersion: Int!
+  PatchVersion: Int!
+  Status: String!
+  Type: String
+}
+
 input CreateWorkspaceInput {
   Description: String
   Name: String!
@@ -1954,6 +1965,7 @@ type Mutation {
   CreateUserViewRunDetail(input: CreateUserViewRunDetailInput!): UserViewRunDetail_!
   CreateVectorDatabase(input: CreateVectorDatabaseInput!): VectorDatabase_!
   CreateVectorIndex(input: CreateVectorIndexInput!): VectorIndex_!
+  CreateVersionInstallation(input: CreateVersionInstallationInput!): VersionInstallation_!
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   DeleteAccount(ID: Int!): Account_!
@@ -2071,6 +2083,7 @@ type Mutation {
   UpdateUserViewRunDetail(input: UpdateUserViewRunDetailInput!): UserViewRunDetail_!
   UpdateVectorDatabase(input: UpdateVectorDatabaseInput!): VectorDatabase_!
   UpdateVectorIndex(input: UpdateVectorIndexInput!): VectorIndex_!
+  UpdateVersionInstallation(input: UpdateVersionInstallationInput!): VersionInstallation_!
   UpdateWorkflow(input: UpdateWorkflowInput!): Workflow_!
   UpdateWorkflowEngine(input: UpdateWorkflowEngineInput!): WorkflowEngine_!
   UpdateWorkflowRun(input: UpdateWorkflowRunInput!): WorkflowRun_!
@@ -2562,6 +2575,9 @@ type Query {
   RunVectorIndexDynamicView(input: RunDynamicViewInput!): RunVectorIndexViewResult!
   RunVectorIndexViewByID(input: RunViewByIDInput!): RunVectorIndexViewResult!
   RunVectorIndexViewByName(input: RunViewByNameInput!): RunVectorIndexViewResult!
+  RunVersionInstallationDynamicView(input: RunDynamicViewInput!): RunVersionInstallationViewResult!
+  RunVersionInstallationViewByID(input: RunViewByIDInput!): RunVersionInstallationViewResult!
+  RunVersionInstallationViewByName(input: RunViewByNameInput!): RunVersionInstallationViewResult!
   RunViewByID(input: RunViewByIDInput!): RunViewResult!
   RunViewByName(input: RunViewByNameInput!): RunViewResult!
   RunWorkflowDynamicView(input: RunDynamicViewInput!): RunWorkflowViewResult!
@@ -2603,6 +2619,7 @@ type Query {
   UserViewsByUserID(UserID: Int!): [UserView_!]!
   VectorDatabase(ID: Int!): VectorDatabase_
   VectorIndex(ID: Int!): VectorIndex_
+  VersionInstallation(ID: Int!): VersionInstallation_
   Workflow(ID: Int!): Workflow_
   WorkflowEngine(ID: Int!): WorkflowEngine_
   WorkflowRun(ID: Int!): WorkflowRun_
@@ -3947,6 +3964,16 @@ type RunVectorIndexViewResult {
   UserViewRunID: Int
 }
 
+type RunVersionInstallationViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [VersionInstallation_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 input RunViewByIDInput {
   """
   if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.
@@ -5094,6 +5121,18 @@ input UpdateVectorIndexInput {
   VectorDatabaseID: Int!
 }
 
+input UpdateVersionInstallationInput {
+  Comments: String
+  ID: Int!
+  InstallLog: String
+  InstalledAt: Timestamp!
+  MajorVersion: Int!
+  MinorVersion: Int!
+  PatchVersion: Int!
+  Status: String!
+  Type: String
+}
+
 input UpdateWorkflowEngineInput {
   Description: String
   DriverClass: String!
@@ -5103,11 +5142,15 @@ input UpdateWorkflowEngineInput {
 }
 
 input UpdateWorkflowInput {
+  AutoRunEnabled: Boolean!
+  AutoRunInterval: Int
+  AutoRunIntervalUnits: String
   CompanyName: String!
   Description: String
   ExternalSystemRecordID: String!
   ID: Int!
   Name: String!
+  SubclassName: String
   WorkflowEngineName: String!
 }
 
@@ -5372,6 +5415,29 @@ type VectorIndex_ {
   VectorDatabaseID: Int!
 }
 
+type VersionInstallation_ {
+  """
+  Optional, comments the administrator wants to save for each installed version
+  """
+  Comments: String
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """Any logging that was saved from the installation process"""
+  InstallLog: String
+  InstalledAt: Timestamp!
+  MajorVersion: Int!
+  MinorVersion: Int!
+  PatchVersion: Int!
+
+  """Pending, Complete, Failed"""
+  Status: String!
+
+  """What type of installation was applied"""
+  Type: String
+  UpdatedAt: Timestamp!
+}
+
 type WorkflowEngine_ {
   CreatedAt: Timestamp!
   Description: String
@@ -5396,6 +5462,18 @@ type WorkflowRun_ {
 }
 
 type Workflow_ {
+  """
+  If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
+  """
+  AutoRunEnabled: Boolean!
+
+  """
+  The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.
+  """
+  AutoRunInterval: Int
+
+  """Minutes, Hours, Days, Weeks, Months, Years"""
+  AutoRunIntervalUnits: String
   CompanyName: String!
   CreatedAt: Timestamp!
   Description: String
@@ -5403,6 +5481,11 @@ type Workflow_ {
   ID: Int!
   Name: String!
   ReportsArray: [Report_!]!
+
+  """
+  If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.
+  """
+  SubclassName: String
   UpdatedAt: Timestamp!
   WorkflowEngineName: String!
   WorkflowRunsArray: [WorkflowRun_!]!
