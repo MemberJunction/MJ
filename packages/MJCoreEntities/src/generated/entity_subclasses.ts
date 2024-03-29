@@ -5590,6 +5590,55 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
     
+        /**
+        * * Field Name: AutoRunEnabled
+        * * Display Name: Auto Run Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
+        */
+        get AutoRunEnabled(): boolean {  
+            return this.Get('AutoRunEnabled');
+        }
+        set AutoRunEnabled(value: boolean) {
+            this.Set('AutoRunEnabled', value);
+        }
+        /**
+        * * Field Name: AutoRunIntervalUnits
+        * * Display Name: Auto Run Interval Units
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Minutes, Hours, Days, Weeks, Months, Years
+        */
+        get AutoRunIntervalUnits(): string | null {  
+            return this.Get('AutoRunIntervalUnits');
+        }
+        set AutoRunIntervalUnits(value: string | null) {
+            this.Set('AutoRunIntervalUnits', value);
+        }
+        /**
+        * * Field Name: AutoRunInterval
+        * * Display Name: Auto Run Interval
+        * * SQL Data Type: int
+        * * Description: The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.
+        */
+        get AutoRunInterval(): number | null {  
+            return this.Get('AutoRunInterval');
+        }
+        set AutoRunInterval(value: number | null) {
+            this.Set('AutoRunInterval', value);
+        }
+        /**
+        * * Field Name: SubclassName
+        * * Display Name: Subclass Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.
+        */
+        get SubclassName(): string | null {  
+            return this.Get('SubclassName');
+        }
+        set SubclassName(value: string | null) {
+            this.Set('SubclassName', value);
+        }
 
     }
     
@@ -13448,6 +13497,173 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Entity(): string {  
             return this.Get('Entity');
+        }
+    
+
+    }
+    
+    /**
+     * Version Installations - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: VersionInstallation
+     * * Base View: vwVersionInstallations
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Version Installations')
+    export class VersionInstallationEntity extends BaseEntity {
+        /**
+        * Loads the Version Installations record from the database
+        * @param ID: number - primary key value to load the Version Installations record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof VersionInstallationEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const pkeyValues: PrimaryKeyValue[] = [];
+            pkeyValues.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+        }
+        
+        /**
+        * Version Installations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof VersionInstallationEntity
+        * @throws {Error} - Delete is not allowed for Version Installations, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Version Installations, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+    
+        /**
+        * * Field Name: MajorVersion
+        * * Display Name: Major Version
+        * * SQL Data Type: int
+        */
+        get MajorVersion(): number {  
+            return this.Get('MajorVersion');
+        }
+        set MajorVersion(value: number) {
+            this.Set('MajorVersion', value);
+        }
+        /**
+        * * Field Name: MinorVersion
+        * * Display Name: Minor Version
+        * * SQL Data Type: int
+        */
+        get MinorVersion(): number {  
+            return this.Get('MinorVersion');
+        }
+        set MinorVersion(value: number) {
+            this.Set('MinorVersion', value);
+        }
+        /**
+        * * Field Name: PatchVersion
+        * * Display Name: Patch Version
+        * * SQL Data Type: int
+        */
+        get PatchVersion(): number {  
+            return this.Get('PatchVersion');
+        }
+        set PatchVersion(value: number) {
+            this.Set('PatchVersion', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'System'
+        * * Description: What type of installation was applied
+        */
+        get Type(): string | null {  
+            return this.Get('Type');
+        }
+        set Type(value: string | null) {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: InstalledAt
+        * * Display Name: Installed At
+        * * SQL Data Type: datetime
+        */
+        get InstalledAt(): Date {  
+            return this.Get('InstalledAt');
+        }
+        set InstalledAt(value: Date) {
+            this.Set('InstalledAt', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Description: Pending, Complete, Failed
+        */
+        get Status(): string {  
+            return this.Get('Status');
+        }
+        set Status(value: string) {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: InstallLog
+        * * Display Name: Install Log
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Any logging that was saved from the installation process
+        */
+        get InstallLog(): string | null {  
+            return this.Get('InstallLog');
+        }
+        set InstallLog(value: string | null) {
+            this.Set('InstallLog', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional, comments the administrator wants to save for each installed version
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+    
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
         }
     
 

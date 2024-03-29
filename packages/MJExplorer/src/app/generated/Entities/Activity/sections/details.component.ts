@@ -15,10 +15,6 @@ import { ActivityEntity } from 'mj_generatedentities';
             <span >{{FormatValue('BCMID', 0)}}</span>   
         </div>               
         <div class="record-form-row">
-            <label class="fieldLabel">Employee ID</label>
-            <kendo-numerictextbox [(value)]="record.EmployeeID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
             <label class="fieldLabel">Contact ID</label>
             <kendo-numerictextbox [(value)]="record.ContactID!" ></kendo-numerictextbox>   
         </div>               
@@ -100,10 +96,6 @@ import { ActivityEntity } from 'mj_generatedentities';
         <div class="record-form-row">
             <label class="fieldLabel">BCMID</label>
             <span >{{FormatValue('BCMID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Employee ID</label>
-            <span mjFieldLink [record]="record" fieldName="EmployeeID" >{{FormatValue('EmployeeID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Contact ID</label>

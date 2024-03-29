@@ -31,7 +31,11 @@ function Process-Directory($path) {
 
             if (-not (Test-IgnoredPattern $relativePath $dirIgnorePatterns) -and -not (Test-IgnoredPattern $fileName $fileIgnorePatterns)) {
                 Add-Content -Path $destFile -Value ("`n" * 10)
+                Add-Content -Path $destFile -Value "*******************************************************************************"
                 Add-Content -Path $destFile -Value "-------------------------------------------------------------------------------"
+                Add-Content -Path $destFile -Value "-------------------------NEW FILE----------------------------------------------"
+                Add-Content -Path $destFile -Value "-------------------------------------------------------------------------------"
+                Add-Content -Path $destFile -Value "*******************************************************************************"
                 Add-Content -Path $destFile -Value "FILENAME: $fileName"
                 Add-Content -Path $destFile -Value "DIRECTORY NAME: $dirName"
                 Add-Content -Path $destFile -Value "-------------------------------------------------------------------------------"
