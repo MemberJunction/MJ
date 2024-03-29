@@ -15,7 +15,7 @@ a {
 
 // App styles
 .k-drawer-container {
-    background-color: $background-color;
+    background-color: var(--menuSelect);
     position: relative;
     z-index: 1;
 

@@ -13,8 +13,34 @@ kendo-expansionpanel {
 }
 
 .panelbar-wrapper {
-    width: 300px;
+    width: 274px;
     margin: 0 auto;
-    max-height: 1200px;
-    overflow-y: scroll;
+    height: calc(100vh - 80px);
+    overflow-y: auto;
+    padding: 16px 0;
+    box-sizing: border-box;
+}
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item {
+    padding: 5px 14px !important;
+}
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item div .k-treeview-toggle {
+    margin: 0;
+}
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item div {
+    color: var(--white-color);
+}
+
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item div > .k-treeview-leaf {
+    white-space: pre-line;
+    box-shadow: none;
+}
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item div > .k-treeview-leaf:hover,
+::ng-deep .panelbar-wrapper .k-treeview-group .k-treeview-item div > .k-treeview-leaf:focus {
+    box-shadow: none;
+    background: transparent;
+    color: var(--white-color);
 }
