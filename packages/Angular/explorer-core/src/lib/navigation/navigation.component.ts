@@ -297,6 +297,10 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         this.tabQueryParams['tab_' + this.activeTabIndex] = queryParams;
       }
     }
+
+    if(url.toLowerCase().includes('/app') && this.activeTabIndex > 0){
+      this.setActiveTabToHome();
+    }
   }
 
 

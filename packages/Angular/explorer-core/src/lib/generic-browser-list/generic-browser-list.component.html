@@ -39,8 +39,7 @@
             fill="#2264DC"
           />
         </svg>
-
-        add/Edit Entities
+        {{ addText }}
       </button>
       <!-- <button kendoButton (click)="createFolder()" [primary]="true">
             <span class="k-icon k-font-icon k-i-chevron-left"></span>
@@ -386,4 +385,55 @@
       </div>
     </div>
   </div>
+
+  <kendo-dialog title="Confirm" *ngIf="deleteDialogOpened" (close)="onConfirmDeleteItem(false)">
+    <kendo-loader *ngIf="showLoader" type="converging-spinner"></kendo-loader>
+    <div [class]="showLoader ? 'disabled-div' : ''">
+      <p class="k-m-7.5 k-text-center">
+        Are you sure you want to delete <b>{{selectedItem?.Name}}</b>
+      </p>
+      <div class="k-actions k-actions-end popup-actions">
+        <button kendoButton (click)="onConfirmDeleteItem(true)" themeColor="primary">
+          <span class="k-icon k-i-check"></span> Yes
+        </button>
+        <button kendoButton (click)="onConfirmDeleteItem(false)"><span class="k-icon k-i-close"></span> No</button>
+      </div>
+    </div>
+  </kendo-dialog>
+  <kendo-dialog 
+    [minWidth]="450"
+    [width]="600"
+    [title]="getCopyFromTitle()" 
+    *ngIf="copyFromDialogOpened" 
+    (close)="toggleCopyFromView()"
+  >
+  <div class="search">
+    <input type="text" placeholder="Search" (keyup)="onKeyup(searchInput.value)"/>
+  </div>
+    <kendo-dialog-actions>
+      <button kendoButton>
+        Cancel
+      </button>
+      <button kendoButton themeColor="primary">
+        Create new {{resourceName}}
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
+  <kendo-dialog 
+    title="Create new Folder" 
+    *ngIf="createFolderDialogOpened" 
+    (close)="toggleCreateFolderView()"
+  >
+  <div class="search">
+    <kendo-textbox placeholder="Enter a folder name" (valueChange)="onCreateFolderKeyup($event)"/>
+  </div>
+    <kendo-dialog-actions>
+      <button (click)="toggleCreateFolderView()" kendoButton>
+        Cancel
+      </button>
+      <button (click)="createFolder()" kendoButton themeColor="primary">
+        Create
+      </button>
+    </kendo-dialog-actions>
+  </kendo-dialog>
 </div>

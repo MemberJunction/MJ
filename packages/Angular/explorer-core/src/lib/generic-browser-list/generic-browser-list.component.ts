@@ -12,7 +12,7 @@ import { CellClickEvent } from '@progress/kendo-angular-grid';
   templateUrl: './generic-browser-list.component.html',
   styleUrls: ['./generic-browser-list.component.css', '../../shared/first-tab-styles.css']
 })
-export class GenericBrowserListComponent {
+export class GenericBrowserListComponent implements OnInit{
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
   @Input() public title: string = '';
@@ -27,6 +27,7 @@ export class GenericBrowserListComponent {
   @Input() public showNotifications: boolean = true;
   @Input() public categoryEntityID: number | null = null;
   @Input() public displayAsGrid: boolean = false;
+  @Input() public resourceName: string = "Resource";
   /**
    * If we are viewing a reesource, such as dashboards, reports, queries, etc
    * then the UI will need to change abit to accomodate this like 
@@ -58,31 +59,39 @@ export class GenericBrowserListComponent {
   
   @Output() public itemClickEvent: EventEmitter<any> = new EventEmitter<any>();
   @Output() public backButtonClickEvent: EventEmitter<void> = new EventEmitter<void>();
-
   @Output() public viewModeChangeEvent: EventEmitter<'grid' | 'list'> = new EventEmitter<'grid' | 'list'>();
 
   private _resizeDebounceTime: number = 250;
   private _resizeEndDebounceTime: number = 500;
-  private saveChangesSubject: Subject<any> = new Subject();
+  private filterItemsSubject: Subject<any> = new Subject();
   private filter: string = '';
   private sourceItems: Item[] | null = null;
+  public selectedItem: Item | null = null;
+  public deleteDialogOpened: boolean = false;
+  public copyFromDialogOpened: boolean = false;
+  public createFolderDialogOpened: boolean = false;
+  private newFolderText: string = "Sample Folder";
 
   data = [
     { text: "Folder" },
-    { text: "Report with Skip" },
+    { text: "Report with Skip" }
   ];
 
   constructor(public sharedService: SharedService, private router: Router) {
     this.router = router;
 
-    this.saveChangesSubject
+    this.filterItemsSubject
         .pipe(debounceTime(this._resizeDebounceTime))
         .subscribe(() => this.filterItems(this.filter));
   }
 
+  public ngOnInit(): void {
+    //this.data.push({ text: `${this.resourceName} from Existing` });
+  }
+  
+
   //wrapper function for the grid view
   public onCellItemClicked(event: CellClickEvent): void {
-    console.log("onCellItemClicked: ", event);
     this.itemClick(event.dataItem);
   }
 
@@ -101,12 +110,21 @@ export class GenericBrowserListComponent {
   //todo - show a modal asking the user for a name to give the resource
   public async addResourceButtonClicked() {
 
-    const resourceName: string = "Sample";
+    let event: BeforeAddItemEvent = new BeforeAddItemEvent("");
+    this.BeforeAddItemEvent.emit(event);
+    if(event.Cancel){
+      return;
+    }
+
+    const resourceName: string = `Sample ${this.ItemEntityName}`;
     const md: Metadata = new Metadata();
     const entity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.ItemEntityName);
 
     entity.NewRecord();
+    //some entities, like resources, have common fields 
+    //we can try to set here
     entity.Set("Name", resourceName);
+    entity.Set("UserID", md.CurrentUser.ID);
 
     let saveResult: boolean = await entity.Save();
     if(saveResult){
@@ -117,19 +135,22 @@ export class GenericBrowserListComponent {
       this.AfterAddItemEvent.emit(new AfterAddItemEvent(item));
     }
     else{
-      this.showNotification(`Unable to create folder ${resourceName}`, "error");
+      this.showNotification(`Unable to create ${resourceName}`, "error");
     }
 
   }
 
   //todo - show a modal asking the user for a name to give the folder
   public async createFolder(): Promise<void> {
-    let event: BeforeAddFolderEvent = new BeforeAddFolderEvent("Sample Folder");
+    this.toggleCreateFolderView(false);
+
+    let event: BeforeAddFolderEvent = new BeforeAddFolderEvent(this.newFolderText);
     if(event.Cancel){
     }
 
-    let folderName: string = "Sample Folder " + this.ItemEntityName;
-    let description: string = `Sub folder of ${(this.selectedFolderID ? this.selectedFolderID : "root")} inside ${this.ItemEntityName}`;
+    let folderName: string = this.newFolderText;
+    let description: string = "";
+    console.log("creating folder: ", folderName, this.CategoryEntityName);
     
     const md: Metadata = new Metadata();
     const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
@@ -156,12 +177,15 @@ export class GenericBrowserListComponent {
     else{
       this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
     }
+    this.newFolderText = "Sample Folder";
   }
 
   public async deleteItem(item: Item){
     if(!item){
       return;
     }
+
+    this.selectedItem = item;
 
     if(item.Type === ItemType.Folder){
       let event: BeforeDeleteFolderEvent = new BeforeDeleteFolderEvent(item);
@@ -171,12 +195,7 @@ export class GenericBrowserListComponent {
         return;
       }
 
-      let deleteResult = await this.deleteFolder(item);
-      if(deleteResult){
-        let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
-        this.AfterDeleteFolderEvent.emit(deleteFolderEvent);
-      }
-
+      this.deleteDialogOpened = true;
     }
     else if(item.Type === ItemType.Entity){
       let event: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
@@ -186,10 +205,34 @@ export class GenericBrowserListComponent {
         return;
       }
 
+      this.deleteDialogOpened = true;
+    }
+  }
+
+  public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
+    this.deleteDialogOpened = false;
+    
+    if(!this.selectedItem || !shouldDelete){
+      return;
+    }
+    
+    let item: Item = this.selectedItem;
+
+    if(item.Type === ItemType.Folder){
+      let deleteResult = await this.deleteFolder(item);
+      if(deleteResult){
+        let deleteFolderEvent: AfterDeleteFolderEvent = new AfterDeleteFolderEvent(item);
+        this.AfterDeleteFolderEvent.emit(deleteFolderEvent);
+      }
+
+    }
+    else if(item.Type === ItemType.Entity){
       await this.deleteResource(item);
       let deleteItemEvent: AfterDeleteItemEvent = new AfterDeleteItemEvent(item);
       this.AfterDeleteItemEvent.emit(deleteItemEvent);
     }
+
+    this.selectedItem = null;
   }
 
   private async deleteFolder(item: Item): Promise<boolean>{
@@ -305,7 +348,11 @@ export class GenericBrowserListComponent {
 
   public onKeyup(Value: any): void {
     this.filter = Value;
-    this.saveChangesSubject.next(true);
+    this.filterItemsSubject.next(true);
+  }
+
+  public onCreateFolderKeyup(value: string): void {
+    this.newFolderText = value;
   }
 
   private filterItems(filter: string): void {
@@ -370,7 +417,30 @@ export class GenericBrowserListComponent {
     console.log("onDropdownItemClick: ", data.text);
 
     if(data.text === "Folder"){
-      await this.createFolder();
+      this.toggleCreateFolderView();
+    }
+    else if(data.text === "Report with Skip"){
+      //todo - implement
+    }
+    else if(data.text === `${this.resourceName} from Existing`){
+      this.toggleCopyFromView();
+    }
+  }
+
+  public toggleCopyFromView(): void {
+    this.copyFromDialogOpened = !this.copyFromDialogOpened;
+  }
+
+  public getCopyFromTitle(): string {
+    return `Select ${this.resourceName} to Copy`;
+  }
+
+  public toggleCreateFolderView(visible?: boolean): void {
+    if(visible !== undefined){
+      this.createFolderDialogOpened = visible;
+    }
+    else{
+      this.createFolderDialogOpened = !this.createFolderDialogOpened;
     }
   }
 }

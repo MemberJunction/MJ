@@ -6,6 +6,7 @@ import { Metadata } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
+import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
   selector: 'app-single-dashboard',
@@ -34,8 +35,8 @@ export class SingleDashboardComponent implements OnInit {
   public selectedResource!: ResourceTypeEntity | null;
   public selectedDashboardItem!: DashboardItem | null;
   private saveChangesSubject: Subject<any> = new Subject();
-
   private selectedComponent: SingleDashboardComponent | null = null;
+  private editOnLoad: boolean = false;
 
   public get contentLoading(): boolean {
     for (const item of this.items) {
@@ -46,12 +47,17 @@ export class SingleDashboardComponent implements OnInit {
     return false;
   }
 
-  constructor(public sharedService: SharedService) {
+  constructor(private route: ActivatedRoute, public sharedService: SharedService) {
     this.saveChangesSubject
     .pipe(debounceTime(500))
     .subscribe(() => {
       this.SaveDashboard();
     });
+
+    let edit = this.route.snapshot.queryParamMap.get('edit');
+    if(edit){
+      this.editOnLoad = true;
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -72,6 +78,13 @@ export class SingleDashboardComponent implements OnInit {
           this.config.rowHeight = uiConfig.rowHeight;
           this.config.resizable = uiConfig.resizable;
           this.config.reorderable = uiConfig.reorderable;
+        }
+
+        //the save and canel functions call this function
+        //and we only want to show the edit view once
+        if(this.editOnLoad){
+          this.editOnLoad = false;
+          this.toggleEditDashboard(true);
         }
       }
       else {

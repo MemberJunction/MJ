@@ -15,5 +15,6 @@ CategoryEntityName="Report Categories"
 [showLoader]="showLoader"
 [disableAddButton]="true"
 (viewModeChangeEvent)="onViewModeChange($event)"
+(BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
 />
 <!-- creation of reports are disabled because they need a conversation ID before theyre made -->

@@ -3,7 +3,8 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { Item } from '../../generic/Item.types';
 import { SharedService } from '@memberjunction/ng-shared';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { BaseEntity } from '@memberjunction/core';
+import { BeforeUpdateItemEvent } from '../../generic/Events.types';
+import { QueryEntity } from '@memberjunction/core-entities';
 
 @Component({
   selector: 'app-query-browser',
@@ -36,10 +37,19 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
     let dataID: string = "";
 
     if(item.Type === "Entity"){
-      let dashboard: BaseEntity = item.Data as BaseEntity;
-      dataID = dashboard.Get("ID").toString();
+      let query: QueryEntity = item.Data as QueryEntity;
+      dataID = query.ID.toString();
     }
 
     super.Navigate(item, this.router, dataID);
+  }
+
+  public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {
+    event.Cancel = true;
+
+    let item: Item = event.Item;
+    let query: QueryEntity = item.Data;
+
+    this.router.navigate(['resource', this.routeNameSingular, query.ID], {queryParams: {edit: true}});
   }
 }

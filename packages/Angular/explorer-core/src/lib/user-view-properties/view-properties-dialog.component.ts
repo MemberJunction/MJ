@@ -92,10 +92,13 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
       // We don't have a View ID, we are creating a NEW view, so do NewRecord()
       this.record.NewRecord();
       const e = md.Entities.find (e => e.Name == this.EntityName);
-      if (e) 
+      if (e){
         this.record.SetDefaultsFromEntity(e);
-      else  
+        console.log("e found: ", e);
+      }
+      else {
         throw new Error(`Entity ${this.EntityName} not found in metadata`);
+      }
     }
 
     // now we load up the columns
