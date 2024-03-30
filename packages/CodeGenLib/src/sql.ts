@@ -29,20 +29,22 @@ export function getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_func
    return path.join(schema, `${objectName}.${type}${type==='full_text_search_function' ? '.fulltext' : ''}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
 }
 
-export async function recompileAllBaseViews(ds: DataSource, applyPermissions: boolean): Promise<boolean> {
+export async function recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean): Promise<boolean> {
     let bSuccess: boolean = true; // start off true
     const md: Metadata = new Metadata();
     for (let i = 0; i < md.Entities.length; ++i) {  
-       // do this in two steps to ensure recompile isn't ever short circuited through code optimization
-      const e = md.Entities[i];
-      if ( e.BaseViewGenerated && // only do this for entities that have a base view generated
-           e.IncludeInAPI && // only do this for entities that are included in the API
-           !e.VirtualEntity && // do not include virtual entities
-           !newEntityList.includes(e.Name)) {
-         // only do this if base view generated and for NON-virtual entities, 
-         // custom base views should be defined in the BEFORE SQL Scripts 
-         // and NOT for newly created entities         
-         bSuccess = await recompileSingleBaseView(ds, e, applyPermissions) && bSuccess;
+      if (!excludeSchemas.includes(md.Entities[i].SchemaName)) {
+         // do this in two steps to ensure recompile isn't ever short circuited through code optimization
+         const e = md.Entities[i];
+         if ( e.BaseViewGenerated && // only do this for entities that have a base view generated
+               e.IncludeInAPI && // only do this for entities that are included in the API
+               !e.VirtualEntity && // do not include virtual entities
+               !newEntityList.includes(e.Name)) {
+            // only do this if base view generated and for NON-virtual entities, 
+            // custom base views should be defined in the BEFORE SQL Scripts 
+            // and NOT for newly created entities         
+            bSuccess = await recompileSingleBaseView(ds, e, applyPermissions) && bSuccess;
+         }
       }
     }
 

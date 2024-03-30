@@ -4,7 +4,7 @@
 
    */
 
-import { DataSource } from "typeorm";
+import { And, DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
 import { EntityInfo, LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { logError, logStatus } from "./logging";
@@ -15,33 +15,34 @@ export const newEntityList: string[] = [];
 
 export async function manageMetadata(ds: DataSource): Promise<boolean> {
    const md = new Metadata();
+   const excludeSchemas = configInfo.excludeSchemas ? configInfo.excludeSchemas : [];
 
    let bSuccess = true;
    if (! await createNewEntities(ds)) {
       logError('Error creating new entities');
       bSuccess = false;
    }  
-   if (! await updateExistingEntitiesFromSchema(ds)) {
+   if (! await updateExistingEntitiesFromSchema(ds, excludeSchemas)) {
       logError('Error updating existing entities');
       bSuccess = false;
    }  
-   if (! await recompileAllBaseViews(ds, true)) {
+   if (! await recompileAllBaseViews(ds, excludeSchemas, true)) {
       logError('Warning: Non-Fatal error recompiling base views');
       // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
       // failure for this entire function
    }         
 
-   if (! await manageEntityFields(ds)) {
+   if (! await manageEntityFields(ds, excludeSchemas)) {
       logError('Error managing entity fields');
       bSuccess = false;
    }
-   if (! await manageEntityRelationships(ds, md)) {
+   if (! await manageEntityRelationships(ds, excludeSchemas, md)) {
       logError('Error managing entity relationships');
       bSuccess = false;
    }
 
    if (newEntityList.length > 0) {
-      await generateNewEntityDescriptions(ds, md);
+      await generateNewEntityDescriptions(ds, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
    }
 
    // if (! await manageVirtualEntities(ds)) {
@@ -142,14 +143,14 @@ export async function manageMetadata(ds: DataSource): Promise<boolean> {
 // }
 
 
-export async function manageEntityRelationships(ds: DataSource, md: Metadata): Promise<boolean> {
+export async function manageEntityRelationships(ds: DataSource, excludeSchemas: string[], md: Metadata): Promise<boolean> {
    let bResult: boolean = true;
-   bResult = bResult && await manageManyToManyEntityRelationships(ds);
-   bResult = bResult && await manageOneToManyEntityRelationships(ds, md);
+   bResult = bResult && await manageManyToManyEntityRelationships(ds, excludeSchemas);
+   bResult = bResult && await manageOneToManyEntityRelationships(ds, excludeSchemas, md);
    return bResult;
 }
 
-export async function manageOneToManyEntityRelationships(ds: DataSource, md: Metadata): Promise<boolean> {
+export async function manageOneToManyEntityRelationships(ds: DataSource, excludeSchemas: string[],  md: Metadata): Promise<boolean> {
    // the way this works is that we look for entities in our catalog and we look for 
    // foreign keys in those entities. For example, if we saw an entity called Persons and that entity
    // had a foreign key linking to an entity called Organizations via a field called OrganizationID, then we would create a relationship
@@ -165,7 +166,13 @@ export async function manageOneToManyEntityRelationships(ds: DataSource, md: Met
    
    try {
       // STEP 1 - search for all foreign keys in the vwEntityFields view, we use the RelatedEntityID field to determine our FKs
-      const sSQL = `SELECT * FROM ${mj_core_schema()}.vwEntityFields WHERE RelatedEntityID IS NOT NULL AND IsVirtual = 0 ORDER BY RelatedEntityID`;
+      const sSQL = `SELECT * 
+                    FROM ${mj_core_schema()}.vwEntityFields 
+                    WHERE 
+                          RelatedEntityID IS NOT NULL AND 
+                          IsVirtual = 0 AND 
+                          EntityID NOT IN (SELECT ID FROM ${mj_core_schema()}.Entity WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
+                    ORDER BY RelatedEntityID`;
       const entityFields = await ds.query(sSQL);
       // now loop through all of our fkey fields
       for (const f of entityFields) {
@@ -188,48 +195,55 @@ export async function manageOneToManyEntityRelationships(ds: DataSource, md: Met
    }
 }
 
-export async function manageManyToManyEntityRelationships(ds: DataSource): Promise<boolean> {
+export async function manageManyToManyEntityRelationships(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    return true; // not implemented for now
 }
 
 
 
-export async function manageEntityFields(ds: DataSource): Promise<boolean> {
+export async function manageEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    let bSuccess = true;
    const startTime: Date = new Date();
-   if (! await deleteUnneededEntityFields(ds)) {
+   if (! await deleteUnneededEntityFields(ds, excludeSchemas)) {
       logError ('Error deleting unneeded entity fields');
       bSuccess = false;
    }
    logStatus(`   Deleted unneeded entity fields in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
    const step2StartTime: Date = new Date();
-   if (! await updateExistingEntityFieldsFromSchema(ds)) {
+   if (! await updateExistingEntityFieldsFromSchema(ds, excludeSchemas)) {
       logError ('Error updating existing entity fields from schema')
       bSuccess = false;
    }
    logStatus(`   Updated existing entity fields from schema in ${(new Date().getTime() - step2StartTime.getTime()) / 1000} seconds`);
 
    const step3StartTime: Date = new Date();
-   if (! await createNewEntityFieldsFromSchema(ds)) {
+   if (! await createNewEntityFieldsFromSchema(ds)) { // has its own internal filtering for exclude schema/table so don't pass in
       logError ('Error creating new entity fields from schema')
       bSuccess = false;
    }
    logStatus(`   Created new entity fields from schema in ${(new Date().getTime() - step3StartTime.getTime()) / 1000} seconds`);
 
    const step4StartTime: Date = new Date();
-   if (! await setDefaultColumnWidthWhereNeeded(ds)) {
+   if (! await setDefaultColumnWidthWhereNeeded(ds, excludeSchemas)) {
       logError ('Error setting default column width where needed')
       bSuccess = false;
    }
    logStatus(`   Set default column width where needed in ${(new Date().getTime() - step4StartTime.getTime()) / 1000} seconds`);
 
    const step5StartTime: Date = new Date();
-   if (! await updateEntityFieldDisplayNameWhereNull(ds)) {
+   if (! await updateEntityFieldDisplayNameWhereNull(ds, excludeSchemas)) {
       logError('Error updating entity field display name where null');
       bSuccess = false;
    }
    logStatus(`   Updated entity field display name where null in ${(new Date().getTime() - step5StartTime.getTime()) / 1000} seconds`);
+
+   const step6StartTime: Date = new Date();
+   if (! await manageEntityFieldValues(ds, excludeSchemas)) {
+      logError('Error managing entity field values');
+      bSuccess = false;
+   }
+   logStatus(`   Managed entity field values in ${(new Date().getTime() - step6StartTime.getTime()) / 1000} seconds`);
 
    logStatus(`   Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
@@ -290,9 +304,23 @@ async function generateNewEntityDescriptions(ds: DataSource, md: Metadata) {
    }
 }
 
-async function updateEntityFieldDisplayNameWhereNull(ds: DataSource): Promise<boolean> {
+async function updateEntityFieldDisplayNameWhereNull(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    try   {
-      const fields = await ds.query(`SELECT ID, Name FROM [${mj_core_schema()}].vwEntityFields WHERE DisplayName IS NULL AND Name <> \'ID\'`)
+      const sql = `SELECT 
+                     ef.ID, ef.Name 
+                   FROM 
+                     [${mj_core_schema()}].vwEntityFields ef
+                   INNER JOIN
+                     [${mj_core_schema()}].vwEntities e
+                   ON
+                     ef.EntityID = e.ID
+                   WHERE 
+                     ef.DisplayName IS NULL AND 
+                     ef.DisplayName <> ef.Name AND
+                     ef.Name <> \'ID\' AND
+                     e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})
+                     ` 
+      const fields = await ds.query(sql)
       if (fields && fields.length > 0)
          for (const field of fields) {
             const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
@@ -310,9 +338,9 @@ async function updateEntityFieldDisplayNameWhereNull(ds: DataSource): Promise<bo
    }
 }
 
-async function setDefaultColumnWidthWhereNeeded(ds: DataSource): Promise<boolean> {
+async function setDefaultColumnWidthWhereNeeded(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    try   {
-      await ds.query(`EXEC ${mj_core_schema()}.spSetDefaultColumnWidthWhereNeeded`)
+      await ds.query(`EXEC ${mj_core_schema()}.spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='${excludeSchemas.join(',')}'`)
       return true;
    }
    catch (e) {
@@ -509,9 +537,9 @@ export async function updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource,
       return false;
    }
 }
-async function updateExistingEntitiesFromSchema(ds: DataSource): Promise<boolean> {
+async function updateExistingEntitiesFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    try   {
-      await ds.query(`EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema`)
+      await ds.query(`EXEC [${mj_core_schema()}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`)
       return true;
    }
    catch (e) {
@@ -519,9 +547,9 @@ async function updateExistingEntitiesFromSchema(ds: DataSource): Promise<boolean
       return false;
    }
 }
-async function updateExistingEntityFieldsFromSchema(ds: DataSource): Promise<boolean> {
+async function updateExistingEntityFieldsFromSchema(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    try   {
-      await ds.query(`EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema`)
+      await ds.query(`EXEC [${mj_core_schema()}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='${excludeSchemas.join(',')}'`)
       return true;
    }
    catch (e) {
@@ -529,9 +557,9 @@ async function updateExistingEntityFieldsFromSchema(ds: DataSource): Promise<boo
       return false;
    }
 }
-async function deleteUnneededEntityFields(ds: DataSource): Promise<boolean> {
+async function deleteUnneededEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
    try   {
-      await ds.query(`EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields`)
+      await ds.query(`EXEC [${mj_core_schema()}].spDeleteUnneededEntityFields @ExcludedSchemaNames='${excludeSchemas.join(',')}'`)
       return true;
    }
    catch (e) {
@@ -539,6 +567,124 @@ async function deleteUnneededEntityFields(ds: DataSource): Promise<boolean> {
       return false;
    }
 }
+
+async function manageEntityFieldValues(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   try  {
+      // here we want to get all of the entity fields that have check constraints attached to them. For each field that has a check constraint, we want to 
+      // evaluate it to see if it is a simple series of OR statements or not, if it is a simple series of OR statements, we can parse the possible values
+      // for the field and sync that up with the EntityFieldValue table. If it is not a simple series of OR statements, we will not be able to parse it and we'll 
+      // just ignore it.
+      const filter = excludeSchemas && excludeSchemas.length > 0 ? ` WHERE SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})` : '';
+      const sSQL = `SELECT * FROM [${mj_core_schema()}].vwEntityFieldsWithCheckConstraints${filter}`
+      const result = await ds.query(sSQL);
+      // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
+      for (const r of result) {
+         if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
+            const parsedValues = parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName);
+            if (parsedValues) {
+               // we have parsed values from the check constraint, so sync them with the entity field values
+               await syncEntityFieldValues(ds, r.EntityID, r.ColumnName, parsedValues);
+               // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
+               await ds.query(`UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE EntityID=${r.EntityID} AND Name='${r.ColumnName}'`)
+            }
+         }
+      }
+
+
+      return true;
+   }
+   catch (e) {
+      logError(e);
+      return false;
+   }
+}
+
+async function syncEntityFieldValues(ds: DataSource, entityID: number, entityFieldName: string, possibleValues: string[]): Promise<boolean> {
+   try {
+      // first, get a list of all of the existing entity field values for the field already in the database
+      const sSQL = `SELECT * FROM [${mj_core_schema()}].EntityFieldValue WHERE EntityID=${entityID} AND EntityFieldName = '${entityFieldName}'`;
+      const existingValues = await ds.query(sSQL);
+      // now, loop through the possible values and add any that are not already in the database
+
+      // Step 1: for any existing value that is NOT in the list of possible Values, delete it
+      let numRemoved: number = 0;
+      await ds.transaction(async () => {
+         for (const ev of existingValues) {
+            if (!possibleValues.find(v => v === ev.Value)) {
+               // delete the value from the database
+               const sSQLDelete = `DELETE FROM [${mj_core_schema()}].EntityFieldValue WHERE ID=${ev.ID}`;
+               await ds.query(sSQLDelete);
+               numRemoved++;
+            }
+         }
+
+         // Step 2: for any possible value that is NOT in the list of existing values, add it
+         let numAdded = 0;
+         for (const v of possibleValues) {
+            if (!existingValues.find(ev => ev.Value === v)) {
+               // add the value to the database
+               const sSQLInsert = `INSERT INTO [${mj_core_schema()}].EntityFieldValue 
+                                    (EntityID, EntityFieldName, Sequence, Value, Code) 
+                                 VALUES 
+                                    (${entityID}, '${entityFieldName}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
+               await ds.query(sSQLInsert);
+               numAdded++;
+            }
+         }
+
+         // Step 3: finally, for the existing values that are in the list of possible values, update the sequence to match the order in the possible values list
+         let numUpdated = 0;
+         for (const v of possibleValues) {
+            const ev = existingValues.find(ev => ev.Value === v);
+            if (ev) {
+               // update the sequence to match the order in the possible values list
+               const sSQLUpdate = `UPDATE [${mj_core_schema()}].EntityFieldValue SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID=${ev.ID}`;
+               await ds.query(sSQLUpdate);
+               numUpdated++;
+            }
+         }
+      });
+
+      return true;
+   }
+   catch (e) {
+      logError(e);
+      return false;
+   }
+}
+
+function parseCheckConstraintValues(constraintDefinition: string, fieldName: string): string[] | null {
+   // This regex checks for the overall structure including field name and 'OR' sequences
+   // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
+   // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
+   // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
+   const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
+   if (!structureRegex.test(constraintDefinition)) {
+       console.log('Constraint does not match the simple OR condition pattern or field name does not match.');
+       return null;
+   }
+
+   // Regular expression to match the values within the single quotes specifically for the field
+   const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
+   let match;
+   const possibleValues: string[] = [];
+
+   // Use regex to find matches and extract the values
+   while ((match = valueRegex.exec(constraintDefinition)) !== null) {
+       // This is necessary to avoid infinite loops with zero-width matches
+       if (match.index === valueRegex.lastIndex) {
+           valueRegex.lastIndex++;
+       }
+
+       // The first captured group contains the value
+       if (match[1]) {
+           possibleValues.push(match[1]);
+       }
+   }
+
+   return possibleValues;
+}
+
 
 function createExcludeTablesAndSchemasFilter(fieldPrefix: string): string {
    let sExcludeTables: string = '';

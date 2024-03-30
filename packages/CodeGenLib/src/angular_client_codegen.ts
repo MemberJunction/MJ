@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType } from '@memberjunction/core';
 import { logError, logStatus } from './logging';
 import fs from 'fs';
 import path from 'path';
@@ -103,6 +103,8 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
+import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 ${componentImports.join('\n')}
@@ -183,7 +185,9 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
-    BaseFormsModule
+    BaseFormsModule,
+    DropDownListModule,
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -355,17 +359,35 @@ function generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormS
                 let bReadOnly: boolean = false;
     
                 if (!field.ReadOnly) {
-                    if (field.TSType === EntityFieldTSType.Boolean)
-                        editControl = `<input type="checkbox" [(ngModel)]="record.${field.CodeName}" kendoCheckBox />`
-                    else if (field.TSType === EntityFieldTSType.Date)
-                        editControl = `<kendo-datepicker [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-datepicker>` // if the field allows null, then add the ! to the end of the field name because the datepicker expects a date object, not null
-                    else if (field.TSType === EntityFieldTSType.Number)
-                        editControl = `<kendo-numerictextbox [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-numerictextbox>` // if the field allows null, then add the ! to the end of the field name because the numerictextbox expects a number, not null
-                    else if (field.TSType === EntityFieldTSType.String) {
-                        if (field.MaxLength > 100)
-                            editControl = `<kendo-textarea [(ngModel)]="record.${field.CodeName}" ></kendo-textarea>`
-                        else
-                            editControl = `<kendo-textbox [(ngModel)]="record.${field.CodeName}"  />`
+                    // first, check to see if we have a ValueListType != None, if so, generate a dropdown. 
+                    // If value list type is ListOrUserEntry, then generate a combobox, if ValueListType = List, then generate a dropdown
+                    if (field.ValueListTypeEnum !== EntityFieldValueListType.None) {
+                        // build the possible values list
+                        const quotes = field.NeedsQuotes ? "'" : '';
+                        const itemsString = '[' + field.EntityFieldValues.map(v => `${quotes}${v.Value}${quotes}`).join(', ') + ']';
+                        if (field.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
+                            // combo box
+                            editControl = `<kendo-combobox [data]="${itemsString}" [allowCustom]="true" [(ngModel)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-combobox>`  
+                        }
+                        else if (field.ValueListTypeEnum === EntityFieldValueListType.List) {
+                            // dropdown
+                            editControl = `<kendo-dropdownlist [data]="${itemsString}" [(ngModel)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-dropdownlist>`  
+                        }
+                    }
+                    else {
+                        // no value list, generate a text box, checkbox, or date picker
+                        if (field.TSType === EntityFieldTSType.Boolean)
+                            editControl = `<input type="checkbox" [(ngModel)]="record.${field.CodeName}" kendoCheckBox />`
+                        else if (field.TSType === EntityFieldTSType.Date)
+                            editControl = `<kendo-datepicker [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-datepicker>` // if the field allows null, then add the ! to the end of the field name because the datepicker expects a date object, not null
+                        else if (field.TSType === EntityFieldTSType.Number)
+                            editControl = `<kendo-numerictextbox [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-numerictextbox>` // if the field allows null, then add the ! to the end of the field name because the numerictextbox expects a number, not null
+                        else if (field.TSType === EntityFieldTSType.String) {
+                            if (field.MaxLength > 100)
+                                editControl = `<kendo-textarea [(ngModel)]="record.${field.CodeName}" ></kendo-textarea>`
+                            else
+                                editControl = `<kendo-textbox [(ngModel)]="record.${field.CodeName}"  />`
+                        }
                     }
                 }
                 else {

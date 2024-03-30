@@ -1750,11 +1750,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Value List Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: N'None'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * None
+        *   * List
+        *   * ListOrUserEntry
         */
-        get ValueListType(): string {  
+        get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {  
             return this.Get('ValueListType');
         }
-        set ValueListType(value: string) {
+        set ValueListType(value: 'None' | 'List' | 'ListOrUserEntry') {
             this.Set('ValueListType', value);
         }
         /**
@@ -5607,12 +5612,20 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoRunIntervalUnits
         * * Display Name: Auto Run Interval Units
         * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Years
+        *   * Months
+        *   * Weeks
+        *   * Days
+        *   * Hours
+        *   * Minutes
         * * Description: Minutes, Hours, Days, Weeks, Months, Years
         */
-        get AutoRunIntervalUnits(): string | null {  
+        get AutoRunIntervalUnits(): 'Years' | 'Months' | 'Weeks' | 'Days' | 'Hours' | 'Minutes' | null {  
             return this.Get('AutoRunIntervalUnits');
         }
-        set AutoRunIntervalUnits(value: string | null) {
+        set AutoRunIntervalUnits(value: 'Years' | 'Months' | 'Weeks' | 'Days' | 'Hours' | 'Minutes' | null) {
             this.Set('AutoRunIntervalUnits', value);
         }
         /**
@@ -5639,6 +5652,15 @@ import { RegisterClass } from "@memberjunction/global";
         set SubclassName(value: string | null) {
             this.Set('SubclassName', value);
         }
+        /**
+        * * Field Name: AutoRunIntervalMinutes
+        * * Display Name: Auto Run Interval Minutes
+        * * SQL Data Type: int
+        */
+        get AutoRunIntervalMinutes(): number | null {  
+            return this.Get('AutoRunIntervalMinutes');
+        }
+    
 
     }
     
@@ -6558,25 +6580,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Type
         * * SQL Data Type: nchar(10)
         * * Default Value: N'grant'
-        * Value List Type: List
-        * Possible Values 
-    * Allow - User allowed to execute tasks linked to this authorization
-    * Allow - User allowed to execute tasks linked to this authorization
-    * Allow - User allowed to execute tasks linked to this authorization
-    * Allow - User allowed to execute tasks linked to this authorization
-    * Allow - User allowed to execute tasks linked to this authorization
-    * Allow - User allowed to execute tasks linked to this authorization
-    * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
-    * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
-    * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
-    * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
-    * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
-    * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Allow - User allowed to execute tasks linked to this authorization
+        *   * Deny - User NOT allowed to execute tasks linked to this authorization - deny overrides Allow from all other roles a user may be part of
         */
-        get Type(): string {  
+        get Type(): 'Allow' | 'Deny' {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: 'Allow' | 'Deny') {
             this.Set('Type', value);
         }
         /**
@@ -6890,6 +6902,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: EntityField
+        * * Display Name: Entity Field
+        * * SQL Data Type: nvarchar(255)
+        */
+        get EntityField(): string {  
+            return this.Get('EntityField');
         }
     
         /**
@@ -13664,6 +13685,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: CompleteVersion
+        * * Display Name: Complete Version
+        * * SQL Data Type: nvarchar(302)
+        */
+        get CompleteVersion(): string | null {  
+            return this.Get('CompleteVersion');
         }
     
 

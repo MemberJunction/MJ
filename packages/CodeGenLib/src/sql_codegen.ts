@@ -49,7 +49,7 @@ export async function manageSQLScriptsAndExecution(ds: DataSource, entities: Ent
         createCombinedEntitySQLFiles(directory, baselineEntities);
                 
         // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
-        if (! await manageEntityFields(ds)) {
+        if (! await manageEntityFields(ds, configInfo.excludeSchemas)) {
             logError('Error managing entity fields');
             return false;
         }

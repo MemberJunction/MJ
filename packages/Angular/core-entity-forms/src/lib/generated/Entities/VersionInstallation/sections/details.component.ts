@@ -49,6 +49,10 @@ import { VersionInstallationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Complete Version</label>
+            <span >{{FormatValue('CompleteVersion', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -92,6 +96,10 @@ import { VersionInstallationEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Complete Version</label>
+            <span >{{FormatValue('CompleteVersion', 0)}}</span>
         </div>
     </div>
 </div>
