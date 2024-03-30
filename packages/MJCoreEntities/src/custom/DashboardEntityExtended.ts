@@ -1,4 +1,4 @@
-import { BaseEntity, LogError } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { DashboardEntity } from "../generated/entity_subclasses";
 
@@ -17,7 +17,12 @@ export class DashboardEntityExtended extends DashboardEntity  {
     
             const configJSON = JSON.stringify(defaultConfigDetails);
             this.Set("UIConfigDetails", configJSON);
-    
+
+            const md: Metadata = new Metadata();
+            if(md.CurrentUser){
+                this.Set("UserID", md.CurrentUser.ID);
+            }
+
             return true;
         }
         catch(error) {

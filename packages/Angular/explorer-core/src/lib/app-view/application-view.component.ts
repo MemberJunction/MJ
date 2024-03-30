@@ -1,11 +1,13 @@
 import { Component, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus } from '@memberjunction/core';
-import { UserFavoriteEntity } from '@memberjunction/core-entities';
+import { UserFavoriteEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
+import { ViewPropertiesDialogComponent } from '../user-view-properties/view-properties-dialog.component';
+import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
   selector: 'application-view',
@@ -15,6 +17,7 @@ import {Location} from '@angular/common';
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
 
     @ViewChild('entityRow') entityRowRef: Element | undefined;
+    @ViewChild(ViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: ViewPropertiesDialogComponent;
 
     private appNameFromURL: string = '';
     public appName: string = ''
@@ -167,6 +170,29 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
     public onViewModeChange(viewMode: string): void {
         this.viewMode = viewMode;
+    }
+
+    createNewView(event: BeforeAddItemEvent) {
+        event.Cancel = true;
+        this.viewPropertiesDialog.CreateView(this.appName);
+    }
+    
+    public async editView(event: BeforeUpdateItemEvent): Promise<void> {
+        event.Cancel = true;
+        let data: UserViewEntity = event.Item.Data;
+        this.viewPropertiesDialog.Open(data.ID);
+    }
+
+    public async viewPropertiesClosed(args: any): Promise<void> {
+        if(args && args.Saved){
+            const entityNameToLower: string = this.appName.toLowerCase();
+            const selectedAppEntity = this.AppEntityButtons.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
+            if(selectedAppEntity){
+                selectedAppEntity.Selected = true;
+                await this.loadEntitiesAndFolders(selectedAppEntity);
+                return;
+            }
+        }
     }
 } 
 

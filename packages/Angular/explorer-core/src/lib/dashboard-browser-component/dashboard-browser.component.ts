@@ -3,7 +3,8 @@ import { ActivatedRoute, Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 import { Item } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
-import { BaseEntity } from '@memberjunction/core';
+import { DashboardEntity } from '@memberjunction/core-entities';
+import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
   selector: 'app-dashboard-browser',
@@ -30,17 +31,27 @@ export class DashboardBrowserComponent extends BaseBrowserComponent{
     super.InitForResource(this.route);
   }
 
-  //this could exist in the BaseBrowserComponent class, but 
-  //the class would need a reference or dependency on the router
+  //this and the onBeforeUpdateItemEvent function could exist in the 
+  //BaseBrowserComponent class, but the class would need
+  //a reference or dependency on the router
   //which i dont think is needed
   public itemClick(item: Item) {
     let dataID: string = "";
 
     if(item.Type === "Entity"){
-      let dashboard: BaseEntity = item.Data as BaseEntity;
-      dataID = dashboard.Get("ID").toString();
+      let dashboard: DashboardEntity = item.Data as DashboardEntity;
+      dataID = dashboard.ID.toString();
     }
 
     super.Navigate(item, this.router, dataID);
+  }
+
+  public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {
+    event.Cancel = true;
+
+    let item: Item = event.Item;
+    let dashboard: DashboardEntity = item.Data;
+
+    this.router.navigate(['resource', this.routeNameSingular, dashboard.ID], {queryParams: {edit: true}});
   }
 }

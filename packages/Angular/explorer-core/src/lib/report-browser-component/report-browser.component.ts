@@ -4,7 +4,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Item } from '../../generic/Item.types';
-import { BaseEntity } from '@memberjunction/core';
+import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
   selector: 'app-report-browser',
@@ -29,8 +29,7 @@ export class ReportBrowserComponent extends BaseBrowserComponent{
   }
 
   async ngOnInit(): Promise<void> {
-    const categoryEntityFilter: string = "ParentID IS NULL";
-    await super.LoadData({categoryItemFilter: categoryEntityFilter});
+    super.InitForResource(this.route);
   }
 
    //this could exist in the BaseBrowserComponent class, but 
@@ -40,10 +39,19 @@ export class ReportBrowserComponent extends BaseBrowserComponent{
     let dataID: string = "";
 
     if(item.Type === "Entity"){
-      let dashboard: BaseEntity = item.Data as BaseEntity;
-      dataID = dashboard.Get("ID").toString();
+      let report: ReportEntity = item.Data as ReportEntity;
+      dataID = report.ID.toString();
     }
 
     super.Navigate(item, this.router, dataID);
+  }
+
+  public onBeforeUpdateItemEvent(event: BeforeUpdateItemEvent): void {
+    event.Cancel = true;
+
+    let item: Item = event.Item;
+    let report: ReportEntity = item.Data;
+
+    this.router.navigate(['resource', this.routeNameSingular, report.ID], {queryParams: {edit: true}});
   }
 }
