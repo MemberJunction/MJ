@@ -67,7 +67,7 @@ export function combineFiles(directory: string, combinedFileName: string, patter
 
     // Write the combined content to the specified file
     fs.writeFileSync(combinedFilePath, combinedContent);
-    console.log(`Combined file created at ${combinedFilePath}`);
+    console.log(`      Combined file created at ${combinedFilePath}`);
 }
 
 // Usage example

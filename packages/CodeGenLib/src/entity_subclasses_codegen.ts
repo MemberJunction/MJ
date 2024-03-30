@@ -1,4 +1,4 @@
-import { EntityInfo, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { EntityFieldValueListType, EntityInfo, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from './util';
@@ -37,19 +37,33 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
             if (e.ValueListType && 
                 e.ValueListType.length > 0 && 
                 e.ValueListType.trim().toLowerCase() !== 'none') {
-                values = e.EntityFieldValues.map(v => `\n    * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
-                valueList = `\n        * Value List Type: ${e.ValueListType}\n        * Possible Values `+ values  
+                values = e.EntityFieldValues.map(v => `\n        *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
+                valueList = `\n        * * Value List Type: ${e.ValueListType}\n        * * Possible Values `+ values  
+            }
+            let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
+            if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+                // construct a typeString that is a union of the possible values
+                const quotes = e.NeedsQuotes ? "'" : '';
+                typeString = e.EntityFieldValues.map(v => `${quotes}${v.Value}${quotes}`).join(' | ');
+                if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
+                    // special case becuase a user can enter whatever they want
+                    typeString += ' | ' + TypeScriptTypeFromSQLType(e.Type);
+                }
+                // finally, add the null type if it allows null
+                if (e.AllowsNull) {
+                    typeString += ' | null';
+                }
             }
             let sRet: string = `        /**
         * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n        * * Display Name: ' + e.DisplayName : ''}
         * * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' +  e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n        * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n        * * Description: ' + e.Description : ''}
         */
-        get ${e.CodeName}(): ${TypeScriptTypeFromSQLType(e.Type)}${e.AllowsNull ? ' | null' : ''} {  
+        get ${e.CodeName}(): ${typeString} {  
             return this.Get('${e.Name}');
         }
     `
             if (!e.ReadOnly) {
-                sRet += `    set ${e.CodeName}(value: ${TypeScriptTypeFromSQLType(e.Type)}${e.AllowsNull ? ' | null' : ''}) {
+                sRet += `    set ${e.CodeName}(value: ${typeString}) {
             this.Set('${e.Name}', value);
         }`
             }

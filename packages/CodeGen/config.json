@@ -200,6 +200,15 @@
             "when": "after"
         },
         {
+            "workingDirectory": "../Angular/core-entity-forms",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
             "workingDirectory": "../GeneratedEntities",
             "command": "npm",
             "args": [

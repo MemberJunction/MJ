@@ -44,7 +44,7 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Auto Run Interval Units</label>
-            <kendo-textbox [(ngModel)]="record.AutoRunIntervalUnits"  />   
+            <kendo-dropdownlist [data]="['Years', 'Months', 'Weeks', 'Days', 'Hours', 'Minutes']" [(ngModel)]="record.AutoRunIntervalUnits!" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Auto Run Interval</label>
@@ -53,6 +53,10 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Subclass Name</label>
             <kendo-textarea [(ngModel)]="record.SubclassName" ></kendo-textarea>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Interval Minutes</label>
+            <span >{{FormatValue('AutoRunIntervalMinutes', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -100,6 +104,10 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Subclass Name</label>
             <span >{{FormatValue('SubclassName', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Auto Run Interval Minutes</label>
+            <span >{{FormatValue('AutoRunIntervalMinutes', 0)}}</span>
         </div>
     </div>
 </div>

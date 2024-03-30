@@ -43,6 +43,10 @@ import { EntityFieldValueEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Entity Field</label>
+            <span >{{FormatValue('EntityField', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Entity</label>
             <span >{{FormatValue('Entity', 0)}}</span>   
         </div> 
@@ -80,6 +84,10 @@ import { EntityFieldValueEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity Field</label>
+            <span >{{FormatValue('EntityField', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity</label>

@@ -1487,6 +1487,7 @@ type EntityFieldValue_ {
   CreatedAt: Timestamp!
   Description: String
   Entity: String!
+  EntityField: String!
   EntityFieldName: String!
   EntityID: Int!
   ID: Int!
@@ -5420,6 +5421,7 @@ type VersionInstallation_ {
   Optional, comments the administrator wants to save for each installed version
   """
   Comments: String
+  CompleteVersion: String
   CreatedAt: Timestamp!
   ID: Int!
 
@@ -5471,6 +5473,7 @@ type Workflow_ {
   The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.
   """
   AutoRunInterval: Int
+  AutoRunIntervalMinutes: Int
 
   """Minutes, Hours, Days, Weeks, Months, Years"""
   AutoRunIntervalUnits: String

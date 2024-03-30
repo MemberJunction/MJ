@@ -15,6 +15,8 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
+import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 import { IndustryFormComponent, LoadIndustryFormComponent } from "./Entities/Industry/industry.form.component";
@@ -78,7 +80,9 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
-    BaseFormsModule
+    BaseFormsModule,
+    DropDownListModule,
+    ComboBoxModule
 ],
 exports: [
 ]
@@ -106,7 +110,9 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
-    BaseFormsModule
+    BaseFormsModule,
+    DropDownListModule,
+    ComboBoxModule
 ],
 exports: [
 ]

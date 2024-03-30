@@ -76,7 +76,7 @@ import { EntityFieldEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Value List Type</label>
-            <kendo-textbox [(ngModel)]="record.ValueListType"  />   
+            <kendo-dropdownlist [data]="['None', 'List', 'ListOrUserEntry']" [(ngModel)]="record.ValueListType" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Extended Type</label>

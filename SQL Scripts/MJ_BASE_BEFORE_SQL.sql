@@ -889,9 +889,9 @@ GO
 DROP PROC IF EXISTS [__mj].[spDeleteUnneededEntityFields]
 GO
 CREATE PROC [__mj].[spDeleteUnneededEntityFields]
+    @ExcludedSchemaNames NVARCHAR(MAX)
+
 AS
-/****************************************************************/
--- Step #3 
 -- Get rid of any EntityFields that are NOT virtual and are not part of the underlying VIEW or TABLE - these are orphaned meta-data elements
 -- where a field once existed but no longer does either it was renamed or removed from the table or view
 IF OBJECT_ID('tempdb..#ef_spDeleteUnneededEntityFields') IS NOT NULL
@@ -900,7 +900,25 @@ IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
     DROP TABLE #actual_spDeleteUnneededEntityFields
 
 -- put these two views into temp tables, for some SQL systems, this makes the join below WAY faster
-SELECT * INTO #ef_spDeleteUnneededEntityFields FROM vwEntityFields
+SELECT 
+	ef.* 
+INTO 
+	#ef_spDeleteUnneededEntityFields 
+FROM 
+	vwEntityFields ef
+INNER JOIN
+	vwEntities e
+ON 
+	ef.EntityID = e.ID
+-- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
+LEFT JOIN
+    STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
+ON
+    e.SchemaName = excludedSchemas.value
+WHERE
+    excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
+
+
 SELECT * INTO #actual_spDeleteUnneededEntityFields FROM vwSQLColumnsAndEntityFields   
 
 -- first update the entity UpdatedAt so that our metadata timestamps are right
@@ -940,27 +958,42 @@ DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
 GO
 
-DROP PROC IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema]
+DROP PROCEDURE IF EXISTS [__mj].[spUpdateExistingEntitiesFromSchema];
 GO
-CREATE PROC [__mj].spUpdateExistingEntitiesFromSchema
+
+CREATE PROCEDURE [__mj].spUpdateExistingEntitiesFromSchema
+    @ExcludedSchemaNames NVARCHAR(MAX)
 AS
-	UPDATE 
-		[__mj].[Entity]
-	SET
-		Description = IIF(e.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
-	FROM
-		[__mj].[Entity] e
-	INNER JOIN
-		[__mj].[vwSQLTablesAndEntities] fromSQL
-	ON
-		e.ID = fromSQL.EntityID
+BEGIN
+    -- Update statement excluding rows with matching SchemaName
+    UPDATE 
+        [__mj].[Entity]
+    SET
+        Description = IIF(e.AutoUpdateDescription=1, CONVERT(NVARCHAR(MAX),fromSQL.EntityDescription), e.Description)
+    FROM
+        [__mj].[Entity] e
+    INNER JOIN
+        [__mj].[vwSQLTablesAndEntities] fromSQL
+    ON
+        e.ID = fromSQL.EntityID
+    -- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
+    LEFT JOIN
+        STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
+    ON
+        fromSQL.SchemaName = excludedSchemas.value
+    WHERE
+        excludedSchemas.value IS NULL; -- This ensures rows with matching SchemaName are excluded
+END;
 GO
+
+
 
 
 
 DROP PROC IF EXISTS [__mj].[spUpdateExistingEntityFieldsFromSchema]
 GO
 CREATE PROC [__mj].[spUpdateExistingEntityFieldsFromSchema]
+    @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 BEGIN
     -- Update Statement
@@ -1025,21 +1058,81 @@ BEGIN
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
         e.SchemaName = uk.SchemaName
+    -- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
+    LEFT JOIN
+        STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
+    ON
+        e.SchemaName = excludedSchemas.value
 	WHERE
 		fromSQL.EntityFieldID IS NOT NULL -- only where we HAVE ALREADY CREATED EntityField records
+		AND
+        excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
 END
 GO
 
 
+
+DROP VIEW IF EXISTS [__mj].[vwEntityFieldValues]
+GO
+
+CREATE VIEW [__mj].[vwEntityFieldValues]
+AS
+SELECT 
+    efv.*,
+    EntityField_EntityID.[Name] AS [EntityField],
+    EntityField_EntityID.[Entity] AS [Entity]
+FROM
+    [__mj].[EntityFieldValue] AS efv
+INNER JOIN
+    [__mj].[vwEntityFields] AS EntityField_EntityID
+  ON
+    [efv].[EntityID] = EntityField_EntityID.[EntityID] AND
+	efv.EntityFieldName = EntityField_EntityID.Name
+GO
+
+
+
+DROP VIEW IF EXISTS [__mj].[vwVersionInstallations]
+GO
+
+CREATE VIEW [__mj].[vwVersionInstallations]
+AS
+SELECT 
+    v.*,
+	CONVERT(nvarchar(100),v.MajorVersion) + '.' + CONVERT(nvarchar(100),v.MinorVersion) + '.' + CONVERT(nvarchar(100),v.PatchVersion,100) AS CompleteVersion
+FROM
+    [__mj].[VersionInstallation] AS v
+GO
+
+
+
+DROP VIEW IF EXISTS [__mj].[vwWorkflows]
+GO
+
+CREATE VIEW [__mj].[vwWorkflows]
+AS
+SELECT 
+    w.*,
+	AutoRunInterval * (CASE AutoRunIntervalUnits
+        WHEN 'Minutes' THEN 1
+        WHEN 'Hours' THEN 60 -- 60 minutes in an hour
+        WHEN 'Days' THEN 60 * 24 -- 1440 minutes in a day
+        WHEN 'Weeks' THEN 60 * 24 * 7 -- 10080 minutes in a week
+        WHEN 'Months' THEN 60 * 24 * 30 -- Approximately 43200 minutes in a month
+        ELSE 0 END) AS AutoRunIntervalMinutes
+FROM
+    [__mj].[Workflow] AS w
+GO
 
 
 
 DROP PROC IF EXISTS [__mj].[spSetDefaultColumnWidthWhereNeeded]
 GO
 CREATE PROC [__mj].[spSetDefaultColumnWidthWhereNeeded]
+    @ExcludedSchemaNames NVARCHAR(MAX)
 AS
 /**************************************************************************************/
-/* Final step - generate default column widths for columns that don't have a width set*/
+/* Generate default column widths for columns that don't have a width set*/
 /**************************************************************************************/
 
 UPDATE
@@ -1055,11 +1148,19 @@ SET
 	UpdatedAt = GETDATE()
 FROM 
 	__mj.EntityField ef
+INNER JOIN
+	__mj.Entity e
+ON
+	ef.EntityID = e.ID
+-- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
+LEFT JOIN
+    STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
+ON
+    e.SchemaName = excludedSchemas.value
 WHERE
-    ef.DefaultColumnWidth IS NULL
+    ef.DefaultColumnWidth IS NULL AND
+	excludedSchemas.value IS NULL -- This ensures rows with matching SchemaName are excluded
 GO
-
-
 
 
 
@@ -1289,5 +1390,30 @@ WHERE
 GO
 
 
-
+DROP VIEW IF EXISTS __mj.vwEntityFieldsWithCheckConstraints
 GO
+CREATE VIEW __mj.vwEntityFieldsWithCheckConstraints
+AS
+SELECT 
+	e.ID as EntityID,
+	e.Name as EntityName,
+    sch.name AS SchemaName,
+    obj.name AS TableName,
+    col.name AS ColumnName,
+    cc.name AS ConstraintName,
+    cc.definition AS ConstraintDefinition
+FROM 
+    sys.check_constraints cc
+INNER JOIN 
+    sys.objects obj ON cc.parent_object_id = obj.object_id
+INNER JOIN 
+    sys.schemas sch ON obj.schema_id = sch.schema_id
+INNER JOIN 
+    sys.columns col ON col.object_id = obj.object_id AND col.column_id = cc.parent_column_id
+INNER JOIN
+	__mj.Entity e
+	ON
+	e.SchemaName = sch.Name AND
+	e.BaseTable = obj.name
+GO
+SELECT * FROM __mj.vwEntityFieldsWithCheckConstraints

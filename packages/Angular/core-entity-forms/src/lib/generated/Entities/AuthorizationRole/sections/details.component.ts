@@ -20,7 +20,7 @@ import { AuthorizationRoleEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Type</label>
-            <kendo-textbox [(ngModel)]="record.Type"  />   
+            <kendo-dropdownlist [data]="['Allow', 'Deny']" [(ngModel)]="record.Type" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

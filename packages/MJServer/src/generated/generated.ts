@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/29/2024, 3:49:37 PM
+* GENERATED: 3/30/2024, 11:48:47 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -7779,6 +7779,9 @@ export class Workflow_ {
     @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
     @MaxLength(400)
     SubclassName?: string;
+      
+    @Field(() => Int, {nullable: true}) 
+    AutoRunIntervalMinutes?: number;
     
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
@@ -9117,6 +9120,10 @@ export class EntityFieldValue_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(510)
+    EntityField: string;
       
     @Field() 
     @MaxLength(510)
@@ -18496,6 +18503,10 @@ export class VersionInstallation_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(604)
+    CompleteVersion?: string;
     
 }
         

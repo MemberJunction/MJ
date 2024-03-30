@@ -36,7 +36,9 @@ async function handleCodeGenDirectory(dir, normalizedDir, archive) {
   if (configJson.commands) {
     configJson.commands = configJson.commands.filter(item => !item.workingDirectory || 
                                                                         (    !item.workingDirectory.trim().toLowerCase().includes('../mjcoreentities')
-                                                                          && !item.workingDirectory.trim().toLowerCase().includes('../mjserver')) ); // remove this as we don't want people using MJ to ever generated this stuff.
+                                                                          && !item.workingDirectory.trim().toLowerCase().includes('../mjserver')
+                                                                          && !item.workingDirectory.trim().toLowerCase().includes('../angular/core-entity-forms')
+                                                                        ) ); // remove this as we don't want people using MJ to ever generated this stuff.
   }
   if (configJson.customSQLScripts) {
     // find the one that has ../../SQL Scripts/MJ_BASE_BEFORE_SQL.sql and remove one level of the directory
