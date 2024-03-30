@@ -53,14 +53,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
             // found the tab index, if we don't find it, do nothing
             this.activeTabIndex = tabIndex;
             this.tabComponent.selectTab(tabIndex);
-    
-            // now resize after a pause to allow the UI to settle
-            setTimeout(() => {
-              this.sharedService.InvokeManualResize();
-            }, 250);  
           }
         }
       }
+      // now resize after a pause to allow the UI to settle
+      setTimeout(() => {
+        this.sharedService.InvokeManualResize();
+      }, 250);  
     });
   }
 
