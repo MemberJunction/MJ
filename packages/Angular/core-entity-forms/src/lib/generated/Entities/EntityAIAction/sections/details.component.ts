@@ -32,7 +32,7 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Trigger Event</label>
-            <kendo-textbox [(ngModel)]="record.TriggerEvent"  />   
+            <kendo-dropdownlist [data]="['after save', 'before save']" [(ngModel)]="record.TriggerEvent" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">User Message</label>
@@ -40,7 +40,7 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Type</label>
-            <kendo-textbox [(ngModel)]="record.OutputType"  />   
+            <kendo-dropdownlist [data]="['entity', 'field']" [(ngModel)]="record.OutputType" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Output Field</label>

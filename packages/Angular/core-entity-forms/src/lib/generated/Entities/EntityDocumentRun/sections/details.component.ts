@@ -24,7 +24,7 @@ import { EntityDocumentRunEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status</label>
-            <kendo-textbox [(ngModel)]="record.Status"  />   
+            <kendo-dropdownlist [data]="['Pending', 'Complete', 'Failed']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>

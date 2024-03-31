@@ -32,7 +32,7 @@ import { UserEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Type</label>
-            <kendo-textbox [(ngModel)]="record.Type"  />   
+            <kendo-dropdownlist [data]="['User', 'Owner']" [(ngModel)]="record.Type" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Is Active</label>

@@ -314,6 +314,16 @@
                                                [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
                         </ng-template>
                     </kendo-tabstrip-tab>
+          
+                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('User View Categories')">
+                        <ng-template kendoTabTitle>User View Categories</ng-template>
+                        <ng-template kendoTabContent >
+                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('User View Categories')"  
+                                               [AllowLoad]="this.IsCurrentTab('User View Categories')"  
+                                               [EditMode]="this.GridEditMode()"  
+                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
+                        </ng-template>
+                    </kendo-tabstrip-tab>
                             </kendo-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

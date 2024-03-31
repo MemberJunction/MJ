@@ -620,7 +620,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       const convoDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
       convoDetail.NewRecord();
       convoDetail.Message = val;
-      convoDetail.Role = 'user';
+      convoDetail.Role = 'User';
       // this is NOT saved here because it is saved on the server side. Later on in this code after the save we will update the object with the ID from the server, and below
       this.AddMessageToCurrentConversation(convoDetail, true, true)
 
@@ -847,7 +847,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
         if (this.LinkedEntity && this.LinkedEntityRecordID > 0 && e) {
           // now create a single data context item for the new data context 
-          let type: string = "";
+          let type: "view" | "sql" | "query" | "single_record" | "full_entity";
           switch (e.Name.trim().toLowerCase()) {
             case "user views":
               type='view';
@@ -923,7 +923,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       const md = new Metadata();
       const errorMessage = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
       errorMessage.NewRecord();
-      errorMessage.Role = 'error';
+      errorMessage.Role = 'Error';
       errorMessage.Message = 'Error took place' + err;
       this.AddMessageToCurrentConversation(errorMessage, true, false);
       this.AllowSend = true;

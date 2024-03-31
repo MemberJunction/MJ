@@ -16,7 +16,7 @@ import { QueueTaskEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status</label>
-            <kendo-textbox [(ngModel)]="record.Status"  />   
+            <kendo-dropdownlist [data]="['In Progress', 'Completed', 'Failed']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Started At</label>

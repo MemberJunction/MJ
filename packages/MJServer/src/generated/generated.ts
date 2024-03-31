@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 3/30/2024, 11:48:47 AM
+* GENERATED: 3/30/2024, 10:16:12 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2747,7 +2747,7 @@ export class Entity_ {
     @MaxLength(510)
     BaseView: string;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When set to 0, CodeGen no longer generates a base view for the entity.'}) 
     BaseViewGenerated: boolean;
       
     @Field() 
@@ -2757,34 +2757,34 @@ export class Entity_ {
     @Field(() => Boolean) 
     VirtualEntity: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table'}) 
     TrackRecordChanges: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
     AuditRecordAccess: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When set to 1, users running a view against this entity will result in an Audit Log record being created.'}) 
     AuditViewRuns: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 0, the entity will not be available at all in the GraphQL API or the object model.'}) 
     IncludeInAPI: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.'}) 
     AllowAllRowsAPI: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
     AllowUpdateAPI: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
     AllowCreateAPI: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
     AllowDeleteAPI: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Set to 1 if a custom resolver has been created for the entity.'}) 
     CustomResolverAPI: boolean;
       
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Enabling this bit will result in search being possible at the API and UI layers'}) 
     AllowUserSearchAPI: boolean;
       
     @Field(() => Boolean) 
@@ -2961,6 +2961,9 @@ export class Entity_ {
 
     @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
     FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
+
+    @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
+    UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
 
 }
         
@@ -3472,6 +3475,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
         const sSQL = `SELECT * FROM [${mj_core_schema}].[vwFileEntityRecordLinks] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('File Entity Record Links', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
+    async UserViewCategoriesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('User View Categories', userPayload);
+        const sSQL = `SELECT * FROM [${mj_core_schema}].[vwUserViewCategories] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
     

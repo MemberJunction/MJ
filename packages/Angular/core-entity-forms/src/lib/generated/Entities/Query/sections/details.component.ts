@@ -36,7 +36,7 @@ import { QueryEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status</label>
-            <kendo-textbox [(ngModel)]="record.Status"  />   
+            <kendo-dropdownlist [data]="['Pending', 'Approved', 'Rejected', 'Expired']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Quality Rank</label>

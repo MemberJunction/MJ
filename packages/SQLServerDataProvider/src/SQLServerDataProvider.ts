@@ -11,7 +11,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus} from "@memberjunction/core";
 
-import { RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { AuditLogEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
 import { QueueManager } from '@memberjunction/queue'
 
@@ -521,7 +521,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
 
     
-    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: any | null, auditLogDescription: string | null): Promise<any> {
+    public async createAuditLogRecord(user: UserInfo, authorizationName: string | null, auditLogTypeName: string, status: string, details: string | null, entityId: number, recordId: any | null, auditLogDescription: string | null): Promise<AuditLogEntity> {
         try {
             const authorization = authorizationName ? this.Authorizations.find((a) => a?.Name?.trim().toLowerCase() === authorizationName.trim().toLowerCase()) : null;
             const auditLogType = auditLogTypeName ? this.AuditLogTypes.find((a) => a?.Name?.trim().toLowerCase() === auditLogTypeName.trim().toLowerCase()) : null;
@@ -531,22 +531,26 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             if (!auditLogType)
                 throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
 
-            const auditLog = await this.GetEntityObject('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
+            const auditLog = await this.GetEntityObject<AuditLogEntity>('Audit Logs', user); // must pass user context on back end as we're not authenticated the same way as the front end
             auditLog.NewRecord();
-            auditLog.Set('UserID', user.ID)
-            auditLog.Set('AuditLogTypeName', auditLogType.Name)
-            auditLog.Set('Status', status)
-            auditLog.Set('EntityID', entityId)
-            auditLog.Set('RecordID', recordId)
+            auditLog.UserID = user.ID;
+            auditLog.Set('AuditLogTypeName', auditLogType.Name) // weak typing to get around read-only property
+            if (status?.trim().toLowerCase() === 'success')
+                auditLog.Status = 'Success'
+            else    
+                auditLog.Status = 'Failed'
+
+            auditLog.EntityID = entityId;
+            auditLog.RecordID = recordId;
 
             if (authorization)
-                auditLog.Set('AuthorizationName', authorization.Name)
+                auditLog.AuthorizationName = authorization.Name;
 
             if (details)
-                auditLog.Set('Details', details)
+                auditLog.Details = details;
 
             if (auditLogDescription)
-                auditLog.Set('Description', auditLogDescription)
+                auditLog.Description = auditLogDescription
 
             if (await auditLog.Save())
                 return auditLog;
@@ -891,7 +895,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     recordMergeDeletionLog.NewRecord();
                     recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
                     recordMergeDeletionLog.DeletedRecordID = d.PrimaryKeyValues.map(pk => pk.Value).join(','); // this would join together all of the primary key values, which is fine as the primary key is a string
-                    recordMergeDeletionLog.Status = d.Success ? 'Success' : 'Error';
+                    recordMergeDeletionLog.Status = d.Success ? 'Complete' : 'Error';
                     recordMergeDeletionLog.ProcessingLog = d.Success ? null : d.Message; // only save the message if it failed
                     if (!await recordMergeDeletionLog.Save())
                         throw new Error(`Error saving record merge deletion log`);

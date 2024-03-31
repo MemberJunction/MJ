@@ -28,7 +28,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Sharing Scope</label>
-            <kendo-textbox [(ngModel)]="record.SharingScope"  />   
+            <kendo-dropdownlist [data]="['None', 'Specific', 'Everyone']" [(ngModel)]="record.SharingScope" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Conversation ID</label>

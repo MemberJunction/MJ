@@ -141,7 +141,7 @@ export abstract class QueueBase  {
       let result = await this.ProcessTask(task, contextUser);
 
       // now set the record data for the DB
-      task.TaskRecord.Status = result.success ? "Complete" : "Failed";
+      task.TaskRecord.Status = result.success ? "Completed" : "Failed";
       task.TaskRecord.Output = result.output;
       task.TaskRecord.ErrorMessage = result.exception ? JSON.stringify(result.exception) : null;
       await task.TaskRecord.Save();

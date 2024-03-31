@@ -1643,14 +1643,41 @@ type EntityRelationship_ {
 
 """Catalog of all entities across all schemas"""
 type Entity_ {
+  """
+  If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.
+  """
   AllowAllRowsAPI: Boolean!
+
+  """
+  Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
+  """
   AllowCreateAPI: Boolean!
+
+  """
+  Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
+  """
   AllowDeleteAPI: Boolean!
+
+  """
+  Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
+  """
   AllowUpdateAPI: Boolean!
+
+  """
+  Enabling this bit will result in search being possible at the API and UI layers
+  """
   AllowUserSearchAPI: Boolean!
   ApplicationEntitiesArray: [ApplicationEntity_!]!
   AuditLogsArray: [AuditLog_!]!
+
+  """
+  When set to 1, accessing a record by an end-user will result in an Audit Log record being created
+  """
   AuditRecordAccess: Boolean!
+
+  """
+  When set to 1, users running a view against this entity will result in an Audit Log record being created.
+  """
   AuditViewRuns: Boolean!
 
   """
@@ -1660,6 +1687,8 @@ type Entity_ {
   BaseTable: String!
   BaseTableCodeName: String
   BaseView: String!
+
+  """When set to 0, CodeGen no longer generates a base view for the entity."""
   BaseViewGenerated: Boolean!
   CascadeDeletes: Boolean!
   ClassName: String
@@ -1668,6 +1697,8 @@ type Entity_ {
   CompanyIntegrationRunDetailsArray: [CompanyIntegrationRunDetail_!]!
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
+
+  """Set to 1 if a custom resolver has been created for the entity."""
   CustomResolverAPI: Boolean!
   DataContextItemsArray: [DataContextItem_!]!
   DatasetItemsArray: [DatasetItem_!]!
@@ -1690,6 +1721,10 @@ type Entity_ {
   FullTextSearchFunction: String
   FullTextSearchFunctionGenerated: Boolean!
   ID: Int!
+
+  """
+  If set to 0, the entity will not be available at all in the GraphQL API or the object model.
+  """
   IncludeInAPI: Boolean!
   IntegrationURLFormatsArray: [IntegrationURLFormat_!]!
   ListsArray: [List_!]!
@@ -1705,12 +1740,17 @@ type Entity_ {
   ResourceTypesArray: [ResourceType_!]!
   SchemaName: String!
   TaggedItemsArray: [TaggedItem_!]!
+
+  """
+  When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table
+  """
   TrackRecordChanges: Boolean!
   UpdatedAt: Timestamp!
   UserApplicationEntitiesArray: [UserApplicationEntity_!]!
   UserFavoritesArray: [UserFavorite_!]!
   UserFormGenerated: Boolean!
   UserRecordLogsArray: [UserRecordLog_!]!
+  UserViewCategoriesArray: [UserViewCategory_!]!
   UserViewMaxRows: Int
   UserViewsArray: [UserView_!]!
   UsersArray: [User_!]!

@@ -32,7 +32,7 @@ import { EntityRelationshipEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Type</label>
-            <kendo-textbox [(ngModel)]="record.Type"  />   
+            <kendo-dropdownlist [data]="['One To Many', 'Many To Many']" [(ngModel)]="record.Type" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Entity Key Field</label>

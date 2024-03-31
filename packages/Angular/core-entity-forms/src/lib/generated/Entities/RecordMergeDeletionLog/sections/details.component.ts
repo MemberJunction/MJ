@@ -20,7 +20,7 @@ import { RecordMergeDeletionLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status</label>
-            <kendo-textbox [(ngModel)]="record.Status"  />   
+            <kendo-dropdownlist [data]="['Pending', 'Complete', 'Error']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Processing Log</label>
