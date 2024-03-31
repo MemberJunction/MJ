@@ -1,16 +1,5 @@
 /*
-Run this script on:
-
-mj-mj-prodsql.database.windows.net.MJ_BASE_STRUCTURE_ONLY    -  This database will be modified
-
-to synchronize it with:
-
-mj-mj-prodsql.database.windows.net.MJ_BASE
-
-You are recommended to back up your database before running this script
-
-Script created by SQL Data Compare version 15.2.1.24235 from Red Gate Software Ltd at 3/31/2024 10:39:05 AM
-
+ MemberJunction 1.0 Installer Script - DATA
 */
 		
 SET NUMERIC_ROUNDABORT OFF
