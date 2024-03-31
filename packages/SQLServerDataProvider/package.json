@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/sqlserver-dataprovider",
-  "version": "0.9.210",
+  "version": "0.9.212",
   "description": "MemberJunction: SQL Server Client Data Provider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,13 +19,13 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "^0.9.163",
-    "@memberjunction/aiengine": "^0.9.74",
-    "@memberjunction/core": "^0.9.177",
-    "@memberjunction/core-entities": "^0.9.173",
-    "@memberjunction/global": "^0.9.156",
-    "@memberjunction/queue": "^0.9.196",
-    "@memberjunction/ai-vector-dupe": "^0.9.26",
+    "@memberjunction/ai": "^0.9.165",
+    "@memberjunction/aiengine": "^0.9.76",
+    "@memberjunction/core": "^0.9.180",
+    "@memberjunction/core-entities": "^0.9.175",
+    "@memberjunction/global": "^0.9.162",
+    "@memberjunction/queue": "^0.9.198",
+    "@memberjunction/ai-vector-dupe": "^0.9.28",
     "mssql": "^10.0.2",
     "typeorm": "^0.3.20"
   }

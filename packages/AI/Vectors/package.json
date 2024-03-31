@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectors",
-  "version": "0.9.10",
+  "version": "0.9.12",
   "description": "MemberJunction: AI Vectors Module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,8 +16,8 @@
   "license": "ISC",
   "dependencies": {
     "@langchain/mistralai": "^0.0.7",
-    "@memberjunction/core": "^0.9.177",
-    "@memberjunction/global": "^0.9.156",
+    "@memberjunction/core": "^0.9.180",
+    "@memberjunction/global": "^0.9.162",
     "dotenv": "^16.0.3",
     "openai": "^3.2.1"
   },

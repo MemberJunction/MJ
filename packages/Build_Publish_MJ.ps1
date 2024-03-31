@@ -87,6 +87,26 @@ function Get-ChangesSinceLastBuild {
 }
 
 
+# function Update-BuildLog {
+#     param (
+#         [string]$directoryPath
+#     )
+#     $buildLogPath = Join-Path $directoryPath "build.log.json"
+#     $currentDateTime = Get-Date -Format "o" # ISO 8601 format
+
+#     $logObject = @()
+#     if (Test-Path $buildLogPath) {
+#         # Force $logObject to be an array even if there's only one item in the JSON file
+#         $logObject = @(Get-Content $buildLogPath | ConvertFrom-Json)
+#     }
+
+#     # Safely add a new entry
+#     $logObject += @{ "buildTime" = $currentDateTime }
+
+#     # Save back to the file
+#     $logObject | ConvertTo-Json -Depth 64 | Set-Content $buildLogPath
+# }
+
 function Update-BuildLog {
     param (
         [string]$directoryPath
@@ -96,16 +116,26 @@ function Update-BuildLog {
 
     $logObject = @()
     if (Test-Path $buildLogPath) {
-        # Force $logObject to be an array even if there's only one item in the JSON file
-        $logObject = @(Get-Content $buildLogPath | ConvertFrom-Json)
+        # Attempt to force the result into an array explicitly
+        $logContent = Get-Content $buildLogPath | ConvertFrom-Json
+        $logObject = @($logContent)
     }
 
-    # Safely add a new entry
     $logObject += @{ "buildTime" = $currentDateTime }
 
-    # Save back to the file
-    $logObject | ConvertTo-Json -Depth 64 | Set-Content $buildLogPath
+    # Convert the array to JSON, ensuring it remains an array
+    $jsonOutput = $logObject | ConvertTo-Json -Depth 64 
+    # -Compress
+
+    # Ensure the output is wrapped as an array if not already
+    $jsonOutput = $jsonOutput.Trim()
+    if (-not $jsonOutput.StartsWith("[") -or -not $jsonOutput.EndsWith("]")) {
+        $jsonOutput = "[$jsonOutput]"
+    }
+
+    Set-Content -Path $buildLogPath -Value $jsonOutput
 }
+
 
 
 function Update-PatchVersion {

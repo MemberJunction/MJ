@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-data-context",
-  "version": "0.9.43",
+  "version": "0.9.45",
   "description": "MemberJunction: Angular component and pop-up window to display and edit the contents of a data context.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,9 +27,9 @@
     "@progress/kendo-angular-indicators": "~15.1.0"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.177",
-    "@memberjunction/global": "^0.9.156",
-    "@memberjunction/ng-compare-records": "^0.9.189",
+    "@memberjunction/core": "^0.9.180",
+    "@memberjunction/global": "^0.9.162",
+    "@memberjunction/ng-compare-records": "^0.9.191",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
