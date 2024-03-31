@@ -168,3 +168,65 @@
     font-weight: 400;
     color: var(--black);
 }
+::ng-deep .k-menu-popup {
+    box-shadow: 0px 0px 20px 0px rgba(60, 73, 99, 0.2);
+    border-radius: 10px;
+    padding: 16px;
+}
+
+::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link {
+    box-shadow: none !important;
+} 
+::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link:active {
+    background: transparent !important;
+}
+::ng-deep .k-menu-popup kendo-button-list ul li .k-menu-link .k-menu-link-text:hover {
+    color: var(--primary-color);
+    background: transparent !important;
+
+}
+::ng-deep .dialog-wrapper .popup-actions-btn button {
+    flex: 1;
+}
+::ng-deep .dialog-wrapper .popup-actions-btn {
+    display: flex;
+}
+::ng-deep .dialog-wrapper .popup-actions-btn .cancel-btn {
+    background: var(--primary-color);
+    color: var(--white-color);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 34px;
+    text-align: center;
+    border-radius: 10px;
+    border: 1px solid transparent;
+
+}
+::ng-deep .dialog-wrapper .popup-actions-btn .yes-btn {
+    border:1px solid var(--primary-color);
+    background: transparent;
+    color: var(--primary-color);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 34px;
+    text-align: center;
+    border-radius: 10px;
+    box-shadow: none;
+}
+::ng-deep .dialog-wrapper .popup-actions-btn .yes-btn:focus {
+    box-shadow: none !important;
+}
+::ng-deep .dialog-wrapper .k-window-title {
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 36px;
+    text-align: left;
+    color: var(--text-darked);
+}
+::ng-deep .dialog-wrapper p {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 20px;
+    text-align: left;
+    color: var(--black);
+}
