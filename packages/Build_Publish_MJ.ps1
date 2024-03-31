@@ -63,6 +63,8 @@ function Test-FileChangesRecursive {
     # Check if any file has been modified since the last build time
     foreach ($file in $files) {
         if ($file.LastWriteTime -gt $lastBuildTime) {
+            # write to the console the file name that has changed and the time it was last modified
+            Write-Host "         >>> $($file.FullName) has changed since the last build. Last modified: $($file.LastWriteTime)"
             return $true
         }
     }
