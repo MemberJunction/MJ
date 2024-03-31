@@ -271,19 +271,33 @@ export class ResolverBase {
       if (!userInfo) throw new Error(`User ${userPayload?.email} not found in metadata`);
       if (!auditLogType) throw new Error(`Audit Log Type ${auditLogTypeName} not found in metadata`);
 
-      const auditLog = <AuditLogEntity>await md.GetEntityObject('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
+      const auditLog = await md.GetEntityObject<AuditLogEntity>('Audit Logs', userInfo); // must pass user context on back end as we're not authenticated the same way as the front end
       auditLog.NewRecord();
       auditLog.UserID = userInfo.ID;
       auditLog.AuditLogTypeName = auditLogType.Name;
-      if (authorization) auditLog.AuthorizationName = authorization.Name;
-      auditLog.Status = status;
-      if (details) auditLog.Details = details;
-      auditLog.EntityID = entityId;
-      if (recordId) auditLog.RecordID = recordId;
 
-      if (await auditLog.Save()) return auditLog;
-      else throw new Error(`Error saving audit log record`);
-    } catch (err) {
+      if (authorization) 
+        auditLog.AuthorizationName = authorization.Name;
+
+      if (status?.trim().toLowerCase() === 'success') 
+        auditLog.Status = "Success"
+      else
+        auditLog.Status = "Failed";
+
+      if (details) 
+        auditLog.Details = details;
+
+      auditLog.EntityID = entityId;
+
+      if (recordId) 
+        auditLog.RecordID = recordId;
+
+      if (await auditLog.Save()) 
+        return auditLog;
+      else 
+        throw new Error(`Error saving audit log record`);
+    } 
+    catch (err) {
       console.log(err);
       return null;
     }

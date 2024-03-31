@@ -24,7 +24,7 @@ import { AuditLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Status</label>
-            <kendo-textbox [(ngModel)]="record.Status"  />   
+            <kendo-dropdownlist [data]="['Success', 'Failed']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Description</label>

@@ -24,7 +24,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Approval Status</label>
-            <kendo-textbox [(ngModel)]="record.ApprovalStatus"  />   
+            <kendo-dropdownlist [data]="['Pending', 'Approved', 'Rejected']" [(ngModel)]="record.ApprovalStatus" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Approved By User ID</label>
@@ -32,7 +32,7 @@ import { RecordMergeLogEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Processing Status</label>
-            <kendo-textbox [(ngModel)]="record.ProcessingStatus"  />   
+            <kendo-dropdownlist [data]="['Started', 'Complete', 'Error']" [(ngModel)]="record.ProcessingStatus" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Processing Started At</label>

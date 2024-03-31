@@ -20,7 +20,7 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Role</label>
-            <kendo-textbox [(ngModel)]="record.Role"  />   
+            <kendo-dropdownlist [data]="['User', 'AI', 'Error']" [(ngModel)]="record.Role" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Message</label>

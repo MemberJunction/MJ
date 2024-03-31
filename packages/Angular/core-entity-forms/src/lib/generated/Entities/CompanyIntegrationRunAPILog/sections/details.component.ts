@@ -24,7 +24,7 @@ import { CompanyIntegrationRunAPILogEntity } from '@memberjunction/core-entities
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Request Method</label>
-            <kendo-textbox [(ngModel)]="record.RequestMethod"  />   
+            <kendo-dropdownlist [data]="['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']" [(ngModel)]="record.RequestMethod!" ></kendo-dropdownlist>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">URL</label>

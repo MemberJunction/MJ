@@ -2207,6 +2207,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Base View Generated
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: When set to 0, CodeGen no longer generates a base view for the entity.
         */
         get BaseViewGenerated(): boolean {  
             return this.Get('BaseViewGenerated');
@@ -2241,6 +2242,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Track Record Changes
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table
         */
         get TrackRecordChanges(): boolean {  
             return this.Get('TrackRecordChanges');
@@ -2253,6 +2255,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Audit Record Access
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: When set to 1, accessing a record by an end-user will result in an Audit Log record being created
         */
         get AuditRecordAccess(): boolean {  
             return this.Get('AuditRecordAccess');
@@ -2265,6 +2268,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Audit View Runs
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: When set to 1, users running a view against this entity will result in an Audit Log record being created.
         */
         get AuditViewRuns(): boolean {  
             return this.Get('AuditViewRuns');
@@ -2277,6 +2281,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Include In API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If set to 0, the entity will not be available at all in the GraphQL API or the object model.
         */
         get IncludeInAPI(): boolean {  
             return this.Get('IncludeInAPI');
@@ -2289,6 +2294,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow All Rows API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.
         */
         get AllowAllRowsAPI(): boolean {  
             return this.Get('AllowAllRowsAPI');
@@ -2301,6 +2307,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowUpdateAPI(): boolean {  
             return this.Get('AllowUpdateAPI');
@@ -2313,6 +2320,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow Create API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowCreateAPI(): boolean {  
             return this.Get('AllowCreateAPI');
@@ -2325,6 +2333,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow Delete API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowDeleteAPI(): boolean {  
             return this.Get('AllowDeleteAPI');
@@ -2337,6 +2346,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Custom Resolver API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Set to 1 if a custom resolver has been created for the entity.
         */
         get CustomResolverAPI(): boolean {  
             return this.Get('CustomResolverAPI');
@@ -2349,6 +2359,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow User Search API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Enabling this bit will result in search being possible at the API and UI layers
         */
         get AllowUserSearchAPI(): boolean {  
             return this.Get('AllowUserSearchAPI');
@@ -2735,11 +2746,15 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Type
         * * SQL Data Type: nchar(15)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * User
+        *   * Owner
         */
-        get Type(): string {  
+        get Type(): 'User' | 'Owner' {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: 'User' | 'Owner') {
             this.Set('Type', value);
         }
         /**
@@ -2980,11 +2995,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * SQL Data Type: nchar(20)
         * * Default Value: N'One To Many'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * One To Many
+        *   * Many To Many
         */
-        get Type(): string {  
+        get Type(): 'One To Many' | 'Many To Many' {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: 'One To Many' | 'Many To Many') {
             this.Set('Type', value);
         }
         /**
@@ -4884,11 +4903,20 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RequestMethod
         * * Display Name: Request Method
         * * SQL Data Type: nvarchar(12)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * GET
+        *   * POST
+        *   * PUT
+        *   * DELETE
+        *   * PATCH
+        *   * HEAD
+        *   * OPTIONS
         */
-        get RequestMethod(): string | null {  
+        get RequestMethod(): 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | null {  
             return this.Get('RequestMethod');
         }
-        set RequestMethod(value: string | null) {
+        set RequestMethod(value: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | null) {
             this.Set('RequestMethod', value);
         }
         /**
@@ -5433,11 +5461,17 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * SQL Data Type: nchar(10)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In Progress
+        *   * Complete
+        *   * Failed
         */
-        get Status(): string {  
+        get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Failed' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Failed') {
             this.Set('Status', value);
         }
         /**
@@ -5912,11 +5946,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * SQL Data Type: nchar(15)
         * * Default Value: N'Complete'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Complete
         */
-        get Status(): string {  
+        get Status(): 'Pending' | 'Complete' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Pending' | 'Complete') {
             this.Set('Status', value);
         }
         /**
@@ -6253,11 +6291,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
         * * Default Value: N'Allow'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Success
+        *   * Failed
         */
-        get Status(): string {  
+        get Status(): 'Success' | 'Failed' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Success' | 'Failed') {
             this.Set('Status', value);
         }
         /**
@@ -7460,11 +7502,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Trigger Event
         * * SQL Data Type: nchar(15)
         * * Default Value: N'After Save'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * after save
+        *   * before save
         */
-        get TriggerEvent(): string {  
+        get TriggerEvent(): 'after save' | 'before save' {  
             return this.Get('TriggerEvent');
         }
-        set TriggerEvent(value: string) {
+        set TriggerEvent(value: 'after save' | 'before save') {
             this.Set('TriggerEvent', value);
         }
         /**
@@ -7483,11 +7529,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Output Type
         * * SQL Data Type: nchar(10)
         * * Default Value: N'FIeld'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * entity
+        *   * field
         */
-        get OutputType(): string {  
+        get OutputType(): 'entity' | 'field' {  
             return this.Get('OutputType');
         }
-        set OutputType(value: string) {
+        set OutputType(value: 'entity' | 'field') {
             this.Set('OutputType', value);
         }
         /**
@@ -8101,11 +8151,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nchar(10)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * In Progress
+        *   * Completed
+        *   * Failed
         */
-        get Status(): string {  
+        get Status(): 'In Progress' | 'Completed' | 'Failed' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'In Progress' | 'Completed' | 'Failed') {
             this.Set('Status', value);
         }
         /**
@@ -8666,11 +8721,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Sharing Scope
         * * SQL Data Type: nvarchar(20)
         * * Default Value: N'Personal'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * None
+        *   * Specific
+        *   * Everyone
         */
-        get SharingScope(): string {  
+        get SharingScope(): 'None' | 'Specific' | 'Everyone' {  
             return this.Get('SharingScope');
         }
-        set SharingScope(value: string) {
+        set SharingScope(value: 'None' | 'Specific' | 'Everyone') {
             this.Set('SharingScope', value);
         }
         /**
@@ -9951,11 +10011,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Role
         * * SQL Data Type: nvarchar(20)
         * * Default Value: user_name()
+        * * Value List Type: List
+        * * Possible Values 
+        *   * User
+        *   * AI
+        *   * Error
         */
-        get Role(): string {  
+        get Role(): 'User' | 'AI' | 'Error' {  
             return this.Get('Role');
         }
-        set Role(value: string) {
+        set Role(value: 'User' | 'AI' | 'Error') {
             this.Set('Role', value);
         }
         /**
@@ -10702,11 +10767,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(10)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Approved
+        *   * Rejected
         */
-        get ApprovalStatus(): string {  
+        get ApprovalStatus(): 'Pending' | 'Approved' | 'Rejected' {  
             return this.Get('ApprovalStatus');
         }
-        set ApprovalStatus(value: string) {
+        set ApprovalStatus(value: 'Pending' | 'Approved' | 'Rejected') {
             this.Set('ApprovalStatus', value);
         }
         /**
@@ -10725,11 +10795,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Processing Status
         * * SQL Data Type: nvarchar(10)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Started
+        *   * Complete
+        *   * Error
         */
-        get ProcessingStatus(): string {  
+        get ProcessingStatus(): 'Started' | 'Complete' | 'Error' {  
             return this.Get('ProcessingStatus');
         }
-        set ProcessingStatus(value: string) {
+        set ProcessingStatus(value: 'Started' | 'Complete' | 'Error') {
             this.Set('ProcessingStatus', value);
         }
         /**
@@ -10896,11 +10971,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(10)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Complete
+        *   * Error
         */
-        get Status(): string {  
+        get Status(): 'Pending' | 'Complete' | 'Error' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Pending' | 'Complete' | 'Error') {
             this.Set('Status', value);
         }
         /**
@@ -11393,11 +11473,17 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Approved
+        *   * Rejected
+        *   * Expired
         */
-        get Status(): string {  
+        get Status(): 'Pending' | 'Approved' | 'Rejected' | 'Expired' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Pending' | 'Approved' | 'Rejected' | 'Expired') {
             this.Set('Status', value);
         }
         /**
@@ -11862,12 +11948,17 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Complete
+        *   * Failed
         * * Description: Can be Pending, In Progress, Completed, or Failed
         */
-        get Status(): string {  
+        get Status(): 'Pending' | 'Complete' | 'Failed' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Pending' | 'Complete' | 'Failed') {
             this.Set('Status', value);
         }
         /**
@@ -12260,11 +12351,15 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Active
+        *   * Inactive
         */
-        get Status(): string {  
+        get Status(): 'Active' | 'Inactive' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Active' | 'Inactive') {
             this.Set('Status', value);
         }
         /**
@@ -12387,12 +12482,19 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * view
+        *   * sql
+        *   * query
+        *   * single_record
+        *   * full_entity
         * * Description: The type of the item, either "view", "query", "full_entity", "single_record", or "sql"
         */
-        get Type(): string {  
+        get Type(): 'view' | 'sql' | 'query' | 'single_record' | 'full_entity' {  
             return this.Get('Type');
         }
-        set Type(value: string) {
+        set Type(value: 'view' | 'sql' | 'query' | 'single_record' | 'full_entity') {
             this.Set('Type', value);
         }
         /**
@@ -12765,6 +12867,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityID
         * * Display Name: Entity ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
         get EntityID(): number {  
             return this.Get('EntityID');
@@ -13611,12 +13714,16 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: N'System'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * New
+        *   * Upgrade
         * * Description: What type of installation was applied
         */
-        get Type(): string | null {  
+        get Type(): 'New' | 'Upgrade' | null {  
             return this.Get('Type');
         }
-        set Type(value: string | null) {
+        set Type(value: 'New' | 'Upgrade' | null) {
             this.Set('Type', value);
         }
         /**
@@ -13635,12 +13742,18 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In Progress
+        *   * Complete
+        *   * Failed
         * * Description: Pending, Complete, Failed
         */
-        get Status(): string {  
+        get Status(): 'Pending' | 'In Progress' | 'Complete' | 'Failed' {  
             return this.Get('Status');
         }
-        set Status(value: string) {
+        set Status(value: 'Pending' | 'In Progress' | 'Complete' | 'Failed') {
             this.Set('Status', value);
         }
         /**
