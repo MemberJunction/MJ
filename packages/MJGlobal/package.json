@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/global",
-  "version": "0.9.163",
+  "version": "0.9.164",
   "description": "MemberJunction: Global Object - Needed for ALL other MJ components",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
