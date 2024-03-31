@@ -337,7 +337,7 @@ sRet += `
 
 function schemaName(entity: EntityInfo): string {
     if (entity.SchemaName === mjCoreSchema) {
-        return '${mj_core_schema}'
+        return '${Metadata.Provider.ConfigData.MJCoreSchemaName}'
     }
     else
         return entity.SchemaName // put the actual schema name in

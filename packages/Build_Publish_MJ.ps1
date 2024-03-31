@@ -87,26 +87,6 @@ function Get-ChangesSinceLastBuild {
 }
 
 
-# function Update-BuildLog {
-#     param (
-#         [string]$directoryPath
-#     )
-#     $buildLogPath = Join-Path $directoryPath "build.log.json"
-#     $currentDateTime = Get-Date -Format "o" # ISO 8601 format
-
-#     $logObject = @()
-#     if (Test-Path $buildLogPath) {
-#         # Force $logObject to be an array even if there's only one item in the JSON file
-#         $logObject = @(Get-Content $buildLogPath | ConvertFrom-Json)
-#     }
-
-#     # Safely add a new entry
-#     $logObject += @{ "buildTime" = $currentDateTime }
-
-#     # Save back to the file
-#     $logObject | ConvertTo-Json -Depth 64 | Set-Content $buildLogPath
-# }
-
 function Update-BuildLog {
     param (
         [string]$directoryPath
