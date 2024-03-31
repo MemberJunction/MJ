@@ -726,8 +726,11 @@ async function createNewEntities(ds: DataSource): Promise<boolean> {
             } 
          })
    
-         LogStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
-         await md.Refresh();// refresh now since we've added some new entities
+         if (newEntityList.length > 0) {
+            // only do this if we actually created new entities
+            LogStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
+            await md.Refresh();// refresh now since we've added some new entities   
+         }
       }
       return true; // if we get here, we succeeded
    }
