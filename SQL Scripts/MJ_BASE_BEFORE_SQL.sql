@@ -1416,4 +1416,3 @@ INNER JOIN
 	e.SchemaName = sch.Name AND
 	e.BaseTable = obj.name
 GO
-SELECT * FROM __mj.vwEntityFieldsWithCheckConstraints

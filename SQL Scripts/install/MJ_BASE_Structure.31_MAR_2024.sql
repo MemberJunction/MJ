@@ -11778,16 +11778,6 @@ BEGIN CATCH
 	SET NOEXEC ON
 END CATCH
 GO
-PRINT N'Altering permissions on  [__mj].[DashboardCategory]'
-GO
-GRANT DELETE ON  [__mj].[DashboardCategory] TO [cdp_Developer]
-GO
-GRANT INSERT ON  [__mj].[DashboardCategory] TO [cdp_Developer]
-GO
-GRANT SELECT ON  [__mj].[DashboardCategory] TO [cdp_Developer]
-GO
-GRANT UPDATE ON  [__mj].[DashboardCategory] TO [cdp_Developer]
-GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
 PRINT N'Altering permissions on  [__mj].[spCreateApplicationEntity]'
