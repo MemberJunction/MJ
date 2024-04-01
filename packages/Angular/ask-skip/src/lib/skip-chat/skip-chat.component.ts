@@ -236,7 +236,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
 
         if (!this._loaded) {
-          // we are now visible, for the first time, 
+          // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
+          this.sharedService.InvokeManualResize();
 
           // first do stuff if we're on "global" skip chat mode...
           if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && this.LinkedEntityRecordID <= 0) {

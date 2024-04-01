@@ -22,8 +22,8 @@
             </div>
         </div>
     </div>
-    <app-view-properties-dialog [EntityName]="this.appName" [ShowPropertiesButton]="false" (dialogClosed)="viewPropertiesClosed($event)">
-    </app-view-properties-dialog>
+    <mj-user-view-properties-dialog [EntityName]="this.appName" [ShowPropertiesButton]="false" (dialogClosed)="viewPropertiesClosed($event)">
+    </mj-user-view-properties-dialog>
     <div class="main-area">
         <app-generic-browser-list 
             iconName="aggregateFields" 

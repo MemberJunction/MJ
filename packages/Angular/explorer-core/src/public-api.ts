@@ -34,7 +34,6 @@ export * from './lib/single-dashboard/single-dashboard.component'
 export * from './lib/single-dashboard/Components/add-item/add-item.component'
 export * from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.component'
 export * from './lib/user-profile/user-profile.component'
-export * from './lib/user-view-properties/view-properties-dialog.component'
 export * from './lib/user-notifications/user-notifications.component';
 export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/entities.guard';

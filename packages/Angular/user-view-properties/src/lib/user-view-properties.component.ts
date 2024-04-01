@@ -1,6 +1,6 @@
-import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef} from '@angular/core';
+import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2} from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
-import { Metadata, EntityFieldInfo, EntityInfo } from "@memberjunction/core";
+import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -14,11 +14,11 @@ import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { FormBuilder } from "@angular/forms";
 
 @Component({
-  selector: 'app-view-properties-dialog',
-  templateUrl: './view-properties-dialog.component.html',
-  styleUrls: ['./view-properties-dialog.component.scss']
+  selector: 'mj-user-view-properties-dialog',
+  templateUrl: './user-view-properties.component.html',
+  styleUrls: ['./user-view-properties.component.scss']
 })
-export class ViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
+export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
   @Input() public ViewID: number | undefined;
   @Input() public EntityName: string | undefined;
   @Input() public ShowPropertiesButton: boolean = true;
@@ -51,8 +51,10 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
   @ViewChild(TabComponent) kendoTab!: TabComponent;
   @ViewChild('nameField') nameField!: TextBoxComponent;
   @ViewChild('dialogContainer') dialogContainer!: ElementRef;
+  @ViewChild('outerDialogContainer') private outerDialogContainer!: ElementRef;
 
-  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router) {
+
+  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2) {
     super(elRef, ss, router, route);
     this.BottomMargin = 75; 
 
@@ -78,6 +80,7 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
     this.ViewID = ViewID;
     await this.Load();
     this.isDialogOpened = true; // binding causes the kendo window to open from this method call
+    this.moveDialogToBody();
   }
 
   async Load() {
@@ -94,7 +97,6 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
       const e = md.Entities.find (e => e.Name == this.EntityName);
       if (e){
         this.record.SetDefaultsFromEntity(e);
-        console.log("e found: ", e);
       }
       else {
         throw new Error(`Entity ${this.EntityName} not found in metadata`);
@@ -248,7 +250,6 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
     this.record.SortState = JSON.stringify(sortMap);
 
     // validate the record first
-    const rec = this.record;
     const valResults = this.record.Validate()
     if (valResults.Success === false) {
       this.showloader = false;
@@ -289,51 +290,55 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
     date: ["neq", "eq", "gte", "gt", "lte", "lt", "isnull", "isnotnull"],
     boolean: ["eq", "neq"]
   };
+
+
+  private _savedFilters: any = null;
+  public setupFilters() {
+    if (this._savedFilters === null) {
+        const filters = this.ViewEntityInfo!.Fields.map((f: EntityFieldInfo) =>  this.toKendoFilterField(f));
+        this._savedFilters = filters;
+        return filters;
+    }
+    else
+        return this._savedFilters;
+  }
  
-  public toKendoFilterField = ({
-                                 DisplayName,
-                                 Name,
-                                 Type,
-                               }: Partial<EntityFieldInfo>): any => {
+  public toKendoFilterField = (f: EntityFieldInfo): any => {
     return {
-      field: Name,
-      title: DisplayName ?? Name,
-      ...this.getFilterTypeAndOperators(this.toKendoFieldType(Type)),
+      field: f.Name,
+      title: f.DisplayName ?? f.Name,
+      editor: this.getKendoEditor(f),
+      operators: this.getKendoOperators(f)
+    }
+  }
+ 
+  public getKendoEditor (field: EntityFieldInfo)  {
+    switch (field.TSType) {
+        case EntityFieldTSType.Boolean:
+            return 'boolean';
+        case EntityFieldTSType.Date:
+            return 'date';
+        case EntityFieldTSType.Number:
+            return 'number';
+        default:
+            return 'string';
     }
   }
 
-  toKendoFieldType = (entityFieldType: string | undefined) => {
-    if (entityFieldType) {
-      return ['int', 'money', 'decimal', 'smallint', 'bigint'].includes(entityFieldType)
-        ? 'numeric'
-        : ['nchar', 'char', 'nvarchar'].includes(entityFieldType)
-          ? 'text'
-          : ['tinyint', 'bit'].includes(entityFieldType)
-            ? 'boolean'
-            : ['datetimeoffset', 'datetime'].includes(entityFieldType)
-              ? 'date'
-              : 'string';
-    } else {
-      return 'string';
+  public getKendoOperators (field: EntityFieldInfo) {
+    switch (field.TSType) {
+        case EntityFieldTSType.Boolean:
+            return this.defaultOperators.boolean;
+        case EntityFieldTSType.Date:
+            return this.defaultOperators.date;
+        case EntityFieldTSType.Number:
+            return this.defaultOperators.number;
+        default:
+            return this.defaultOperators.string;
     }
   }
 
-
-  getFilterTypeAndOperators = (kendoFieldType = '') => {
-    switch (kendoFieldType) {
-      case 'numeric':
-        return {editor: 'number', operators: this.defaultOperators.number};
-      case 'text':
-        return {editor: 'string', operators: this.defaultOperators.string };
-      case 'boolean':
-        return {editor: 'boolean', operators: this.defaultOperators.boolean};
-      case 'date':
-        return {editor: 'date', operators: this.defaultOperators.date};
-      default:
-        return {editor: 'string', operators: this.defaultOperators.string };
-    }
-  };
-
+  
   protected override get ContainerObjectHeight(): number {
     if (this.kendoWindow)
       return this.kendoWindow.height;
@@ -358,4 +363,14 @@ export class ViewPropertiesDialogComponent extends BaseFormComponent implements 
   sortDirectionValueChange(sortItem: any, newValue: any) {
   }
 
+
+  private _movedToBody: boolean = false;
+  moveDialogToBody() {
+    if (this._movedToBody)
+      return;
+    const dialogElement = this.outerDialogContainer.nativeElement;
+    this.renderer.appendChild(document.body, dialogElement);
+
+    this._movedToBody = true;
+  }
 }

@@ -6,7 +6,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
-import { ViewPropertiesDialogComponent } from '../user-view-properties/view-properties-dialog.component';
+import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
 import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
@@ -17,7 +17,7 @@ import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
 
     @ViewChild('entityRow') entityRowRef: Element | undefined;
-    @ViewChild(ViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: ViewPropertiesDialogComponent;
+    @ViewChild(UserViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
     private appNameFromURL: string = '';
     public appName: string = ''
