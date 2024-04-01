@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/aiengine",
-  "version": "0.9.78",
+  "version": "0.9.79",
   "description": "MemberJunction: AI Engine Package - handles automatic execution of Entity AI Actions using AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,10 +15,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "^0.9.182",
-    "@memberjunction/global": "^0.9.164",
-    "@memberjunction/core-entities": "^0.9.177",
-    "@memberjunction/ai": "^0.9.167",
+    "@memberjunction/core": "^0.9.183",
+    "@memberjunction/global": "^0.9.165",
+    "@memberjunction/core-entities": "^0.9.178",
+    "@memberjunction/ai": "^0.9.168",
     "dotenv": "^16.0.3",
     "openai": "^3.2.1",
     "rxjs": "^7.8.1",

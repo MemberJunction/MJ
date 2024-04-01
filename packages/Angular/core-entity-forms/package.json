@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-core-entity-forms",
-  "version": "0.9.159",
+  "version": "0.9.160",
   "description": "MemberJunction Core Entity Angular Forms",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,10 +24,10 @@
     "@angular/forms": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.182",
-    "@memberjunction/core-entities": "^0.9.177",
-    "@memberjunction/ng-explorer-core": "^0.9.220",
-    "@memberjunction/ng-base-forms": "^0.9.13",
+    "@memberjunction/core": "^0.9.183",
+    "@memberjunction/core-entities": "^0.9.178",
+    "@memberjunction/ng-explorer-core": "^0.9.221",
+    "@memberjunction/ng-base-forms": "^0.9.14",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "tslib": "^2.3.0"
