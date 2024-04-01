@@ -110,6 +110,9 @@
             "Name": "Angular/base-forms"
         },
         {
+            "Name": "Angular/user-view-properties"
+        },
+        {
             "Name": "Angular/entity-form-dialog"
         },
         {

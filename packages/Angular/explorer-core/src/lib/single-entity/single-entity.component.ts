@@ -2,7 +2,7 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { Metadata } from '@memberjunction/core';
 import { ViewInfo, UserViewEntity } from '@memberjunction/core-entities';
-import { ViewPropertiesDialogComponent } from '../user-view-properties/view-properties-dialog.component';
+import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
 import { NotificationService } from "@progress/kendo-angular-notification";
 import { SharedService } from '@memberjunction/ng-shared';
 
@@ -24,7 +24,7 @@ export class SingleEntityComponent implements OnInit {
   public deleteDialogOpened: boolean = false;
   public showloader: boolean = false;
 
-  @ViewChild(ViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: ViewPropertiesDialogComponent;
+  @ViewChild(UserViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(async params => {

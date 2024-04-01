@@ -69,9 +69,9 @@ import { SingleSearchResultComponent } from './lib/single-search-result/single-s
 import { SingleViewComponent } from './lib/single-view/single-view.component';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
-import { ViewPropertiesDialogComponent } from './lib/user-view-properties/view-properties-dialog.component';
 import {ExpansionPanelComponent} from './lib/expansion-panel-component/expansion-panel-component';
 import {ApplicationViewComponent} from './lib/app-view/application-view.component';
+import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 
 @NgModule({
   declarations: [
@@ -104,7 +104,6 @@ import {ApplicationViewComponent} from './lib/app-view/application-view.componen
     SingleViewComponent,
     SingleQueryComponent,
     UserProfileComponent,
-    ViewPropertiesDialogComponent,
     SingleDashboardComponent,
     AddItemComponent,
     DeleteItemComponent,
@@ -122,7 +121,6 @@ import {ApplicationViewComponent} from './lib/app-view/application-view.componen
     GridModule,
     DialogsModule,
     ExcelExportModule,
-    ButtonsModule,
     CompareRecordsModule,
     IndicatorsModule,
     CommonModule,
@@ -156,6 +154,7 @@ import {ApplicationViewComponent} from './lib/app-view/application-view.componen
     EntityPermissionsModule,
     ExplorerSettingsModule,
     FileStorageModule,
+    UserViewPropertiesDialogModule
   ],
   exports: [
     FormToolbarComponent,
@@ -184,7 +183,6 @@ import {ApplicationViewComponent} from './lib/app-view/application-view.componen
     SingleSearchResultComponent,
     SingleViewComponent,
     UserProfileComponent,
-    ViewPropertiesDialogComponent,
     SingleDashboardComponent,
     AddItemComponent,
     DeleteItemComponent,

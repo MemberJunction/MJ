@@ -60,11 +60,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @ViewChild('analysisQuestion', { read: TextAreaComponent }) analysisQuestion: TextAreaComponent | null = null;
   @ViewChild('analysisResults', { read: ElementRef }) analysisResults: ElementRef | null = null;
 
-//  @ViewChild('plotlyPlot', { read: PlotlyComponent }) plotlyPlot: PlotlyComponent | null = null;
-//  @ViewChild('plotContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
-
   @ViewChild('compareDialogContainer') private compareDialogContainer!: ElementRef;
-
 
   private _pendingRecords: GridPendingRecordItem[] = [];
 
@@ -535,13 +531,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       return;
     const dialogElement = this.compareDialogContainer.nativeElement;
     this.renderer.appendChild(document.body, dialogElement);
-    // const appBody = dialogElement.closest('.app-body');
-    // if (appBody) {
-    //   this.renderer.appendChild(appBody, dialogElement);
-    // } 
-    // else {
-    //   console.error('App body element not found!');
-    // }
+
     this._movedToBody = true;
   }
 

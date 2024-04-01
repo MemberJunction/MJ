@@ -16,7 +16,6 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
-
 @NgModule({
   declarations: [
     UserViewGridComponent
