@@ -107,6 +107,8 @@ export class AppComponent implements OnInit {
       }
     }, (err: any) => {
       LogError('Error Logging In: ' + err);
+      //show the login page
+      this.authBase.authenticated = false;
     });
   
     const isAuth = await this.authBase.isAuthenticated()
