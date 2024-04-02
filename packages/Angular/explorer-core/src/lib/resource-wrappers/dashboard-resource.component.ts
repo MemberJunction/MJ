@@ -8,8 +8,8 @@ export function LoadDashboardResource() {
 
 @RegisterClass(BaseResourceComponent, 'Dashboards')
 @Component({
-    selector: 'single-dashboard-resource',
-    template: `<app-single-dashboard [ResourceData]="Data" (dashboardSaved)="ResourceRecordSaved($event)" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()" mjFillContainer></app-single-dashboard>`
+    selector: 'mj-single-dashboard-resource',
+    template: `<mj-single-dashboard [ResourceData]="Data" (dashboardSaved)="ResourceRecordSaved($event)" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()" mjFillContainer></mj-single-dashboard>`
 })
 export class DashboardResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {

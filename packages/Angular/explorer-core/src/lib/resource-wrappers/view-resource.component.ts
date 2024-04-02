@@ -9,13 +9,13 @@ export function LoadViewResource() {
 
 @RegisterClass(BaseResourceComponent, 'User Views')
 @Component({
-    selector: 'userview-resource',
-    template: `<app-single-view [viewId]="Data.ResourceRecordID" 
+    selector: 'mj-userview-resource',
+    template: `<mj-single-view [viewId]="Data.ResourceRecordID" 
                                 [viewName]="Data.Configuration?.ViewName" 
                                 [entityName]="Data.Configuration?.Entity" 
                                 [extraFilter]="Data.Configuration?.ExtraFilter" 
                                 (loadComplete)="NotifyLoadComplete()">
-                </app-single-view>`
+                </mj-single-view>`
 })
 export class UserViewResource extends BaseResourceComponent {
     async GetResourceDisplayName(data: ResourceData): Promise<string> {

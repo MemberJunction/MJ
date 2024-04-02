@@ -10,8 +10,8 @@ export function LoadRecordResource() {
 
 @RegisterClass(BaseResourceComponent, 'Records')
 @Component({
-    selector: 'record-resource',
-    template: `<app-single-record [primaryKeyValues]="this.primaryKeyValues" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()"></app-single-record>`
+    selector: 'mj-record-resource',
+    template: `<mj-single-record [primaryKeyValues]="this.primaryKeyValues" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     public get primaryKeyValues(): PrimaryKeyValue[] {

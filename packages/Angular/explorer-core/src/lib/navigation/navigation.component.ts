@@ -62,7 +62,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
   @ViewChild(DrawerComponent, { static: false }) drawer!: DrawerComponent;
   @ViewChild('drawerWrapper', { static: false }) drawerWrapper!: ElementRef;
-  @ViewChild("tabstrip", { static: false }) public tabstrip !: TabStripComponent;
+  //@ViewChild("tabstrip", { static: false }) public tabstrip !: TabStripComponent;
   @ViewChild('container', { static: true, read: ElementRef }) container !: ElementRef;
 
   @HostListener('window:resize')
@@ -94,6 +94,79 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   ) {
     this.tabs = [];
   }
+
+
+
+
+
+
+
+
+
+
+  // NEW TAB CONTROL - we will move this out of here into its own MJ Tab Control component and library soon
+
+  @ViewChild('tabInnerContainer') tabInnerContainer!: ElementRef;
+
+  showLeftButton: boolean = false;
+  showRightButton: boolean = false;
+
+  @HostListener('window:resize', ['$event'])
+  onResize(event: any) {
+    this.checkTabScrollButtons();
+  }
+
+  checkTabScrollButtons() {
+    if (this.tabInnerContainer && this.tabInnerContainer.nativeElement && this.tabInnerContainer.nativeElement.parentElement) {
+      const container = this.tabInnerContainer.nativeElement;
+      const parent = container.parentElement;
+      const currentLeft = container.style.left ? parseInt(container.style.left) : 0;
+
+      // show the right button if the container is wider than the parent AND the left position(which is zero or negative) + the container width is greater than the parent width
+      this.showRightButton = container.clientWidth > parent.clientWidth && 
+                             currentLeft + container.clientWidth > parent.clientWidth;
+
+      // Show left button if left position is less than 0, meaning some of the left side of the container is off screen
+      this.showLeftButton = currentLeft < 0;  
+    }
+  }
+
+  scrollTabHeader(scrollAmount: number) {
+    const style = this.tabInnerContainer.nativeElement.style
+    if (style) {
+      const curLeft = style.left ? parseInt(style.left) : 0;     
+      style.left = (curLeft + scrollAmount) + 'px';
+      this.checkTabScrollButtons(); // can do immediately because the above is direct DOM manipulation so the effect is immediate
+    }
+  }
+
+  scrollLeft() {
+    this.scrollTabHeader(150)
+  }
+  scrollRight() {
+    this.scrollTabHeader(-150)
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   onTabContextMenu(event: MouseEvent, tab: any): void {
     event.preventDefault();
@@ -144,7 +217,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     await transGroup.Submit();
     if (this.activeTabIndex > this.tabs.length) 
       this.activeTabIndex = this.tabs.length - 1;
-    this.tabstrip.selectTab(this.activeTabIndex);
+    //this.tabstrip.selectTab(this.activeTabIndex);
     if (this.activeTabIndex === 0) {
       // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
       let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
@@ -159,6 +232,10 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
+    // check tab scroll buttons and bind to resize
+    this.checkTabScrollButtons();
+    window.addEventListener('resize', this.checkTabScrollButtons.bind(this));
+
     MJGlobal.Instance.GetEventListener(true) // true gets us replay of past events so we can "catch up" as needed
       .subscribe(event => {
         this.handleEvent(event, event.args);
@@ -274,7 +351,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       // see if this matches a drawer item or not
       const di = this.drawerItems;
       //const item = di.find(i => (<any>i).path.toLowerCase().trim() === url.toLowerCase().trim());
-      const item = di.find(i => url.toLowerCase().trim().startsWith((<any>i).path.toLowerCase().trim()));
+      const item = di.find(i => url.toLowerCase().trim().startsWith((<any>i).path?.toLowerCase().trim()));
 
       if (item) {
         this.selectDrawerItem(this.drawerItems.indexOf(item));
@@ -329,10 +406,32 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   protected setActiveTabToHome() {
-    if (this.activeTabIndex !== 0) {
-      this.activeTabIndex = 0;
-      this.tabstrip.selectTab(0);
-      //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
+    this.selectTab(null);
+  }
+
+  public selectTab(tab: any) {
+    // get index from the tabs array
+    const index = tab ? this.tabs.indexOf(tab) + 1 : 0; // add one because the HOME tab is not in the array so we have to offset by 1 here for our data structure
+    if (this.activeTabIndex !== index) {
+      this.activeTabIndex = index;
+      this.sharedService.InvokeManualResize();
+  
+      if (index === 0) {
+        let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
+        if (this.selectedDrawerItem !== null && this.selectedDrawerItem !== undefined)
+          url = (<any>this.selectedDrawerItem).path;
+        this.router.navigate([url]);
+        this.setAppTitle();
+        this._mostRecentURL = url;
+      }
+      else {
+        const tab = this.tabs[index - 1];
+        if (tab) {
+          this.setAppTitle(tab.label);
+          const data = tab.data;
+          this.updateBrowserURL(tab, data);    
+        }
+      }  
     }
   }
   
@@ -408,6 +507,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
         if (newTab === this.tabs[this.activeTabIndex - 1]) // subtract one since the activeTabIndex is relative to the full set of tabs and the this.tabs array doesn't include the HOME tab
           this.setAppTitle(newTab.label)
+
+        this.checkTabScrollButtons();          
       },10)
     });
   }
@@ -463,7 +564,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     if (existingTab) {
       const index = this.tabs.indexOf(existingTab);
       this.activeTabIndex = index + 1; // add one because the HOME tab is not in the tabs array but it IS part of our tab structure
-      this.tabstrip.selectTab(this.activeTabIndex);
+      //this.tabstrip.selectTab(this.activeTabIndex);
 
       this.scrollIntoView();
       if (existingTab.label)
@@ -490,7 +591,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // select the new tab
       this.activeTabIndex = this.tabs.length; // this is intentionally past array boundary because ActiveTabIndex includes the Home tab that is not part of the tabs array
-      this.tabstrip.selectTab(this.activeTabIndex);
+      //this.tabstrip.selectTab(this.activeTabIndex);
       //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
 
       this.sharedService.InvokeManualResize();
@@ -589,11 +690,11 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   scrollIntoView() {
-    const containerElement = this.tabstrip.wrapper.nativeElement;
-    setTimeout(() => {
-      const newTabElement = containerElement.querySelector(`li:nth-child(${this.activeTabIndex + 1})`);
-      newTabElement.scrollIntoView({ inline: 'nearest' });
-    }, 200);
+    // const containerElement = this.tabstrip.wrapper.nativeElement;
+    // setTimeout(() => {
+    //   const newTabElement = containerElement.querySelector(`li:nth-child(${this.activeTabIndex + 1})`);
+    //   newTabElement.scrollIntoView({ inline: 'nearest' });
+    // }, 200);
   }
 
   async GetWorkspaceItemDisplayName(data: ResourceData): Promise<string> {
@@ -658,52 +759,40 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.cdr.detectChanges(); // Manually trigger change detection
   }
 
-  public async onClose(ev: TabCloseEvent): Promise<void> {
-    if (ev.tab.selected) {
-      setTimeout(async () => {
-        // find the closest tab to the one we just closed
-        await this.removeWorkspaceItem(this.tabs[ev.index - 1], null /*no transaction group*/);
+  public async closeTab(tab: any): Promise<void> {
+    const tabIndex = this.tabs.indexOf(tab);
+    if (tabIndex >= 0) {
+      await this.removeWorkspaceItem(this.tabs[tabIndex], null /*no transaction group*/);
 
-        if (ev.index < this.tabs.length + 1) {
-          // NOT the last tab, kendo by defulat will show the next tab, so let that be, but we need to update our routing info
-          // dont need to update active tab index or call selectTab() here because kendo does this and activetab index stays the same since we're closing the tab
-          const i = this.activeTabIndex > 0 ? this.activeTabIndex-1 : 0;
-          const tabs = this.tabs;
-          const tab = tabs[i];
-          if (tab) {
-            const data = tab.data;
-            this.updateBrowserURL(tab, data);  
-          }
+      // now, check to see how many tabs we have left and if we have none, then we need to select the HOME tab
+      if (this.tabs.length > 0) {
+        if (tabIndex > this.tabs.length) {
+          // we're closing the last tab, so select the tab to the left of it
+          this.activeTabIndex = 1 + (tabIndex - 1); // always add 1 to reflect the HOME tab that is not in the tabs array but it IS part of our tab structure
         }
         else {
-          if (ev.index > 1) {
-            // the to-be-selected tab is a RESOURCE so do what's appropraite there
-            this.activeTabIndex = ev.index - 1;
-            this.tabstrip.selectTab(ev.index - 1);
-            //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
-
-            const i = this.activeTabIndex > 0 ? this.activeTabIndex-1 : 0;
-            const tabs = this.tabs;
-            const tab = tabs[i];
-            if (tab) {
-              const data = tab.data;
-              this.updateBrowserURL(tab, data);    
-            }
-          }
-          else {
-            // the tab that will be selected is the HOME tab o we need to update
-            this.activeTabIndex = 0
-            this.tabstrip.selectTab(0);
-            //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
-  
-            // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
-            let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
-            this.router.navigate([url]);
-            //this.location.go(url); // update the browser URL if needed  
-            this._mostRecentURL = url;
-          }
+          // we're closing a tab that is not the last tab, so we need to select the tab to the right of it
+          this.activeTabIndex = 1 + (tabIndex + 1); // always add 1 to reflect the HOME tab that is not in the tabs array but it IS part of our tab structure
         }
-      }, 100);
+
+        const i = this.activeTabIndex > 0 ? this.activeTabIndex-1 : 0;
+        const tabs = this.tabs;
+        const tab = tabs[i];
+        if (tab) {
+          const data = tab.data;
+          this.updateBrowserURL(tab, data);    
+        }
+      }
+      else {
+        // the tab that will be selected is the HOME tab o we need to update
+        this.activeTabIndex = 0
+
+        // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
+        let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
+        this.router.navigate([url]);
+        //this.location.go(url); // update the browser URL if needed  
+        this._mostRecentURL = url;
+      }
     }
   }
 
@@ -734,31 +823,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  public onTabSelect(e: SelectEvent): void {
-    e.preventDefault();
-    if (this.activeTabIndex !== e.index) {
-      this.activeTabIndex = e.index
-      this.sharedService.InvokeManualResize();
-  
-      if (e.index === 0) {
-        let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
-        if (this.selectedDrawerItem !== null && this.selectedDrawerItem !== undefined)
-          url = (<any>this.selectedDrawerItem).path;
-        this.router.navigate([url]);
-        //this.location.go(url); // update the browser URL if needed
-        this.setAppTitle();
-        this._mostRecentURL = url;
-      }
-      else {
-        const tab = this.tabs[e.index - 1];
-        if (tab) {
-          this.setAppTitle(tab.label);
-          const data = tab.data;
-          this.updateBrowserURL(tab, data);    
-        }
-      }  
-    }
-  }
+
 
 
   public getActiveTabId() {
@@ -791,7 +856,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // make sure that the first tab is selected since this is showing stuff in the Home/Nav tab
     if (this.activeTabIndex !== 0) {
       this.activeTabIndex = 0;
-      this.tabstrip.selectTab(0);
+      //this.tabstrip.selectTab(0);
       //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
     }
 

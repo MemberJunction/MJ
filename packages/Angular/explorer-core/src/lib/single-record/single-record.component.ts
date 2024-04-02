@@ -7,7 +7,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 
 
 @Component({
-  selector: 'app-single-record',
+  selector: 'mj-single-record',
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
@@ -38,8 +38,6 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
     if (primaryKeyValues && entityName) {
       this.entityName = entityName
       this.primaryKeyValues = primaryKeyValues
-
-      console.log("loading form...");
 
       const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
       const md = new Metadata();

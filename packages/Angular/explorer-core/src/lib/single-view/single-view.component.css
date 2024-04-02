@@ -1,4 +1,6 @@
-
+.single-view-wrap {
+  padding: 10px;
+}
 ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper {
     background: var(--white-color) !important;
     padding-left: 0 !important;
