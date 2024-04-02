@@ -230,3 +230,21 @@
     text-align: left;
     color: var(--black);
 }
+
+.margin-left-small {
+    margin-left: 10px;
+}
+
+.card-wrapper {
+    min-width: 230px;
+    height: 150px;
+    min-height: 125px;
+}
+
+.padding-top-small {
+    padding-top: 10px;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}

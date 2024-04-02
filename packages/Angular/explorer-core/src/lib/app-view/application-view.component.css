@@ -22,3 +22,8 @@
       background: var(--white-color);
  
  }
+
+ .margin-top-neg-20 {
+     margin-top: -20px;
+     padding: 0px !important
+ }

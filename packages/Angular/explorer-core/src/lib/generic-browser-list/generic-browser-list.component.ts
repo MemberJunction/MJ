@@ -15,7 +15,7 @@ import { CellClickEvent } from '@progress/kendo-angular-grid';
 export class GenericBrowserListComponent implements OnInit{
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
-  @Input() public title: string = '';
+  @Input() public title: string | undefined = '';
   @Input() public items: any[] = [];
   @Input() public iconName: string = 'view';
   @Input() public disableAddButton: boolean = false;
@@ -74,7 +74,6 @@ export class GenericBrowserListComponent implements OnInit{
 
   data = [
     { text: "Folder" },
-    { text: "Report with Skip" }
   ];
 
   constructor(public sharedService: SharedService, private router: Router) {
@@ -86,7 +85,7 @@ export class GenericBrowserListComponent implements OnInit{
   }
 
   public ngOnInit(): void {
-    //this.data.push({ text: `${this.resourceName} from Existing` });
+    this.data.push({ text: this.resourceName });
   }
   
 
@@ -377,23 +376,17 @@ export class GenericBrowserListComponent implements OnInit{
       return;
     }
 
-    console.log("????");
-    console.log(item);
-    console.log("setting favorite status for item: ", item.Name);
     item.Favorite = !item.Favorite;
     const md: Metadata = new Metadata();
     let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
     let pkv: PrimaryKeyValue[] = [{FieldName: "ID", Value: item.Data.ID}];
     await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, pkv, item.Favorite);
-    console.log("favorite status set for item: ", item.Favorite);
   }
 
   public editItem(item: Item): void {
     if(!item){
       return;
     }
-
-    console.log("on edit item clicked: ", item.Name);
 
     if(item.Type === ItemType.Folder){
       let event: BeforeUpdateFolderEvent = new BeforeUpdateFolderEvent(item);
@@ -422,7 +415,7 @@ export class GenericBrowserListComponent implements OnInit{
     else if(data.text === "Report with Skip"){
       //todo - implement
     }
-    else if(data.text === `${this.resourceName} from Existing`){
+    else if(data.text === this.resourceName){
       this.toggleCopyFromView();
     }
   }
