@@ -19,12 +19,12 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
     @ViewChild('entityRow') entityRowRef: Element | undefined;
     @ViewChild(UserViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
-    private appNameFromURL: string = '';
+    public appNameFromURL: string = '';
     public appName: string = ''
     public appDescription: string = ''
     public appEntities: ApplicationEntityInfo[] = [];
     public AppEntityButtons: ApplicationEntityButton[] = []
-    private selectedAppEntity: ApplicationEntityInfo | null = null;
+    public selectedAppEntity: ApplicationEntityInfo | null = null;
     public categoryEntityID: number | null = null;
 
     constructor (private router: Router, private route: ActivatedRoute, private location: Location, private sharedService: SharedService){
@@ -44,10 +44,9 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             }
             
             if (appName) {
-
                 this.appName = this.appNameFromURL = appName;
-                const md = new Metadata()
-                const app = md.Applications.find(a => a.Name == appName)
+                const md = new Metadata();
+                const app = md.Applications.find(a => a.Name == appName);
                 
                 if (app) {
                     this.appDescription = app.Description
