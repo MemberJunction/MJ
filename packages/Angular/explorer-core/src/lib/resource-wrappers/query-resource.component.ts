@@ -9,8 +9,8 @@ export function LoadQueryResource() {
 
 @RegisterClass(BaseResourceComponent, 'Queries')
 @Component({
-    selector: 'query-resource',
-    template: `<app-single-query [queryId]="Data.ResourceRecordID" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></app-single-query>`
+    selector: 'mj-query-resource',
+    template: `<mj-single-query [queryId]="Data.ResourceRecordID" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-query>`
 })
 export class QueryResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {

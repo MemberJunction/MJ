@@ -6,8 +6,8 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 
 @Component({
-  selector: 'app-resource',
-  template: `<ng-template mjContainer mjFillContainer></ng-template>`,
+  selector: 'mj-resource',
+  template: `<div [style.display]="!isVisible ? 'none' : 'block'"><ng-template mjContainer mjFillContainer></ng-template></div>`,
 })
 export class ResourceContainerComponent implements OnChanges {
   @Input() public Data!: ResourceData;

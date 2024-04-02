@@ -19,7 +19,7 @@
       </div>
       <ng-template #dashboard_name_header>
         <span class="k-icon k-i-star"></span>
-        <h3 (click)="toggleInlineNameEdit(true)">{{dashboardEntity.Name}}</h3>
+        <h3 (click)="toggleInlineNameEdit(true)">{{dashboardEntity ? dashboardEntity.Name : ''}}</h3>
       </ng-template>
     </div>
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
@@ -68,7 +68,7 @@
           </div>
         </kendo-tilelayout-item-header>
         <kendo-tilelayout-item-body [ngClass]="[getIsEditingItemBodyStyle()]">
-          <app-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></app-resource>
+          <mj-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></mj-resource>
         </kendo-tilelayout-item-body>
       </kendo-tilelayout-item>
     </kendo-tilelayout>

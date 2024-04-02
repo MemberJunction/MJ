@@ -9,7 +9,7 @@ import { UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
-  selector: 'app-single-view',
+  selector: 'mj-single-view',
   templateUrl: './single-view.component.html',
   styleUrls: ['./single-view.component.css']
 })
@@ -42,7 +42,6 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   }
 
   private async initialLoad() {
-    console.log("loading view...single-view");
     const md = new Metadata()
     if (this.viewId || this.viewName) {
       let view: UserViewEntity | null = null;

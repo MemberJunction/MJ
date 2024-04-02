@@ -7,7 +7,7 @@ import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { QueryEntity } from '@memberjunction/core-entities';
 
 @Component({
-  selector: 'app-query-browser',
+  selector: 'mj-query-browser',
   templateUrl: './query-browser.component.html',
   styleUrls: ['./query-browser.component.css', '../../shared/first-tab-styles.css']
 })

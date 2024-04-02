@@ -9,7 +9,7 @@ import { Subject, debounceTime } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 
 @Component({
-  selector: 'app-single-dashboard',
+  selector: 'mj-single-dashboard',
   templateUrl: './single-dashboard.component.html',
   styleUrls: ['./single-dashboard.component.css']
 })

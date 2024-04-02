@@ -7,7 +7,7 @@ import { Item } from '../../generic/Item.types';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 
 @Component({
-  selector: 'app-report-browser',
+  selector: 'mj-report-browser',
   templateUrl: './report-browser.component.html',
   styleUrls: ['./report-browser.component.css', '../../shared/first-tab-styles.css']
 })

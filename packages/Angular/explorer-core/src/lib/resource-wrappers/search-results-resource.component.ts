@@ -8,8 +8,8 @@ export function LoadSearchResultsResource() {
 
 @RegisterClass(BaseResourceComponent, 'Search Results')
 @Component({
-    selector: 'search-results-resource',
-    template: `<app-single-search-result [entity]="Data.Configuration.Entity" [searchInput]="Data.Configuration.SearchInput" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></app-single-search-result>`
+    selector: 'mj-search-results-resource',
+    template: `<mj-single-search-result [entity]="Data.Configuration.Entity" [searchInput]="Data.Configuration.SearchInput" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-search-result>`
 })
 export class SearchResultsResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {

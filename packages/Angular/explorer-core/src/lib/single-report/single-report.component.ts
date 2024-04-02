@@ -4,7 +4,7 @@ import { ReportEntity } from '@memberjunction/core-entities';
 import { DynamicReportComponent } from '@memberjunction/ng-ask-skip';
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types'; 
 @Component({
-  selector: 'app-single-report',
+  selector: 'mj-single-report',
   templateUrl: './single-report.component.html',
   styleUrls: ['./single-report.component.css']
 })

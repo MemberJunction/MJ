@@ -9,8 +9,8 @@ export function LoadReportResource() {
 
 @RegisterClass(BaseResourceComponent, 'Reports')
 @Component({
-    selector: 'report-resource',
-    template: `<app-single-report [reportId]="Data.ResourceRecordID" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></app-single-report>`
+    selector: 'mj-report-resource',
+    template: `<mj-single-report [reportId]="Data.ResourceRecordID" (loadComplete)="NotifyLoadComplete()" (loadStarted)="NotifyLoadStarted()"></mj-single-report>`
 })
 export class ReportResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {

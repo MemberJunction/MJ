@@ -14,6 +14,54 @@
       <expansion-panel-component [items]="panelItems" />
     </div>
     <kendo-drawer-content mjFillContainer>
+      <!--
+          TEST TAB SECTION
+      -->
+
+      <!--TAB HEADER-->
+      <div class="tab-header-outer">
+        <button kendoButton *ngIf="showLeftButton" class="tab-scroll-button-left" (click)="scrollLeft()">⇦</button>
+        <div class="tab-header-inner" #tabInnerContainer>
+          <div class="single-tab"
+              [ngClass]="activeTabIndex === 0 ? 'single-tab-selected' : ''"
+              (click)="setActiveTabToHome()">
+              <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, 0)">Home</span>
+          </div>
+          <div *ngFor="let tab of tabs; let i = index" class="single-tab"
+                [ngClass]="activeTabIndex - 1 === i ? 'single-tab-selected' : ''"
+                (click)="selectTab(tab)">
+              <kendo-svgicon *ngIf="tab?.contentLoading" [icon]="sharedService.kendoSVGIcon('clock')" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
+              <kendo-svgicon *ngIf="!tab?.contentLoading && tab?.icon" [icon]="sharedService.kendoSVGIcon(tab.icon)" (contextmenu)="onTabContextMenu($event, i)"></kendo-svgicon>
+              <span class="nav-tab-title" (contextmenu)="onTabContextMenu($event, i)">{{ tab.labelLoading ? 'Loading...' : tab.label }}</span>
+              <span class="tab-close-button" (click)="closeTab(tab)" >✖</span>
+          </div>
+        </div>  
+        <button kendoButton *ngIf="showRightButton" class="tab-scroll-button-right" (click)="scrollRight()">⇨</button>
+      </div>
+      <!--TAB BODY-->
+      <div class="tab-body" mjFillContainer>
+        <div class="single-tab-body" 
+            [hidden]="activeTabIndex !== 0" 
+            mjFillContainer >
+          <router-outlet></router-outlet>
+        </div>
+        <div *ngFor="let tab of tabs; let i = index" class="single-tab-body" 
+            [hidden]="activeTabIndex -1 !== i"
+            mjFillContainer >
+          <mj-resource [Data]="tab.data"
+                        [isVisible]="activeTabIndex -1 === i" 
+                        (ResourceRecordSaved)="SaveSingleWorkspaceItem(tab)"
+                        (ContentLoadingStarted)="setTabContentLoadingStatus(tab, true)"
+                        (ContentLoadingComplete)="setTabContentLoadingStatus(tab, false)"
+                        >
+          </mj-resource>
+        </div>
+      </div>
+
+      <!--
+          END OF TEST TAB SECTION
+      -->
+<!-- 
       <kendo-tabstrip mjFillContainer class="drawer-container" [scrollable]="true" [keepTabContent]="true" (tabClose)="onClose($event)" (tabSelect)="onTabSelect($event)" [animate]="false" #tabstrip>
         <kendo-tabstrip-tab [selected]="activeTabIndex === 0" [closable]="false">
           <ng-template kendoTabTitle>
@@ -38,7 +86,7 @@
                           ></app-resource>
           </ng-template>
         </kendo-tabstrip-tab>
-      </kendo-tabstrip>
+      </kendo-tabstrip> -->
     </kendo-drawer-content>
   </kendo-drawer-container>
 

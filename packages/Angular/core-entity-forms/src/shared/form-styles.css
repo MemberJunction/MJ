@@ -6,10 +6,13 @@ a {
 .record-form {
   display: flex;
   flex-direction: column;
+  background-color: #F5F6FA;
+  padding: 10px;
 }
 
 .record-form-group {
   margin-top: 0px;
+  background-color: #F5F6FA;
 }
 
 button {
@@ -58,12 +61,6 @@ button {
  
 
 @media (min-width: 768px) {
-  .record-form {
-      padding-left: 5px;
-      padding-right: 5px;
-      padding-bottom: 5px;
-  }
-
   .record-form-row {
     flex-direction: row;
     align-items: center;

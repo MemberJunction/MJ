@@ -3,7 +3,7 @@ import { RunViewParams } from '@memberjunction/core';
 import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
 
 @Component({
-  selector: 'app-single-search-result',
+  selector: 'mj-single-search-result',
   templateUrl: './single-search-result.component.html',
   styleUrls: ['./single-search-result.component.css']
 })
