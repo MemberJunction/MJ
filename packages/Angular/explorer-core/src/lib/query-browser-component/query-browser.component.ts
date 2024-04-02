@@ -5,6 +5,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import { BeforeUpdateItemEvent } from '../../generic/Events.types';
 import { QueryEntity } from '@memberjunction/core-entities';
+import { LogStatus, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-query-browser',
@@ -27,7 +28,24 @@ export class QueryBrowserComponent extends BaseBrowserComponent {
   }
 
   async ngOnInit(): Promise<void> {
-    super.InitForResource(this.route);
+    //doing this "manually" rather than calling super.InitForResource 
+    //because BaseBrowserComponent's resource filter includes a filter for UserID
+    //which doesnt exist on queries
+    this.route.paramMap.subscribe(async (params) => {
+      this.selectedFolderID = Number(params.get('folderID')) || null;
+      const md: Metadata = new Metadata();
+        let categoryFilter: string = this.selectedFolderID ? `CategoryID = ${this.selectedFolderID}` : `CategoryID IS NULL`;
+        let resourceFilter: string = `${categoryFilter}`;
+    
+        let resourceCategoryFilter: string = this.selectedFolderID ? `ParentID = ${this.selectedFolderID}` : `ParentID IS NULL`;
+        LogStatus("resourceFilter: " + resourceFilter + " category filter: " + resourceCategoryFilter);
+        await this.LoadData({
+            sortItemsAfterLoad: true, 
+            categoryItemFilter: resourceCategoryFilter, 
+            entityItemFilter: resourceFilter, 
+            showLoader: true
+        });
+    });
   }
 
   //this could exist in the BaseBrowserComponent class, but 

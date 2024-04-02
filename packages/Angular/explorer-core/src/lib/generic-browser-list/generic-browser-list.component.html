@@ -63,7 +63,7 @@
         </kendo-grid>
         <div *ngIf="!displayAsGrid" class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap">
           <div *ngFor="let d of items">
-            <kendo-card class="card-wrapper">
+            <kendo-card class="card-wrapper cursor-pointer">
               <div class="list-item-icon">
                 <button (click)="editItem(d)" class="list-btn">
                   <span class="fa-regular fa-pen-to-square"></span>

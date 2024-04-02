@@ -99,12 +99,16 @@ export class BaseBrowserComponent {
             ExtraFilter: extraFilter
         });
 
-        if (result && result.Success){
-            return result.Results;
+        if(result){
+            if(result.Success){
+                return result.Results;
+            }
+            else{
+                throw new Error(result.ErrorMessage);
+            }
         }
-        else{
-            return[];
-        }
+        
+        return [];
     }
 
     protected createItemsFromEntityData(entityData: any[]): Item[] {
