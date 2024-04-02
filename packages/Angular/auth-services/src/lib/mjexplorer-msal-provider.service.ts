@@ -97,6 +97,7 @@ export class MJMSALProvider extends MJAuthBase {
           if (error instanceof InteractionRequiredAuthError) {
             return from(this.auth.instance.acquireTokenSilent(silentRequest));
           }
+          this.authenticated = false;
           return throwError(error);
         }));
     } else {

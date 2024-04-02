@@ -84,3 +84,10 @@
     flex: 2;
     color: #fff;
   }
+
+  .title {
+    font-size: x-large;  
+  }
+  .app-logo {
+    width: 297px;
+  }
