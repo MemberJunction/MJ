@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/3/2024, 4:18:53 PM
+* GENERATED: 4/3/2024, 5:30:40 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -3709,6 +3709,18 @@ export class User_ {
     @Field(() => [mj_core_schema_server_object_types.DataContext_])
     DataContextsArray: mj_core_schema_server_object_types.DataContext_[]; // Link to DataContexts
 
+    @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
+    ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
+
+    @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
+    UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
+
+    @Field(() => [mj_core_schema_server_object_types.DashboardCategory_])
+    DashboardCategoriesArray: mj_core_schema_server_object_types.DashboardCategory_[]; // Link to DashboardCategories
+
+    @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
+    QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
+
 }
         
 //****************************************************************************
@@ -3994,6 +4006,38 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDataContexts] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Data Contexts', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
+    async ReportCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Report Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwReportCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Report Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
+    async UserViewCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('User View Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserViewCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('User View Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
+    async DashboardCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboard Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Dashboard Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
+    async QueryCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Query Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
     
@@ -14597,9 +14641,16 @@ export class QueryCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
+    @Field(() => Int) 
+    UserID: number;
+      
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
+      
+    @Field() 
+    @MaxLength(200)
+    User: string;
     
     @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
     QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
@@ -14622,6 +14673,9 @@ export class CreateQueryCategoryInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
         
@@ -14641,6 +14695,9 @@ export class UpdateQueryCategoryInput {
 
     @Field({ nullable: true })
     Description: string;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
 //****************************************************************************
@@ -16913,9 +16970,16 @@ export class UserViewCategory_ {
     @Field(() => Int) 
     EntityID: number;
       
+    @Field(() => Int) 
+    UserID: number;
+      
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
+      
+    @Field() 
+    @MaxLength(200)
+    User: string;
     
     @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
     UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
@@ -16941,6 +17005,9 @@ export class CreateUserViewCategoryInput {
 
     @Field(() => Int)
     EntityID: number;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
         
@@ -16963,6 +17030,9 @@ export class UpdateUserViewCategoryInput {
 
     @Field(() => Int)
     EntityID: number;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
 //****************************************************************************
@@ -17148,9 +17218,16 @@ export class DashboardCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
+    @Field(() => Int) 
+    UserID: number;
+      
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
+      
+    @Field() 
+    @MaxLength(200)
+    User: string;
     
     @Field(() => [mj_core_schema_server_object_types.Dashboard_])
     DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
@@ -17173,6 +17250,9 @@ export class CreateDashboardCategoryInput {
 
     @Field(() => Int, { nullable: true })
     ParentID: number;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
         
@@ -17192,6 +17272,9 @@ export class UpdateDashboardCategoryInput {
 
     @Field(() => Int, { nullable: true })
     ParentID: number;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
 //****************************************************************************
@@ -17377,9 +17460,16 @@ export class ReportCategory_ {
     @MaxLength(8)
     UpdatedAt: Date;
       
+    @Field(() => Int) 
+    UserID: number;
+      
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
+      
+    @Field() 
+    @MaxLength(200)
+    User: string;
     
     @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
     ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
@@ -17402,6 +17492,9 @@ export class CreateReportCategoryInput {
 
     @Field(() => Int, { nullable: true })
     ParentID: number;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
         
@@ -17421,6 +17514,9 @@ export class UpdateReportCategoryInput {
 
     @Field(() => Int, { nullable: true })
     ParentID: number;
+
+    @Field(() => Int)
+    UserID: number;
 }
 
 //****************************************************************************

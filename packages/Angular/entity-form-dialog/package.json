@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-form-dialog",
-  "version": "0.9.18",
+  "version": "0.9.19",
   "description": "MemberJunction: Dialog component that is able to display any entity form in a modal dialog",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -30,7 +30,7 @@
     "@memberjunction/core": "^0.9.185",
     "@memberjunction/ng-container-directives": "^0.9.148",
     "@memberjunction/ng-shared": "^0.9.49",
-    "@memberjunction/ng-base-forms": "^0.9.18",
+    "@memberjunction/ng-base-forms": "^0.9.19",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-dialog": "~15.1.0",
     "tslib": "^2.3.0"
