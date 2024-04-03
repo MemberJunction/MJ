@@ -105,12 +105,14 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   ngAfterViewInit() {
     this._viewInitialized = true;
     this.syncTabIndexes();
+    this.checkTabScrollButtons();
   }
   ngAfterContentInit() {
     this.syncTabIndexes();
   }
   ngAfterContentChecked(): void {
     this.syncTabIndexes();
+    this.checkTabScrollButtons();
   }
 
   protected syncTabIndexes() {
