@@ -15,7 +15,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
   ],
   imports: [
     CommonModule,
-    ContainerDirectivesModule
+    ContainerDirectivesModule,
   ],
   exports: [
     MJTabStripComponent,

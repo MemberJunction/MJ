@@ -12,6 +12,7 @@ import { Title } from '@angular/platform-browser';
 import { StubData } from '../../generic/app-nav-view.types';
 import { Item, ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
+import { letterSpaceIcon } from '@progress/kendo-svg-icons';
 
 export interface Tab {
   id?: number;
@@ -609,7 +610,15 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Your cached query params, assuming it's an object like { key1: 'value1', key2: 'value2' }
     const tabIndex = this.tabs.indexOf(tab) + 1; // we add 1 Because the HOME tab is not in the array so we have to offset by 1 here for our data structure
-    const cachedQueryParams = this.tabQueryParams['tab_' + tabIndex]; // Replace with your actual method to get cached params
+    let cachedQueryParams = this.tabQueryParams['tab_' + tabIndex]; // Replace with your actual method to get cached params
+    if (!cachedQueryParams) {
+      // there is a case when we are first loading and cached query params might have been stuffed into a 'tab_-1' key because at the time activeTabIndex wasn't yet known. So we need to check for that
+      cachedQueryParams = this.tabQueryParams['tab_-1'];
+      if (cachedQueryParams) {
+        delete this.tabQueryParams['tab_-1']; // remove it from the -1 key
+        this.tabQueryParams['tab_' + tabIndex] = cachedQueryParams; // stuff it into the correct key
+      }
+    }
     if (cachedQueryParams) {
       // Merge cached query params if they don't already exist in the URL
       const keys = Object.keys(cachedQueryParams);

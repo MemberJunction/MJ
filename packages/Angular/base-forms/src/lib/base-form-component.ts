@@ -8,6 +8,7 @@ import { BaseRecordComponent } from './base-record-component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TabStripComponent } from '@progress/kendo-angular-layout';
+import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
 
 @Directive() // this isn't really a directive, BUT we are doing this to avoid Angular compile errors that require a decorator in order to implement the lifecycle interfaces
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
@@ -16,6 +17,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public EditMode: boolean = false;
   public BottomMargin: number = 10;
   public TabHeight: string = '500px';
+  /**
+   * This property is automatically updated by the BaseFormComponent to reflect the height of the "Top Area" of the form. The Top Area is defined in a template by having
+   * a #topArea element anywhere in the form. This property will automatically be updated AfterViewInit to reflect the height of the top area. This is useful for various things
+   * like setting a pane in a splitter to a specific height based on the top area height.
+   */
+  public TopAreaHeight: string = '300px';
   public GridBottomMargin: number = 100;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
@@ -28,7 +35,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     super();
     this.setupSplitterLayoutDebounce();
   }
-  @ViewChild(TabStripComponent, { static: false }) tabComponent!: TabStripComponent;
+  @ViewChild(MJTabStripComponent, { static: false }) tabComponent!: MJTabStripComponent;
 
   async ngOnInit() {
     if (this.record) {
@@ -39,6 +46,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
   }
 
+  @ViewChild('topArea') topArea!: ElementRef;
   ngAfterViewInit(): void {
     this.setTabHeight();
 
@@ -52,7 +60,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           if (tabIndex >=0) {
             // found the tab index, if we don't find it, do nothing
             this.activeTabIndex = tabIndex;
-            this.tabComponent.selectTab(tabIndex);
+            this.tabComponent.SelectedTabIndex = tabIndex;
           }
         }
       }
@@ -61,6 +69,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.sharedService.InvokeManualResize();
       }, 250);  
     });
+
+    this.CalcTopAreaHeight();
+
+    // finally, set a timer to set the SelectedTabIndex = SelectedTabIndex to force the tab to refresh
+    setTimeout(() => {
+      if (this.tabComponent)
+        this.tabComponent.SelectedTabIndex = this.activeTabIndex;
+    }, 100);
+  }
+
+  /**
+   * This method can be called at anytime to re-calculate the height of the top area and set the TopAreaHeight property. This is useful if the top area height changes dynamically
+   */
+  public CalcTopAreaHeight(): void {
+    // calculate the top area height and set it to our TopAreaHeight property, sub-classes can then do whatever they want with that property
+    if (this.topArea && this.topArea.nativeElement) {
+      const height = this.topArea.nativeElement.offsetHeight;
+      this.TopAreaHeight = `${height}px`;
+    }
   }
 
   private resizeSub: Subscription | null = null;
@@ -76,8 +103,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this._pendingRecords;
   }   
  
-  public onTabSelect(e: any) {
-    this.activeTabIndex = e.index;
+  public onTabSelect(tabIndex: any) {
+    this.activeTabIndex = tabIndex;
     this.sharedService.InvokeManualResize();
 
     // now that we've updated our state and re-sized, also update the browser URL to add the tab name as a query parameter to the URL

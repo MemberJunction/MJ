@@ -1,6 +1,7 @@
 import { Component, Input, EventEmitter, Output, ContentChildren, QueryList, ViewChild, HostListener, ElementRef, AfterContentInit, AfterContentChecked, AfterViewInit } from '@angular/core';
 import { MJTabComponent } from '../tab/tab.component';
 import { MJTabBodyComponent } from '../tab-body/tab-body.component';
+import { SharedService } from '@memberjunction/ng-shared';
 
  
 export class TabEvent {
@@ -70,6 +71,9 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
     // now, we have to tell each of our tabs they have been selected or not, and also to tell the bodies if they are visible or not
     this.tabs?.forEach((tab, i) => tab.TabSelected = i === index);
     this.tabBodies?.forEach((body, i) => body.TabVisible = i === index);
+
+    // also ask for a resize now
+    SharedService.Instance.InvokeManualResize();
   }
 
   /**

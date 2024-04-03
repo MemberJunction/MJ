@@ -1,21 +1,23 @@
-import { Component, Input, OnDestroy, ViewChild, ViewContainerRef, AfterViewInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnDestroy, ViewChild, ViewContainerRef, AfterViewInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseFormSectionComponent } from './base-form-section-component';
 import { BaseEntity } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-form-section',
-  template: `<ng-template #container></ng-template>`
+  template: `<div class="form-section"><ng-template #container></ng-template></div>`
 })
 export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChanges {
     @Input() Entity!: string;
     @Input() Section!: string;
     @Input() record!: BaseEntity;
     @Input() EditMode: boolean = false;
+    @Output() LoadComplete: EventEmitter<void> = new EventEmitter<void>();
 
     @ViewChild('container', { read: ViewContainerRef }) container!: ViewContainerRef;
   
     private _sectionObj: BaseFormSectionComponent | null = null;
+    constructor(private cdr: ChangeDetectorRef) { }
 
     ngOnChanges(changes: SimpleChanges): void {
         // react to EditMode change
@@ -39,7 +41,9 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
         this._sectionObj = <BaseFormSectionComponent>componentRef.instance;
         this._sectionObj.record = this.record;
         this._sectionObj.EditMode = this.EditMode;
+        this.cdr.detectChanges(); // Manually trigger change detection so that the call below to LoadComplete.emit() will occur after DOM is updated
       }
+      this.LoadComplete.emit();
     }
   
     ngOnDestroy() {

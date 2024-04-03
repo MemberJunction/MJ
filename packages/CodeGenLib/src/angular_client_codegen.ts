@@ -96,13 +96,19 @@ function generateAngularModule(componentImports: string[], componentNames: strin
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+
+// MemberJunction Imports
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
+import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
+
+// Kendo Imports
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { BaseFormsModule } from '@memberjunction/ng-base-forms';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
-import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
@@ -186,6 +192,8 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
     DropDownListModule,
     ComboBoxModule
 ],
@@ -276,12 +284,12 @@ function generateAngularAdditionalSections(entity: EntityInfo, startIndex: numbe
                 sectionName = 'details';
 
             section.TabCode = `
-                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('${section.Name}')">
-                        <ng-template kendoTabTitle>${section.Name}</ng-template>
-                        <ng-template kendoTabContent >
-                            <mj-form-section Entity="${entity.Name}" Section="${stripWhiteSpace(section.Name.toLowerCase())}" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
-                        </ng-template>
-                    </kendo-tabstrip-tab>`
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${section.Name}')">
+                        ${section.Name}
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section Entity="${entity.Name}" Section="${stripWhiteSpace(section.Name.toLowerCase())}" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                    </mj-tab-body>`
         }
 
         const { readModeHTML, editModeHTML } = generateSectionHTMLForAngular(entity, section);
@@ -413,16 +421,17 @@ function generateRelatedEntityTabs(entity: EntityInfo, startIndex: number): stri
     let index = startIndex;
     for (const relatedEntity of entity.RelatedEntities) {
         const tabName: string = relatedEntity.DisplayName ? relatedEntity.DisplayName : relatedEntity.RelatedEntity
-        tabs.push(`          
-                    <kendo-tabstrip-tab  [selected]="this.RegisterAndCheckIfCurrentTab('${tabName}')">
-                        <ng-template kendoTabTitle>${tabName}</ng-template>
-                        <ng-template kendoTabContent >
-                            <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
-                                               [AllowLoad]="this.IsCurrentTab('${tabName}')"  
-                                               [EditMode]="this.GridEditMode()"  
-                                               [BottomMargin]="GridBottomMargin"></mj-user-view-grid>
-                        </ng-template>
-                    </kendo-tabstrip-tab>`)
+        tabs.push(` 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${tabName}')">
+                        ${tabName}
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
+                            [AllowLoad]="this.IsCurrentTab('${tabName}')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>`)
 
         index++;
     }
@@ -447,10 +456,11 @@ function generateSingleEntityHTMLForAngular(entity: EntityInfo): {htmlCode: stri
 
 
 function generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
-    const htmlCode: string =  `<div class="record-form-container">
-    <form *ngIf="record" class="record-form"  #form="ngForm">
-        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()">
-            <kendo-splitter-pane>
+    const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
 ${innerTopAreaHTML(topArea)}
             </kendo-splitter-pane>
             <kendo-splitter-pane>
@@ -465,22 +475,21 @@ ${innerTabStripHTML(additionalSections, relatedEntitySections)}
 
 function innerTopAreaHTML(topArea: string): string {
 return `                <div #topArea class="record-form-group">
-                    <mj-form-toolbar [form]="this"></mj-form-toolbar>
                     ${topArea}
                 </div>`
 }
 function innerTabStripHTML(additionalSections, relatedEntitySections): string {
-    return `                <kendo-tabstrip #tabStrip (tabSelect)="onTabSelect($event)" [keepTabContent]="true" [animate] = "false" [height]="TabHeight" >
-                                ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
-                                ${relatedEntitySections ? relatedEntitySections.join('\n') : ''}
-                            </kendo-tabstrip>`
+return `                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
+                    ${relatedEntitySections ? relatedEntitySections.join('\n') : ''}
+                </mj-tabstrip>`
 }
 
 function generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
-    const htmlCode: string =  `<div class="record-form-container">
-    <form *ngIf="record" class="record-form"  #form="ngForm">
-        ${innerTopAreaHTML(topArea)}
-        ${innerTabStripHTML(additionalSections, relatedEntitySections)}
+    const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+${innerTopAreaHTML(topArea)}
+${innerTabStripHTML(additionalSections, relatedEntitySections)}
     </form>
   </div>
     `

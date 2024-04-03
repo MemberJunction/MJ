@@ -1,10 +1,15 @@
+.k-pane {
+  background-color: #F5F6FA;
+} 
+
+
 a {
   font-size: 14px;
   font-weight: bolder;
 }
 
 .record-form {
-  display: flex;
+  display: block;
   flex-direction: column;
   background-color: #F5F6FA;
   padding: 10px;

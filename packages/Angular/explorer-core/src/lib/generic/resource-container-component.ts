@@ -7,7 +7,7 @@ import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-resource',
-  template: `<div [style.display]="!isVisible ? 'none' : 'block'"><ng-template mjContainer mjFillContainer></ng-template></div>`,
+  template: `<div [style.display]="!isVisible ? 'none' : 'block'" mjFillContainer><ng-template mjContainer mjFillContainer></ng-template></div>`,
 })
 export class ResourceContainerComponent implements OnChanges {
   @Input() public Data!: ResourceData;

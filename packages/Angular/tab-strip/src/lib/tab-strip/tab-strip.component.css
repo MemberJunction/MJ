@@ -1,3 +1,7 @@
+.tabstrip-container {
+  overflow: hidden;
+}
+
 .tab-header-outer {
   position: relative;
   display: flex;
@@ -34,12 +38,4 @@
   right: 0;
 }
 
-  
-
-.tab-body {
-  border-top: 0;
-  background-color: #F5F6FA;    
-  width: 100%;
-  height: 200px;
-  display: block;
-} 
+ 
