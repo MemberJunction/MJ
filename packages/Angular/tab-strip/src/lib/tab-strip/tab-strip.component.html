@@ -1,0 +1,15 @@
+<!-- mj-tabstrip.component.html -->
+<div class="tabstrip-container" mjFillContainer>
+    <!-- Tab Headers -->
+    <div class="tab-header-outer">
+      <button kendoButton *ngIf="showLeftButton" class="tab-scroll-button-left" (click)="scrollLeft()">⇦</button>
+      <div class="tab-header-inner" #tabInnerContainer>
+        <ng-content select="mj-tab"></ng-content> <!-- Where <mj-tab> components are projected -->
+      </div>
+      <button kendoButton *ngIf="showRightButton" class="tab-scroll-button-right" (click)="scrollRight()">⇨</button>
+    </div>
+    <!-- Tab Content -->
+    <div class="tab-body" mjFillContainer>
+      <ng-content select="mj-tab-body"></ng-content> <!-- Where <mj-tab-body> components are projected -->
+    </div>
+</div>

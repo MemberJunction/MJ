@@ -80,6 +80,9 @@
             "Name": "Angular/shared"
         },
         {
+            "Name": "Angular/tab-strip"
+        },
+        {
             "Name": "Angular/auth-services"
         },
         {

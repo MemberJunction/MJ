@@ -29,6 +29,7 @@ import { QueryGridModule } from '@memberjunction/ng-query-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
@@ -154,7 +155,8 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     EntityPermissionsModule,
     ExplorerSettingsModule,
     FileStorageModule,
-    UserViewPropertiesDialogModule
+    UserViewPropertiesDialogModule,
+    MJTabStripModule
   ],
   exports: [
     FormToolbarComponent,
