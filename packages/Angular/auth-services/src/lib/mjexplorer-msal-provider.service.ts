@@ -28,8 +28,8 @@ export class MJMSALProvider extends MJAuthBase {
       .subscribe(() => {
         this.setAuthenticated(this.auth.instance.getAllAccounts().length > 0);
         this.auth.instance.setActiveAccount(this.auth.instance.getAllAccounts()[0] || null);
+        this._initializationCompleted$.next(true); // Signal initialization complete
       });
-    this._initializationCompleted$.next(true); // Signal initialization complete
   }
 
   // Ensure methods wait for initialization
