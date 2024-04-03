@@ -19,17 +19,16 @@
                      [ngClass]="SelectedConversation?.ID === dataItem.ID ? 'conversation-item-selected' : ''"
                      [title]="dataItem.Name" 
                      (click)="SelectConversation(dataItem)"> 
-                    <!-- <kendo-svgicon *ngIf="!IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('comment')" name="comment" svgIcon="conversation-icon"></kendo-svgicon> -->
-                    <kendo-svgicon *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" [icon]="sharedService.kendoSVGIcon('clock')" name="clock" class="conversation-icon"></kendo-svgicon>
+                    <span *ngIf="SelectedConversation && IsSkipProcessing(dataItem)" class="fa-regular fa-clock"></span>
                     <div class="text-container">
                         <span *ngIf="dataItem.ID !== SelectedConversation?.ID || !ConversationEditMode">{{ dataItem.Name }}</span>
                         <textarea *ngIf="dataItem.ID === SelectedConversation?.ID && ConversationEditMode" [(ngModel)]="dataItem.Name" maxlength="100"></textarea>
                     </div>
                     <div *ngIf="SelectedConversation?.ID === dataItem.ID" class="edit-conversation-panel">
-                        <kendo-svgicon *ngIf="!ConversationEditMode" [icon]="sharedService.kendoSVGIcon('pencil')" name="edit" class="edit-icon" (click)="editConvo(dataItem)"></kendo-svgicon>
-                        <kendo-svgicon *ngIf="!ConversationEditMode" [icon]="sharedService.kendoSVGIcon('trash')" name="delete" class="delete-icon" (click)="deleteConvo(dataItem)"></kendo-svgicon>    
-                        <kendo-svgicon *ngIf="ConversationEditMode" [icon]="sharedService.kendoSVGIcon('check')" name="check" class="save-icon" (click)="saveConvoName(dataItem)" ></kendo-svgicon>
-                        <kendo-svgicon *ngIf="ConversationEditMode" [icon]="sharedService.kendoSVGIcon('close')" name="close" class="cancel-edit-icon" (click)="cancelConvoEdit(dataItem)"></kendo-svgicon>
+                        <span *ngIf="!ConversationEditMode" class="fa-solid fa-pen-to-square" (click)="editConvo(dataItem)"></span>
+                        <span *ngIf="!ConversationEditMode" class="fa-regular fa-trash-can" (click)="deleteConvo(dataItem)"></span>
+                        <span *ngIf="ConversationEditMode" class="fa-solid fa-check" (click)="saveConvoName(dataItem)"></span>
+                        <span *ngIf="ConversationEditMode" class="fa-solid fa-xmark" (click)="cancelConvoEdit(dataItem)"></span>
                     </div>
                 </div>
             </ng-template>
@@ -85,7 +84,7 @@
                     placeholder="Ask Skip a question"></textarea>
             </div>
             <button kendoButton >
-                <kendo-svgicon *ngIf="ShowDataContextButton" [icon]="sharedService.kendoSVGIcon('gearIcon')" name="gear" svgIcon="gear-icon" (click)="showDataContext()"></kendo-svgicon>
+                <span *ngIf="ShowDataContextButton" class="fa-solid fa-gear" (click)="showDataContext()"></span>
             </button>
             <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()"><i class="fas fa-solid fa-arrow-up"></i></button>
         </div>

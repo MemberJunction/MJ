@@ -10,7 +10,7 @@
     <kendo-tabstrip #tabComponent [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip mjFillContainer [bottomMargin]="25">
         <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)" mjFillContainer>
             <ng-template kendoTabTitle mjFillContainer>
-              <kendo-svgicon [icon]="sharedService.kendoSVGIcon('graph')"></kendo-svgicon>
+              <span class="fa-solid fa-chart-line"></span>
               <span class="report-tab-title">Chart</span>
             </ng-template>
             <ng-template kendoTabContent>
@@ -22,7 +22,7 @@
         </kendo-tabstrip-tab>  
         <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
             <ng-template kendoTabTitle>
-              <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
+              <span class="fa-solid fa-table"></span>
               <span class="report-tab-title">Table</span>
             </ng-template>
             <ng-template kendoTabContent class="report-tab-contents">
@@ -32,7 +32,7 @@
         </kendo-tabstrip-tab>  
         <kendo-tabstrip-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [selected]="isTabSelected(2)">
           <ng-template kendoTabTitle>
-            <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('paneFreeze')"></kendo-svgicon>
+            <span class="fa-solid fa-table-columns"></span>
             <span class="report-tab-title">Drill Down</span>
           </ng-template>
           <ng-template kendoTabContent class="report-tab-contents">
@@ -53,7 +53,7 @@
         </kendo-tabstrip-tab>  
         <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(4)">
             <ng-template kendoTabTitle>
-              <kendo-svgicon [icon]="sharedService.kendoSVGIcon('file')"></kendo-svgicon>
+              <span class="fa-solid fa-file"></span>
               <span class="report-tab-title">Explanation</span>
             </ng-template>
             <ng-template kendoTabContent class="report-tab-contents">
@@ -62,7 +62,7 @@
         </kendo-tabstrip-tab>
         <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(5)">
             <ng-template kendoTabTitle>
-              <kendo-svgicon  [icon]="sharedService.kendoSVGIcon('code')" name="page-properties"></kendo-svgicon>
+              <span class="fa-solid fa-code"></span>
               <span class="report-tab-title">Details</span>
             </ng-template>
             <ng-template kendoTabContent class="report-tab-contents">
