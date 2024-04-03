@@ -5,7 +5,7 @@
       (click)="this.Open()"
       class="view-properties-button"
     >
-        <kendo-svgicon [icon]="sharedService.kendoSVGIcon('gear')"></kendo-svgicon>
+        <span class="fa-solid fa-gear"></span>
         Properties
     </button>
     <div  #outerDialogContainer>
@@ -69,7 +69,7 @@
                                         class="k-checkbox-label"
                                     ></kendo-label>
                                     </div>
-                                    <kendo-svgicon [icon]="sharedService.kendoSVGIcon('reorder')"></kendo-svgicon>
+                                    <span class="fa-solid fa-bars-staggered"></span>
                                 </div>
                                 </ng-template>
                             </kendo-sortable>
@@ -103,7 +103,7 @@
                             <ng-template kendoTabContent>
                             <div class="sort-header">
                                 <button kendoButton (click)="addSort()">
-                                <kendo-svgicon [icon]="sharedService.kendoSVGIcon('filterAddExpression')"></kendo-svgicon>
+                                    <span class="fa-solid fa-arrow-up-a-z"></span>
                                 </button>
                                 
                             </div>
@@ -126,7 +126,9 @@
                                 [(ngModel)]="s.direction"
                                 >
                                 </kendo-dropdownlist>
-                                <button kendoButton (click)="removeSort(s)"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('sortClear')"></kendo-svgicon></button>
+                                <button kendoButton (click)="removeSort(s)">
+                                    <span class="fa-solid fa-arrow-up-z-a"></span>
+                                </button>
                             </div> 
                             </ng-template>
                         </kendo-tabstrip-tab>
