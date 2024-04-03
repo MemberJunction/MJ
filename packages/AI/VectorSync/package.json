@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vector-sync",
-  "version": "0.9.29",
+  "version": "0.9.30",
   "description": "MemberJunction: AI Vector/Entity Sync Package - handles synchronization between Vector DB and MJ CDP Data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,13 +15,13 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "^0.9.169",
-    "@memberjunction/ai-vectordb": "^0.9.15",
-    "@memberjunction/ai-vectors": "^0.9.16",
-    "@memberjunction/aiengine": "^0.9.80",
-    "@memberjunction/core": "^0.9.184",
-    "@memberjunction/global": "^0.9.166",
-    "@memberjunction/sqlserver-dataprovider": "^0.9.216",
+    "@memberjunction/ai": "^0.9.170",
+    "@memberjunction/ai-vectordb": "^0.9.16",
+    "@memberjunction/ai-vectors": "^0.9.17",
+    "@memberjunction/aiengine": "^0.9.81",
+    "@memberjunction/core": "^0.9.185",
+    "@memberjunction/global": "^0.9.167",
+    "@memberjunction/sqlserver-dataprovider": "^0.9.217",
     "dotenv": "^16.0.3",
     "typeorm": "^0.3.20"
   },

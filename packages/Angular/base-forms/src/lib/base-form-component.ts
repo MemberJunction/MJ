@@ -14,7 +14,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public activeTabIndex = 0;
   public selectedTab = 0;
   public EditMode: boolean = false;
-  public BottomMargin: number = 53;
+  public BottomMargin: number = 10;
   public TabHeight: string = '500px';
   public GridBottomMargin: number = 100;
   public FavoriteInitDone: boolean = false;
