@@ -2,12 +2,13 @@
   <div class="header header-bg">
     <div class="nav-container">
       <div class="menu-button">
-        <span class="k-icon" (click)="onButtonClick()"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('menu')" ></kendo-svgicon></span>
+        <span class="k-icon" (click)="onButtonClick()">
+          <span class="fa-solid fa-bars fa-xl"></span>
+        </span>
       </div>
 
       <div class="title">
         <img kendoCardMedia src="assets/MJ_logo.svg" height="45px" class="app-logo" />
-        <!-- <h1 class="k-ml-2.5">{{appName}}</h1> -->
       </div>
 
       <div class="user-info-wrapper">
@@ -28,10 +29,14 @@
             (keydown.enter)="onSearch($event)"
             #searchInput
           />
-                        <span class="k-icon" (click)="onSearch($event)"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('search')"></kendo-svgicon></span>
+                        <span class="k-icon" (click)="onSearch($event)">
+                          <span class="fa-solid fa-magnifying-glass"></span>
+                        </span>
                 </div>
       <div class="icon-inbox" (click)="showNotifications($event)">
-          <span class="k-icon" style="cursor: pointer;"><kendo-svgicon [icon]="sharedService.kendoSVGIcon('inbox')"></kendo-svgicon></span>
+          <span class="k-icon" style="cursor: pointer;">
+            <span class="fa-solid fa-inbox fa-xl"></span>
+          </span>
           <span class="notification" *ngIf="UnreadNotificationCount > 0">{{UnreadNotificationCount}}</span>
       </div>
       <div class="user-info">
@@ -42,14 +47,7 @@
             
           </div>
       </div>
-     
-
-       
       </div>
     </div>
   </div>
-  <!-- <div class="nav-breadcrumb">
-        <kendo-breadcrumb (itemClick)="onBreadCrumbClick($event)" [items]="breadCrumbItems">
-        </kendo-breadcrumb>
-    </div> -->
 </div>

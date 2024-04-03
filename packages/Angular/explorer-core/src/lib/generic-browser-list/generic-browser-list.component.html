@@ -97,9 +97,11 @@
         Are you sure you want to delete <b>{{selectedItem?.Name}}</b>
       </p>
       <div  class="k-actions k-actions-end popup-actions popup-actions-btn">
-        <button class="cancel-btn" kendoButton (click)="onConfirmDeleteItem(false)"><span class="k-icon k-i-close"></span> No, Cancel</button>
+        <button class="cancel-btn" kendoButton (click)="onConfirmDeleteItem(false)">
+          <span class="fa-solid fa-xmark"></span> No, Cancel
+        </button>
         <button class="yes-btn" kendoButton (click)="onConfirmDeleteItem(true)" themeColor="primary">
-          <span class="k-icon k-i-check"></span> Yes, Delete
+          <span class="fa-solid fa-check"></span> Yes, Delete
         </button>
       </div>
     </div>

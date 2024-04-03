@@ -12,7 +12,7 @@
       <div class="dialog-content ">
         <div class="dialog-actions">
             <kendo-dropdownbutton class="k-m-2" themeColor="primary" [data]="ResourceTypes" [textField]="'DisplayName'" (itemClick)="onItemSelect($event)">
-              <span class="k-icon k-i-plus"></span> Add item
+              <span class="fa-solid fa-plus"></span> Add item
             </kendo-dropdownbutton>
         </div>
         <kendo-tilelayout
@@ -39,11 +39,11 @@
       <div class="dialog-footer">
         <div class="k-card-footer !k-border-none">
           <kendo-button (click)="closeDialog($event)" >
-            <span class="k-icon k-i-close"></span>
+            <span class="fa-solid fa-xmark"></span>
             Cancel
           </kendo-button>
           <kendo-button (click)="saveChanges()" [primary]="true" >
-            <span class="k-icon k-i-check"></span>
+            <span class="fa-solid fa-check"></span>
             Save
           </kendo-button>
         </div>
