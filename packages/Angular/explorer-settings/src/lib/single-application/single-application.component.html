@@ -5,7 +5,9 @@
             <tbody>
                 <tr>
                     <th scope="row">Application</th>
-                    <td>{{Record.Name}}<kendo-svgicon class='edit-icon' [icon]="kendoSVGIcon('pencil')" (click)="EditRecord()"></kendo-svgicon></td>
+                    <td>{{Record.Name}}
+                        <span class="edit-icon fa-solid fa-pen-to-square" (click)="EditRecord()"></span>
+                    </td>
                 </tr>
                 <tr>
                     <th scope="row">Description</th>
