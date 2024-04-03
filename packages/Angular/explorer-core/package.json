@@ -36,6 +36,7 @@
     "@memberjunction/ng-query-grid": "^0.9.77",
     "@memberjunction/ng-user-view-properties": "^0.9.3",
     "@memberjunction/ng-shared": "^0.9.47",
+    "@memberjunction/ng-tabstrip": "^0.9.1",
     "@memberjunction/ng-ask-skip": "^0.9.118",
     "@memberjunction/ng-auth-services": "^0.9.106",
     "@memberjunction/ng-explorer-settings": "^0.9.25",

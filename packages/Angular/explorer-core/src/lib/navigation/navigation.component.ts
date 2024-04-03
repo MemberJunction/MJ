@@ -11,6 +11,7 @@ import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { Title } from '@angular/platform-browser';
 import { StubData } from '../../generic/app-nav-view.types';
 import { Item, ItemType, TreeItem } from '../../generic/Item.types';
+import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
 
 export interface Tab {
   id?: number;
@@ -48,8 +49,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public tabs: any[] = [];
   public closedTabs: any[] = []; // should always be empty after using it
   private tabQueryParams: any = {};
-  public activeTabIndex: number = 0;
-  public selectedTabIndex: number = 0;
+  // public activeTabIndex: number = 0;
+  // public selectedTabIndex: number = 0;
   private workSpace: any = {};
   private workSpaceItems: WorkspaceItemEntity[] = [];
   public panelItems: TreeItem[] = [];
@@ -61,6 +62,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   private resizeTimeout: any;
 
   @ViewChild(DrawerComponent, { static: false }) drawer!: DrawerComponent;
+  @ViewChild('mjTabstrip') mjTabStrip!: MJTabStripComponent;
   @ViewChild('drawerWrapper', { static: false }) drawerWrapper!: ElementRef;
   //@ViewChild("tabstrip", { static: false }) public tabstrip !: TabStripComponent;
   @ViewChild('container', { static: true, read: ElementRef }) container !: ElementRef;
@@ -95,86 +97,16 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.tabs = [];
   }
 
+ 
 
 
+  private _contextMenuSelectedTabIndex: number = -1;
+  public handleTabContextMenu(event: TabContextMenuEvent): void {
+    event.mouseEvent.preventDefault();
 
-
-
-
-
-
-
-  // NEW TAB CONTROL - we will move this out of here into its own MJ Tab Control component and library soon
-
-  @ViewChild('tabInnerContainer') tabInnerContainer!: ElementRef;
-
-  showLeftButton: boolean = false;
-  showRightButton: boolean = false;
-
-  @HostListener('window:resize', ['$event'])
-  onResize(event: any) {
-    this.checkTabScrollButtons();
-  }
-
-  checkTabScrollButtons() {
-    if (this.tabInnerContainer && this.tabInnerContainer.nativeElement && this.tabInnerContainer.nativeElement.parentElement) {
-      const container = this.tabInnerContainer.nativeElement;
-      const parent = container.parentElement;
-      const currentLeft = container.style.left ? parseInt(container.style.left) : 0;
-
-      // show the right button if the container is wider than the parent AND the left position(which is zero or negative) + the container width is greater than the parent width
-      this.showRightButton = container.clientWidth > parent.clientWidth && 
-                             currentLeft + container.clientWidth > parent.clientWidth;
-
-      // Show left button if left position is less than 0, meaning some of the left side of the container is off screen
-      this.showLeftButton = currentLeft < 0;  
-    }
-  }
-
-  scrollTabHeader(scrollAmount: number) {
-    const style = this.tabInnerContainer.nativeElement.style
-    if (style) {
-      const curLeft = style.left ? parseInt(style.left) : 0;     
-      style.left = (curLeft + scrollAmount) + 'px';
-      this.checkTabScrollButtons(); // can do immediately because the above is direct DOM manipulation so the effect is immediate
-    }
-  }
-
-  scrollLeft() {
-    this.scrollTabHeader(150)
-  }
-  scrollRight() {
-    this.scrollTabHeader(-150)
-  }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  onTabContextMenu(event: MouseEvent, tab: any): void {
-    event.preventDefault();
-
-    this.selectedTabIndex = tab;
-    const mouseEvent = event as MouseEvent;
-    const mouseX = mouseEvent.clientX;
-    const mouseY = mouseEvent.clientY;
+    this._contextMenuSelectedTabIndex = event.index;
+    const mouseX = event.mouseEvent.clientX;
+    const mouseY = event.mouseEvent.clientY;
 
     this.contextMenuStyle = {
       top: mouseY + 'px',
@@ -183,7 +115,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.contextMenuVisible = true;
   }
 
-  async handleContextMenuOption(option: number): Promise<void> {
+  public async handleContextMenuOption(option: number): Promise<void> {
     this.closedTabs = [];
     switch (option) {
       case 1:
@@ -193,15 +125,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       break;
     case 2:
       // Close Others
-      this.closedTabs = this.tabs.filter((tab, id) => id !== this.selectedTabIndex);
-      this.tabs = [this.tabs[this.selectedTabIndex]];
-      if(this.activeTabIndex > 1) this.activeTabIndex = 1;
+      // the _contextMenuSelectedTabIndex is the index of the tab that was right-clicked on and it INCLUDES the home tab so we have to adjust it
+      // keep just that item 
+      if (this._contextMenuSelectedTabIndex > 0) {
+        this.closedTabs = this.tabs.filter((tab, index) => index !== this._contextMenuSelectedTabIndex - 1);
+        this.tabs = [this.tabs[this._contextMenuSelectedTabIndex - 1]];
+      }
       break;
     case 3:
       // Close Tabs to the Right
-      this.activeTabIndex = this.selectedTabIndex + 1;
-      this.closedTabs = this.closedTabs.concat(this.tabs.slice(this.activeTabIndex));
-      this.tabs = this.tabs.slice(0, this.selectedTabIndex + 1);
+      const currentTabIndex = this._contextMenuSelectedTabIndex - 1; // because the HOME tab is not in the array so we have to offset by 1 here for our data structure
+      this.closedTabs = this.tabs.slice(currentTabIndex + 1); // close everything to right
+      this.tabs = this.tabs.slice(0, currentTabIndex + 1);
       break;
     default:
       // Handle other options if needed
@@ -215,9 +150,13 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.removeWorkspaceItem(tab, transGroup);
     }
     await transGroup.Submit();
-    if (this.activeTabIndex > this.tabs.length) 
-      this.activeTabIndex = this.tabs.length - 1;
-    //this.tabstrip.selectTab(this.activeTabIndex);
+    await this.waitForDomUpdate(); // make sure the DOM is updated before we do anything else so that the tab control knows about the changes from our data structure changes ABOVE
+
+    if (this.activeTabIndex > this.tabs.length) // DO NOT add 1 here because in this case, the array boundary is the max for the tab control
+      this.activeTabIndex = this.tabs.length; // don't subtract 1 here because the activeTabIndex is relative to the full set of tabs and the this.tabs array doesn't include the HOME tab
+    else
+      this.activeTabIndex = this.activeTabIndex; // this is a hack to force the tab control to update the selected tab
+
     if (this.activeTabIndex === 0) {
       // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
       let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
@@ -232,10 +171,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // check tab scroll buttons and bind to resize
-    this.checkTabScrollButtons();
-    window.addEventListener('resize', this.checkTabScrollButtons.bind(this));
-
     MJGlobal.Instance.GetEventListener(true) // true gets us replay of past events so we can "catch up" as needed
       .subscribe(event => {
         this.handleEvent(event, event.args);
@@ -349,9 +284,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this._mostRecentURL = this.router.url;
 
       // see if this matches a drawer item or not
-      const di = this.drawerItems;
-      //const item = di.find(i => (<any>i).path.toLowerCase().trim() === url.toLowerCase().trim());
-      const item = di.find(i => url.toLowerCase().trim().startsWith((<any>i).path?.toLowerCase().trim()));
+      const item = this.drawerItems.find(i => url.toLowerCase().trim().startsWith((<any>i).path?.toLowerCase().trim()));
 
       if (item) {
         this.selectDrawerItem(this.drawerItems.indexOf(item));
@@ -406,33 +339,30 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   protected setActiveTabToHome() {
-    this.selectTab(null);
+    this.innerSelectTab(null);
   }
 
-  public selectTab(tab: any) {
+  public innerSelectTab(tab: any) {
     // get index from the tabs array
     const index = tab ? this.tabs.indexOf(tab) + 1 : 0; // add one because the HOME tab is not in the array so we have to offset by 1 here for our data structure
-    if (this.activeTabIndex !== index) {
-      this.activeTabIndex = index;
-      this.sharedService.InvokeManualResize();
-  
-      if (index === 0) {
-        let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
-        if (this.selectedDrawerItem !== null && this.selectedDrawerItem !== undefined)
-          url = (<any>this.selectedDrawerItem).path;
-        this.router.navigate([url]);
-        this.setAppTitle();
-        this._mostRecentURL = url;
-      }
-      else {
-        const tab = this.tabs[index - 1];
-        if (tab) {
-          this.setAppTitle(tab.label);
-          const data = tab.data;
-          this.updateBrowserURL(tab, data);    
-        }
-      }  
+    this.sharedService.InvokeManualResize();
+
+    if (index === 0) {
+      let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
+      if (this.selectedDrawerItem !== null && this.selectedDrawerItem !== undefined)
+        url = (<any>this.selectedDrawerItem).path;
+      this.router.navigate([url]);
+      this.setAppTitle();
+      this._mostRecentURL = url;
     }
+    else {
+      const tab = this.tabs[index - 1];
+      if (tab) {
+        this.setAppTitle(tab.label);
+        const data = tab.data;
+        this.updateBrowserURL(tab, data);    
+      }
+    }  
   }
   
   private checkForBaseURL() {
@@ -481,7 +411,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public async LoadWorkSpace(): Promise<void> {
     const md = new Metadata();
     this.tabs = []; // first clear out the tabs - this is often already the state but in case this is a full refresh, make sure we do this.
-    this.workSpaceItems.forEach(async (item, index) => {
+    for (let item of this.workSpaceItems) {
       const itemData = item.Configuration ? JSON.parse(item.Configuration) : {};
       const resourceData: ResourceData = new ResourceData({
         ID: item.ID,
@@ -498,7 +428,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         workspaceItem: item, // provide the entity object here so we can modify it later if needed
         icon: resourceData.ResourceIcon
       }
-      this.tabs.push(newTab);
+      // now add to data structure
+      await this.internalAddTab(newTab);
 
       setTimeout(async () => {
         // non-blocking, load dynamically
@@ -507,10 +438,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
         if (newTab === this.tabs[this.activeTabIndex - 1]) // subtract one since the activeTabIndex is relative to the full set of tabs and the this.tabs array doesn't include the HOME tab
           this.setAppTitle(newTab.label)
-
-        this.checkTabScrollButtons();          
       },10)
-    });
+    }
+    this.mjTabStrip.SelectedTabIndex = 0; 
   }
 
   protected setAppTitle(title: string = '') {
@@ -563,7 +493,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (existingTab) {
       const index = this.tabs.indexOf(existingTab);
-      this.activeTabIndex = index + 1; // add one because the HOME tab is not in the tabs array but it IS part of our tab structure
+      // add one because the HOME tab is not in the tabs array but it IS part of our tab structure
+      this.activeTabIndex = index + 1;
+
       //this.tabstrip.selectTab(this.activeTabIndex);
 
       this.scrollIntoView();
@@ -587,7 +519,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.SaveSingleWorkspaceItem(newTab)
 
       // now add to data structure
-      this.tabs.push(newTab);
+      await this.internalAddTab(newTab);
 
       // select the new tab
       this.activeTabIndex = this.tabs.length; // this is intentionally past array boundary because ActiveTabIndex includes the Home tab that is not part of the tabs array
@@ -605,6 +537,20 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       }, 10)
     }
   }
+
+  protected async internalAddTab(newTab: Tab) {
+    // add the tab to the tabs collection
+    this.tabs.push(newTab);
+    // Manually trigger change detection and wait for DOM updates
+    await this.waitForDomUpdate();
+  }
+
+  waitForDomUpdate(): Promise<void> {
+    return new Promise(resolve => {
+      this.cdr.detectChanges(); // Manually trigger change detection
+      setTimeout(() => { resolve(); }, 0); // Resolve on the next tick to ensure changes are reflected in the DOM
+    });
+  }  
 
   private updateBrowserURL(tab: Tab, data: ResourceData) {
     // update the URL to reflect the current tab
@@ -759,39 +705,46 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.cdr.detectChanges(); // Manually trigger change detection
   }
 
-  public async closeTab(tab: any): Promise<void> {
+  public async handleTabClosed(event: TabClosedEvent) {
+    // get our tab data structure item based on the index that we get in the event
+    if (event.index !== null && event.index >=0 && event.index <= this.tabs.length) {
+      const tab = this.tabs[event.index - 1];  // subtract 1 because the event index includes the home tab and our data structure does not
+      await this.closeTab(tab, event.newTabIndex);  
+    }
+    event.done(); // let the tab control know that we're done handling the event
+  }
+
+  public handleTabSelected(event: TabEvent) {
+    if (event.index !== null && event.index >= 0 && event.index <= this.tabs.length) {
+      if (event.index > 0) {
+        const tab = this.tabs[event.index - 1]; // subtract 1 because the event index includes the home tab and our data structure does not
+        this.innerSelectTab(tab);
+      }
+      else 
+        this.innerSelectTab(null); // home
+    }
+  }
+
+  public async closeTab(tab: any, newTabIndex: number): Promise<void> {
     const tabIndex = this.tabs.indexOf(tab);
     if (tabIndex >= 0) {
       await this.removeWorkspaceItem(this.tabs[tabIndex], null /*no transaction group*/);
+//      await this.waitForDomUpdate(); // make sure dom is up to date
 
       // now, check to see how many tabs we have left and if we have none, then we need to select the HOME tab
       if (this.tabs.length > 0) {
-        if (tabIndex > this.tabs.length) {
-          // we're closing the last tab, so select the tab to the left of it
-          this.activeTabIndex = 1 + (tabIndex - 1); // always add 1 to reflect the HOME tab that is not in the tabs array but it IS part of our tab structure
+        if (newTabIndex === 0) {
+          // home tab
+          this.innerSelectTab(null); // null param means home tab
         }
         else {
-          // we're closing a tab that is not the last tab, so we need to select the tab to the right of it
-          this.activeTabIndex = 1 + (tabIndex + 1); // always add 1 to reflect the HOME tab that is not in the tabs array but it IS part of our tab structure
-        }
-
-        const i = this.activeTabIndex > 0 ? this.activeTabIndex-1 : 0;
-        const tabs = this.tabs;
-        const tab = tabs[i];
-        if (tab) {
-          const data = tab.data;
-          this.updateBrowserURL(tab, data);    
+          // not home tab
+          const tab = this.tabs[newTabIndex -1]; // remove 1 because the newTabIndex includes the HOME tab and our data structure does not
+          this.updateBrowserURL(tab, tab?.data);    
         }
       }
       else {
-        // the tab that will be selected is the HOME tab o we need to update
-        this.activeTabIndex = 0
-
-        // in this situation we have the home tab showing, so we need to update the URL path based on what's selected in the drawer
-        let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
-        this.router.navigate([url]);
-        //this.location.go(url); // update the browser URL if needed  
-        this._mostRecentURL = url;
+        this.innerSelectTab(null); // null param means home tab
       }
     }
   }
@@ -861,6 +814,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     this.setAppTitle(ev.item.text);
+  }
+  
+  protected get activeTabIndex(): number {
+    if (this.mjTabStrip)
+      return this.mjTabStrip.SelectedTabIndex;
+    else
+      return -1;
+  }
+
+  protected set activeTabIndex(index: number) {
+    if (this.mjTabStrip)
+      this.mjTabStrip.SelectedTabIndex = index;
   }
 
   public getEntityItemFromViewItem(viewItem: DrawerItem): DrawerItem | null {
