@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectors-pinecone",
-  "version": "0.9.32",
+  "version": "0.9.33",
   "description": "MemberJunction: Pinecone Implementation for AI Vectors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/aiengine": "^0.9.81",
+    "@memberjunction/aiengine": "^0.9.82",
     "@memberjunction/core": "^0.9.185",
     "@memberjunction/global": "^0.9.167",
     "@memberjunction/ai-vectors": "^0.9.17",

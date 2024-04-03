@@ -9,6 +9,8 @@ import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { EntitiesFormComponent, LoadEntitiesFormComponent } from "./Entities/entities-form.component";
+import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
+import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 
 @NgModule({
     declarations: [
@@ -23,7 +25,9 @@ import { EntitiesFormComponent, LoadEntitiesFormComponent } from "./Entities/ent
         DateInputsModule,
         UserViewGridModule,
         LinkDirectivesModule,
-        BaseFormsModule
+        BaseFormsModule,
+        MJTabStripModule,
+        ContainerDirectivesModule
     ],
     exports: [
         EntitiesFormComponent

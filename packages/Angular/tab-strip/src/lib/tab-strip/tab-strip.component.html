@@ -6,10 +6,10 @@
       <div class="tab-header-inner" #tabInnerContainer>
         <ng-content select="mj-tab"></ng-content> <!-- Where <mj-tab> components are projected -->
       </div>
-      <button kendoButton *ngIf="showRightButton" class="tab-scroll-button-right" (click)="scrollRight()">⇨</button>
+      <span *ngIf="showRightButton" class="tab-scroll-button-right fa-regular fa-caret-right" (click)="scrollRight()"></span>
     </div>
     <!-- Tab Content -->
-    <div class="tab-body" mjFillContainer>
+    <div class="tab-bodies" mjFillContainer>
       <ng-content select="mj-tab-body"></ng-content> <!-- Where <mj-tab-body> components are projected -->
     </div>
 </div>
