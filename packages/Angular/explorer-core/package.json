@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-core",
-  "version": "0.9.225",
+  "version": "0.9.226",
   "description": "MemberJunction Explorer: Core Angular Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -36,7 +36,7 @@
     "@memberjunction/ng-query-grid": "^0.9.78",
     "@memberjunction/ng-user-view-properties": "^0.9.5",
     "@memberjunction/ng-shared": "^0.9.48",
-    "@memberjunction/ng-tabstrip": "^0.9.3",
+    "@memberjunction/ng-tabstrip": "^0.9.4",
     "@memberjunction/ng-ask-skip": "^0.9.119",
     "@memberjunction/ng-auth-services": "^0.9.107",
     "@memberjunction/ng-explorer-settings": "^0.9.27",
