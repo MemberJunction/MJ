@@ -209,6 +209,50 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Report Categories')">
+                        Report Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Report Categories')"  
+                            [AllowLoad]="this.IsCurrentTab('Report Categories')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('User View Categories')">
+                        User View Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('User View Categories')"  
+                            [AllowLoad]="this.IsCurrentTab('User View Categories')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Dashboard Categories')">
+                        Dashboard Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Dashboard Categories')"  
+                            [AllowLoad]="this.IsCurrentTab('Dashboard Categories')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Query Categories')">
+                        Query Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Query Categories')"  
+                            [AllowLoad]="this.IsCurrentTab('Query Categories')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
   </div>

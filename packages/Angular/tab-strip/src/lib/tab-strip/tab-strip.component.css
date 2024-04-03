@@ -38,4 +38,14 @@
   right: 0;
 }
 
+.tab-scroll-button {
+  padding: 8px 10px 10px 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  background-color: lightblue;
+}
+.tab-scroll-button:hover {
+  background-color: pink;
+}
+
  

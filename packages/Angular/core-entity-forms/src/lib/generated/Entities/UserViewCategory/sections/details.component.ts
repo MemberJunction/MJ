@@ -35,8 +35,16 @@ import { UserViewCategoryEntity } from '@memberjunction/core-entities';
             <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">User ID</label>
+            <kendo-numerictextbox [(value)]="record.UserID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Parent</label>
             <span >{{FormatValue('Parent', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">User</label>
+            <span >{{FormatValue('User', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -66,8 +74,16 @@ import { UserViewCategoryEntity } from '@memberjunction/core-entities';
             <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
         </div>              
         <div class="record-form-row">
+            <label class="fieldLabel">User ID</label>
+            <span mjFieldLink [record]="record" fieldName="UserID" >{{FormatValue('UserID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
             <label class="fieldLabel">Parent</label>
             <span >{{FormatValue('Parent', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">User</label>
+            <span >{{FormatValue('User', 0)}}</span>
         </div>
     </div>
 </div>

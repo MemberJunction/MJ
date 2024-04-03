@@ -11339,12 +11339,34 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)
         */
         get Parent(): string | null {  
             return this.Get('Parent');
+        }
+    
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get User(): string {  
+            return this.Get('User');
         }
     
 
@@ -12876,12 +12898,34 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EntityID', value);
         }
         /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
         */
         get Parent(): string | null {  
             return this.Get('Parent');
+        }
+    
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get User(): string {  
+            return this.Get('User');
         }
     
 
@@ -12980,12 +13024,34 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
         */
         get Parent(): string | null {  
             return this.Get('Parent');
+        }
+    
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get User(): string {  
+            return this.Get('User');
         }
     
 
@@ -13084,12 +13150,34 @@ import { RegisterClass } from "@memberjunction/global";
         }
     
         /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)
         */
         get Parent(): string | null {  
             return this.Get('Parent');
+        }
+    
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get User(): string {  
+            return this.Get('User');
         }
     
 
