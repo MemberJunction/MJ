@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-forms",
-  "version": "0.9.15",
+  "version": "0.9.17",
   "description": "MemberJunction: Angular Base Form Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,11 +25,11 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/global": "^0.9.166",
-    "@memberjunction/core": "^0.9.184",
-    "@memberjunction/ng-shared": "^0.9.47",
-    "@memberjunction/ng-record-changes": "^0.9.129",
-    "@memberjunction/ng-user-view-grid": "^0.9.230",
+    "@memberjunction/global": "^0.9.167",
+    "@memberjunction/core": "^0.9.185",
+    "@memberjunction/ng-shared": "^0.9.48",
+    "@memberjunction/ng-record-changes": "^0.9.130",
+    "@memberjunction/ng-user-view-grid": "^0.9.231",
     "@progress/kendo-angular-layout": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "tslib": "^2.3.0"

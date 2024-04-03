@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-mistral",
-  "version": "0.9.30",
+  "version": "0.9.31",
   "description": "MemberJunction Wrapper for Mistral AI's AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,7 +19,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "^0.9.169",
-    "@memberjunction/global": "^0.9.166"
+    "@memberjunction/ai": "^0.9.170",
+    "@memberjunction/global": "^0.9.167"
   }
 }
