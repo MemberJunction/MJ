@@ -9,17 +9,6 @@
       <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap" *ngIf="!showLoader">
         <div class="card-item" *ngFor="let app of applications">
           <kendo-card class="card-wrapper">
-            <!-- <kendo-card-header class="k-hstack view-card">
-              <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
-              <div class="btn-wrapper">
-                <button kendoButton fillMode="flat" (click)="editView(entity)">
-                  <span class="k-icon k-i-edit"></span>
-                </button>
-                <button kendoButton fillMode="flat" (click)="handleDeleteView(entity)"><span
-                    class="k-icon k-i-delete"></span></button>
-              </div> 
-            </kendo-card-header> -->
-  
             <kendo-card-body (click)="appItemClick(app)">
               <div class="view-card-content k-cursor-pointer">
                 <h2 kendoCardTitle>{{ app.Name }}</h2>

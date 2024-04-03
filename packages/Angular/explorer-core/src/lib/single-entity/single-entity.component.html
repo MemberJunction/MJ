@@ -1,22 +1,15 @@
 <div class="card-container entity-container">
   <div class="card-header-entity">
-    <!-- <div class="title-wrapper">
-      <h4>{{entityName}}</h4>
-      <kendo-dropdownbutton [data]="data" themeColor="primary">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M7.86401 1V14.7279" stroke="white" stroke-width="2" stroke-linecap="round"/>
-          <path d="M1 7.86401H14.7279" stroke="white" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-            Create New
-      </kendo-dropdownbutton>
-    </div> -->
     <div class="title-wrap">
       <h1>{{entityName}}</h1>
-      <p> <span class="k-icon k-i-information"></span> {{entityDescription}}</p>
+      <p> 
+        <span class="fa-solid fa-circle-info"></span> {{entityDescription}}
+      </p>
     </div>
     <button kendoButton (click)="createNewView()">
-      <kendo-svgicon [icon]="sharedService.kendoSVGIcon('plus')"></kendo-svgicon>
-      Create New View</button>
+      <span class="fa-solid fa-plus"></span>
+      Create New View
+    </button>
   </div>
   <mj-user-view-properties-dialog [EntityName]="this.entityName" [ShowPropertiesButton]="false"
     (dialogClosed)="viewPropertiesClosed($event)"></mj-user-view-properties-dialog>
@@ -29,10 +22,11 @@
             <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
             <div class="btn-wrapper">
               <button kendoButton fillMode="flat" (click)="editView(entity)">
-                <span class="k-icon k-i-edit"></span>
+                <span class="fa-solid fa-pen-to-square"></span>
               </button>
-              <button kendoButton fillMode="flat" (click)="handleDeleteView(entity)"><span
-                  class="k-icon k-i-delete"></span></button>
+              <button kendoButton fillMode="flat" (click)="handleDeleteView(entity)">
+                <span class="fa-regular fa-trash-can"></span>  
+              </button>
             </div>
           </kendo-card-header>
 
@@ -55,9 +49,11 @@
       </p>
       <div class="k-actions k-actions-end popup-actions">
         <button kendoButton (click)="deleteView()" themeColor="primary">
-          <span class="k-icon k-i-check"></span> Yes
+          <span class="fa-solid fa-check"></span> Yes
         </button>
-        <button kendoButton (click)="handleDeleteView()"><span class="k-icon k-i-close"></span> No</button>
+        <button kendoButton (click)="handleDeleteView()">
+          <span class="fa-solid fa-xmark"></span> No
+        </button>
       </div>
     </div>
   </kendo-dialog>

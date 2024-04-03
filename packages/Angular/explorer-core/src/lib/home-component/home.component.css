@@ -37,3 +37,7 @@
 .home-favorites {
     width: 500px;
 }
+
+.sky-blue {
+    color: var(--sky-blue);
+}

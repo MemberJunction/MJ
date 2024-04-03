@@ -24,7 +24,7 @@
         </mj-tab-body>
 
         <mj-tab *ngFor="let tab of tabs;let i = index" [TabCloseable]="true">
-          <kendo-svgicon *ngIf="tab?.contentLoading" [icon]="sharedService.kendoSVGIcon('clock')"></kendo-svgicon>
+          <span *ngIf="tab?.contentLoading" class="fa-regular fa-clock"></span>
           <kendo-svgicon *ngIf="!tab?.contentLoading && tab?.icon" [icon]="sharedService.kendoSVGIcon(tab.icon)"></kendo-svgicon>          
           {{ tab.labelLoading ? 'Loading...' : tab.label }}
         </mj-tab>
