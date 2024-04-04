@@ -11,7 +11,7 @@ import { DynamicReportComponent } from './dynamic-report';
   selector: 'mj-dynamic-chart',
   template: `
     <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">Save as Image</button>
-    <div #plotContainer>
+    <div #plotContainer mjFillContainer>
       <plotly-plot #plotlyPlot 
                    [data]="plotData" 
                    [layout]="plotLayout" 
@@ -105,8 +105,9 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
         setTimeout(() => {
             this.resizeObserver = new ResizeObserver(entries => {
                 for (let entry of entries) {
-                    const { height } = entry.contentRect;
-                    this.updateChartHeight(height);
+                    const { height, width } = entry.contentRect;
+//                    this.updateChartHeight(height);
+                    this.updateChartSize(height, width);
                 }
             });
             this.resizeObserver.observe(this.el.nativeElement);
@@ -114,8 +115,17 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
     }
 
     updateChartHeight(newHeight: number) {
-        if (this.plotLayout)
-            this.plotLayout.height = newHeight;
+      if (this.plotLayout && newHeight > 0)
+        this.plotLayout.height = newHeight;
+    }
+    updateChartSize(newHeight: number, newWidth: number) {
+      if (this.plotLayout) {
+        if (newHeight > 0)
+          this.plotLayout.height = newHeight;
+
+        if (newWidth > 0)
+          this.plotLayout.width = newWidth;
+      }
     }
 
     private _skipData: SkipAPIAnalysisCompleteResponse | undefined;

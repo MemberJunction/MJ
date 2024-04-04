@@ -7,78 +7,79 @@
     <div class="report-tab-toolbar" *ngIf="ReportEntity && ReportEntity.ID > 0" >
       <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
     </div>
-    <kendo-tabstrip #tabComponent [keepTabContent]="true" [animate]="false" class="report-tabstrip" (tabSelect)="onTabSelect($event)" #tabStrip mjFillContainer [bottomMargin]="25">
-        <kendo-tabstrip-tab *ngIf="IsChart" [selected]="isTabSelected(0)" mjFillContainer>
-            <ng-template kendoTabTitle mjFillContainer>
-              <span class="fa-solid fa-chart-line"></span>
-              <span class="report-tab-title">Chart</span>
-            </ng-template>
-            <ng-template kendoTabContent>
-                <div class="report-tab-contents" mjFillContainer [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
-                  <mj-dynamic-chart mjFillContainer #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
-                  </mj-dynamic-chart>  
-                </div>
-            </ng-template>
-        </kendo-tabstrip-tab>  
-        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(1)">
-            <ng-template kendoTabTitle>
-              <span class="fa-solid fa-table"></span>
-              <span class="report-tab-title">Table</span>
-            </ng-template>
-            <ng-template kendoTabContent class="report-tab-contents">
-                <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleGridDrillDown($event)">
-                </mj-dynamic-grid>
-            </ng-template>
-        </kendo-tabstrip-tab>  
-        <kendo-tabstrip-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [selected]="isTabSelected(2)">
-          <ng-template kendoTabTitle>
-            <span class="fa-solid fa-table-columns"></span>
-            <span class="report-tab-title">Drill Down</span>
-          </ng-template>
-          <ng-template kendoTabContent class="report-tab-contents">
-            <mj-dynamic-report-drill-down #drillDownComponent [DrillDowns]="DrillDowns" mjFillContainer style="display:block;"></mj-dynamic-report-drill-down>
-          </ng-template>
-        </kendo-tabstrip-tab>
-        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(3)">
-            <ng-template kendoTabTitle>
-                <i class="fa-light fa-flask"></i>
-                <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" />
-              <span class="report-tab-title">Analysis</span>
-            </ng-template>
-            <ng-template kendoTabContent class="report-tab-contents">
-              <div>
-                  <markdown [data]="SkipData?.analysis"></markdown>
-              </div>
-            </ng-template>
-        </kendo-tabstrip-tab>  
-        <kendo-tabstrip-tab [closable]="false" [selected]="isTabSelected(4)">
-            <ng-template kendoTabTitle>
-              <span class="fa-solid fa-file"></span>
-              <span class="report-tab-title">Explanation</span>
-            </ng-template>
-            <ng-template kendoTabContent class="report-tab-contents">
-              {{SkipData?.userExplanation || 'No Explanation Provided'}}
-            </ng-template>
-        </kendo-tabstrip-tab>
-        <kendo-tabstrip-tab *ngIf="ShowDetailsTab" [selected]="isTabSelected(5)">
-            <ng-template kendoTabTitle>
-              <span class="fa-solid fa-code"></span>
-              <span class="report-tab-title">Details</span>
-            </ng-template>
-            <ng-template kendoTabContent class="report-tab-contents">
-              <div *ngIf="ConversationID!==null"><b>Skip Conversation ID:</b><span>{{ConversationID}}</span></div>
-              <div *ngIf="ConversationDetailID!==null"><b>Skip Conversation Detail ID:</b><span>{{ConversationDetailID}}</span></div>
-              <div *ngIf="SkipData?.techExplanation">
-                <span><b>Technical Explanation</b></span>
-                <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData?.techExplanation}}</textarea></span>
-              </div>
-              <div *ngIf="SkipData?.scriptText" mjFillContainer>
-                <span><b>Script</b></span>
-                <span><textarea mjFillContainer [disabled]="true" [bottomMargin]="20">{{SkipData?.scriptText}}</textarea></span>
-              </div>
-            </ng-template>
-        </kendo-tabstrip-tab>  
-  </kendo-tabstrip>
+    <mj-tabstrip #tabComponent class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25">
+      <mj-tab *ngIf="IsChart" [TabSelected]="isTabSelected(0)" >
+        <span class="fa-solid fa-chart-line"></span>
+        <span class="report-tab-title">Chart</span>
+      </mj-tab>
+      <mj-tab-body>
+        <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
+          <mj-dynamic-chart mjFillContainer #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
+          </mj-dynamic-chart>  
+        </div>
+      </mj-tab-body>
+
+      <mj-tab [TabSelected]="isTabSelected(1)">
+        <span class="fa-solid fa-table"></span>
+        <span class="report-tab-title">Table</span>
+      </mj-tab>
+      <mj-tab-body>
+        <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+          <mj-dynamic-grid mjFillContainer #theGrid [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleGridDrillDown($event)">
+          </mj-dynamic-grid>
+        </div>
+      </mj-tab-body>
+
+      <mj-tab *ngIf="AllowDrillDown && DrillDowns.length > 0" [TabSelected]="isTabSelected(2)">
+        <span class="fa-solid fa-table-columns"></span>
+        <span class="report-tab-title">Drill Down</span>
+      </mj-tab>
+      <mj-tab-body *ngIf="AllowDrillDown && DrillDowns.length > 0">
+        <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+          <mj-dynamic-report-drill-down #drillDownComponent [DrillDowns]="DrillDowns" mjFillContainer style="display:block;"></mj-dynamic-report-drill-down>
+        </div>  
+      </mj-tab-body>
+
+      <mj-tab [TabSelected]="isTabSelected(3)">
+        <i class="fa-light fa-flask"></i>
+        <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" />
+        <span class="report-tab-title">Analysis</span>
+      </mj-tab>
+      <mj-tab-body>
+        <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+          <markdown [data]="SkipData?.analysis"></markdown>
+        </div>
+      </mj-tab-body>
+
+      <mj-tab [TabSelected]="isTabSelected(4)">
+        <span class="fa-solid fa-file"></span>
+        <span class="report-tab-title">Explanation</span>
+      </mj-tab> 
+      <mj-tab-body>
+        <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+          {{SkipData?.userExplanation || 'No Explanation Provided'}}
+        </div>
+      </mj-tab-body>
+
+      <mj-tab [TabSelected]="isTabSelected(5)">
+        <span class="fa-solid fa-code"></span>
+        <span class="report-tab-title">Details</span>
+      </mj-tab>
+      <mj-tab-body>
+        <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20">
+          <div *ngIf="ConversationID!==null"><b>Skip Conversation ID:</b><span>{{ConversationID}}</span></div>
+          <div *ngIf="ConversationDetailID!==null"><b>Skip Conversation Detail ID:</b><span>{{ConversationDetailID}}</span></div>
+          <div *ngIf="SkipData?.techExplanation">
+            <span><b>Technical Explanation</b></span>
+            <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData?.techExplanation}}</textarea></span>
+          </div>
+          <div *ngIf="SkipData?.scriptText" mjFillContainer>
+            <span><b>Script</b></span>
+            <span><textarea mjFillContainer [disabled]="true" [bottomMargin]="20">{{SkipData?.scriptText}}</textarea></span>
+          </div>
+        </div>
+      </mj-tab-body>
+    </mj-tabstrip>
   </div> 
 <div *ngIf="LayoutMode === 'linear'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" 

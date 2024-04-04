@@ -22,4 +22,8 @@
 .report-tab-toolbar > button {
     margin-right: 5px;
 }
- 
+
+.report-tab-contents {
+    display: block;
+    padding: 5px;
+}

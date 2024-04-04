@@ -23,19 +23,20 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { LabelModule } from '@progress/kendo-angular-label';
 import { InputsModule } from '@progress/kendo-angular-inputs';
-import { TabStripModule } from '@progress/kendo-angular-layout';
 import { IconsModule, IconModule } from '@progress/kendo-angular-icons';
 import { ListViewModule } from '@progress/kendo-angular-listview';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
+import { LayoutModule } from '@progress/kendo-angular-layout';
 
 /*********************************************/
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared'; 
 import { DataContextModule } from '@memberjunction/ng-data-context';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 
 /*********************************************/
 // Local Components 
@@ -48,7 +49,6 @@ import { SkipButtonComponent } from './lib/skip-button/skip-button.component';
 import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
 import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-single-message.component';
 import { UserViewGridWithAnalysisComponent } from './public-api';
-import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-drill-down';
 
 
@@ -76,7 +76,8 @@ import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-dr
     CommonModule,
     FormsModule,
     ButtonsModule,
-    TabStripModule,
+    MJTabStripModule,
+    LayoutModule,
     IndicatorsModule,
     DialogsModule,
     InputsModule,
@@ -85,7 +86,6 @@ import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-dr
     IconsModule,
     ContainerDirectivesModule,
     ListViewModule,
-    LayoutModule,
     DropDownsModule,
     MemberJunctionSharedModule,
     GridModule,

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, Host } from '@angular/core';
+import { Component, Input, Output, EventEmitter, Host, ChangeDetectorRef } from '@angular/core';
 import { MJTabBase } from '../tab.base';
 import { MJTabStripComponent } from '../tab-strip/tab-strip.component';
 
@@ -20,6 +20,7 @@ export class MJTabComponent extends MJTabBase {
   } 
   set TabSelected(value: boolean) {
     this._tabSelected = value;
+    this.cdr.detectChanges(); // Manually trigger change detection to update the view
   }
 
   /**
@@ -33,7 +34,7 @@ export class MJTabComponent extends MJTabBase {
   public get TabStrip(): MJTabStripComponent {
     return this.tabstrip;
   }
-  constructor(@Host() private tabstrip: MJTabStripComponent) {
+  constructor(@Host() private tabstrip: MJTabStripComponent, private cdr: ChangeDetectorRef) {
     super();
   }
 
