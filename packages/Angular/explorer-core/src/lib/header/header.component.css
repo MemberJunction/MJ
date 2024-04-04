@@ -12,7 +12,6 @@
 .user-info {
   display: flex;
   align-items: center;
-  gap: 15px;
 }
 
 .user-info kendo-dropdownlist {
@@ -62,7 +61,7 @@
   height: 44px;
 }
 ::ng-deep .search-wrapper #txtSearch::placeholder, ::ng-deep .search-wrapper input::placeholder {
-  color: #fff;
+  color: #54585F;
 }
 .search-wrapper .k-input::placeholder {
   color: #54585F;
