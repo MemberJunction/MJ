@@ -1,4 +1,4 @@
-import { Component, Input, EventEmitter, Output, ContentChildren, QueryList, ViewChild, HostListener, ElementRef, AfterContentInit, AfterContentChecked, AfterViewInit } from '@angular/core';
+import { Component, Input, EventEmitter, Output, ContentChildren, QueryList, ViewChild, HostListener, ElementRef, AfterContentInit, AfterContentChecked, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { MJTabComponent } from '../tab/tab.component';
 import { MJTabBodyComponent } from '../tab-body/tab-body.component';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -33,6 +33,9 @@ export class TabContextMenuEvent extends TabEvent {
 })
 export class MJTabStripComponent implements AfterContentInit, AfterContentChecked, AfterViewInit {
   protected _selectedTabIndex: number = -1; // default to negative 1 so any valid value of 0+ will invoke a state change internally later
+
+  constructor(private cdr: ChangeDetectorRef) { }
+
   /**
    * The index of the selected tab. You can get/set this value and it will change the displayed tab.
    */
@@ -72,6 +75,9 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
     this.tabs?.forEach((tab, i) => tab.TabSelected = i === index);
     this.tabBodies?.forEach((body, i) => body.TabVisible = i === index);
 
+    // let angular now it needs to update its change detection
+    this.cdr.detectChanges();
+    
     // also ask for a resize now
     SharedService.Instance.InvokeManualResize();
   }
@@ -108,6 +114,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   private _viewInitialized: boolean = false;
   ngAfterViewInit() {
     this._viewInitialized = true;
+    this.SelectedTabIndex = this.SelectedTabIndex; // force a refresh of the tab visibility
     this.syncTabIndexes();
     this.checkTabScrollButtons();
   }

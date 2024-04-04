@@ -2,27 +2,26 @@ import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from
 import { RunViewParams } from "@memberjunction/core";
 import { GridRowClickedEvent, GridRowEditedEvent, UserViewGridComponent } from "@memberjunction/ng-user-view-grid";
 import { SharedService } from "@memberjunction/ng-shared";
+import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
 
 @Component({
     selector: 'mj-user-view-grid-with-analysis',
     template: `
-<kendo-tabstrip [keepTabContent]="true" [animate] = "false" mjFillContainer [bottomMargin]="BottomMargin" (tabSelect)="selectTabHandler() ">        
-    <kendo-tabstrip-tab [selected]="true">
-        <ng-template kendoTabTitle>Data</ng-template>
-        <ng-template kendoTabContent>
+    <mj-tabstrip mjFillContainer [bottomMargin]="BottomMargin" (TabSelectedabSelect)="selectTabHandler() ">
+        <mj-tab [TabSelected]="true"> Data </mj-tab>
+        <mj-tab-body>
             <mj-user-view-grid [Params]="Params" [InEditMode]="InEditMode" [EditMode]="EditMode" [AutoNavigate]="AutoNavigate" 
-                                (rowClicked)="this.rowClicked.emit($event)" (rowEdited)="this.rowEdited.emit($event)" ></mj-user-view-grid>
-        </ng-template>            
-    </kendo-tabstrip-tab>
-    <kendo-tabstrip-tab>
-        <ng-template kendoTabTitle>Analysis</ng-template>
-        <ng-template kendoTabContent>
+                                    (rowClicked)="this.rowClicked.emit($event)" (rowEdited)="this.rowEdited.emit($event)" >
+            </mj-user-view-grid>
+        </mj-tab-body>
+
+        <mj-tab> Analysis </mj-tab>
+        <mj-tab-body>
             <mj-skip-chat mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
-                                            [LinkedEntity]="'User Views'" [LinkedEntityRecordID]="ViewID">
+                                          [LinkedEntity]="'User Views'" [LinkedEntityRecordID]="ViewID">
             </mj-skip-chat>
-        </ng-template>
-    </kendo-tabstrip-tab>
-</kendo-tabstrip>
+        </mj-tab-body>
+    </mj-tabstrip>
     `,
     styles: []
   })
@@ -38,7 +37,7 @@ import { SharedService } from "@memberjunction/ng-shared";
     @Output() rowEdited = new EventEmitter<GridRowEditedEvent>();
 
     @ViewChild(UserViewGridComponent, {static: false}) viewGrid!: UserViewGridComponent;
-  
+    @ViewChild(MJTabStripComponent, {static: false}) tabStrip!: MJTabStripComponent;
     public get ViewID(): number {
         if (this.Params && this.Params.ViewID)
           return this.Params.ViewID;
@@ -59,8 +58,10 @@ import { SharedService } from "@memberjunction/ng-shared";
     public _pendingRefresh = false;
     async Refresh(params: RunViewParams) {
         this.Params = params;
-        if (this.viewGrid) 
-            this.viewGrid.Refresh(params);
+        if (this.viewGrid) {
+            this.tabStrip.SelectedTabIndex = 0; // go back to the first tab on refresh
+            await this.viewGrid.Refresh(params);
+        }
         else
             this._pendingRefresh = true;
     }    

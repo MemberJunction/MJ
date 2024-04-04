@@ -9,6 +9,8 @@
     /*initial sizes*/
     width: 100%;
     height: 100%;
+
+    background-color: #f9f9f9;
 }
 
 .conversation-wrapper {
@@ -147,6 +149,7 @@
 
     margin-top: 2px; /* align it with the top of converation history exactly*/
 
+    background-color: #f9f9f9;
     flex: 1;
 }
 
@@ -287,6 +290,8 @@
     margin-left: 7px;
     margin-top: 7px;
     margin-bottom: 5px;
+
+    background-color: #f9f9f9;
 }
 
 .text-area-wrapper > textarea:disabled {

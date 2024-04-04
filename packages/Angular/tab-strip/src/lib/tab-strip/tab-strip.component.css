@@ -1,5 +1,6 @@
 .tabstrip-container {
   overflow: hidden;
+  font-size: 14px; /*default font size*/
 }
 
 .tab-header-outer {

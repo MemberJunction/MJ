@@ -4,11 +4,10 @@ import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse, MJAPISkipResult } from
 import { SharedService, HtmlListType } from '@memberjunction/ng-shared';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ReportEntity } from '@memberjunction/core-entities';
-import { SelectEvent } from '@progress/kendo-angular-layout';
-import { TabComponent } from '@progress/kendo-angular-layout';
 import { DataContext } from '@memberjunction/data-context';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { DrillDownInfo, DynamicReportDrillDownComponent } from './dynamic-drill-down';
+import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
 
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
@@ -36,7 +35,7 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   public DrillDowns: DrillDownInfo[] = [];
 
   @ViewChild('drillDownComponent', {static: false}) drillDownComponent!: DynamicReportDrillDownComponent;
-  @ViewChild('tabComponent') tabComponent!: TabComponent;
+  @ViewChild('tabComponent') tabComponent!: MJTabStripComponent;
 
 
   constructor (public sharedService: SharedService, private router: Router, private cdRef: ChangeDetectorRef) {}
@@ -77,6 +76,10 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
 
   async ngAfterViewInit() {
     await this.RefreshMatchingReport();
+    setTimeout(() => {
+      this.tabComponent.SelectedTabIndex = 0; // make sure the first tab is selected
+      SharedService.Instance.InvokeManualResize(250); // resize the tab strip and its contents after short delay
+    }, 100);
   }
 
   public clickMatchingReport() {
@@ -87,9 +90,7 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   }
 
   public activeTabIndex: number = 0;
-  public onTabSelect(e: SelectEvent): void {
-    e.preventDefault();
-    
+  public onTabSelect(e: TabEvent): void {
     this.activeTabIndex = e.index
     this.sharedService.InvokeManualResize(100)
   }
