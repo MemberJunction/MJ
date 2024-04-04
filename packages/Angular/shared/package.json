@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-shared",
-  "version": "0.9.51",
+  "version": "0.9.53",
   "description": "MemberJunction: Angular Shared Package - utility functions and other reusable elements used across other MJ Angular packages",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,8 +27,8 @@
     "@progress/kendo-svg-icons": "^2.1.0"
   },
   "dependencies": {
-    "@memberjunction/core": "^0.9.186",
-    "@memberjunction/graphql-dataprovider": "^0.9.204",
+    "@memberjunction/core": "^0.9.188",
+    "@memberjunction/graphql-dataprovider": "^0.9.206",
     "@progress/kendo-angular-notification": "~15.1.0",
     "tslib": "^2.3.0"
   },
