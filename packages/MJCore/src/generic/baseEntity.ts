@@ -79,8 +79,8 @@ export class EntityField {
         if (this.ReadOnly)
             return false
         else {
-            const oldNull = this._OldValue === null || this.OldValue === undefined;
-            const curNull = this.Value === null || this.Value === undefined;
+            const oldNull = this._OldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
+            const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.OldValue);
             if (oldNull && curNull)
                 return false; // BOTH are null or undefined, not dirty
             else {

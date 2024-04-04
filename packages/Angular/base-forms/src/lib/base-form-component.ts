@@ -85,8 +85,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CalcTopAreaHeight(): void {
     // calculate the top area height and set it to our TopAreaHeight property, sub-classes can then do whatever they want with that property
     if (this.topArea && this.topArea.nativeElement) {
-      const height = this.topArea.nativeElement.offsetHeight;
-      this.TopAreaHeight = `${height}px`;
+      // give it a brief pause to let the UI settle
+      setTimeout(() => {
+        let height = this.topArea.nativeElement.offsetHeight;
+        if (height === 0) {
+          // if we get here, still probably a timing issue so chekc our immediate parent which might be a splitter pane, if it is, use it's height
+          const parent = this.topArea.nativeElement.parentElement;
+          if (parent && parent.offsetHeight > 0 && parent.nodeName === "KENDO-SPLITTER-PANE") {
+            height = parent.offsetHeight;
+          }
+        }
+        if (height > 0)
+          this.TopAreaHeight = `${height}px`;
+      }, 100);
     }
   }
 
