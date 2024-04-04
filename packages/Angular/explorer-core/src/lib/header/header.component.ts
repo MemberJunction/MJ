@@ -95,11 +95,12 @@ export class HeaderComponent implements OnInit {
                 this.menuItems[0] = md.CurrentUser.FirstLast;
                 this.selectedMenuItem = this.menuItems[0];
 
-                if (this.isMicrosoft(event.args))
+                if (this.isMicrosoft(event.args)){
                     this.msftUserImageService.getPhoto(event.args.accessToken).subscribe((blob: Blob) => {
                         this.userImageURL = URL.createObjectURL(blob);
                         this.sharedService.CurrentUserImage = this.userImageURL;
                     });
+                }
             }
         });
     }

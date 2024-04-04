@@ -34,17 +34,23 @@
                         </span>
                 </div>
       <div class="icon-inbox" (click)="showNotifications($event)">
+        <kendo-badge-container>
+          <i class="fa-solid fa-inbox fa-xl"></i>
+          <kendo-badge class="notification" *ngIf="UnreadNotificationCount > 0">{{UnreadNotificationCount}}</kendo-badge>
+        </kendo-badge-container>
+        <!--
           <span class="k-icon" style="cursor: pointer;">
-            <span class="fa-solid fa-inbox fa-xl"></span>
+            <span class="fa-solid fa-inbox fa-xl">
+            </span>
           </span>
-          <span class="notification" *ngIf="UnreadNotificationCount > 0">{{UnreadNotificationCount}}</span>
+          <span ></span>
+          -->
       </div>
       <div class="user-info">
           <kendo-avatar class="k-m-0" style="margin: 0;" [imageSrc]="userImageURL" shape="circle"> </kendo-avatar>
           <div class="example-col">
               <kendo-dropdownlist [data]="menuItems"  [value]="selectedMenuItem" (valueChange)="valueChange($event)">
               </kendo-dropdownlist>
-            
           </div>
       </div>
       </div>
