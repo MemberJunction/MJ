@@ -32,9 +32,11 @@ export class TabContextMenuEvent extends TabEvent {
   styleUrls: ['./tab-strip.component.css']
 })
 export class MJTabStripComponent implements AfterContentInit, AfterContentChecked, AfterViewInit {
-  protected _selectedTabIndex: number = -1; // default to negative 1 so any valid value of 0+ will invoke a state change internally later
+  protected _selectedTabIndex: number = 0; // default to negative 1 so any valid value of 0+ will invoke a state change internally later
 
   constructor(private cdr: ChangeDetectorRef) { }
+  @Input() FillWidth: boolean = true;
+  @Input() FillHeight: boolean = true;
 
   /**
    * The index of the selected tab. You can get/set this value and it will change the displayed tab.
@@ -71,15 +73,19 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
     }
   }
   protected innerRefreshTabVisibility(index: number) {
-    // now, we have to tell each of our tabs they have been selected or not, and also to tell the bodies if they are visible or not
-    this.tabs?.forEach((tab, i) => tab.TabSelected = i === index);
-    this.tabBodies?.forEach((body, i) => body.TabVisible = i === index);
+    Promise.resolve().then(() => {
+      // do this within a Promise.resolve() to ensure that the change detection has a chance to catch up before we start changing things
 
-    // let angular now it needs to update its change detection
-    this.cdr.detectChanges();
-    
-    // also ask for a resize now
-    SharedService.Instance.InvokeManualResize();
+      // now, we have to tell each of our tabs they have been selected or not, and also to tell the bodies if they are visible or not
+      this.tabs?.forEach((tab, i) => tab.TabSelected = i === index);
+      this.tabBodies?.forEach((body, i) => body.TabVisible = i === index);
+
+      // let angular now it needs to update its change detection
+      this.cdr.detectChanges();
+      
+      // also ask for a resize now
+      SharedService.Instance.InvokeManualResize();
+    });
   }
 
   /**

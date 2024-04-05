@@ -349,12 +349,18 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.sharedService.InvokeManualResize();
 
     if (index === 0) {
+      // this means the HOME tab
       let url = this.selectedDrawerItem ? (<any>this.selectedDrawerItem).path : '/home';
       if (this.selectedDrawerItem !== null && this.selectedDrawerItem !== undefined)
         url = (<any>this.selectedDrawerItem).path;
-      this.router.navigate([url]);
-      this.setAppTitle();
-      this._mostRecentURL = url;
+      if (!this._mostRecentURL.startsWith(url)) {
+        // we only do this IF the most recent URL does NOT start with the selectedDrawerItem path. 
+        // The reason is because there could be SUB-PATHS within the _mostRecentURL that are not part of the selectedDrawerItem path
+        // plus this is redundant if we're already on the selectedDrawerItem path
+        this.router.navigate([url]);
+        this.setAppTitle();
+        this._mostRecentURL = url;  
+      }
     }
     else {
       const tab = this.tabs[index - 1];
