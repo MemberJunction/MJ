@@ -1,4 +1,4 @@
-@import './../../../../.././MJExplorer/src/styles/_variables.scss';
+@import './../../../../../MJExplorer/src/styles/_variables.scss';
 .header-wrap {
   flex: auto;
 }
