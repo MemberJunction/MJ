@@ -921,6 +921,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Data
     await this.loadApplications(md);
 
+    //make sure SharedService_resourceTypes is populated first
+    await SharedService.RefreshData();
+
     // Dashboards
     await this.loadResourceType('Dashboards','Dashboards','/dashboards', md.CurrentUser.ID);
 
@@ -938,8 +941,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.loading = false;
   }
-
-
 
   protected async loadSkip(md: Metadata) {
     const drawerItem = {
@@ -1020,6 +1021,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         svgIcon: icon ? this.sharedService.kendoSVGIcon(icon) : null
       }
       this.drawerItems.push(drawerItem); 
+    }
+    else{
+      console.log("no resource type found for " + resourceType);
     }
   }
 

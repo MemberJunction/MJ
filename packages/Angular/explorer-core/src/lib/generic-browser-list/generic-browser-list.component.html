@@ -51,7 +51,7 @@
           <kendo-grid-column title="">
             <ng-template kendoGridCellTemplate let-dataItem>
               <div class="grid-wrapper">
-                <button class="list-btn" (click)="editItem(dataItem)">
+                <button *ngIf="!disableEditButton" class="list-btn" (click)="editItem(dataItem)">
                   <i class="fa-regular fa-pen-to-square"></i>
                 </button>
                 <button class="list-btn" (click)="deleteItem(dataItem)">
@@ -65,7 +65,7 @@
           <div *ngFor="let d of items">
             <kendo-card class="card-wrapper cursor-pointer">
               <div class="list-item-icon">
-                <button (click)="editItem(d)" class="list-btn">
+                <button *ngIf="!disableEditButton" (click)="editItem(d)" class="list-btn">
                   <span class="fa-regular fa-pen-to-square"></span>
                 </button>
                 <button (click)="deleteItem(d)" class="list-btn">
@@ -90,39 +90,19 @@
   <kendo-dialog 
   [minWidth]="450"
   [width]="650"
-  class="dialog-wrapper" title="Confirm" *ngIf="deleteDialogOpened" (close)="onConfirmDeleteItem(false)">
-    <kendo-loader *ngIf="showLoader" type="converging-spinner"></kendo-loader>
-    <div [class]="showLoader ? 'disabled-div' : ''">
-      <p class="k-m-7.5 k-text-center">
-        Are you sure you want to delete <b>{{selectedItem?.Name}}</b>
-      </p>
-      <div  class="k-actions k-actions-end popup-actions popup-actions-btn">
-        <button class="cancel-btn" kendoButton (click)="onConfirmDeleteItem(false)">
-          <span class="fa-solid fa-xmark"></span> No, Cancel
-        </button>
-        <button class="yes-btn" kendoButton (click)="onConfirmDeleteItem(true)" themeColor="primary">
-          <span class="fa-solid fa-check"></span> Yes, Delete
-        </button>
-      </div>
-    </div>
-  </kendo-dialog>
-  <kendo-dialog 
-
-    [minWidth]="450"
-    [width]="600"
-    [title]="getCopyFromTitle()" 
-    *ngIf="copyFromDialogOpened" 
-    (close)="toggleCopyFromView()"
-  >
-  <div class="search">
-    <input type="text" placeholder="Search" (keyup)="onKeyup(searchInput.value)"/>
-  </div>
-    <kendo-dialog-actions>
-      <button kendoButton>
-        Cancel
+  class="dialog-wrapper" 
+  title="Confirm" 
+  *ngIf="deleteDialogOpened" 
+  (close)="onConfirmDeleteItem(false)">
+    <p class="k-m-7.5 k-text-center">
+      Are you sure you want to delete <b>{{selectedItem?.Name}}?</b>
+    </p>
+    <kendo-dialog-actions class="popup-actions-btn">
+      <button class="cancel-btn" (click)="onConfirmDeleteItem(true)" kendoButton themeColor="info">
+        Yes, Delete
       </button>
-      <button kendoButton themeColor="primary">
-        Create new {{resourceName}}
+      <button class="yes-btn" (click)="onConfirmDeleteItem(false)" kendoButton fillMode="outline" themeColor="info">
+        No, Cancel
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>
@@ -137,12 +117,12 @@
   <div class="search">
     <kendo-textbox placeholder="Enter a folder name" (valueChange)="onCreateFolderKeyup($event)"/>
   </div>
-    <kendo-dialog-actions class=" popup-actions-btn">
-      <button  class="yes-btn" fillMode="outline" themeColor="info" (click)="toggleCreateFolderView()" kendoButton>
-        Cancel
-      </button>
+    <kendo-dialog-actions class="popup-actions-btn">
       <button class="cancel-btn" (click)="createFolder()" kendoButton themeColor="info">
         Create
+      </button>
+      <button  class="yes-btn" (click)="toggleCreateFolderView()" kendoButton fillMode="outline" themeColor="info">
+        Cancel
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>

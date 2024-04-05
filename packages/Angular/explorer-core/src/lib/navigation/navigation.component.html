@@ -9,10 +9,13 @@
       [animation]="false"
       (select)="onDrawerSelect($event)"
       [autoCollapse]="false"
-    />
+    >
+    </kendo-drawer>
+    <!--
     <div *ngIf="showExpansionPanel">
       <expansion-panel-component [items]="panelItems" />
     </div>
+    -->
     <kendo-drawer-content mjFillContainer>
 
       <mj-tabstrip #mjTabstrip mjFillContainer (TabClosed)="handleTabClosed($event)" (TabSelected)="handleTabSelected($event)" (TabContextMenu)="handleTabContextMenu($event)">
