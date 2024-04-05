@@ -1,4 +1,4 @@
-<div mjFillContainer>
+<div>
     <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
     <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="savePermissions()">Save</button>
     <button [disabled]="NumDirtyPermissions === 0" kendoButton (click)="cancelEdit()">Cancel</button>

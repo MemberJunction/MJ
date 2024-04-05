@@ -111,6 +111,8 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
                 ae.NewRecord();
                 ae.Sequence = 1000; // default value, isn't used anywhere 
 
+                ae.DefaultForNewUser = false; // not used anywhere
+                
                 ae.ApplicationName = this.ApplicationName;
                 ae.Set('Application', this.ApplicationName); // use weak typing to get around the readonly property
                 ae.SavedApplicationName = this.ApplicationName; // stash this in an extra property so we can later set it if we have a delete operation

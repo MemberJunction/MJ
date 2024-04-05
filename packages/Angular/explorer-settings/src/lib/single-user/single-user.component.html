@@ -33,23 +33,23 @@
                 </tr>
             </tbody>
         </table>         
-        <kendo-tabstrip
-            [keepTabContent]="true"
-            [animate]="false" 
-            >    
-            <kendo-tabstrip-tab title="Roles" [selected]="true">
-                <ng-template kendoTabContent>
-                    <mj-user-roles-grid Mode="Users" [UserID]="UserID" [UserRecord]="UserRecord"></mj-user-roles-grid>
-                </ng-template>
-            </kendo-tabstrip-tab>
-            <kendo-tabstrip-tab title="Views">
-                <ng-template kendoTabContent>
-                    <div class="content">
-                        <mj-user-view-grid *ngIf="UserViewsParams" [Params]="UserViewsParams"></mj-user-view-grid>
-                    </div>
-                </ng-template>
-            </kendo-tabstrip-tab>
-        </kendo-tabstrip>
+        <mj-tabstrip>
+            <mj-tab [TabSelected]="true">
+                Roles
+            </mj-tab>
+            <mj-tab-body>
+                <mj-user-roles-grid Mode="Users" [UserID]="UserID" [UserRecord]="UserRecord"></mj-user-roles-grid>
+            </mj-tab-body>
+
+            <mj-tab>
+                Views
+            </mj-tab>   
+            <mj-tab-body> 
+                <div class="content">
+                    <mj-user-view-grid *ngIf="UserViewsParams" [Params]="UserViewsParams"></mj-user-view-grid>
+                </div>
+            </mj-tab-body>
+        </mj-tabstrip>
     </div>
 </div>
 

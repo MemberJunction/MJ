@@ -1,6 +1,8 @@
-<div mjFillContainer>
-    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
-    <div *ngIf="!isLoading && RoleRecord">
+<div mjFillContainer class="wrapper">
+    @if(isLoading) {
+        <kendo-loader></kendo-loader>        
+    }
+    @if(!isLoading && RoleRecord) {
         <table class="role-info-table">
             <tbody>
                 <tr>
@@ -23,24 +25,23 @@
                 </tr>
             </tbody>
         </table>         
-        <kendo-tabstrip
-            [keepTabContent]="true"
-            [animate]="false" 
-            >    
-            <kendo-tabstrip-tab title="Users" [selected]="true">
-                <ng-template kendoTabContent>
-                    <mj-user-roles-grid Mode="Roles" [RoleName]="RoleName" [RoleRecord]="RoleRecord"></mj-user-roles-grid>
-                </ng-template>
-            </kendo-tabstrip-tab>
-            <kendo-tabstrip-tab title="Entity Permissions">
-                <ng-template kendoTabContent>
-                    <div class="content">
-                        <mj-entity-permissions-grid *ngIf="RoleRecord && RoleRecord.Name" Mode="Role" [RoleName]="RoleRecord.Name" ></mj-entity-permissions-grid>
-                    </div>
-                </ng-template>
-            </kendo-tabstrip-tab>
-        </kendo-tabstrip>
-    </div>
+
+        <mj-tabstrip mjFillContainer [bottomMargin]="150">
+            <mj-tab>
+                Users
+            </mj-tab>
+            <mj-tab-body>
+                <mj-user-roles-grid Mode="Roles" [RoleName]="RoleName" [RoleRecord]="RoleRecord"></mj-user-roles-grid>
+            </mj-tab-body>
+
+            <mj-tab>
+                Entity Permissions
+            </mj-tab>
+            <mj-tab-body>
+                <mj-entity-permissions-grid *ngIf="RoleRecord && RoleRecord.Name" Mode="Role" [RoleName]="RoleRecord.Name" mjFillContainer></mj-entity-permissions-grid>
+            </mj-tab-body>
+        </mj-tabstrip>
+    }
 </div>
  
 <mj-entity-form-dialog #entityForm 

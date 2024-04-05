@@ -1,6 +1,6 @@
-<div class="container" mjFillContainer [fillWidth]="false" [bottomMargin]="5">
+<div class="container" mjFillContainer [bottomMargin]="5" [rightMargin]="0">
     <!-- Options container -->
-    <div class="options-container">
+    <div class="options-container" mjFillContainer [fillWidth]="false">
         <div *ngFor="let o of options"
             class="option-item"
             [class.selected]="leftNavItemSelected(o)"
@@ -9,45 +9,44 @@
     </div>
 
     <!-- Display container -->
-    <div class="display-container">
-        <div *ngIf="currentItem === 'EntityPermissions'">
-            <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
-        </div>
-
-        <div *ngIf="currentItem === 'Users'">
-            <mj-simple-record-list
-                EntityName="Users"
-                SortBy="Name"
-                [Columns]="['Name', 'Email', 'IsActive', 'Type']"
-                (RecordSelected)="selectUser($event)"
-            ></mj-simple-record-list>
-        </div>
-        <div *ngIf="currentItem === 'User'">
-            <mj-single-user [UserID]="selectedUserID"></mj-single-user>
-        </div>
-
-        <div *ngIf="currentItem === 'Roles'">
-            <mj-simple-record-list
-                EntityName="Roles"
-                SortBy="Name"
-                [Columns]="['Name', 'Description']"
-                (RecordSelected)="selectRole($event)"
-            ></mj-simple-record-list>
-        </div>
-        <div *ngIf="currentItem === 'Role'">
-            <mj-single-role [RoleName]="selectedRoleName"></mj-single-role>
-        </div>
-
-        <div *ngIf="currentItem === 'Applications'">
-            <mj-simple-record-list
-                EntityName="Applications"
-                SortBy="Name"
-                [Columns]="['Name', 'Description']"
-                (RecordSelected)="selectApplication($event)"
-            ></mj-simple-record-list>
-        </div>
-        <div *ngIf="currentItem === 'Application'">
-            <mj-single-application [ApplicationName]="selectedApplicationName"></mj-single-application>
-        </div>        
+    <div class="display-container" mjFillContainer [fillWidth]="false">
+        @switch (currentItem) {
+            @case ('EntityPermissions') {
+                <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>
+            }
+            @case ('Users') {
+                <mj-simple-record-list
+                    EntityName="Users"
+                    SortBy="Name"
+                    [Columns]="['Name', 'Email', 'IsActive', 'Type']"
+                    (RecordSelected)="selectUser($event)"
+                ></mj-simple-record-list>
+            }
+            @case ('User') {
+                <mj-single-user [UserID]="selectedUserID"></mj-single-user>
+            }
+            @case ('Roles') {
+                <mj-simple-record-list
+                    EntityName="Roles"
+                    SortBy="Name"
+                    [Columns]="['Name', 'Description']"
+                    (RecordSelected)="selectRole($event)"
+                ></mj-simple-record-list>
+            }
+            @case ('Role') {
+                <mj-single-role [RoleName]="selectedRoleName" mjFillContainer></mj-single-role>
+            }
+            @case ('Applications') {
+                <mj-simple-record-list
+                    EntityName="Applications"
+                    SortBy="Name"
+                    [Columns]="['Name', 'Description']"
+                    (RecordSelected)="selectApplication($event)"
+                ></mj-simple-record-list>
+            }
+            @case ('Application') {
+                <mj-single-application [ApplicationName]="selectedApplicationName"></mj-single-application>
+            }
+        }
     </div>
 </div>

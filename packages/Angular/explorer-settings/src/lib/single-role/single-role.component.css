@@ -1,3 +1,7 @@
+.wrapper {
+    display: block;
+}
+
 button {
     margin-left: 5px;
     margin-top: 5px;

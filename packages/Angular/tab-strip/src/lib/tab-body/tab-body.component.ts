@@ -11,7 +11,10 @@ import { MJTabStripComponent } from '../tab-strip/tab-strip.component';
 export class MJTabBodyComponent extends MJTabBase {
   @Input() TabVisible = false;
 
-  constructor(@Host() private tabstrip: MJTabStripComponent) {
+  @Input() FillWidth: boolean = true;
+  @Input() FillHeight: boolean = true;
+  
+  constructor(@Host() private tabStrip: MJTabStripComponent) {
     super();
   }
 }

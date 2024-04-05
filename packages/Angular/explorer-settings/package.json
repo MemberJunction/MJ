@@ -35,6 +35,7 @@
     "@memberjunction/ng-entity-form-dialog": "^0.9.24",
     "@memberjunction/ng-user-view-grid": "^0.9.236",
     "@memberjunction/ng-simple-record-list": "^0.9.24",
+    "@memberjunction/ng-tabstrip": "0.9.12",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",

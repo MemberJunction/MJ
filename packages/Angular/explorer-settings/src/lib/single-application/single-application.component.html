@@ -1,6 +1,8 @@
 <div mjFillContainer>
-    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
-    <div *ngIf="!isLoading && Record">
+    @if(isLoading) {
+        <kendo-loader></kendo-loader>
+    }
+    @if(!isLoading && Record) {
         <table class="info-table">
             <tbody>
                 <tr>
@@ -15,17 +17,15 @@
                 </tr>
             </tbody>
         </table>         
-        <kendo-tabstrip
-            [keepTabContent]="true"
-            [animate]="false" 
-            >    
-            <kendo-tabstrip-tab title="Entities" [selected]="true">
-                <ng-template kendoTabContent>
-                    <mj-application-entities-grid *ngIf="ApplicationName && Record" Mode="Applications" [ApplicationName]="ApplicationName" [ApplicationRecord]="Record"></mj-application-entities-grid>
-                </ng-template>
-            </kendo-tabstrip-tab>
-        </kendo-tabstrip>
-    </div>
+        <mj-tabstrip mjFillContainer>
+            <mj-tab [TabSelected]="true">
+                Entities
+            </mj-tab>
+            <mj-tab-body>
+                <mj-application-entities-grid *ngIf="ApplicationName && Record" Mode="Applications" [ApplicationName]="ApplicationName" [ApplicationRecord]="Record"></mj-application-entities-grid>
+            </mj-tab-body>
+        </mj-tabstrip>
+    }
 </div>
 
 

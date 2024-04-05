@@ -105,25 +105,24 @@
                                 <button kendoButton (click)="addSort()">
                                     <span class="fa-solid fa-arrow-up-a-z"></span>
                                 </button>
-                                
                             </div>
                             <div *ngFor="let s of this.sortState"> 
                                 <kendo-dropdownlist 
-                                class="sort-column"
-                                [data]="sortFields"
-                                textField="Name"
-                                valueField="Name"
-                                (valueChange)="sortColumnValueChange(s, $event)"
-                                [(ngModel)]="s.field"
+                                    class="sort-column"
+                                    [data]="sortFields"
+                                    textField="Name"
+                                    valueField="Name"
+                                    (valueChange)="sortColumnValueChange(s, $event)"
+                                    [(ngModel)]="s.field"
                                 >
                                 </kendo-dropdownlist>
                                 <kendo-dropdownlist
-                                class="sort-direction"
-                                [data]="sortDirections"
-                                textField="Name"
-                                valueField="Value"
-                                (valueChange)="sortDirectionValueChange(s, $event)"
-                                [(ngModel)]="s.direction"
+                                    class="sort-direction"
+                                    [data]="sortDirections"
+                                    textField="Name"
+                                    valueField="Value"
+                                    (valueChange)="sortDirectionValueChange(s, $event)"
+                                    [(ngModel)]="s.direction"
                                 >
                                 </kendo-dropdownlist>
                                 <button kendoButton (click)="removeSort(s)">
@@ -134,7 +133,7 @@
                         </kendo-tabstrip-tab>
                         <kendo-tabstrip-tab title="Advanced">
                             <ng-template kendoTabContent>
-                            <div *ngIf="record.SmartFilterEnabled">
+                            @if(record.SmartFilterEnabled) {
                                 <kendo-textarea
                                 [readonly]="true"
                                 [rows]="5"
@@ -149,8 +148,8 @@
                                 resizable="vertical"
                                 class="advanced-tab-details"
                                 ></kendo-textarea>  
-                            </div>
-                            <div *ngElse>
+                            }
+                            @else {
                                 <kendo-textarea
                                 [readonly]="true"
                                 [rows]="7"
@@ -158,7 +157,7 @@
                                 resizable="vertical"
                                 class="advanced-tab-details"
                                 ></kendo-textarea>
-                            </div>
+                            }
             
                             </ng-template>
                         </kendo-tabstrip-tab>
