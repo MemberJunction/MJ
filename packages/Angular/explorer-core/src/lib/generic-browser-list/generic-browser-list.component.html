@@ -2,7 +2,10 @@
 <div class="generic-browser-list-container">
   <div class="main-fav-wrapper">
     <div class="title-wrapper">
-      <h4>{{title}}</h4>
+      <div class="title-flex-display">
+        <span *ngIf="selectedFolderID" title="Folder" class="title-folder fa-regular fa-folder fa-2xl"></span>
+        <h4>{{title}}</h4>
+      </div>
       <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="data" themeColor="info">
         <span class="fa-solid fa-plus"></span>
         Create New
@@ -73,8 +76,8 @@
                 </button>
               </div>
               <kendo-card-body (click)="itemClick(d)">
-                  <span *ngIf="d.Type === 'Folder'" class="fa-3x fa-regular fa-folder"></span>
-                  <span *ngIf="d.Type !== 'Folder'" class="fa-3x fa-solid fa-table-cells"></span>
+                  <span *ngIf="d.Type === 'Folder'" title="Folder" class="fa-3x fa-regular fa-folder"></span>
+                  <span *ngIf="d.Type !== 'Folder'" [title]="resourceName" class="fa-3x fa-solid fa-table-cells"></span>
                   <div class="padding-top-small">
                     <h5 kendoCardTitle>{{ d.Name }}</h5>
                     <p kendoCardSubtitle>{{ d.Description }}</p>
