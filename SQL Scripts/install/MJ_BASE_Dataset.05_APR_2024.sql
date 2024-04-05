@@ -1833,7 +1833,7 @@ PRINT(N'Operation applied to 72 rows out of 72')
 
 PRINT(N'Add rows to [__mj].[QueryCategory]')
 SET IDENTITY_INSERT [__mj].[QueryCategory] ON
-INSERT INTO [__mj].[QueryCategory] ([ID], [Name], [ParentID], [Description], [CreatedAt], [UpdatedAt], [UserID]) VALUES (1, N'Admin', NULL, NULL, '2024-02-02 18:51:42.120', '2024-02-02 18:51:42.120', 13)
+INSERT INTO [__mj].[QueryCategory] ([ID], [Name], [ParentID], [Description], [CreatedAt], [UpdatedAt], [UserID]) VALUES (1, N'Admin', NULL, NULL, '2024-02-02 18:51:42.120', '2024-02-02 18:51:42.120', 8)
 SET IDENTITY_INSERT [__mj].[QueryCategory] OFF
 PRINT(N'Operation applied to 1 rows out of 3')
 
