@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-forms",
-  "version": "0.9.25",
+  "version": "0.9.26",
   "description": "MemberJunction: Angular Base Form Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,7 +28,7 @@
     "@memberjunction/global": "^0.9.168",
     "@memberjunction/core": "^0.9.188",
     "@memberjunction/ng-record-changes": "^0.9.135",
-    "@memberjunction/ng-tabstrip": "^0.9.12",
+    "@memberjunction/ng-tabstrip": "^0.9.13",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "tslib": "^2.3.0"
   },
