@@ -248,3 +248,13 @@
 .cursor-pointer {
     cursor: pointer;
 }
+
+.title-folder {
+    padding-right: 20px;
+    margin: auto;
+}
+
+.title-flex-display {
+    display: flex;
+    flex-direction: row;
+}

@@ -234,7 +234,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
         this.updateRecordGridState(); 
   }
 
-  public async saveProperties() {
+  public async saveProperties() : Promise<void> {
+
     const bNewRecord = !(this.record.PrimaryKey.Value)
     this.showloader = true;
     const lfs = JSON.stringify(this.localFilterState);
@@ -250,15 +251,29 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.record.SortState = JSON.stringify(sortMap);
 
     // validate the record first
-    const valResults = this.record.Validate()
+    const valResults = this.record.Validate();
     if (valResults.Success === false) {
       this.showloader = false;
       this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
     }
-    else if (await this.record.Save()) {
-      this.dialogClosed.emit({Saved: true, ViewEntity: this.record});
-      this.isDialogOpened = false; // close the kendo window - this works through ngIf binding
-      this.showloader = false;
+
+    this.showloader = false;
+    this.isDialogOpened = false;
+
+    let saveResult: boolean = await this.record.Save(); 
+    if(saveResult){
+      let event: any = {
+        Saved: true, 
+        ViewEntity: this.record,
+        Cancel: false,
+        bNewRecord: bNewRecord
+      }
+
+      this.dialogClosed.emit(event); 
+
+      if(event.Cancel) {
+        return;
+      }
 
       if (!bNewRecord) // view already exists so we're not changing the route as it is alreayd on the view, but we fire an event to let people know that it's changed
         MJGlobal.Instance.RaiseEvent({
@@ -273,9 +288,10 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
                                 }),
           component: this
         });
-      else  
+      else{
         // we route to the new view using the router
         this.router.navigate(['resource', 'view', this.record.PrimaryKey.Value])
+      }
     }
     else {
       // it failed, so don't close the dialog

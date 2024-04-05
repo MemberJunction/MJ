@@ -9,14 +9,15 @@ export class BaseBrowserComponent {
     public folders: Folder[];
     public entityData: any[];
     public selectedFolderID: number | null = null;
-    protected viewMode: string = "list";
-    protected parentFolderID: number | null = null;
+    public pageTitle: string = '';
 
     protected pageName: string = "";
     protected routeName: string = "";
     protected routeNameSingular: string = "";
     protected itemEntityName: string = "";
     protected categoryEntityName: string = "";
+    protected viewMode: string = "list";
+    protected parentFolderID: number | null = null;
     
     constructor() {
         this.items = [];

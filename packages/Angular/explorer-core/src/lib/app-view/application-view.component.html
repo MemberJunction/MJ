@@ -20,7 +20,7 @@
             </div>
         </div>
     </div>
-    <mj-user-view-properties-dialog [EntityName]="this.appName" [ShowPropertiesButton]="false" (dialogClosed)="viewPropertiesClosed($event)">
+    <mj-user-view-properties-dialog [EntityName]="this.appName" [ShowPropertiesButton]="false" (dialogClosed)="OnViewPropertiesDialogClose($event)">
     </mj-user-view-properties-dialog>
     <div class="main-area margin-top-neg-20">
         <app-generic-browser-list 
@@ -30,7 +30,7 @@
             addText="Create New View"
             ItemEntityName="User Views"
             resourceName="View"
-            [title]="selectedAppEntity?.Entity"
+            [title]="pageTitle"
             [CategoryEntityName]="categoryEntityName"
             (itemClickEvent)="onItemClick($event)" 
             [selectedFolderID]="selectedFolderID"

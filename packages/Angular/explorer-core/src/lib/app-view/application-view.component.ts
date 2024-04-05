@@ -1,9 +1,9 @@
 import { Component, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { ApplicationEntityInfo, Metadata, LogStatus } from '@memberjunction/core';
-import { UserFavoriteEntity, UserViewEntity } from '@memberjunction/core-entities';
+import { UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
-import { Item, ItemType } from '../../generic/Item.types';
+import { Folder, Item, ItemType } from '../../generic/Item.types';
 import { BaseBrowserComponent } from '../base-browser-component/base-browser-component';
 import {Location} from '@angular/common'; 
 import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
@@ -94,6 +94,16 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.selectedAppEntity = appEntityButton.Data;
         this.categoryEntityID = this.selectedAppEntity.EntityID;
 
+        if(this.selectedFolderID){
+            let viewResult: Folder[] = await super.RunView(this.categoryEntityName, `ID=${this.selectedFolderID}`);
+            if(viewResult.length > 0){
+                this.pageTitle = viewResult[0].Name;
+            }
+        }
+        else{
+            this.pageTitle = this.selectedAppEntity.Entity;
+        }
+
         const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID=${this.selectedFolderID}` : 'ParentID IS NULL';
         const categoryFilter: string = `EntityID=${this.selectedAppEntity.EntityID} AND ` + parentFolderIDFilter;
         
@@ -108,6 +118,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             entityItemFilter: userViewFilter, 
             showLoader: true
         });
+
         this.showLoader = false;
     }
 
@@ -182,14 +193,21 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         this.viewPropertiesDialog.Open(data.ID);
     }
 
-    public async viewPropertiesClosed(args: any): Promise<void> {
+    public async OnViewPropertiesDialogClose(args: {Saved?: boolean, ViewEntity?: UserViewEntityExtended, Cancel?: boolean, bNewRecord?: boolean}): Promise<void> {
+        if(args && args.bNewRecord){
+            //the component will handle redirecting to the view
+            //dont need to do anything here
+            return;
+        }
+        
         if(args && args.Saved){
+            args.Cancel = true;
+
             const entityNameToLower: string = this.appName.toLowerCase();
             const selectedAppEntity = this.AppEntityButtons.find(e => e.Name.toLocaleLowerCase() == entityNameToLower);
             if(selectedAppEntity){
                 selectedAppEntity.Selected = true;
                 await this.loadEntitiesAndFolders(selectedAppEntity);
-                return;
             }
         }
     }

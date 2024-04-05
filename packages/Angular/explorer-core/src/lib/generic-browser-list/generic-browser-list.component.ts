@@ -77,9 +77,7 @@ export class GenericBrowserListComponent implements OnInit{
     { text: "Folder" },
   ];
 
-  constructor(public sharedService: SharedService, private router: Router) {
-    this.router = router;
-
+  constructor(public sharedService: SharedService) {
     this.filterItemsSubject
         .pipe(debounceTime(this._resizeDebounceTime))
         .subscribe(() => this.filterItems(this.filter));
@@ -141,12 +139,12 @@ export class GenericBrowserListComponent implements OnInit{
 
   }
 
-  //todo - show a modal asking the user for a name to give the folder
   public async createFolder(): Promise<void> {
     this.toggleCreateFolderView(false);
 
     let event: BeforeAddFolderEvent = new BeforeAddFolderEvent(this.newFolderText);
     if(event.Cancel){
+      return;
     }
 
     let folderName: string = this.newFolderText;
@@ -159,6 +157,7 @@ export class GenericBrowserListComponent implements OnInit{
     folderEntity.Set("Name", folderName);
     folderEntity.Set("ParentID", this.selectedFolderID);
     folderEntity.Set("Description", description);
+    folderEntity.Set("UserID", md.CurrentUser.ID);
     
     if(this.categoryEntityID){
       folderEntity.Set("EntityID", this.categoryEntityID);
@@ -172,7 +171,16 @@ export class GenericBrowserListComponent implements OnInit{
       folder.Description = folderEntity.Get("Description");
 
       let item: Item = new Item(folder, ItemType.Folder);
-      this.AfterAddFolderEvent.emit(new AfterAddFolderEvent(item));
+      let event: AfterAddFolderEvent = new AfterAddFolderEvent(item);
+      this.AfterAddFolderEvent.emit(event);
+
+      if(event.Cancel){
+        return;
+      }
+
+      //navigate to the newly created folder
+      //by raising an item click event
+      this.itemClick(item);
     }
     else{
       this.sharedService.CreateSimpleNotification(`Unable to create folder ${folderName}`, "error");
@@ -328,7 +336,7 @@ export class GenericBrowserListComponent implements OnInit{
 
   private showNotification(message: string, type: "none" | "success" | "error" | "warning" | "info" | undefined): void {
     if(this.showNotifications){
-      this.sharedService.CreateSimpleNotification(message, type, 500);
+      this.sharedService.CreateSimpleNotification(message, type, 1000);
     }
   }
 
