@@ -19,6 +19,7 @@ export class GenericBrowserListComponent implements OnInit{
   @Input() public items: any[] = [];
   @Input() public iconName: string = 'view';
   @Input() public disableAddButton: boolean = false;
+  @Input() public disableEditButton: boolean = false;
   @Input() public addText: string = 'Create New';
   @Input() public backText: string = 'Go Back';
   @Input() public ItemEntityName: string = '';
@@ -85,7 +86,9 @@ export class GenericBrowserListComponent implements OnInit{
   }
 
   public ngOnInit(): void {
-    this.data.push({ text: this.resourceName });
+    if(!this.disableAddButton){
+      this.data.push({ text: this.resourceName });
+    }
   }
   
 
@@ -106,7 +109,6 @@ export class GenericBrowserListComponent implements OnInit{
     this.backButtonClickEvent.emit();
   }
 
-  //todo - show a modal asking the user for a name to give the resource
   public async addResourceButtonClicked() {
 
     let event: BeforeAddItemEvent = new BeforeAddItemEvent("");
@@ -149,7 +151,6 @@ export class GenericBrowserListComponent implements OnInit{
 
     let folderName: string = this.newFolderText;
     let description: string = "";
-    console.log("creating folder: ", folderName, this.CategoryEntityName);
     
     const md: Metadata = new Metadata();
     const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
@@ -327,7 +328,7 @@ export class GenericBrowserListComponent implements OnInit{
 
   private showNotification(message: string, type: "none" | "success" | "error" | "warning" | "info" | undefined): void {
     if(this.showNotifications){
-      this.sharedService.CreateSimpleNotification(message, type);
+      this.sharedService.CreateSimpleNotification(message, type, 500);
     }
   }
 
@@ -355,7 +356,6 @@ export class GenericBrowserListComponent implements OnInit{
   }
 
   private filterItems(filter: string): void {
-    console.log("filtering items");
 
     if(!this.sourceItems){
       this.sourceItems = [...this.items];
@@ -407,16 +407,15 @@ export class GenericBrowserListComponent implements OnInit{
   }
 
   public async onDropdownItemClick(data: {text: string}): Promise<void>{
-    console.log("onDropdownItemClick: ", data.text);
+    if(!data || !data.text){
+      return;
+    }
 
     if(data.text === "Folder"){
       this.toggleCreateFolderView();
     }
-    else if(data.text === "Report with Skip"){
-      //todo - implement
-    }
     else if(data.text === this.resourceName){
-      this.toggleCopyFromView();
+      this.addResourceButtonClicked();
     }
   }
 
