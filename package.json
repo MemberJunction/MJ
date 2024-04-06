@@ -9,12 +9,15 @@
   ],
   "scripts": {
     "build": "turbo build --filter=!mj_explorer",
-    "start": "turbo start --filter=mj_explorer --filter=mj_api"
+    "start": "turbo start --filter=mj_explorer --filter=mj_api",
+    "docs": "typedoc"
   },
   "dependencies": {
     "archiver": "^7.0.0"
   },
   "devDependencies": {
-    "turbo": "^1.12.5"
+    "turbo": "^1.12.5",
+    "typedoc": "^0.25.12",
+    "typedoc-plugin-missing-exports": "^2.2.0"
   }
 }
