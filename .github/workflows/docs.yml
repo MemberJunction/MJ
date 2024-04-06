@@ -1,0 +1,38 @@
+name: Update package documentation
+on:
+  workflow_dispatch:
+
+jobs:
+  docs:
+    name: Generate and commit updated documentation
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          
+
+      - name: Set up node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate doumentation
+        run: npm run docs
+
+      - name: Git configuration
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"        
+
+      - name: Commit updated documentation
+        run: |
+          git add docs
+          git commit -m "Update package documentation"
+          git push origin
