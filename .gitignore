@@ -67,6 +67,7 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
+docs/
 SQL Scripts/generated/
 *.old
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql

@@ -1,8 +1,9 @@
 {
-  "name": "codegen",
+  "name": "mj_codegen",
   "version": "1.0.1",
   "description": "MemberJunction Code Generator Utility",
   "main": "src/index.ts",
+  "private": true,
   "scripts": {
     "dev:debug": "ts-node-dev --transpile-only --respawn --inspect=4321 --project tsconfig.dev.json src/index.ts",
     "dev": "ts-node-dev --transpile-only --respawn --project tsconfig.dev.json src/index.ts",

@@ -1,0 +1,16 @@
+{
+  // Comments are supported
+  "name": "Member Junction",
+  "entryPoints": ["packages/*", "packages/Angular/*", "packages/AI/*"],
+  "entryPointStrategy": "packages",
+  "out": "docs",
+  "exclude": [
+    "packages/CodeGen/",
+    "packages/GeneratedEntities/",
+    "packages/MJAPI/",
+    "packages/MJExplorer/",
+    "**/*.spec.ts",
+    "**/*.d.ts",
+    "node_modules"
+  ]
+}
