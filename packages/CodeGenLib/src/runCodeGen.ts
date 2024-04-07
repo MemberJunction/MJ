@@ -3,7 +3,7 @@ import { manageSQLScriptsAndExecution, runCustomSQLScripts } from './sql_codegen
 import { generateAllEntitySubClasses } from './entity_subclasses_codegen';
 import { setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource from "./db"
-import { manageMetadata } from './manageMetadata';
+import { ManageMetadataBase } from './manageMetadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
 import { logError, logStatus } from './logging';
 import * as MJ from '@memberjunction/core'
@@ -12,6 +12,7 @@ import { generateDBSchemaJSONOutput } from './dbSchema';
 import { generateAngularCode } from './angular_client_codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { createNewUser } from './createNewUser';
+import { MJGlobal } from '@memberjunction/global';
 
 export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false) {
     try {
@@ -73,8 +74,9 @@ export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: bo
             /****************************************************************************************
             // STEP 1 - Manage Metadata - including generating new metadata as required
             ****************************************************************************************/
+            const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase);
             logStatus('Managing Metadata...')
-            if (! await manageMetadata(AppDataSource))
+            if (! await manageMD.manageMetadata(AppDataSource))
                 logError('ERROR managing metadata');
 
             /****************************************************************************************
