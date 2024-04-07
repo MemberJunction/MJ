@@ -120,8 +120,13 @@ function Update-BuildLog {
 
 
 
-function Update-PatchVersion {
+function Update-Version {
     param (
+        [hashtable]$newVersion = @{
+            major = $null
+            minor = $null
+            patch = $null
+        },
         [int]$maxRetries = 10, # Maximum number of retries
         [int]$retryDelay = 4  # Delay in seconds between retries
     )
@@ -132,10 +137,14 @@ function Update-PatchVersion {
     while ($attempt -lt $maxRetries -and -not $success) {
         try {
             $json = Get-Content 'package.json' -Raw | ConvertFrom-Json
-            $version = $json.version -split '\.'
-            $patch = [int]$version[2] + 1
-            $newVersion = "$($version[0]).$($version[1]).$patch"
-            $json.version = $newVersion
+            if ($null -ne $newVersion.major -and $null -ne $newVersion.minor -and $null -ne $newVersion.patch) {
+                $json.version = "$($newVersion.major).$($newVersion.minor).$($newVersion.patch)"
+            } else {
+                $version = $json.version -split '\.'
+                $patch = [int]$version[2] + 1
+                $newVer = "$($version[0]).$($version[1]).$patch"
+                $json.version = $newVer    
+            }
             $json | ConvertTo-Json -Depth 64 | Set-Content 'package.json'
             $success = $true
         } catch {
@@ -237,6 +246,40 @@ function UpdatePackageJSONToLatestDependencyVersion($rootDirectory, $packageName
     }
 }
 
+function GetLargestVersionNumbers() {
+    # this function will look at ALL of the packages in our build.order.json file and will return an object that has major, minor and patch properties
+    # the major, minor and patch properties will be the LARGEST major, minor and patch numbers found in the packages in the build.order.json file
+    # we will then add 1 to the patch number and return the object
+    $largestVersion = @{
+        major = 0
+        minor = 0
+        patch = 0
+    }
+    # next iterate through all of the pacakges in the build.order.json file and get the LARGEST major, minor and patch numbers
+    foreach ($lib in $libraries) {
+        $packageName = $lib.PackageName
+        $directoryName = MapPackageNameToDirectoryName $rootDirectory $packageName
+        $dependencyPath = Join-Path -Path $directoryName -ChildPath "package.json"
+
+        if (Test-Path $dependencyPath) {
+            $depJson = Get-Content $dependencyPath | ConvertFrom-Json
+            $version = $depJson.version -split '\.'
+
+            if ([int]$version[0] -gt $largestVersion.major) {
+                $largestVersion.major = [int]$version[0]
+            }
+            if ([int]$version[1] -gt $largestVersion.minor) {
+                $largestVersion.minor = [int]$version[1]
+            }
+            if ([int]$version[2] -gt $largestVersion.patch) {
+                $largestVersion.patch = [int]$version[2]
+            }
+        }
+    }
+    # now return the object with the largest version numbers
+    return $largestVersion
+}
+
 function InstallLatestVersion($packageName) {
     npm install @memberjunction/$packageName@latest --save
 }
@@ -285,6 +328,44 @@ foreach ($lib in $libraries) {
 # GET USER INPUT ON OPTIONS
 $publishToNPM = Read-Host "Do you want to publish to npm? (y/n)"
 $ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publish EVERYTHING, regardless of if things changed)? (y/n)"
+$alignVersions = "n"
+$newVersion = @{
+    major = $null
+    minor = $null
+    patch = $null
+}
+if ($ignoreBuildLog -eq "y") {
+    $alignVersions = Read-Host "Do you want to align version numbers to ensure the same major/minor/patch version on all packages? (y/n)"
+    if ($alignVersions -eq "y") {
+        # now get the major, minor and patch version number to use, do this by doing a look into ALL packages we have in our build.order.json file
+        # and get the LARGEST major, LARGEST minor, and LARGEST patch number and then add 1 to the patch number
+        $customVersion = Read-Host "Do you want to specify a custom version number? If NO, will calculate the highest major/minor/patch version and add 1 to the patch version. (y/n)"
+        if ($customVersion -eq "y") {
+            $customVersionInput = Read-Host "Enter the complete version number (e.g. 1.2.3)"
+            $customVersionArray = $customVersionInput -split '\.'
+
+            # make sure we validate the custom version array that it has exactly 3 elements and that each element is a 0 or greater integer
+            if ($customVersionArray.Length -ne 3) {
+                Write-Host "Invalid version number entered, must be in format of 1.2.3  ----- Halting the script."
+                exit
+            }
+
+            $newVersion = @{
+                major = [int]$customVersionArray[0]
+                minor = [int]$customVersionArray[1]
+                patch = [int]$customVersionArray[2]
+            }
+            # now make sure that the custom version number is valid, we have to have a major, minor and patch number and they have to be non-null and non-negative
+            if ($null -eq $newVersion.major -or $null -eq $newVersion.minor -or $null -eq $newVersion.patch -or $newVersion.major -lt 0 -or $newVersion.minor -lt 0 -or $newVersion.patch -lt 0) {
+                Write-Host "Invalid version number entered. Halting the script."
+                exit
+            }
+        } else {
+            # get the largest version numbers (major, minor, patch) and add 1 to the patch number
+            $newVersion = GetLargestVersionNumbers
+        }
+    }
+}
 ############################################################################################################
 
 # Store the Root Directory so we can come back to it later
@@ -317,7 +398,15 @@ foreach ($libObject in $libraries) {
         Write-Host "   Building and publishing $lib"
 
         if (!$libObject.SkipNPMPublish) {
-            Update-PatchVersion
+            if ($alignVersions -eq "y") {
+                # Update the version number in the package.json file for the current library with the 
+                # STANDARDIZED version number (major, minor, patch)
+                Update-Version $newVersion 
+            }
+            else {
+                # we are NOT aligning version numbers, rather we are just updating the patch version number
+                Update-Version
+            }
         }
 
         # build the project
