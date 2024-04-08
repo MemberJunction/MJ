@@ -13,8 +13,8 @@ import { RegisterClass } from "@memberjunction/global";
  */
 @RegisterClass(ManageMetadataBase)
 export class ManageMetadataBase {
-   private _newEntityList: string[] = [];
-   public get newEntityList(): string[] {
+   private static _newEntityList: string[] = [];
+   public static get newEntityList(): string[] {
       return this._newEntityList;
    }
 
@@ -51,7 +51,7 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
    
-      if (this._newEntityList.length > 0) {
+      if (ManageMetadataBase.newEntityList.length > 0) {
          await this.generateNewEntityDescriptions(ds, md); // don't pass excludeSchemas becuase by definition this is the NEW entities we created
       }
    
@@ -304,7 +304,7 @@ export class ManageMetadataBase {
          const systemPrompt = prompt.systemPrompt;
          const userMessage = prompt.userMessage + '\n\n';
          // now loop through the new entities and generate descriptions for them
-         for (let e of this.newEntityList) {
+         for (let e of ManageMetadataBase.newEntityList) {
             const data = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntities WHERE Name = '${e}'`);
             const fields = await ds.query(`SELECT * FROM [${mj_core_schema()}].vwEntityFields WHERE EntityID = ${data[0].ID}`);
             const entityUserMessage = userMessage + `Entity Name: ${e}, 
@@ -807,7 +807,7 @@ export class ManageMetadataBase {
                } 
             })
       
-            if (this.newEntityList.length > 0) {
+            if (ManageMetadataBase.newEntityList.length > 0) {
                // only do this if we actually created new entities
                LogStatus(`   Done creating entities, refreshing metadata to reflect new entities...`)
                await md.Refresh();// refresh now since we've added some new entities   
@@ -902,7 +902,7 @@ export class ManageMetadataBase {
             let newEntityName: string = await this.createNewEntityName(newEntity);
             let suffix = '';
             const existingEntity = md.Entities.find(e => e.Name === newEntityName);
-            const existingEntityInNewEntityList = this.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
+            const existingEntityInNewEntityList = ManageMetadataBase.newEntityList.find(e => e === newEntityName); // check the newly created entity list to make sure we didn't create the new entity name along the way in this RUN of CodeGen as it wouldn't yet be in our metadata above
             if (existingEntity || existingEntityInNewEntityList) {
                // the generated name is already in place, so we need another name
                // use Entity Name __ SchemaName instead of just the table name as basis
@@ -923,7 +923,7 @@ export class ManageMetadataBase {
                // if we get here we created a new entity safely, otherwise we get exception
    
                // add it to the new entity list
-               this.newEntityList.push(newEntityName);
+               ManageMetadataBase.newEntityList.push(newEntityName);
    
                // next, check if this entity is in a schema that is new (e.g. no other entities have been added to this schema yet), if so and if 
                // our config option is set to create new applications from new schemas, then create a new application for this schema
