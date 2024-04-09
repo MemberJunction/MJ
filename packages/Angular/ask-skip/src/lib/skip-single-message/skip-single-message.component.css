@@ -28,13 +28,11 @@
     max-height: 100%;
 }
 .user-message {
-  background-color: white;
 }
 .error-message {
     background-color:lightpink;
 }
 .ai-message {
-  background-color: white;
 }
 .ai-message-in-progress {
     font-style: italic;
