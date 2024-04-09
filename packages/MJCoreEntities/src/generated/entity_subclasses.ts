@@ -5160,6 +5160,15 @@ import { RegisterClass } from "@memberjunction/global";
         set Sequence(value: number) {
             this.Set('Sequence', value);
         }
+        /**
+        * * Field Name: List
+        * * Display Name: List
+        * * SQL Data Type: nvarchar(100)
+        */
+        get List(): string {  
+            return this.Get('List');
+        }
+    
 
     }
     
@@ -6528,6 +6537,15 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
     
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+    
 
     }
     
@@ -7053,6 +7071,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('AIModelTypeID', value);
         }
         /**
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        */
+        get IsActive(): boolean {  
+            return this.Get('IsActive');
+        }
+        set IsActive(value: boolean) {
+            this.Set('IsActive', value);
+        }
+        /**
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -7086,16 +7116,28 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('DriverImportPath', value);
         }
         /**
-        * * Field Name: IsActive
-        * * Display Name: Is Active
-        * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Field Name: APIName
+        * * Display Name: APIName
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls
         */
-        get IsActive(): boolean {  
-            return this.Get('IsActive');
+        get APIName(): string | null {  
+            return this.Get('APIName');
         }
-        set IsActive(value: boolean) {
-            this.Set('IsActive', value);
+        set APIName(value: string | null) {
+            this.Set('APIName', value);
+        }
+        /**
+        * * Field Name: PowerRank
+        * * Display Name: Power Rank
+        * * SQL Data Type: int
+        * * Description: A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.
+        */
+        get PowerRank(): number | null {  
+            return this.Get('PowerRank');
+        }
+        set PowerRank(value: number | null) {
+            this.Set('PowerRank', value);
         }
         /**
         * * Field Name: CreatedAt
@@ -7115,6 +7157,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+    
+        /**
+        * * Field Name: AIModelType
+        * * Display Name: AIModel Type
+        * * SQL Data Type: nvarchar(50)
+        */
+        get AIModelType(): string {  
+            return this.Get('AIModelType');
         }
     
 
@@ -8240,6 +8291,15 @@ import { RegisterClass } from "@memberjunction/global";
         set Comments(value: string | null) {
             this.Set('Comments', value);
         }
+        /**
+        * * Field Name: Queue
+        * * Display Name: Queue
+        * * SQL Data Type: nvarchar(50)
+        */
+        get Queue(): string {  
+            return this.Get('Queue');
+        }
+    
 
     }
     
@@ -8952,6 +9012,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get OutputEvent(): string | null {  
             return this.Get('OutputEvent');
+        }
+    
+        /**
+        * * Field Name: OutputWorkflow
+        * * Display Name: Output Workflow
+        * * SQL Data Type: nvarchar(100)
+        */
+        get OutputWorkflow(): string | null {  
+            return this.Get('OutputWorkflow');
         }
     
 
@@ -11363,7 +11432,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
@@ -12922,7 +12990,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
@@ -13048,7 +13115,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');
@@ -13174,7 +13240,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');

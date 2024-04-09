@@ -1,8 +1,10 @@
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { CleanJSON, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { BaseEntity, EntityInfo, LogError, Metadata } from "@memberjunction/core";
-import { AIModelEntity, UserViewEntityExtended } from '@memberjunction/core-entities'
+import { AIModelEntity, AIModelEntityExtended, UserViewEntityExtended } from '@memberjunction/core-entities'
 import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { AIEngine } from "@memberjunction/aiengine";
+import { LoadOpenAILLM } from "@memberjunction/ai-openai";
+LoadOpenAILLM(); // this is to prevent tree shaking since the openai package is not directly used and rather instantiated dynamically in the LoadOpenAILLM function. Since no static code path exists tree shaking can result in this class being optimized out
 
 @RegisterClass(BaseEntity, 'User Views', 3) // high priority to ensure this is used ahead of the UserViewEntityExtended in the @memberjunction/core-entities package (which has priority of 2)
 export class UserViewEntity_Server extends UserViewEntityExtended  {
@@ -14,12 +16,24 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
     }
 
     /**
-     * Default implementation simply grabs the first AI model that is of type 1 (Language Model). If you want to override this to use a different model you can override this method in your subclass and return the model you want to use.
+     * Default implementation simply returns 'OpenAI' - override this in your subclass if you are using a different AI vendor.
      * @returns 
      */
-    protected GetAIModel(): AIModelEntity {
-        const model = AIEngine.Models.find(m => m.AIModelTypeID === 1/*elim this hardcoding by adding virtual field for Type to AI Models entity*/) // get the first llm 
-        return model;
+    protected get AIVendorName(): string {
+        return 'OpenAI';
+    }
+
+    /**
+     * Default implementation simply grabs the first AI model that matches GetAIModelName().
+     * @returns 
+     */
+    protected async GetAIModel(): Promise<AIModelEntityExtended> {
+        await AIEngine.LoadAIMetadata(this.ContextCurrentUser); // most of the time this is already loaded, but just in case it isn't we will load it here
+        const models = AIEngine.Models.filter(m => m.AIModelType.trim().toLowerCase() === 'llm' && 
+                                                   m.Vendor.trim().toLowerCase() === this.AIVendorName.trim().toLowerCase())  
+        // next, sort the models by the PowerRank field so that the highest power rank model is the first array element
+        models.sort((a, b) => b.PowerRank - a.PowerRank); // highest power rank first
+        return models[0];
     }
 
     /** 
@@ -29,11 +43,11 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
      */
     public async GenerateSmartFilterWhereClause(prompt: string, entityInfo: EntityInfo): Promise<{whereClause: string, userExplanation: string}> {
         try {
-            const model = this.GetAIModel();
+            const model = await this.GetAIModel();
             const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)); 
 
             const chatParams: ChatParams = {
-                model: 'gpt-4',
+                model: model.APINameOrName,
                 messages: [      
                     {
                         role: 'system',
@@ -51,7 +65,11 @@ export class UserViewEntity_Server extends UserViewEntityExtended  {
                 if (llmResponse) {
                     // try to parse it as JSON
                     try {
-                        const parsed = JSON.parse(llmResponse);
+                        const cleansed = CleanJSON(llmResponse);
+                        if (!cleansed)
+                            throw new Error('Invalid JSON response from AI: ' + llmResponse);
+
+                        const parsed = JSON.parse(cleansed);
                         if (parsed.whereClause && parsed.whereClause.length > 0) {
                             // we have the where clause. Sometimes the LLM prefixes it with WHERE and somtimes not, we need to strip WHERE if it is there
                             const trimmed = parsed.whereClause.trim();

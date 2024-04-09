@@ -21,6 +21,10 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Sequence</label>
             <kendo-numerictextbox [(value)]="record.Sequence" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">List</label>
+            <span >{{FormatValue('List', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -36,6 +40,10 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Sequence</label>
             <span >{{FormatValue('Sequence', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">List</label>
+            <span >{{FormatValue('List', 0)}}</span>
         </div>
     </div>
 </div>

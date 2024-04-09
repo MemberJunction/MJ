@@ -56,3 +56,85 @@ export function CopyScalarsAndArrays<T extends object>(input: T): Partial<T> {
     });
     return result;
 }
+
+
+/**
+ * This function takes in an input string and attempts to clean it up to return a valid JSON string. This function will attempt to extract JSON from a Markdown code block if it exists, 
+ * otherwise it will attempt to extract JSON from the input string itself. If the input string is not valid JSON, this function will return null.
+ * @param inputString 
+ * @returns 
+ */
+export function CleanJSON(inputString: string | null): string | null {
+    if (!inputString)
+        return null;
+
+    // replace all \n and \t with nothing
+    const jsonString = inputString.trim().replace(/\n/g, "").replace(/\t/g, "");
+
+    // Regular expression to match JavaScript code blocks within Markdown fences
+    // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
+    const markdownRegex = /```(?:json|JSON)?\s*([\s\S]*?)```/gi;
+
+    // Check if the input contains Markdown code fences for JavaScript
+    const matches = Array.from(jsonString.matchAll(markdownRegex));
+
+    if (matches.length > 0) {
+        // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
+        return matches.map(match => match[1].trim()).join('\n');
+    } else {
+        // If there are no Markdown code fences, we could have a string that contains JSON, or is JUST JSON
+        // Attempt to extract JSON from a mixed string
+        const firstBracketIndex = jsonString.indexOf('[');
+        const firstBraceIndex = jsonString.indexOf('{');
+        let startIndex = -1;
+        let endIndex = -1;
+    
+        // Determine the starting index based on the position of the first '[' and '{'
+        if ((firstBracketIndex !== -1 && firstBracketIndex < firstBraceIndex) || firstBraceIndex === -1) {
+            startIndex = firstBracketIndex;
+            endIndex = jsonString.lastIndexOf(']');
+        } else if (firstBraceIndex !== -1) {
+            startIndex = firstBraceIndex;
+            endIndex = jsonString.lastIndexOf('}');
+        }
+    
+        if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+            console.warn("No JSON found in the input.");
+            return jsonString.trim();
+        }
+    
+        const potentialJSON = jsonString.substring(startIndex, endIndex + 1);
+        try {
+            // Parse and stringify to format the JSON nicely
+            // and to validate it's indeed a valid JSON.
+            const jsonObject = JSON.parse(potentialJSON);
+            return JSON.stringify(jsonObject, null, 2);
+        } catch (error) {
+            console.error("Failed to parse extracted string as JSON:", error);
+            // Return null or potentially invalid JSON text as a fallback
+            return null;
+        }     
+    }
+}
+
+/**
+ * This function takes in a string that may contain JavaScript code in a markdown code block and returns the JavaScript code without the code block.
+ * @param javaScriptCode 
+ * @returns 
+ */
+export function CleanJavaScript(javaScriptCode: string): string {
+    // Regular expression to match JavaScript code blocks within Markdown fences
+    // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
+    const markdownRegex = /```(?:js|javascript)?\s*([\s\S]*?)```/gi;
+
+    // Check if the input contains Markdown code fences for JavaScript
+    const matches = Array.from(javaScriptCode.matchAll(markdownRegex));
+
+    if (matches.length > 0) {
+        // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
+        return matches.map(match => match[1].trim()).join('\n');
+    } else {
+        // If there are no Markdown code fences, assume the input is plain JavaScript code
+        return javaScriptCode.trim();
+    }
+}

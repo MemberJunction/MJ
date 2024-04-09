@@ -23,6 +23,10 @@ import { AIModelEntity } from '@memberjunction/core-entities';
             <kendo-numerictextbox [(value)]="record.AIModelTypeID" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Is Active</label>
+            <input type="checkbox" [(ngModel)]="record.IsActive" kendoCheckBox />   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Description</label>
             <kendo-textbox [(ngModel)]="record.Description"  />   
         </div>               
@@ -35,8 +39,12 @@ import { AIModelEntity } from '@memberjunction/core-entities';
             <kendo-textarea [(ngModel)]="record.DriverImportPath" ></kendo-textarea>   
         </div>               
         <div class="record-form-row">
-            <label class="fieldLabel">Is Active</label>
-            <input type="checkbox" [(ngModel)]="record.IsActive" kendoCheckBox />   
+            <label class="fieldLabel">APIName</label>
+            <kendo-textbox [(ngModel)]="record.APIName"  />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Power Rank</label>
+            <kendo-numerictextbox [(value)]="record.PowerRank!" ></kendo-numerictextbox>   
         </div>               
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
@@ -45,6 +53,10 @@ import { AIModelEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">AIModel Type</label>
+            <span >{{FormatValue('AIModelType', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -62,6 +74,10 @@ import { AIModelEntity } from '@memberjunction/core-entities';
             <span mjFieldLink [record]="record" fieldName="AIModelTypeID" >{{FormatValue('AIModelTypeID', 0)}}</span>
         </div>              
         <div class="record-form-row">
+            <label class="fieldLabel">Is Active</label>
+            <span >{{FormatValue('IsActive', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
             <label class="fieldLabel">Description</label>
             <span >{{FormatValue('Description', 0)}}</span>
         </div>              
@@ -74,8 +90,12 @@ import { AIModelEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('DriverImportPath', 0)}}</span>
         </div>              
         <div class="record-form-row">
-            <label class="fieldLabel">Is Active</label>
-            <span >{{FormatValue('IsActive', 0)}}</span>
+            <label class="fieldLabel">APIName</label>
+            <span >{{FormatValue('APIName', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Power Rank</label>
+            <span >{{FormatValue('PowerRank', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Created At</label>
@@ -84,6 +104,10 @@ import { AIModelEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">AIModel Type</label>
+            <span >{{FormatValue('AIModelType', 0)}}</span>
         </div>
     </div>
 </div>

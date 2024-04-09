@@ -45,6 +45,10 @@ import { QueueTaskEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Comments</label>
             <kendo-textbox [(ngModel)]="record.Comments"  />   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Queue</label>
+            <span >{{FormatValue('Queue', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -84,6 +88,10 @@ import { QueueTaskEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Comments</label>
             <span >{{FormatValue('Comments', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Queue</label>
+            <span >{{FormatValue('Queue', 0)}}</span>
         </div>
     </div>
 </div>

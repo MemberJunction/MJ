@@ -4,7 +4,7 @@ import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelActionEntity, AIModelEntity, EntityAIActionEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIModelActionEntity, AIModelEntityExtended, EntityAIActionEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 
 export class AIActionParams {
@@ -25,7 +25,7 @@ export class AIEngine {
     private static _instance: AIEngine | null = null;
     private static _globalInstanceKey = '__mj_ai_engine_instance__';
 
-    private _models: AIModelEntity[] = [];
+    private _models: AIModelEntityExtended[] = [];
     private _vectorDatabases: VectorDatabaseEntity[] = [];
     private _actions: AIActionEntity[] = [];
     private _entityActions: EntityAIActionEntity[] = [];
@@ -35,7 +35,7 @@ export class AIEngine {
         if (this._metadataLoaded === false) {
             // Load up AI Models
             const rv = new RunView();
-            const models = await rv.RunView({EntityName: 'AI Models'}, contextUser)
+            const models = await rv.RunView({EntityName: 'AI Models', ResultType: 'entity_object'}, contextUser)
             this._models = models?.Results
 
             // load up vector database models
@@ -62,7 +62,7 @@ export class AIEngine {
     public static async LoadAIMetadata(contextUser?: UserInfo) {
         return AIEngine.Instance.LoadAIMetadata(contextUser);
     }
-    public static get Models(): AIModelEntity[] {
+    public static get Models(): AIModelEntityExtended[] {
         AIEngine.checkMetadataLoaded();
         return AIEngine.Instance._models;
     }
@@ -288,7 +288,7 @@ export class AIEngine {
         }
     }
 
-    protected async getDriver(model: AIModelEntity, apiKey: string): Promise<BaseModel> {
+    protected async getDriver(model: AIModelEntityExtended, apiKey: string): Promise<BaseModel> {
         const driverClassName = model.DriverClass;
         const driverModuleName = model.DriverImportPath;
         try {
