@@ -28,6 +28,136 @@
             <kendo-loader *ngIf="showloader" type="converging-spinner" ></kendo-loader>
             <div class="k-d-flex k-flex-col k-justify-content-between k-h-full" #dialogContainer>
                 <div [class]="showloader ? 'disabled-div' : ''">
+                    <mj-tabstrip mjFillContainer [bottomMargin]="BottomMargin" (TabSelectedabSelect)="selectTabHandler() ">
+                        <mj-tab [TabSelected]="true">General</mj-tab>
+                        <mj-tab-body>
+                            <div class="view-prop-tab-contents">
+                                <div class="form-group">
+                                <kendo-label class="k-form-label" text="Name"></kendo-label>
+                                <kendo-textbox #nameField class="view-name" [(ngModel)]="record.Name"></kendo-textbox>
+                                </div>
+                                <div class="form-group form-group-description">
+                                <kendo-label class="k-form-label" text="Description"></kendo-label>
+                                <textarea class="k-input k-input-solid view-description" [(ngModel)]="record.Description"></textarea>
+                                </div>
+                            </div>
+                        </mj-tab-body>
+                        <mj-tab>Fields</mj-tab>
+                        <mj-tab-body>
+                            <kendo-sortable
+                                [kendoSortableBinding]="this.localGridState.columnSettings"
+                                [animation]="true"
+                                itemClass="item"
+                                activeItemClass="item active"
+                                (dragEnd)="onDragEnd($event)"
+                            >
+                                <ng-template let-col="item">
+                                <div class="item-content">
+                                    <div>
+                                    <input
+                                        type="checkbox"
+                                        [(ngModel)]="!col.hidden"
+                                        id="column_{{col.ID}}"
+                                        kendoCheckBox
+                                        (change)="toggleColumn(col)"
+                                    />
+                                    <kendo-label
+                                        [for]="'column_'+col.ID"
+                                        [text]="col.DisplayName ? col.DisplayName : col.Name"
+                                        class="k-checkbox-label"
+                                    ></kendo-label>
+                                    </div>
+                                    <span class="fa-solid fa-bars-staggered"></span>
+                                </div>
+                                </ng-template>
+                            </kendo-sortable>
+                        </mj-tab-body>
+                        <mj-tab [TabSelected]="true">Filters</mj-tab>
+                        <mj-tab-body>
+                            <div class="smart-filter-container">
+                                <kendo-label text="Smart Filter" class="smart-filter-label"></kendo-label>
+                                <kendo-switch [(ngModel)]="record.SmartFilterEnabled"></kendo-switch>
+                            </div>
+                            <div *ngIf="record.SmartFilterEnabled" class="smart-filter-prompt" mjFillContainer [fillHeight]="true">
+                                <kendo-textarea
+                                placeholder="Describe how you would like the data filtered"
+                                [rows]="10"
+                                [(ngModel)]="record.SmartFilterPrompt"
+                                resizable="vertical"
+                                ></kendo-textarea>
+                            </div>
+                            <div *ngIf="!record.SmartFilterEnabled">
+                                <kendo-filter
+                                    [filters]="setupFilters()"
+                                    [value]="defaultFilterState"
+                                    (valueChange)="onFilterChange($event)"
+                                >
+                            </kendo-filter>
+                            </div>
+                        </mj-tab-body>
+
+                        <mj-tab [TabSelected]="true">Sorting</mj-tab>
+                        <mj-tab-body>
+                            <div class="sort-header">
+                                <button kendoButton (click)="addSort()">
+                                    <span class="fa-solid fa-arrow-up-a-z"></span>
+                                </button>
+                            </div>
+                            <div *ngFor="let s of this.sortState"> 
+                                <kendo-dropdownlist 
+                                    class="sort-column"
+                                    [data]="sortFields"
+                                    textField="Name"
+                                    valueField="Name"
+                                    (valueChange)="sortColumnValueChange(s, $event)"
+                                    [(ngModel)]="s.field"
+                                >
+                                </kendo-dropdownlist>
+                                <kendo-dropdownlist
+                                    class="sort-direction"
+                                    [data]="sortDirections"
+                                    textField="Name"
+                                    valueField="Value"
+                                    (valueChange)="sortDirectionValueChange(s, $event)"
+                                    [(ngModel)]="s.direction"
+                                >
+                                </kendo-dropdownlist>
+                                <button kendoButton (click)="removeSort(s)">
+                                    <span class="fa-solid fa-arrow-up-z-a"></span>
+                                </button>
+                            </div> 
+                        </mj-tab-body>
+
+                        <mj-tab [TabSelected]="true">Advanced</mj-tab>
+                        <mj-tab-body>
+                            @if(record.SmartFilterEnabled) {
+                                <kendo-textarea
+                                [readonly]="true"
+                                [rows]="5"
+                                [(ngModel)]="record.SmartFilterExplanation"
+                                resizable="vertical"
+                                class="advanced-tab-details"
+                                ></kendo-textarea>
+                                <kendo-textarea
+                                [readonly]="true"
+                                [rows]="5"
+                                [(ngModel)]="record.SmartFilterWhereClause"
+                                resizable="vertical"
+                                class="advanced-tab-details"
+                                ></kendo-textarea>  
+                            }
+                            @else {
+                                <kendo-textarea
+                                [readonly]="true"
+                                [rows]="7"
+                                [(ngModel)]="record.WhereClause"
+                                resizable="vertical"
+                                class="advanced-tab-details"
+                                ></kendo-textarea>
+                            }
+                        </mj-tab-body>
+                    </mj-tabstrip>
+                    <!--
                     <kendo-tabstrip [keepTabContent]="true" [animate] = "false" [height]="TabHeight" >
                         <kendo-tabstrip-tab title="General" [selected]="true">
                             <ng-template kendoTabContent>
@@ -162,7 +292,7 @@
                             </ng-template>
                         </kendo-tabstrip-tab>
                     </kendo-tabstrip>
-            
+                    -->
                     <div class="k-actions k-actions-end customBtn popup-actions">
                         <button kendoButton (click)="saveProperties()" themeColor="info">
                             <kendo-svgicon [icon]="sharedService.kendoSVGIcon('save')"></kendo-svgicon>

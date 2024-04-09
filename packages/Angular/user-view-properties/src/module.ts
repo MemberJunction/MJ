@@ -12,6 +12,8 @@ import { TabStripModule } from '@progress/kendo-angular-layout';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
 import { SortableModule } from '@progress/kendo-angular-sortable';
 import { FilterModule } from '@progress/kendo-angular-filter';
+import { DropDownsModule } from "@progress/kendo-angular-dropdowns";
+import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 
 @NgModule({
   declarations: [
@@ -26,7 +28,9 @@ import { FilterModule } from '@progress/kendo-angular-filter';
     WindowModule,
     TabStripModule,
     SortableModule,
-    FilterModule
+    FilterModule,
+    DropDownsModule,
+    MJTabStripModule
   ],
   exports: [
     UserViewPropertiesDialogComponent
