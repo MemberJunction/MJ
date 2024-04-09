@@ -1,5 +1,5 @@
 import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
-import { manageSQLScriptsAndExecution, runCustomSQLScripts } from './sql_codegen';
+import { SQLCodeGenBase } from './sql_codegen';
 import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
 import { setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource from "./db"
@@ -7,7 +7,7 @@ import { ManageMetadataBase } from './manageMetadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
 import { logError, logStatus } from './logging';
 import * as MJ from '@memberjunction/core'
-import { runCommands } from './runCommand';
+import { RunCommandsBase } from './runCommand';
 import { DBSchemaGeneratorBase } from './dbSchema';
 import { AngularClientGeneratorBase } from './angular_client_codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -57,6 +57,9 @@ export class RunCodeGenBase {
                 logError('No entities found in metadata, exiting...'); // TODO: add a way to generate the metadata if it doesn't exist
                 process.exit(1);
             }
+
+            const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase);
+            const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase);
     
             // check to see if the user wants to skip database generation via the config settings
             const skipDB = skipDatabaseGeneration || getSettingValue('skip_database_generation', false);
@@ -68,14 +71,14 @@ export class RunCodeGenBase {
                 const beforeCommands = commands('BEFORE')
                 if (beforeCommands && beforeCommands.length > 0) {
                     logStatus('Executing BEFORE commands...')
-                    const results = await runCommands(beforeCommands)
+                    const results = await runCommandsObject.runCommands(beforeCommands)
                     if (results.some(r => !r.success))
                         logError('ERROR running one or more BEFORE commands');
                 }
                 /****************************************************************************************
                 // STEP 0.1 --- Execute any before SQL Scripts specified in the config file
                 ****************************************************************************************/
-                if (! await runCustomSQLScripts(AppDataSource, 'before-all'))
+                if (! await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'before-all'))
                     logError('ERROR running before-all SQL Scripts');
     
                 /****************************************************************************************
@@ -103,7 +106,7 @@ export class RunCodeGenBase {
                 const sqlOutputDir = outputDir('SQL', true);
                 if (sqlOutputDir) {
                     logStatus('Managing SQL Scripts and Execution...')
-                    if (! await manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir))
+                    if (! await sqlCodeGenObject.manageSQLScriptsAndExecution(AppDataSource, md.Entities, sqlOutputDir))
                         logError('Error managing SQL scripts and execution');
                 }
                 else
@@ -213,16 +216,19 @@ export class RunCodeGenBase {
             const afterCommands = commands('AFTER')
             if (afterCommands && afterCommands.length > 0) {
                 logStatus('Executing AFTER commands...')
-                const results = await runCommands(afterCommands)
+                const results = await runCommandsObject.runCommands(afterCommands)
                 if (results.some(r => !r.success))
                     logError('ERROR running one or more AFTER commands');
             }
+
+
             /****************************************************************************************
             // STEP 8 --- Execute any AFTER SQL Scripts specified in the config file
             ****************************************************************************************/
-            if (! await runCustomSQLScripts(AppDataSource, 'after-all'))
-                logError('ERROR running after-all SQL Scripts');
-    
+            if (!skipDB) {
+                if (! await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))
+                    logError('ERROR running after-all SQL Scripts');    
+            }
     
             logStatus(md.Entities.length + ' entities processed and outputed to configured directories');
             logStatus("MJ CodeGen Run Complete! @ " + new Date().toLocaleString() + " (" + (new Date().getTime() - startTime.getTime()) / 1000 + " seconds)");

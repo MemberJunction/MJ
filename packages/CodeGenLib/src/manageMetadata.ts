@@ -2,9 +2,9 @@ import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
 import { LogError, LogStatus, Metadata } from "@memberjunction/core";
 import { logError, logStatus } from "./logging";
-import { recompileAllBaseViews } from "./sql";
+import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
-import { RegisterClass } from "@memberjunction/global";
+import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
 
 /**
@@ -36,7 +36,8 @@ export class ManageMetadataBase {
          logError('Error updating existing entities');
          bSuccess = false;
       }  
-      if (! await recompileAllBaseViews(ds, excludeSchemas, true)) {
+      const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
+      if (! await sqlUtility.recompileAllBaseViews(ds, excludeSchemas, true)) {
          logError('Warning: Non-Fatal error recompiling base views');
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
          // failure for this entire function
@@ -239,7 +240,7 @@ export class ManageMetadataBase {
     * @param excludeSchemas 
     * @returns 
     */
-   protected async manageEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
+   public async manageEntityFields(ds: DataSource, excludeSchemas: string[]): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
       if (! await this.deleteUnneededEntityFields(ds, excludeSchemas)) {
@@ -603,7 +604,14 @@ export class ManageMetadataBase {
       }
    }
    
-   protected async updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource, entityFieldID: number, relatedEntityNameFieldMap: string): Promise<boolean> {
+   /**
+    * This method handles updating entity field related name field maps which is basically the process of finding the related entity field that is the "name" field for the related entity.
+    * @param ds 
+    * @param entityFieldID 
+    * @param relatedEntityNameFieldMap 
+    * @returns 
+    */
+   public async updateEntityFieldRelatedEntityNameFieldMap(ds: DataSource, entityFieldID: number, relatedEntityNameFieldMap: string): Promise<boolean> {
       try   {
          const sSQL = `EXEC [${mj_core_schema()}].spUpdateEntityFieldRelatedEntityNameFieldMap 
          @EntityFieldID=${entityFieldID} ,

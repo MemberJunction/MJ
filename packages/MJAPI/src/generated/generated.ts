@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/8/2024, 7:27:10 PM
+* GENERATED: 4/9/2024, 5:58:12 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -10,7 +10,7 @@
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType } from '@memberjunction/core'
 import { AppContext } from '@memberjunction/server';
 
@@ -20,7 +20,7 @@ import { DataSource } from 'typeorm';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 import { IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, ContactEntity, DealStageEntity, ActivityEntity, DealForecastCategoryEntity, DealEntity, DealTypeEntity, InvoiceEntity, ActivityAttachmentEntity, PaymentTermsTypeEntity, InvoiceStatusTypeEntity } from 'mj_generatedentities';
-
+    
 
 //****************************************************************************
 // ENTITY CLASS for Industries
@@ -29,29 +29,29 @@ import { IndustryEntity, ContactRoleEntity, ContactLevelEntity, AccountEntity, C
 export class Industry_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(40)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(400)
     Description: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     Keywords?: string;
-    
+        
     @Field(() => [Account_])
     AccountsArray: Account_[]; // Link to Accounts
-
+    
 }
         
 //****************************************************************************
@@ -61,14 +61,14 @@ export class Industry_ {
 export class CreateIndustryInput {
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-
+    
     @Field({ nullable: true })
     Keywords: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Industries   
@@ -77,17 +77,17 @@ export class CreateIndustryInput {
 export class UpdateIndustryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-
+    
     @Field({ nullable: true })
     Keywords: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Industries
 //****************************************************************************
@@ -139,7 +139,7 @@ export class IndustryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Industries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Account_])
     async AccountsArray(@Root() industry_: Industry_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Accounts', userPayload);
@@ -147,7 +147,7 @@ export class IndustryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Accounts', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Industry_)
     async CreateIndustry(
         @Arg('input', () => CreateIndustryInput) input: CreateIndustryInput,
@@ -177,7 +177,7 @@ export class IndustryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateIndustryInput) {
     }
-    
+        
     @Mutation(() => Industry_)
     async UpdateIndustry(
         @Arg('input', () => UpdateIndustryInput) input: UpdateIndustryInput,
@@ -208,7 +208,7 @@ export class IndustryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateIndustryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -218,28 +218,28 @@ export class IndustryResolver extends ResolverBase {
 export class ContactRole_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     Keywords?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [Contact_])
     ContactsArray: Contact_[]; // Link to Contacts
-
+    
 }
         
 //****************************************************************************
@@ -249,14 +249,14 @@ export class ContactRole_ {
 export class CreateContactRoleInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     Keywords: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Contact Roles   
@@ -265,17 +265,17 @@ export class CreateContactRoleInput {
 export class UpdateContactRoleInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     Keywords: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Contact Roles
 //****************************************************************************
@@ -327,7 +327,7 @@ export class ContactRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contact Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Contact_])
     async ContactsArray(@Root() contactrole_: ContactRole_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
@@ -335,7 +335,7 @@ export class ContactRoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => ContactRole_)
     async CreateContactRole(
         @Arg('input', () => CreateContactRoleInput) input: CreateContactRoleInput,
@@ -365,7 +365,7 @@ export class ContactRoleResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateContactRoleInput) {
     }
-    
+        
     @Mutation(() => ContactRole_)
     async UpdateContactRole(
         @Arg('input', () => UpdateContactRoleInput) input: UpdateContactRoleInput,
@@ -396,7 +396,7 @@ export class ContactRoleResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateContactRoleInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -406,34 +406,34 @@ export class ContactRoleResolver extends ResolverBase {
 export class ContactLevel_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     Rank: number;
-      
+          
     @Field({nullable: true}) 
     Keywords?: string;
-      
+          
     @Field({nullable: true}) 
     ExcludeKeywords?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [Contact_])
     ContactsArray: Contact_[]; // Link to Contacts
-
+    
 }
         
 //****************************************************************************
@@ -443,20 +443,20 @@ export class ContactLevel_ {
 export class CreateContactLevelInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     Rank: number;
-
+    
     @Field({ nullable: true })
     Keywords: string;
-
+    
     @Field({ nullable: true })
     ExcludeKeywords: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Contact Levels   
@@ -465,23 +465,23 @@ export class CreateContactLevelInput {
 export class UpdateContactLevelInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     Rank: number;
-
+    
     @Field({ nullable: true })
     Keywords: string;
-
+    
     @Field({ nullable: true })
     ExcludeKeywords: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Contact Levels
 //****************************************************************************
@@ -533,7 +533,7 @@ export class ContactLevelResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contact Levels', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Contact_])
     async ContactsArray(@Root() contactlevel_: ContactLevel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
@@ -541,7 +541,7 @@ export class ContactLevelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => ContactLevel_)
     async CreateContactLevel(
         @Arg('input', () => CreateContactLevelInput) input: CreateContactLevelInput,
@@ -571,7 +571,7 @@ export class ContactLevelResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateContactLevelInput) {
     }
-    
+        
     @Mutation(() => ContactLevel_)
     async UpdateContactLevel(
         @Arg('input', () => UpdateContactLevelInput) input: UpdateContactLevelInput,
@@ -602,7 +602,7 @@ export class ContactLevelResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateContactLevelInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -612,148 +612,148 @@ export class ContactLevelResolver extends ResolverBase {
 export class Account_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(16)
     BCMID: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     TaxID?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Acronym?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OperatingName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(500)
     DisplayName?: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     AddressLine1?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     AddressLine2?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     AddressLine3?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     City?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     StateProvince?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     PostalCode?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Country?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(10)
     ISOCountryCode?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Domain?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Website?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     EmailPattern?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     LogoURL?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     LeadershipPageURL?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     PhoneNumber?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     LinkedIn?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Facebook?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Logo?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     IndustryID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastReviewedDate?: Date;
-      
+          
     @Field(() => Int) 
     ActivityCount: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LatestActivityDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     EarliestActivityDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     RecordSource?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastEnrichedAt?: Date;
-    
+        
     @Field(() => [Contact_])
     ContactsArray: Contact_[]; // Link to Contacts
-
+    
     @Field(() => [Activity_])
     ActivitiesArray: Activity_[]; // Link to Activities
-
+    
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
-
+    
     @Field(() => [Invoice_])
     InvoicesArray: Invoice_[]; // Link to Invoices
-
+    
 }
         
 //****************************************************************************
@@ -763,95 +763,95 @@ export class Account_ {
 export class CreateAccountInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     TaxID: string;
-
+    
     @Field({ nullable: true })
     Acronym: string;
-
+    
     @Field({ nullable: true })
     OperatingName: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     AddressLine1: string;
-
+    
     @Field({ nullable: true })
     AddressLine2: string;
-
+    
     @Field({ nullable: true })
     AddressLine3: string;
-
+    
     @Field({ nullable: true })
     City: string;
-
+    
     @Field({ nullable: true })
     StateProvince: string;
-
+    
     @Field({ nullable: true })
     PostalCode: string;
-
+    
     @Field({ nullable: true })
     Country: string;
-
+    
     @Field({ nullable: true })
     ISOCountryCode: string;
-
+    
     @Field({ nullable: true })
     Domain: string;
-
+    
     @Field({ nullable: true })
     Website: string;
-
+    
     @Field({ nullable: true })
     EmailPattern: string;
-
+    
     @Field({ nullable: true })
     LogoURL: string;
-
+    
     @Field({ nullable: true })
     LeadershipPageURL: string;
-
+    
     @Field({ nullable: true })
     PhoneNumber: string;
-
+    
     @Field({ nullable: true })
     LinkedIn: string;
-
+    
     @Field({ nullable: true })
     Facebook: string;
-
+    
     @Field({ nullable: true })
     Logo: string;
-
+    
     @Field(() => Int, { nullable: true })
     IndustryID: number;
-
+    
     @Field({ nullable: true })
     LastReviewedDate: Date;
-
+    
     @Field(() => Int)
     ActivityCount: number;
-
+    
     @Field({ nullable: true })
     LatestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     EarliestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     RecordSource: string;
-
+    
     @Field({ nullable: true })
     LastEnrichedAt: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Accounts   
@@ -860,98 +860,98 @@ export class CreateAccountInput {
 export class UpdateAccountInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     TaxID: string;
-
+    
     @Field({ nullable: true })
     Acronym: string;
-
+    
     @Field({ nullable: true })
     OperatingName: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     AddressLine1: string;
-
+    
     @Field({ nullable: true })
     AddressLine2: string;
-
+    
     @Field({ nullable: true })
     AddressLine3: string;
-
+    
     @Field({ nullable: true })
     City: string;
-
+    
     @Field({ nullable: true })
     StateProvince: string;
-
+    
     @Field({ nullable: true })
     PostalCode: string;
-
+    
     @Field({ nullable: true })
     Country: string;
-
+    
     @Field({ nullable: true })
     ISOCountryCode: string;
-
+    
     @Field({ nullable: true })
     Domain: string;
-
+    
     @Field({ nullable: true })
     Website: string;
-
+    
     @Field({ nullable: true })
     EmailPattern: string;
-
+    
     @Field({ nullable: true })
     LogoURL: string;
-
+    
     @Field({ nullable: true })
     LeadershipPageURL: string;
-
+    
     @Field({ nullable: true })
     PhoneNumber: string;
-
+    
     @Field({ nullable: true })
     LinkedIn: string;
-
+    
     @Field({ nullable: true })
     Facebook: string;
-
+    
     @Field({ nullable: true })
     Logo: string;
-
+    
     @Field(() => Int, { nullable: true })
     IndustryID: number;
-
+    
     @Field({ nullable: true })
     LastReviewedDate: Date;
-
+    
     @Field(() => Int)
     ActivityCount: number;
-
+    
     @Field({ nullable: true })
     LatestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     EarliestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     RecordSource: string;
-
+    
     @Field({ nullable: true })
     LastEnrichedAt: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Accounts
 //****************************************************************************
@@ -1003,7 +1003,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Accounts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Contact_])
     async ContactsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Contacts', userPayload);
@@ -1011,7 +1011,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -1019,7 +1019,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -1027,7 +1027,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() account_: Account_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -1035,7 +1035,7 @@ export class AccountResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Account_)
     async CreateAccount(
         @Arg('input', () => CreateAccountInput) input: CreateAccountInput,
@@ -1065,7 +1065,7 @@ export class AccountResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateAccountInput) {
     }
-    
+        
     @Mutation(() => Account_)
     async UpdateAccount(
         @Arg('input', () => UpdateAccountInput) input: UpdateAccountInput,
@@ -1096,7 +1096,7 @@ export class AccountResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateAccountInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Account_)
     async DeleteAccount(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -1122,7 +1122,7 @@ export class AccountResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1132,135 +1132,135 @@ export class AccountResolver extends ResolverBase {
 export class Contact_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(16)
     BCMID: string;
-      
+          
     @Field() 
     @MaxLength(200)
     FirstName: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     NickName?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     LastName: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     AccountID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastReviewedDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(400)
     Title?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Email1?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Email2?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     EmailSource?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     PhoneNumber?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     ProfilePictureURL?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Twitter?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Instagram?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     LinkedIn?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Facebook?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     EmailStatus?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     RoleID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     LevelID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Prefix?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(500)
     Suffix?: string;
-      
+          
     @Field({nullable: true}) 
     Tags?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Status?: string;
-      
+          
     @Field(() => Int) 
     ActivityCount: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LatestActivityDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     EarliestActivityDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     RecordSource?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastEnrichedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Account?: string;
-    
+        
     @Field(() => [Invoice_])
     InvoicesArray: Invoice_[]; // Link to Invoices
-
+    
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
-
+    
     @Field(() => [Activity_])
     ActivitiesArray: Activity_[]; // Link to Activities
-
+    
 }
         
 //****************************************************************************
@@ -1270,86 +1270,86 @@ export class Contact_ {
 export class CreateContactInput {
     @Field()
     FirstName: string;
-
+    
     @Field({ nullable: true })
     NickName: string;
-
+    
     @Field()
     LastName: string;
-
+    
     @Field(() => Int, { nullable: true })
     AccountID: number;
-
+    
     @Field({ nullable: true })
     LastReviewedDate: Date;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field({ nullable: true })
     Email1: string;
-
+    
     @Field({ nullable: true })
     Email2: string;
-
+    
     @Field({ nullable: true })
     EmailSource: string;
-
+    
     @Field({ nullable: true })
     PhoneNumber: string;
-
+    
     @Field({ nullable: true })
     ProfilePictureURL: string;
-
+    
     @Field({ nullable: true })
     Twitter: string;
-
+    
     @Field({ nullable: true })
     Instagram: string;
-
+    
     @Field({ nullable: true })
     LinkedIn: string;
-
+    
     @Field({ nullable: true })
     Facebook: string;
-
+    
     @Field({ nullable: true })
     EmailStatus: string;
-
+    
     @Field(() => Int, { nullable: true })
     RoleID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LevelID: number;
-
+    
     @Field({ nullable: true })
     Prefix: string;
-
+    
     @Field({ nullable: true })
     Suffix: string;
-
+    
     @Field({ nullable: true })
     Tags: string;
-
+    
     @Field({ nullable: true })
     Status: string;
-
+    
     @Field(() => Int)
     ActivityCount: number;
-
+    
     @Field({ nullable: true })
     LatestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     EarliestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     RecordSource: string;
-
+    
     @Field({ nullable: true })
     LastEnrichedAt: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Contacts   
@@ -1358,89 +1358,89 @@ export class CreateContactInput {
 export class UpdateContactInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     FirstName: string;
-
+    
     @Field({ nullable: true })
     NickName: string;
-
+    
     @Field()
     LastName: string;
-
+    
     @Field(() => Int, { nullable: true })
     AccountID: number;
-
+    
     @Field({ nullable: true })
     LastReviewedDate: Date;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field({ nullable: true })
     Email1: string;
-
+    
     @Field({ nullable: true })
     Email2: string;
-
+    
     @Field({ nullable: true })
     EmailSource: string;
-
+    
     @Field({ nullable: true })
     PhoneNumber: string;
-
+    
     @Field({ nullable: true })
     ProfilePictureURL: string;
-
+    
     @Field({ nullable: true })
     Twitter: string;
-
+    
     @Field({ nullable: true })
     Instagram: string;
-
+    
     @Field({ nullable: true })
     LinkedIn: string;
-
+    
     @Field({ nullable: true })
     Facebook: string;
-
+    
     @Field({ nullable: true })
     EmailStatus: string;
-
+    
     @Field(() => Int, { nullable: true })
     RoleID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LevelID: number;
-
+    
     @Field({ nullable: true })
     Prefix: string;
-
+    
     @Field({ nullable: true })
     Suffix: string;
-
+    
     @Field({ nullable: true })
     Tags: string;
-
+    
     @Field({ nullable: true })
     Status: string;
-
+    
     @Field(() => Int)
     ActivityCount: number;
-
+    
     @Field({ nullable: true })
     LatestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     EarliestActivityDate: Date;
-
+    
     @Field({ nullable: true })
     RecordSource: string;
-
+    
     @Field({ nullable: true })
     LastEnrichedAt: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Contacts
 //****************************************************************************
@@ -1492,7 +1492,7 @@ export class ContactResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Contacts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -1500,7 +1500,7 @@ export class ContactResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -1508,7 +1508,7 @@ export class ContactResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() contact_: Contact_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -1516,7 +1516,7 @@ export class ContactResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Contact_)
     async CreateContact(
         @Arg('input', () => CreateContactInput) input: CreateContactInput,
@@ -1546,7 +1546,7 @@ export class ContactResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateContactInput) {
     }
-    
+        
     @Mutation(() => Contact_)
     async UpdateContact(
         @Arg('input', () => UpdateContactInput) input: UpdateContactInput,
@@ -1577,7 +1577,7 @@ export class ContactResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateContactInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1587,26 +1587,26 @@ export class ContactResolver extends ResolverBase {
 export class DealStage_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(40)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(400)
     Description: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
-
+    
 }
         
 //****************************************************************************
@@ -1616,11 +1616,11 @@ export class DealStage_ {
 export class CreateDealStageInput {
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Deal Stages   
@@ -1629,14 +1629,14 @@ export class CreateDealStageInput {
 export class UpdateDealStageInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Deal Stages
 //****************************************************************************
@@ -1688,7 +1688,7 @@ export class DealStageResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deal Stages', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() dealstage_: DealStage_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -1696,7 +1696,7 @@ export class DealStageResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => DealStage_)
     async CreateDealStage(
         @Arg('input', () => CreateDealStageInput) input: CreateDealStageInput,
@@ -1726,7 +1726,7 @@ export class DealStageResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDealStageInput) {
     }
-    
+        
     @Mutation(() => DealStage_)
     async UpdateDealStage(
         @Arg('input', () => UpdateDealStageInput) input: UpdateDealStageInput,
@@ -1757,7 +1757,7 @@ export class DealStageResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDealStageInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1767,79 +1767,79 @@ export class DealStageResolver extends ResolverBase {
 export class Activity_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(16)
     BCMID: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     EmployeeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ContactID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     AccountID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DealID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     ActivityDate?: Date;
-      
+          
     @Field(() => Boolean, {nullable: true}) 
     IsActive?: boolean;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(60)
     Type?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Attachment?: string;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemRecordID?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int, {nullable: true}) 
     AttachmentID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Title?: string;
-      
+          
     @Field(() => Boolean, {nullable: true}) 
     IsOpened?: boolean;
-      
+          
     @Field(() => Boolean, {nullable: true}) 
     IsBounced?: boolean;
-      
+          
     @Field(() => Boolean, {nullable: true}) 
     IsReplied?: boolean;
-      
+          
     @Field({nullable: true}) 
     Summary?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Account?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -1849,56 +1849,56 @@ export class Activity_ {
 export class CreateActivityInput {
     @Field(() => Int, { nullable: true })
     EmployeeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ContactID: number;
-
+    
     @Field(() => Int, { nullable: true })
     AccountID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DealID: number;
-
+    
     @Field({ nullable: true })
     ActivityDate: Date;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsActive: boolean;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     Type: string;
-
+    
     @Field({ nullable: true })
     Attachment: string;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field({ nullable: true })
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int, { nullable: true })
     AttachmentID: number;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsOpened: boolean;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsBounced: boolean;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsReplied: boolean;
-
+    
     @Field({ nullable: true })
     Summary: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Activities   
@@ -1907,59 +1907,59 @@ export class CreateActivityInput {
 export class UpdateActivityInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int, { nullable: true })
     EmployeeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ContactID: number;
-
+    
     @Field(() => Int, { nullable: true })
     AccountID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DealID: number;
-
+    
     @Field({ nullable: true })
     ActivityDate: Date;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsActive: boolean;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     Type: string;
-
+    
     @Field({ nullable: true })
     Attachment: string;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field({ nullable: true })
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int, { nullable: true })
     AttachmentID: number;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsOpened: boolean;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsBounced: boolean;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsReplied: boolean;
-
+    
     @Field({ nullable: true })
     Summary: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Activities
 //****************************************************************************
@@ -2011,7 +2011,7 @@ export class ActivityResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => Activity_)
     async CreateActivity(
         @Arg('input', () => CreateActivityInput) input: CreateActivityInput,
@@ -2041,7 +2041,7 @@ export class ActivityResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateActivityInput) {
     }
-    
+        
     @Mutation(() => Activity_)
     async UpdateActivity(
         @Arg('input', () => UpdateActivityInput) input: UpdateActivityInput,
@@ -2072,7 +2072,7 @@ export class ActivityResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateActivityInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -2082,30 +2082,30 @@ export class ActivityResolver extends ResolverBase {
 export class DealForecastCategory_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Name?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     DisplayName?: string;
-      
+          
     @Field() 
     @MaxLength(400)
     Description: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
-
+    
 }
         
 //****************************************************************************
@@ -2115,14 +2115,14 @@ export class DealForecastCategory_ {
 export class CreateDealForecastCategoryInput {
     @Field({ nullable: true })
     Name: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field()
     Description: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Deal Forecast Categories   
@@ -2131,17 +2131,17 @@ export class CreateDealForecastCategoryInput {
 export class UpdateDealForecastCategoryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     Name: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field()
     Description: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Deal Forecast Categories
 //****************************************************************************
@@ -2193,7 +2193,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deal Forecast Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() dealforecastcategory_: DealForecastCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -2201,7 +2201,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => DealForecastCategory_)
     async CreateDealForecastCategory(
         @Arg('input', () => CreateDealForecastCategoryInput) input: CreateDealForecastCategoryInput,
@@ -2231,7 +2231,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDealForecastCategoryInput) {
     }
-    
+        
     @Mutation(() => DealForecastCategory_)
     async UpdateDealForecastCategory(
         @Arg('input', () => UpdateDealForecastCategoryInput) input: UpdateDealForecastCategoryInput,
@@ -2262,7 +2262,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDealForecastCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => DealForecastCategory_)
     async DeleteDealForecastCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -2288,7 +2288,7 @@ export class DealForecastCategoryResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -2298,117 +2298,117 @@ export class DealForecastCategoryResolver extends ResolverBase {
 export class Deal_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(16)
     BCMID: string;
-      
+          
     @Field() 
     @MaxLength(100)
     ExternalSystemRecordID: string;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     AccountID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ContactID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Title?: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Float, {nullable: true}) 
     Value?: number;
-      
+          
     @Field(() => Boolean, {nullable: true}) 
     IncludeInForecast?: boolean;
-      
+          
     @Field(() => Float, {nullable: true}) 
     Probability?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     CloseDate?: Date;
-      
+          
     @Field(() => Int, {nullable: true}) 
     EmployeeID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Pipeline?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     LeadSource?: string;
-      
+          
     @Field({nullable: true}) 
     LeadSourceDetail?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     ExternalSystemCreatedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     ExternalSystemUpdatedAt?: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DealTypeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DealStageID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DealForecastCategoryID?: number;
-      
+          
     @Field(() => Float) 
     MRR: number;
-      
+          
     @Field(() => Float) 
     OneTimeFees: number;
-      
+          
     @Field(() => Int) 
     ContractTermMonths: number;
-      
+          
     @Field({nullable: true}) 
     ForecastNotes?: string;
-      
+          
     @Field(() => Boolean) 
     IsDeleted: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Account?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     DealType?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     DealStage?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     DealForecastCategory?: string;
-    
+        
     @Field(() => [Activity_])
     ActivitiesArray: Activity_[]; // Link to Activities
-
+    
 }
         
 //****************************************************************************
@@ -2418,77 +2418,77 @@ export class Deal_ {
 export class CreateDealInput {
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field(() => Int, { nullable: true })
     AccountID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ContactID: number;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Float, { nullable: true })
     Value: number;
-
+    
     @Field(() => Boolean, { nullable: true })
     IncludeInForecast: boolean;
-
+    
     @Field(() => Float, { nullable: true })
     Probability: number;
-
+    
     @Field({ nullable: true })
     CloseDate: Date;
-
+    
     @Field(() => Int, { nullable: true })
     EmployeeID: number;
-
+    
     @Field({ nullable: true })
     Pipeline: string;
-
+    
     @Field({ nullable: true })
     LeadSource: string;
-
+    
     @Field({ nullable: true })
     LeadSourceDetail: string;
-
+    
     @Field({ nullable: true })
     ExternalSystemCreatedAt: Date;
-
+    
     @Field({ nullable: true })
     ExternalSystemUpdatedAt: Date;
-
+    
     @Field(() => Int, { nullable: true })
     DealTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DealStageID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DealForecastCategoryID: number;
-
+    
     @Field(() => Float)
     MRR: number;
-
+    
     @Field(() => Float)
     OneTimeFees: number;
-
+    
     @Field(() => Int)
     ContractTermMonths: number;
-
+    
     @Field({ nullable: true })
     ForecastNotes: string;
-
+    
     @Field(() => Boolean)
     IsDeleted: boolean;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Deals   
@@ -2497,80 +2497,80 @@ export class CreateDealInput {
 export class UpdateDealInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field(() => Int, { nullable: true })
     AccountID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ContactID: number;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Float, { nullable: true })
     Value: number;
-
+    
     @Field(() => Boolean, { nullable: true })
     IncludeInForecast: boolean;
-
+    
     @Field(() => Float, { nullable: true })
     Probability: number;
-
+    
     @Field({ nullable: true })
     CloseDate: Date;
-
+    
     @Field(() => Int, { nullable: true })
     EmployeeID: number;
-
+    
     @Field({ nullable: true })
     Pipeline: string;
-
+    
     @Field({ nullable: true })
     LeadSource: string;
-
+    
     @Field({ nullable: true })
     LeadSourceDetail: string;
-
+    
     @Field({ nullable: true })
     ExternalSystemCreatedAt: Date;
-
+    
     @Field({ nullable: true })
     ExternalSystemUpdatedAt: Date;
-
+    
     @Field(() => Int, { nullable: true })
     DealTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DealStageID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DealForecastCategoryID: number;
-
+    
     @Field(() => Float)
     MRR: number;
-
+    
     @Field(() => Float)
     OneTimeFees: number;
-
+    
     @Field(() => Int)
     ContractTermMonths: number;
-
+    
     @Field({ nullable: true })
     ForecastNotes: string;
-
+    
     @Field(() => Boolean)
     IsDeleted: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Deals
 //****************************************************************************
@@ -2622,7 +2622,7 @@ export class DealResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() deal_: Deal_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -2630,7 +2630,7 @@ export class DealResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Deal_)
     async CreateDeal(
         @Arg('input', () => CreateDealInput) input: CreateDealInput,
@@ -2660,7 +2660,7 @@ export class DealResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDealInput) {
     }
-    
+        
     @Mutation(() => Deal_)
     async UpdateDeal(
         @Arg('input', () => UpdateDealInput) input: UpdateDealInput,
@@ -2691,7 +2691,7 @@ export class DealResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDealInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -2701,30 +2701,30 @@ export class DealResolver extends ResolverBase {
 export class DealType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Name?: string;
-      
+          
     @Field() 
     @MaxLength(400)
     Description: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     DisplayName?: string;
-    
+        
     @Field(() => [Deal_])
     DealsArray: Deal_[]; // Link to Deals
-
+    
 }
         
 //****************************************************************************
@@ -2734,14 +2734,14 @@ export class DealType_ {
 export class CreateDealTypeInput {
     @Field({ nullable: true })
     Name: string;
-
+    
     @Field()
     Description: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Deal Types   
@@ -2750,17 +2750,17 @@ export class CreateDealTypeInput {
 export class UpdateDealTypeInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     Name: string;
-
+    
     @Field()
     Description: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Deal Types
 //****************************************************************************
@@ -2812,7 +2812,7 @@ export class DealTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Deal Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Deal_])
     async DealsArray(@Root() dealtype_: DealType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Deals', userPayload);
@@ -2820,7 +2820,7 @@ export class DealTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Deals', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => DealType_)
     async CreateDealType(
         @Arg('input', () => CreateDealTypeInput) input: CreateDealTypeInput,
@@ -2850,7 +2850,7 @@ export class DealTypeResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDealTypeInput) {
     }
-    
+        
     @Mutation(() => DealType_)
     async UpdateDealType(
         @Arg('input', () => UpdateDealTypeInput) input: UpdateDealTypeInput,
@@ -2881,7 +2881,7 @@ export class DealTypeResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDealTypeInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -2891,75 +2891,75 @@ export class DealTypeResolver extends ResolverBase {
 export class Invoice_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(16)
     BCMID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     InvoiceDate: Date;
-      
+          
     @Field(() => Int) 
     AccountID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ContactID?: number;
-      
+          
     @Field(() => Float) 
     SubTotal: number;
-      
+          
     @Field(() => Float) 
     Tax: number;
-      
+          
     @Field(() => Float) 
     Total: number;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     ExternalSystemRecordID: string;
-      
+          
     @Field() 
     @MaxLength(40)
     InvoiceNumber: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     PostingDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     DueDate?: Date;
-      
+          
     @Field(() => Int) 
     StatusID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     PaymentTermsID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Account: string;
-      
+          
     @Field() 
     @MaxLength(40)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     PaymentTerms?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -2969,44 +2969,44 @@ export class Invoice_ {
 export class CreateInvoiceInput {
     @Field()
     InvoiceDate: Date;
-
+    
     @Field(() => Int)
     AccountID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ContactID: number;
-
+    
     @Field(() => Float)
     SubTotal: number;
-
+    
     @Field(() => Float)
     Tax: number;
-
+    
     @Field(() => Float)
     Total: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field()
     InvoiceNumber: string;
-
+    
     @Field({ nullable: true })
     PostingDate: Date;
-
+    
     @Field({ nullable: true })
     DueDate: Date;
-
+    
     @Field(() => Int)
     StatusID: number;
-
+    
     @Field(() => Int, { nullable: true })
     PaymentTermsID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Invoices   
@@ -3015,47 +3015,47 @@ export class CreateInvoiceInput {
 export class UpdateInvoiceInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     InvoiceDate: Date;
-
+    
     @Field(() => Int)
     AccountID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ContactID: number;
-
+    
     @Field(() => Float)
     SubTotal: number;
-
+    
     @Field(() => Float)
     Tax: number;
-
+    
     @Field(() => Float)
     Total: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field()
     InvoiceNumber: string;
-
+    
     @Field({ nullable: true })
     PostingDate: Date;
-
+    
     @Field({ nullable: true })
     DueDate: Date;
-
+    
     @Field(() => Int)
     StatusID: number;
-
+    
     @Field(() => Int, { nullable: true })
     PaymentTermsID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Invoices
 //****************************************************************************
@@ -3107,7 +3107,7 @@ export class InvoiceResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => Invoice_)
     async CreateInvoice(
         @Arg('input', () => CreateInvoiceInput) input: CreateInvoiceInput,
@@ -3137,7 +3137,7 @@ export class InvoiceResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateInvoiceInput) {
     }
-    
+        
     @Mutation(() => Invoice_)
     async UpdateInvoice(
         @Arg('input', () => UpdateInvoiceInput) input: UpdateInvoiceInput,
@@ -3168,7 +3168,7 @@ export class InvoiceResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateInvoiceInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -3178,22 +3178,22 @@ export class InvoiceResolver extends ResolverBase {
 export class ActivityAttachment_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Attachments?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [Activity_])
     ActivitiesArray: Activity_[]; // Link to Activities
-
+    
 }
         
 //****************************************************************************
@@ -3203,8 +3203,8 @@ export class ActivityAttachment_ {
 export class CreateActivityAttachmentInput {
     @Field({ nullable: true })
     Attachments: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Activity Attachments   
@@ -3213,11 +3213,11 @@ export class CreateActivityAttachmentInput {
 export class UpdateActivityAttachmentInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     Attachments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Activity Attachments
 //****************************************************************************
@@ -3269,7 +3269,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Activity Attachments', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Activity_])
     async ActivitiesArray(@Root() activityattachment_: ActivityAttachment_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Activities', userPayload);
@@ -3277,7 +3277,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Activities', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => ActivityAttachment_)
     async CreateActivityAttachment(
         @Arg('input', () => CreateActivityAttachmentInput) input: CreateActivityAttachmentInput,
@@ -3307,7 +3307,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateActivityAttachmentInput) {
     }
-    
+        
     @Mutation(() => ActivityAttachment_)
     async UpdateActivityAttachment(
         @Arg('input', () => UpdateActivityAttachmentInput) input: UpdateActivityAttachmentInput,
@@ -3338,7 +3338,7 @@ export class ActivityAttachmentResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateActivityAttachmentInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -3348,45 +3348,45 @@ export class ActivityAttachmentResolver extends ResolverBase {
 export class PaymentTermsType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     DisplayName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Code?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     DueDateCalculation?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(400)
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemRecordID?: string;
-    
+        
     @Field(() => [Invoice_])
     InvoicesArray: Invoice_[]; // Link to Invoices
-
+    
 }
         
 //****************************************************************************
@@ -3396,26 +3396,26 @@ export class PaymentTermsType_ {
 export class CreatePaymentTermsTypeInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field({ nullable: true })
     Code: string;
-
+    
     @Field({ nullable: true })
     DueDateCalculation: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CompanyIntegrationID: number;
-
+    
     @Field({ nullable: true })
     ExternalSystemRecordID: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Payment Terms Types   
@@ -3424,29 +3424,29 @@ export class CreatePaymentTermsTypeInput {
 export class UpdatePaymentTermsTypeInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field({ nullable: true })
     Code: string;
-
+    
     @Field({ nullable: true })
     DueDateCalculation: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CompanyIntegrationID: number;
-
+    
     @Field({ nullable: true })
     ExternalSystemRecordID: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Payment Terms Types
 //****************************************************************************
@@ -3498,7 +3498,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Payment Terms Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() paymenttermstype_: PaymentTermsType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -3506,7 +3506,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => PaymentTermsType_)
     async CreatePaymentTermsType(
         @Arg('input', () => CreatePaymentTermsTypeInput) input: CreatePaymentTermsTypeInput,
@@ -3536,7 +3536,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreatePaymentTermsTypeInput) {
     }
-    
+        
     @Mutation(() => PaymentTermsType_)
     async UpdatePaymentTermsType(
         @Arg('input', () => UpdatePaymentTermsTypeInput) input: UpdatePaymentTermsTypeInput,
@@ -3567,7 +3567,7 @@ export class PaymentTermsTypeResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdatePaymentTermsTypeInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -3577,26 +3577,26 @@ export class PaymentTermsTypeResolver extends ResolverBase {
 export class InvoiceStatusType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(40)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(400)
     Description: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [Invoice_])
     InvoicesArray: Invoice_[]; // Link to Invoices
-
+    
 }
         
 //****************************************************************************
@@ -3606,11 +3606,11 @@ export class InvoiceStatusType_ {
 export class CreateInvoiceStatusTypeInput {
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Invoice Status Types   
@@ -3619,14 +3619,14 @@ export class CreateInvoiceStatusTypeInput {
 export class UpdateInvoiceStatusTypeInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Invoice Status Types
 //****************************************************************************
@@ -3678,7 +3678,7 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Invoice Status Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [Invoice_])
     async InvoicesArray(@Root() invoicestatustype_: InvoiceStatusType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Invoices', userPayload);
@@ -3686,7 +3686,7 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Invoices', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => InvoiceStatusType_)
     async CreateInvoiceStatusType(
         @Arg('input', () => CreateInvoiceStatusTypeInput) input: CreateInvoiceStatusTypeInput,
@@ -3716,7 +3716,7 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateInvoiceStatusTypeInput) {
     }
-    
+        
     @Mutation(() => InvoiceStatusType_)
     async UpdateInvoiceStatusType(
         @Arg('input', () => UpdateInvoiceStatusTypeInput) input: UpdateInvoiceStatusTypeInput,
@@ -3747,5 +3747,5 @@ export class InvoiceStatusTypeResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateInvoiceStatusTypeInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }

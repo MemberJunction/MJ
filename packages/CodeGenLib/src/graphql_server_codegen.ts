@@ -85,27 +85,27 @@ export class GraphQLServerGeneratorBase {
     
     public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string): string {
         let sRet: string = `/********************************************************************************
-    * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
-    * Generated Entities and Resolvers for Server
-    * 
-    * GENERATED: ${new Date().toLocaleString()}
-    * 
-    *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
-    *   >>> YOUR CHANGES WILL BE OVERWRITTEN
-    *   >>> THE NEXT TIME THIS FILE IS GENERATED
-    * 
-    **********************************************************************************/
-    import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
-    import { Metadata, EntityPermissionType } from '@memberjunction/core'
-    import { AppContext } from '@memberjunction/server';
-    
-    import { MaxLength } from 'class-validator';
-    import { DataSource } from 'typeorm';
-    ${importLibrary.trim().toLowerCase() === '@memberjunction/core-entities' ? `import { mj_core_schema } from '../config';\n` : ''}
-    import * as mj_core_schema_server_object_types from '@memberjunction/server'
-    
-    import { ${entities.map(e => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';
+* ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
+* Generated Entities and Resolvers for Server
+* 
+* GENERATED: ${new Date().toLocaleString()}
+* 
+*   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
+*   >>> YOUR CHANGES WILL BE OVERWRITTEN
+*   >>> THE NEXT TIME THIS FILE IS GENERATED
+* 
+**********************************************************************************/
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+import { Metadata, EntityPermissionType } from '@memberjunction/core'
+import { AppContext } from '@memberjunction/server';
+
+import { MaxLength } from 'class-validator';
+import { DataSource } from 'typeorm';
+${importLibrary.trim().toLowerCase() === '@memberjunction/core-entities' ? `import { mj_core_schema } from '../config';\n` : ''}
+import * as mj_core_schema_server_object_types from '@memberjunction/server'
+
+import { ${entities.map(e => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';
     `
         return sRet;    
     }
@@ -113,18 +113,18 @@ export class GraphQLServerGeneratorBase {
     public generateEntitySpecificServerFileHeader(entity: EntityInfo, importLibrary: string, excludeRelatedEntitiesExternalToSchema: boolean): string {
         const md = new Metadata();
         let sRet: string = `/********************************************************************************
-    * ${entity.Name} TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
-    * 
-    * GENERATED: ${new Date().toLocaleString()}
-    * 
-    *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
-    *   >>> YOUR CHANGES WILL BE OVERWRITTEN
-    *   >>> THE NEXT TIME THIS FILE IS GENERATED
-    * 
-    **********************************************************************************/
-    import { MaxLength } from 'class-validator';
-    import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType } from '@memberjunction/server';
-    import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
+* ${entity.Name} TypeORM/TypeGraphQL Type Class Definition - AUTO GENERATED FILE
+* 
+* GENERATED: ${new Date().toLocaleString()}
+* 
+*   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
+*   >>> YOUR CHANGES WILL BE OVERWRITTEN
+*   >>> THE NEXT TIME THIS FILE IS GENERATED
+* 
+**********************************************************************************/
+import { MaxLength } from 'class-validator';
+import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType } from '@memberjunction/server';
+import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     `
         for (let i:number = 0; i < entity.RelatedEntities.length; ++i) {
             const r = entity.RelatedEntities[i];
@@ -145,12 +145,12 @@ export class GraphQLServerGeneratorBase {
             sDescription = sDescription.replace(/'/g, "\\'")
     
         return `
-    
-    //****************************************************************************
-    // ENTITY CLASS for ${entity.Name}
-    //****************************************************************************
-    @ObjectType(${sDescription.length > 0 ? `{ description: '${sDescription}' }` : ''})
-    export class ${serverGraphQLTypeName} {`;
+
+//****************************************************************************
+// ENTITY CLASS for ${entity.Name}
+//****************************************************************************
+@ObjectType(${sDescription.length > 0 ? `{ description: '${sDescription}' }` : ''})
+export class ${serverGraphQLTypeName} {`;
     }
         
         
@@ -170,8 +170,8 @@ export class GraphQLServerGeneratorBase {
             fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: '${fieldInfo.Description.replace(/'/g, "\\'")}'`;
     
         return `  
-        @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ?  '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
-        ${fieldInfo.CodeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
+    @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ?  '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
+    ${fieldInfo.CodeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `         
     }
         
@@ -214,14 +214,14 @@ export class GraphQLServerGeneratorBase {
     
         if (r.Type.toLowerCase().trim() == 'one to many') {
             return `
-        @Field(() => [${relatedClassName + this.GraphQLTypeSuffix }])
-        ${r.RelatedEntityCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix }[]; // Link to ${r.RelatedEntityCodeName}
+    @Field(() => [${relatedClassName + this.GraphQLTypeSuffix }])
+    ${r.RelatedEntityCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix }[]; // Link to ${r.RelatedEntityCodeName}
     `
         }
         else { // many to many
             return `
-        @Field(() => [${relatedClassName + this.GraphQLTypeSuffix }])
-        ${r.RelatedEntityCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix }[]; // Link to ${r.RelatedEntity}
+    @Field(() => [${relatedClassName + this.GraphQLTypeSuffix }])
+    ${r.RelatedEntityCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix }[]; // Link to ${r.RelatedEntity}
     `
         }
     }
@@ -234,53 +234,53 @@ export class GraphQLServerGeneratorBase {
         if (entity.PrimaryKeys.length > 0) {
             // first add in the base resolver query to lookup by ID for all entities
             const auditAccessCode: string = entity.AuditRecordAccess ? `
-            this.createRecordAccessAuditLogRecord(userPayload, '${entity.Name}', ${entity.PrimaryKey.Name})` : '';
+        this.createRecordAccessAuditLogRecord(userPayload, '${entity.Name}', ${entity.PrimaryKey.Name})` : '';
             
             sRet = `
-    //****************************************************************************
-    // RESOLVER for ${entity.Name}
-    //****************************************************************************
-    @ObjectType()
-    export class Run${entity.BaseTableCodeName}ViewResult {
-        @Field(() => [${serverGraphQLTypeName}])
-        Results: ${serverGraphQLTypeName}[];
-    
-        @Field(() => Int, {nullable: true})
-        UserViewRunID?: number;
-    
-        @Field(() => Int, {nullable: true})
-        RowCount: number;
-    
-        @Field(() => Int, {nullable: true})
-        TotalRowCount: number;
-    
-        @Field(() => Int, {nullable: true})
-        ExecutionTime: number;
-    
-        @Field({nullable: true})
-        ErrorMessage?: string;
-    
-        @Field(() => Boolean, {nullable: false})
-        Success: boolean;
+//****************************************************************************
+// RESOLVER for ${entity.Name}
+//****************************************************************************
+@ObjectType()
+export class Run${entity.BaseTableCodeName}ViewResult {
+    @Field(() => [${serverGraphQLTypeName}])
+    Results: ${serverGraphQLTypeName}[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(${serverGraphQLTypeName})
+export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Base' : ''} extends ResolverBase {
+    @Query(() => Run${entity.BaseTableCodeName}ViewResult)
+    async Run${entity.BaseTableCodeName}ViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
     }
-    
-    @Resolver(${serverGraphQLTypeName})
-    export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Base' : ''} extends ResolverBase {
-        @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-        async Run${entity.BaseTableCodeName}ViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-        }
-    
-        @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-        async Run${entity.BaseTableCodeName}ViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-        }
-    
-        @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-        async Run${entity.BaseTableCodeName}DynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            input.EntityName = '${entity.Name}';
-            return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-        }`
+
+    @Query(() => Run${entity.BaseTableCodeName}ViewResult)
+    async Run${entity.BaseTableCodeName}ViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => Run${entity.BaseTableCodeName}ViewResult)
+    async Run${entity.BaseTableCodeName}DynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = '${entity.Name}';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }`
         let graphQLPKEYArgs = '';
         let whereClause = '';
         for (let i = 0; i < entity.PrimaryKeys.length; i++) {
@@ -295,24 +295,24 @@ export class GraphQLServerGeneratorBase {
         }
     
     sRet += `
-        @Query(() => ${serverGraphQLTypeName}, { nullable: true })
-        async ${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
-            this.CheckUserReadPermissions('${entity.Name}', userPayload);
-            const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}] WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
-            const result = this.MapFieldNamesToCodeNames('${entity.Name}', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-            return result;
-        }
+    @Query(() => ${serverGraphQLTypeName}, { nullable: true })
+    async ${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+        this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}] WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
+        const result = this.MapFieldNamesToCodeNames('${entity.Name}', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
     `
             if (entity.AllowAllRowsAPI) {
                 // this entity allows a query to return all rows, so include that type of query next
                 sRet += `
-        @Query(() => [${serverGraphQLTypeName}])
-        async All${entity.CodeName}(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            this.CheckUserReadPermissions('${entity.Name}', userPayload);
-            const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}]\` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
-            const result = this.ArrayMapFieldNamesToCodeNames('${entity.Name}', await dataSource.query(sSQL));
-            return result;
-        }
+    @Query(() => [${serverGraphQLTypeName}])
+    async All${entity.CodeName}(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const sSQL = \`SELECT * FROM [${this.schemaName(entity)}].[${entity.BaseView}]\` + this.getRowLevelSecurityWhereClause('${entity.Name}', userPayload, EntityPermissionType.Read, ' WHERE');
+        const result = this.ArrayMapFieldNamesToCodeNames('${entity.Name}', await dataSource.query(sSQL));
+        return result;
+    }
     `;
             }
     
@@ -370,11 +370,11 @@ export class GraphQLServerGeneratorBase {
     protected generateServerGraphQLInputTypeInner(entity: EntityInfo, isUpdate: boolean, classPrefix: string): string {
         let sRet: string = ''
         sRet += `\n        
-    //****************************************************************************
-    // INPUT TYPE for ${entity.Name}   
-    //****************************************************************************
-    @InputType()
-    export class ${classPrefix}${entity.BaseTableCodeName}Input {`
+//****************************************************************************
+// INPUT TYPE for ${entity.Name}   
+//****************************************************************************
+@InputType()
+export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         for (let i = 0; i < entity.Fields.length; i++) {
             const f = entity.Fields[i];
             const sTypeGraphQLString: string = this.getTypeGraphQLFieldString(f);
@@ -384,8 +384,8 @@ export class GraphQLServerGeneratorBase {
             const includePrimaryKey = isUpdate || (!f.AutoIncrement && f.Type !=='uniqueidentifier') // include primary key for updates and also for creates if it is not an autoincrement field or a uniqueidentifier
             if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.IsPrimaryKey && !f.IsVirtual && f.AllowUpdateAPI && f.Type.trim().toLowerCase() !== 'uniqueidentifier') ) {
                 sRet += `
-        @Field(${sFullTypeGraphQLString})
-        ${f.CodeName}: ${TypeScriptTypeFromSQLType(f.Type)};
+    @Field(${sFullTypeGraphQLString})
+    ${f.CodeName}: ${TypeScriptTypeFromSQLType(f.Type)};
     `
             }
         }
@@ -402,72 +402,72 @@ export class GraphQLServerGeneratorBase {
         if (entity.AllowCreateAPI && !entity.VirtualEntity) {
             // generate a create mutation
             sRet += `
-        @Mutation(() => ${serverGraphQLTypeName})
-        async Create${entity.BaseTableCodeName}(
-            @Arg('input', () => Create${entity.BaseTableCodeName}Input) input: Create${entity.BaseTableCodeName}Input,
-            @Ctx() { dataSource, userPayload }: AppContext, 
-            @PubSub() pubSub: PubSubEngine
-        ) {
-            if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-                const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
-                await entityObject.NewRecord();
-                entityObject.SetMany(input);
-                if (await entityObject.Save()) {
-                    // save worked, fire the AfterCreate event and then return all the data
-                    await this.AfterCreate(dataSource, input); // fire event
-                    return entityObject.GetAll();
-                }
-                else 
-                    // save failed, return null
-                    return null;
+    @Mutation(() => ${serverGraphQLTypeName})
+    async Create${entity.BaseTableCodeName}(
+        @Arg('input', () => Create${entity.BaseTableCodeName}Input) input: Create${entity.BaseTableCodeName}Input,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
             }
-            else    
+            else 
+                // save failed, return null
                 return null;
         }
-    
-        // Before/After CREATE Event Hooks for Sub-Classes to Override
-        protected async BeforeCreate(dataSource: DataSource, input: Create${entity.BaseTableCodeName}Input): Promise<boolean> {
-            return true;
-        }
-        protected async AfterCreate(dataSource: DataSource, input: Create${entity.BaseTableCodeName}Input) {
-        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: Create${entity.BaseTableCodeName}Input): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: Create${entity.BaseTableCodeName}Input) {
+    }
         `
         }
         if (entity.AllowUpdateAPI && !entity.VirtualEntity) {
             // generate an edit mutation
             const loadParamString: string = entity.PrimaryKeys.map(f => `input.${f.CodeName}`).join(', ');
             sRet += `
-        @Mutation(() => ${serverGraphQLTypeName})
-        async Update${entity.BaseTableCodeName}(
-            @Arg('input', () => Update${entity.BaseTableCodeName}Input) input: Update${entity.BaseTableCodeName}Input,
-            @Ctx() { dataSource, userPayload }: AppContext,
-            @PubSub() pubSub: PubSubEngine
-        ) {
-            if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-                const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
-                ${entity.TrackRecordChanges ? `await entityObject.Load(${loadParamString}) // Track Changes is turned on, so we need to get the latest data from DB first before we save` : 
-                                               `entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for ${entity.Name}` }
-                ${entity.TrackRecordChanges ? 'entityObject.SetMany(input);' : ''}
-                if (await entityObject.Save(${entity.TrackRecordChanges ? '' : '{ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ }' })) {
-                    // save worked, fire afterevent and return all the data
-                    await this.AfterUpdate(dataSource, input); // fire event
-                    return entityObject.GetAll();
-                }
-                else
-                    return null; // save failed, return null
+    @Mutation(() => ${serverGraphQLTypeName})
+    async Update${entity.BaseTableCodeName}(
+        @Arg('input', () => Update${entity.BaseTableCodeName}Input) input: Update${entity.BaseTableCodeName}Input,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
+            ${entity.TrackRecordChanges ? `await entityObject.Load(${loadParamString}) // Track Changes is turned on, so we need to get the latest data from DB first before we save` : 
+                                            `entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for ${entity.Name}` }
+            ${entity.TrackRecordChanges ? 'entityObject.SetMany(input);' : ''}
+            if (await entityObject.Save(${entity.TrackRecordChanges ? '' : '{ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ }' })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
             }
             else
-                return null;
+                return null; // save failed, return null
         }
-    
-        // Before/After UPDATE Event Hooks for Sub-Classes to Override
-        protected async BeforeUpdate(dataSource: DataSource, input: Update${entity.BaseTableCodeName}Input): Promise<boolean> {
-            const i = input, d = dataSource; // prevent error
-            return true;
-        }
-        protected async AfterUpdate(dataSource: DataSource, input: Update${entity.BaseTableCodeName}Input) {
-            const i = input, d = dataSource; // prevent error
-        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: Update${entity.BaseTableCodeName}Input): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: Update${entity.BaseTableCodeName}Input) {
+        const i = input, d = dataSource; // prevent error
+    }
     `
         }
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
@@ -493,31 +493,31 @@ export class GraphQLServerGeneratorBase {
             }
     
     sRet += `
-        @Mutation(() => ${serverGraphQLTypeName})
-        async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            if (await this.BeforeDelete(dataSource, ${pkeys})) { // fire event and proceed if it wasn't cancelled
-                const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
-                await entityObject.Load(${pkeys});
-                const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-                if (await entityObject.Delete()) {
-                    await this.AfterDelete(dataSource, ${pkeys}); // fire event
-                    return returnValue;
-                }
-                else 
-                    return null; // delete failed, this will cause an exception
+    @Mutation(() => ${serverGraphQLTypeName})
+    async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ${pkeys})) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(${pkeys});
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ${pkeys}); // fire event
+                return returnValue;
             }
-            else
-                return null; // BeforeDelete canceled the operation, this will cause an exception
+            else 
+                return null; // delete failed, this will cause an exception
         }
-    
-        // Before/After UPDATE Event Hooks for Sub-Classes to Override
-        protected async BeforeDelete(dataSource: DataSource, ${simplePKEYArgs}): Promise<boolean> {
-            const i = ${entity.PrimaryKey.Name}, d = dataSource; // prevent error;
-            return true;
-        }
-        protected async AfterDelete(dataSource: DataSource, ${simplePKEYArgs}) {
-            const i = ${entity.PrimaryKey.Name}, d = dataSource; // prevent error
-        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ${simplePKEYArgs}): Promise<boolean> {
+        const i = ${entity.PrimaryKey.Name}, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ${simplePKEYArgs}) {
+        const i = ${entity.PrimaryKey.Name}, d = dataSource; // prevent error
+    }
     `        
         }
         return sRet;
@@ -590,13 +590,13 @@ export class GraphQLServerGeneratorBase {
         const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
         const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix 
         return `  
-        @FieldResolver(() => [${serverClassName}])
-        async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix }, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-            const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-            const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
-            return result;
-        }
+    @FieldResolver(() => [${serverClassName}])
+    async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix }, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
+        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
+        return result;
+    }
         `    
     }
     protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
@@ -613,13 +613,13 @@ export class GraphQLServerGeneratorBase {
         const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix 
     
         return `
-        @FieldResolver(() => [${serverClassName}])
-        async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix }, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-            this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-            const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.PrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-            const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
-            return result;
-        }
+    @FieldResolver(() => [${serverClassName}])
+    async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix }, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
+        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.PrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
+        return result;
+    }
         `;
     }
 }

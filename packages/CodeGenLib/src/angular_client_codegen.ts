@@ -93,47 +93,47 @@ export class AngularClientGeneratorBase {
           const moduleCode: string = this.generateAngularModuleCode(componentNames, sections, maxComponentsPerModule, modulePrefix);
       
           return `/**********************************************************************************
-      * GENERATED FILE - This file is automatically managed by the MJ CodeGen tool, 
-      * 
-      * DO NOT MODIFY THIS FILE - any changes you make will be wiped out the next time the file is
-      * generated
-      * 
-      **********************************************************************************/
-      import { NgModule } from '@angular/core';
-      import { CommonModule } from '@angular/common';
-      import { FormsModule } from '@angular/forms';
-      
-      // MemberJunction Imports
-      import { BaseFormsModule } from '@memberjunction/ng-base-forms';
-      import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
-      import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-      import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-      import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-      
-      // Kendo Imports
-      import { InputsModule } from '@progress/kendo-angular-inputs';
-      import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-      import { ButtonsModule } from '@progress/kendo-angular-buttons';
-      import { LayoutModule } from '@progress/kendo-angular-layout';
-      import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-      import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
-      
-      // Import Generated Components
-      ${componentImports.join('\n')}
-      ${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
-      
-      ${moduleCode}
-      
-      export function Load${modulePrefix}GeneratedForms() {
-          // This function doesn't do much, but it calls each generated form's loader function
-          // which in turn calls the sections for that generated form. Ultimately, those bits of 
-          // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
-          // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
-          // in production builds tree shaking will eliminate the code unless we do this
-          ${componentNames.map(c => `Load${c}();`).join('\n    ')}
-          ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
-      }
-      `
+* GENERATED FILE - This file is automatically managed by the MJ CodeGen tool, 
+* 
+* DO NOT MODIFY THIS FILE - any changes you make will be wiped out the next time the file is
+* generated
+* 
+**********************************************************************************/
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+
+// MemberJunction Imports
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
+import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
+import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
+
+// Kendo Imports
+import { InputsModule } from '@progress/kendo-angular-inputs';
+import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { LayoutModule } from '@progress/kendo-angular-layout';
+import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
+import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
+
+// Import Generated Components
+${componentImports.join('\n')}
+${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
+    
+${moduleCode}
+    
+export function Load${modulePrefix}GeneratedForms() {
+    // This function doesn't do much, but it calls each generated form's loader function
+    // which in turn calls the sections for that generated form. Ultimately, those bits of 
+    // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
+    // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
+    // in production builds tree shaking will eliminate the code unless we do this
+    ${componentNames.map(c => `Load${c}();`).join('\n    ')}
+    ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
+}
+    `
       }
       
       protected generateAngularModuleCode(componentNames: string[], sections: AngularFormSectionInfo[], maxComponentsPerModule: number, modulePrefix: string): string {
@@ -145,39 +145,39 @@ export class AngularClientGeneratorBase {
           const subModules: string[] = [];
           let currentComponentCount: number = 0;
           const subModuleStarter: string =   `
-      @NgModule({
-      declarations: [
-      `
-          let currentSubModuleCode: string = subModuleStarter;
-      
-          // loop through the combined array which is the combination of the componentNames and the sections
-          for (let i: number = 0; i < combinedArray.length; ++i) {
-              currentSubModuleCode += (currentComponentCount === 0 ? '' : ',\n') +  '    ' + combinedArray[i]; // prepend a comma if this isn't the first component in the module
-              if ( 
-                   (currentComponentCount === maxComponentsPerModule - 1) || 
-                   (i === combinedArray.length - 1) 
-                 ) {
-                  // we have reached the max number of components for this module, so generate the module code and reset the counters
-                  currentSubModuleCode += this.generateSubModuleEnding(subModules.length);
-                  subModules.push(currentSubModuleCode);
-                  currentSubModuleCode = subModuleStarter;
-                  currentComponentCount = 0;
-              }
-              else    
-                  currentComponentCount++;
-          }            
-      
-          // at this point, we have a list of sub-modules that are generated into the subModules array, now we need to generate the main module that imports each of the sub-modules.
-          const subModuleNames = subModules.map((s, i) => `${this.SubModuleBaseName}${i}`);
-          const masterModuleCode: string = `
-      @NgModule({
-      declarations: [
-      ],
-      imports: [
-          ${subModuleNames.join(',\n    ')}
-      ]
-      })
-      export class ${modulePrefix}GeneratedFormsModule { }`;
+@NgModule({
+declarations: [
+`
+        let currentSubModuleCode: string = subModuleStarter;
+    
+        // loop through the combined array which is the combination of the componentNames and the sections
+        for (let i: number = 0; i < combinedArray.length; ++i) {
+            currentSubModuleCode += (currentComponentCount === 0 ? '' : ',\n') +  '    ' + combinedArray[i]; // prepend a comma if this isn't the first component in the module
+            if ( 
+                (currentComponentCount === maxComponentsPerModule - 1) || 
+                (i === combinedArray.length - 1) 
+                ) {
+                // we have reached the max number of components for this module, so generate the module code and reset the counters
+                currentSubModuleCode += this.generateSubModuleEnding(subModules.length);
+                subModules.push(currentSubModuleCode);
+                currentSubModuleCode = subModuleStarter;
+                currentComponentCount = 0;
+            }
+            else    
+                currentComponentCount++;
+        }            
+    
+        // at this point, we have a list of sub-modules that are generated into the subModules array, now we need to generate the main module that imports each of the sub-modules.
+        const subModuleNames = subModules.map((s, i) => `${this.SubModuleBaseName}${i}`);
+        const masterModuleCode: string = `
+@NgModule({
+declarations: [
+],
+imports: [
+    ${subModuleNames.join(',\n    ')}
+]
+})
+export class ${modulePrefix}GeneratedFormsModule { }`;
       
           // now we have the sub-modules generated into the subModules array, and we have the master module code generated into the masterModuleCode variable
           // so we need to combine the two into a single return value and send back to the caller
@@ -195,26 +195,26 @@ export class AngularClientGeneratorBase {
 
       protected generateSubModuleEnding(moduleNumber: number): string {
       return `],
-      imports: [
-          CommonModule,
-          FormsModule,
-          LayoutModule,
-          InputsModule,
-          ButtonsModule,
-          DateInputsModule,
-          UserViewGridModule,
-          LinkDirectivesModule,
-          BaseFormsModule,
-          MJTabStripModule,
-          ContainerDirectivesModule,
-          DropDownListModule,
-          ComboBoxModule
-      ],
-      exports: [
-      ]
-      })
-      export class ${this.SubModuleBaseName}${moduleNumber} { }
-      `;
+imports: [
+    CommonModule,
+    FormsModule,
+    LayoutModule,
+    InputsModule,
+    ButtonsModule,
+    DateInputsModule,
+    UserViewGridModule,
+    LinkDirectivesModule,
+    BaseFormsModule,
+    MJTabStripModule,
+    ContainerDirectivesModule,
+    DropDownListModule,
+    ComboBoxModule
+],
+exports: [
+]
+})
+export class ${this.SubModuleBaseName}${moduleNumber} { }
+    `;
       }
       
       
@@ -223,24 +223,24 @@ export class AngularClientGeneratorBase {
           const sectionImports: string = sections.length > 0 ? sections.map(s => `import { Load${s.ClassName} } from "./sections/${s.FileNameWithoutExtension}"`).join('\n') : '';
       
           return `import { Component } from '@angular/core';
-      import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
-      import { RegisterClass } from '@memberjunction/global';
-      import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-      ${sectionImports}
-      @RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
-      @Component({
-          selector: 'gen-${entity.ClassName.toLowerCase()}-form',
-          templateUrl: './${entity.ClassName.toLowerCase()}.form.component.html',
-          styleUrls: ['../../../../shared/form-styles.css']
-      })
-      export class ${entity.ClassName}FormComponent extends BaseFormComponent {
-          public record!: ${entityObjectClass}Entity;
-      } 
-      
-      export function Load${entity.ClassName}FormComponent() {
-          ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
-      }
-      `
+import { ${entityObjectClass}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+${sectionImports}
+@RegisterClass(BaseFormComponent, '${entity.Name}') // Tell MemberJunction about this class
+@Component({
+    selector: 'gen-${entity.ClassName.toLowerCase()}-form',
+    templateUrl: './${entity.ClassName.toLowerCase()}.form.component.html',
+    styleUrls: ['../../../../shared/form-styles.css']
+})
+export class ${entity.ClassName}FormComponent extends BaseFormComponent {
+    public record!: ${entityObjectClass}Entity;
+} 
+
+export function Load${entity.ClassName}FormComponent() {
+    ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
+}
+`
       }
       
       protected entityHasTopArea(entity: EntityInfo): boolean {
@@ -297,43 +297,43 @@ export class AngularClientGeneratorBase {
                       sectionName = 'details';
       
                   section.TabCode = `
-                          <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${section.Name}')">
-                              ${section.Name}
-                          </mj-tab>
-                          <mj-tab-body>
-                              <mj-form-section Entity="${entity.Name}" Section="${this.stripWhiteSpace(section.Name.toLowerCase())}" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
-                          </mj-tab-body>`
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${section.Name}')">
+                        ${section.Name}
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section Entity="${entity.Name}" Section="${this.stripWhiteSpace(section.Name.toLowerCase())}" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                    </mj-tab-body>`
               }
       
               const { readModeHTML, editModeHTML } = this.generateSectionHTMLForAngular(entity, section);
       
               section.ComponentCode = `import { Component, Input } from '@angular/core';
-      import { RegisterClass } from '@memberjunction/global';
-      import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-      import { ${entity.ClassName}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
-      
-      @RegisterClass(BaseFormSectionComponent, '${entity.Name}.${sectionName}') // Tell MemberJunction about this class 
-      @Component({
-          selector: 'gen-${entity.ClassName.toLowerCase()}-form-${sectionName}',
-          styleUrls: ['../../../../../shared/form-styles.css'],
-          template: \`<div *ngIf="this.record">
-          <div *ngIf="this.EditMode" class="record-form">
-          ${editModeHTML}
-          </div>
-          <div *ngIf="!this.EditMode" class="record-form">
-          ${readModeHTML}
-          </div>
-      </div>
-          \`
-      })
-      export class ${entity.ClassName}${this.stripWhiteSpace(section.Name)}Component extends BaseFormSectionComponent {
-          @Input() override record!: ${entity.ClassName}Entity;
-          @Input() override EditMode: boolean = false;
-      }
-      
-      export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Component() {
-          // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
-      }
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
+import { ${entity.ClassName}Entity } from '${entity.SchemaName === mjCoreSchema ? '@memberjunction/core-entities' : 'mj_generatedentities'}';
+
+@RegisterClass(BaseFormSectionComponent, '${entity.Name}.${sectionName}') // Tell MemberJunction about this class 
+@Component({
+    selector: 'gen-${entity.ClassName.toLowerCase()}-form-${sectionName}',
+    styleUrls: ['../../../../../shared/form-styles.css'],
+    template: \`<div *ngIf="this.record">
+    <div *ngIf="this.EditMode" class="record-form">
+    ${editModeHTML}
+    </div>
+    <div *ngIf="!this.EditMode" class="record-form">
+    ${readModeHTML}
+    </div>
+</div>
+    \`
+})
+export class ${entity.ClassName}${this.stripWhiteSpace(section.Name)}Component extends BaseFormSectionComponent {
+    @Input() override record!: ${entity.ClassName}Entity;
+    @Input() override EditMode: boolean = false;
+}
+
+export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Component() {
+    // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
+}
       `
       
               if (section.Type !== GeneratedFormSectionType.Top)
@@ -371,10 +371,10 @@ export class AngularClientGeneratorBase {
                       const webLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'url' ? `mjWebLink [field]="record.GetFieldByName('${field.CodeName}')" ` : '';
                       const emailLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'email' ? `mjEmailLink [field]="record.GetFieldByName('${field.CodeName}')" ` : '';
                       readModeHTML += `              
-              <div class="record-form-row">
-                  <label class="fieldLabel">${field.DisplayNameOrName}</label>
-                  <span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.CodeName}', 0)}}</span>
-              </div>`
+        <div class="record-form-row">
+            <label class="fieldLabel">${field.DisplayNameOrName}</label>
+            <span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.CodeName}', 0)}}</span>
+        </div>`
       
                       let editControl = '';
                       let bReadOnly: boolean = false;
@@ -418,10 +418,10 @@ export class AngularClientGeneratorBase {
                       }
       
                       editModeHTML += `              
-              <div class="record-form-row">
-                  <label class="fieldLabel">${field.DisplayNameOrName}</label>
-                  ${editControl}   
-              </div> `
+        <div class="record-form-row">
+            <label class="fieldLabel">${field.DisplayNameOrName}</label>
+            ${editControl}   
+        </div> `
                   }
               }
           }
@@ -434,17 +434,17 @@ export class AngularClientGeneratorBase {
           let index = startIndex;
           for (const relatedEntity of entity.RelatedEntities) {
               const tabName: string = relatedEntity.DisplayName ? relatedEntity.DisplayName : relatedEntity.RelatedEntity
-              tabs.push(` 
-                          <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${tabName}')">
-                              ${tabName}
-                          </mj-tab>
-                          <mj-tab-body>
-                              <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
-                                  [AllowLoad]="this.IsCurrentTab('${tabName}')"  
-                                  [EditMode]="this.GridEditMode()"  
-                                  [BottomMargin]="GridBottomMargin">
-                              </mj-user-view-grid>
-                          </mj-tab-body>`)
+                  tabs.push(` 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${tabName}')">
+                        ${tabName}
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
+                            [AllowLoad]="this.IsCurrentTab('${tabName}')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>`)
       
               index++;
           }
@@ -470,42 +470,42 @@ export class AngularClientGeneratorBase {
       
       protected generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-          <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
-              <mj-form-toolbar [form]="this"></mj-form-toolbar>
-              <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
-                  <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
-      ${this.innerTopAreaHTML(topArea)}
-                  </kendo-splitter-pane>
-                  <kendo-splitter-pane>
-      ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
-                  </kendo-splitter-pane>
-              </kendo-splitter>
-          </form>
-        </div>
-          `
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
+${this.innerTopAreaHTML(topArea)}
+            </kendo-splitter-pane>
+            <kendo-splitter-pane>
+${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
+            </kendo-splitter-pane>
+        </kendo-splitter>
+    </form>
+</div>
+        `
           return htmlCode;
       }
       
       protected innerTopAreaHTML(topArea: string): string {
       return `                <div #topArea class="record-form-group">
-                          ${topArea}
-                      </div>`
+                    ${topArea}
+                </div>`
       }
       protected innerTabStripHTML(additionalSections, relatedEntitySections): string {
       return `                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                          ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
-                          ${relatedEntitySections ? relatedEntitySections.join('\n') : ''}
-                      </mj-tabstrip>`
+                    ${additionalSections ? additionalSections.filter(s => s.Type !== GeneratedFormSectionType.Top).map(s => s.TabCode).join('\n               ') : ''}
+                    ${relatedEntitySections ? relatedEntitySections.join('\n') : ''}
+                </mj-tabstrip>`
       }
       
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
-          <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
-      ${this.innerTopAreaHTML(topArea)}
-      ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
-          </form>
-        </div>
-          `
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+${this.innerTopAreaHTML(topArea)}
+${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
+    </form>
+</div>
+        `
           return htmlCode;
       }
 }
