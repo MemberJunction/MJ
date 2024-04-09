@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/3/2024, 5:30:40 PM
+* GENERATED: 4/8/2024, 7:27:10 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -7101,6 +7101,10 @@ export class ListDetail_ {
       
     @Field(() => Int) 
     Sequence: number;
+      
+    @Field() 
+    @MaxLength(200)
+    List: string;
     
 }
         
@@ -8821,6 +8825,10 @@ export class Authorization_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
     
     @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
@@ -9266,6 +9274,9 @@ export class AIModel_ {
     @Field(() => Int) 
     AIModelTypeID: number;
       
+    @Field(() => Boolean) 
+    IsActive: boolean;
+      
     @Field({nullable: true}) 
     Description?: string;
       
@@ -9277,8 +9288,12 @@ export class AIModel_ {
     @MaxLength(510)
     DriverImportPath?: string;
       
-    @Field(() => Boolean) 
-    IsActive: boolean;
+    @Field({nullable: true, description: 'The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls'}) 
+    @MaxLength(200)
+    APIName?: string;
+      
+    @Field(() => Int, {nullable: true, description: 'A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.'}) 
+    PowerRank?: number;
       
     @Field() 
     @MaxLength(8)
@@ -9287,6 +9302,10 @@ export class AIModel_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+      
+    @Field() 
+    @MaxLength(100)
+    AIModelType: string;
     
     @Field(() => [mj_core_schema_server_object_types.AIAction_])
     AIActionsArray: mj_core_schema_server_object_types.AIAction_[]; // Link to AIActions
@@ -9319,6 +9338,9 @@ export class UpdateAIModelInput {
     @Field(() => Int)
     AIModelTypeID: number;
 
+    @Field(() => Boolean)
+    IsActive: boolean;
+
     @Field({ nullable: true })
     Description: string;
 
@@ -9328,8 +9350,11 @@ export class UpdateAIModelInput {
     @Field({ nullable: true })
     DriverImportPath: string;
 
-    @Field(() => Boolean)
-    IsActive: boolean;
+    @Field({ nullable: true })
+    APIName: string;
+
+    @Field(() => Int, { nullable: true })
+    PowerRank: number;
 }
 
 //****************************************************************************
@@ -10569,6 +10594,10 @@ export class QueueTask_ {
       
     @Field({nullable: true}) 
     Comments?: string;
+      
+    @Field() 
+    @MaxLength(100)
+    Queue: string;
     
 }
         
@@ -11327,6 +11356,10 @@ export class Report_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputEvent?: string;
+      
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    OutputWorkflow?: string;
     
     @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots

@@ -275,6 +275,11 @@ function GetLargestVersionNumbers() {
                 $largestVersion.patch = [int]$version[2]
             }
         }
+        else {
+            # this should never happen so if we get here throw a message to the console and stop the script
+            Write-Host "   Couldn't find package.json for $directoryName, halting the script."
+            exit
+        }
     }
     # now return the object with the largest version numbers
     return $largestVersion
@@ -294,6 +299,10 @@ function LinkAllDependencies($dependenciesArray) {
 ### THE REASON WE DO THIS INSTEAD OF JUST SCANNING OUR SUB-DIRECTORIES IS BECAUSE 
 ### WE WANT TO BE ABLE TO SPECIFY THE ORDER OF THE LIBRARIES
 $jsonPath = './build.order.json'
+
+# Store the Root Directory so we can come back to it later
+$rootDirectory = Get-Location
+
 
 # Read the JSON file content
 $jsonContent = Get-Content -Path $jsonPath -Raw
@@ -339,7 +348,12 @@ if ($ignoreBuildLog -eq "y") {
     if ($alignVersions -eq "y") {
         # now get the major, minor and patch version number to use, do this by doing a look into ALL packages we have in our build.order.json file
         # and get the LARGEST major, LARGEST minor, and LARGEST patch number and then add 1 to the patch number
-        $customVersion = Read-Host "Do you want to specify a custom version number? If NO, will calculate the highest major/minor/patch version and add 1 to the patch version. (y/n)"
+        $largestVersion = GetLargestVersionNumbers
+        $largestVersionBumped = $largestVersion
+        $largestVersionBumped.patch++
+        # now share the largest version bumped with the user and ask if they want to use this version number or specify a custom version number
+        $customVersion = Read-Host "Do you want to specify a custom version number? If NO, we will use $($largestVersionBumped.major).$($largestVersionBumped.minor).$($largestVersionBumped.patch)      (y/n)"
+#        $customVersion = Read-Host "Do you want to specify a custom version number? If NO, we will use . (y/n)"
         if ($customVersion -eq "y") {
             $customVersionInput = Read-Host "Enter the complete version number (e.g. 1.2.3)"
             $customVersionArray = $customVersionInput -split '\.'
@@ -360,16 +374,16 @@ if ($ignoreBuildLog -eq "y") {
                 Write-Host "Invalid version number entered. Halting the script."
                 exit
             }
+            elseif ($newVersion.major -lt $largestVersion.major -or ($newVersion.major -eq $largestVersion.major -and $newVersion.minor -lt $largestVersion.minor) -or ($newVersion.major -eq $largestVersion.major -and $newVersion.minor -eq $largestVersion.minor -and $newVersion.patch -lt $largestVersion.patch)) {
+                Write-Host "The custom version number is less than the largest version number found across ALL of the packages listed in the build.order.json file. Halting the script."
+                exit
+            }
         } else {
-            # get the largest version numbers (major, minor, patch) and add 1 to the patch number
-            $newVersion = GetLargestVersionNumbers
+            $newVersion = $largestVersionBumped
         }
     }
 }
 ############################################################################################################
-
-# Store the Root Directory so we can come back to it later
-$rootDirectory = Get-Location
 
 # Iterate over the library array
 foreach ($libObject in $libraries) {

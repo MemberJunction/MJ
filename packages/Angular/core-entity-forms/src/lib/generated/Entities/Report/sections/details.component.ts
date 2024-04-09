@@ -113,6 +113,10 @@ import { ReportEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Output Event</label>
             <span >{{FormatValue('OutputEvent', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Output Workflow</label>
+            <span >{{FormatValue('OutputWorkflow', 0)}}</span>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -220,6 +224,10 @@ import { ReportEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Output Event</label>
             <span >{{FormatValue('OutputEvent', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Output Workflow</label>
+            <span >{{FormatValue('OutputWorkflow', 0)}}</span>
         </div>
     </div>
 </div>

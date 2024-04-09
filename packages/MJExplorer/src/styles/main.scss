@@ -183,7 +183,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
     pointer-events: none;
     opacity: 0.4; /* you can adjust this as needed */
 }
-
+ 
 .k-tabstrip-items-wrapper .k-item {
     color: black;
     font-weight: normal;
@@ -191,13 +191,10 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .k-tabstrip-top .k-tabstrip-items-wrapper .k-item.k-active {
-    border-left: solid 1px black;
-    border-right: solid 1px black;
-    border-top: solid 1px black;
     border-bottom: solid 1px white;
     font-weight: bold;
     color: blue;
     background-color: white;
     z-index: 1;
 }
-  
+   

@@ -103,7 +103,8 @@
                             <ng-template kendoTabContent>
                             <div class="sort-header">
                                 <button kendoButton (click)="addSort()">
-                                    <span class="fa-solid fa-arrow-up-a-z"></span>
+                                    <span class="fa-solid fa-plus"></span>
+                                    Add
                                 </button>
                             </div>
                             <div *ngFor="let s of this.sortState"> 
@@ -126,7 +127,8 @@
                                 >
                                 </kendo-dropdownlist>
                                 <button kendoButton (click)="removeSort(s)">
-                                    <span class="fa-solid fa-arrow-up-z-a"></span>
+                                    <span class="fa-solid fa-xmark"></span>
+                                    Remove
                                 </button>
                             </div> 
                             </ng-template>
