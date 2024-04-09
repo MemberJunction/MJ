@@ -92,3 +92,21 @@
     background: var(--white-color) !important;
     border-right: 0 !important;
   }
+
+.k-checkbox:checked {
+  background-color: var(--border-blue);
+  border-color: var(--border-blue);
+  color: white;
+}
+
+.k-switch-on .k-switch-track {
+  background-color: var(--border-blue);
+  border-color: var(--border-blue);
+  color: white;
+}
+
+.k-selected {
+  background-color: var(--border-blue);
+  border-color: var(--border-blue);
+  color: white;
+}
