@@ -85,7 +85,7 @@ export class GenericBrowserListComponent implements OnInit{
 
   public ngOnInit(): void {
     if(!this.disableAddButton){
-      this.data.push({ text: this.resourceName });
+      this.data.unshift({ text: this.resourceName });
     }
   }
   
