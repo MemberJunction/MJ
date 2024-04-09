@@ -604,7 +604,8 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns the EntityField object for the Field that has IsNameField set to true. If multiple fields have IsNameField on, the function will return the first field (by sequence) that matches. If no fields match, null is returned
+     * Returns the EntityField object for the Field that has IsNameField set to true. If multiple fields have IsNameField on, the function will return the first field (by sequence) that matches. 
+     * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
         for (let j: number = 0; j < this.Fields.length; j++) {
@@ -612,7 +613,8 @@ export class EntityInfo extends BaseInfo {
             if (ef.IsNameField) 
                 return ef;
         }
-        return null;
+        // at this point, we return the first field called "Name" if it exists, and the below line will return NULL if we can't find a field called "Name"
+        return this.Fields.find((f) => f.Name.toLowerCase() === 'name');
     }
 
     /**
