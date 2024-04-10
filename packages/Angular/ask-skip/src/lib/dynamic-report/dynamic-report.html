@@ -7,7 +7,7 @@
     <div class="report-tab-toolbar" *ngIf="ReportEntity && ReportEntity.ID > 0" >
       <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
     </div>
-    <mj-tabstrip #tabComponent class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25">
+    <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25">
       <mj-tab *ngIf="IsChart" [TabSelected]="isTabSelected(0)" >
         <span class="fa-solid fa-chart-line"></span>
         <span class="report-tab-title">Chart</span>
