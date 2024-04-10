@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/8/2024, 7:27:10 PM
+* GENERATED: 4/9/2024, 5:58:12 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -10,7 +10,7 @@
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-         PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType } from '@memberjunction/core'
 import { AppContext } from '@memberjunction/server';
 
@@ -21,7 +21,7 @@ import { mj_core_schema } from '../config';
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
 import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity } from '@memberjunction/core-entities';
-
+    
 
 //****************************************************************************
 // ENTITY CLASS for Companies
@@ -30,44 +30,44 @@ import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyInteg
 export class Company_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(400)
     Description: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Website?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     LogoURL?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Domain?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Employee_])
     EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
-
+    
     @Field(() => [mj_core_schema_server_object_types.Workflow_])
     WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
-
+    
 }
         
 //****************************************************************************
@@ -77,20 +77,20 @@ export class Company_ {
 export class CreateCompanyInput {
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-
+    
     @Field({ nullable: true })
     Website: string;
-
+    
     @Field({ nullable: true })
     LogoURL: string;
-
+    
     @Field({ nullable: true })
     Domain: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Companies   
@@ -99,23 +99,23 @@ export class CreateCompanyInput {
 export class UpdateCompanyInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field()
     Description: string;
-
+    
     @Field({ nullable: true })
     Website: string;
-
+    
     @Field({ nullable: true })
     LogoURL: string;
-
+    
     @Field({ nullable: true })
     Domain: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Companies
 //****************************************************************************
@@ -167,7 +167,7 @@ export class CompanyResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Company_])
     async AllCompanies(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Companies', userPayload);
@@ -175,7 +175,7 @@ export class CompanyResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Companies', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Employee_])
     async EmployeesArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
@@ -183,7 +183,7 @@ export class CompanyResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
@@ -191,7 +191,7 @@ export class CompanyResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Workflow_])
     async WorkflowsArray(@Root() company_: Company_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
@@ -199,7 +199,7 @@ export class CompanyResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Company_)
     async CreateCompany(
         @Arg('input', () => CreateCompanyInput) input: CreateCompanyInput,
@@ -229,7 +229,7 @@ export class CompanyResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateCompanyInput) {
     }
-    
+        
     @Mutation(() => Company_)
     async UpdateCompany(
         @Arg('input', () => UpdateCompanyInput) input: UpdateCompanyInput,
@@ -260,7 +260,7 @@ export class CompanyResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Company_)
     async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -286,7 +286,7 @@ export class CompanyResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -296,80 +296,80 @@ export class CompanyResolver extends ResolverBase {
 export class Employee_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(16)
     BCMID: string;
-      
+          
     @Field() 
     @MaxLength(60)
     FirstName: string;
-      
+          
     @Field() 
     @MaxLength(100)
     LastName: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Title?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     Email: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Phone?: string;
-      
+          
     @Field(() => Boolean) 
     Active: boolean;
-      
+          
     @Field(() => Int) 
     CompanyID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     SupervisorID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(162)
     FirstLast?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(162)
     Supervisor?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(60)
     SupervisorFirstName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     SupervisorLastName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     SupervisorEmail?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Employee_])
     EmployeesArray: mj_core_schema_server_object_types.Employee_[]; // Link to Employees
-
+    
     @Field(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
     EmployeeCompanyIntegrationsArray: mj_core_schema_server_object_types.EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
-
+    
     @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
     EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
-
+    
     @Field(() => [mj_core_schema_server_object_types.EmployeeSkill_])
     EmployeeSkillsArray: mj_core_schema_server_object_types.EmployeeSkill_[]; // Link to EmployeeSkills
-
+    
 }
         
 //****************************************************************************
@@ -379,29 +379,29 @@ export class Employee_ {
 export class CreateEmployeeInput {
     @Field()
     FirstName: string;
-
+    
     @Field()
     LastName: string;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field()
     Email: string;
-
+    
     @Field({ nullable: true })
     Phone: string;
-
+    
     @Field(() => Boolean)
     Active: boolean;
-
+    
     @Field(() => Int)
     CompanyID: number;
-
+    
     @Field(() => Int, { nullable: true })
     SupervisorID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Employees   
@@ -410,32 +410,32 @@ export class CreateEmployeeInput {
 export class UpdateEmployeeInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     FirstName: string;
-
+    
     @Field()
     LastName: string;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field()
     Email: string;
-
+    
     @Field({ nullable: true })
     Phone: string;
-
+    
     @Field(() => Boolean)
     Active: boolean;
-
+    
     @Field(() => Int)
     CompanyID: number;
-
+    
     @Field(() => Int, { nullable: true })
     SupervisorID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Employees
 //****************************************************************************
@@ -487,7 +487,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Employee_])
     async AllEmployees(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
@@ -495,7 +495,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Employee_])
     async EmployeesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employees', userPayload);
@@ -503,7 +503,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employees', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
@@ -511,7 +511,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeRole_])
     async EmployeeRolesArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
@@ -519,7 +519,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeSkill_])
     async EmployeeSkillsArray(@Root() employee_: Employee_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
@@ -527,7 +527,7 @@ export class EmployeeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Employee_)
     async CreateEmployee(
         @Arg('input', () => CreateEmployeeInput) input: CreateEmployeeInput,
@@ -557,7 +557,7 @@ export class EmployeeResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEmployeeInput) {
     }
-    
+        
     @Mutation(() => Employee_)
     async UpdateEmployee(
         @Arg('input', () => UpdateEmployeeInput) input: UpdateEmployeeInput,
@@ -588,7 +588,7 @@ export class EmployeeResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Employee_)
     async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -614,7 +614,7 @@ export class EmployeeResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -624,37 +624,37 @@ export class EmployeeResolver extends ResolverBase {
 export class UserFavorite_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityBaseTable: string;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityBaseView: string;
-    
+        
 }
         
 //****************************************************************************
@@ -664,14 +664,14 @@ export class UserFavorite_ {
 export class CreateUserFavoriteInput {
     @Field(() => Int)
     UserID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User Favorites   
@@ -680,17 +680,17 @@ export class CreateUserFavoriteInput {
 export class UpdateUserFavoriteInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Favorites
 //****************************************************************************
@@ -742,7 +742,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => UserFavorite_)
     async CreateUserFavorite(
         @Arg('input', () => CreateUserFavoriteInput) input: CreateUserFavoriteInput,
@@ -772,7 +772,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserFavoriteInput) {
     }
-    
+        
     @Mutation(() => UserFavorite_)
     async UpdateUserFavorite(
         @Arg('input', () => UpdateUserFavoriteInput) input: UpdateUserFavoriteInput,
@@ -803,7 +803,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserFavoriteInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => UserFavorite_)
     async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -829,7 +829,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -839,28 +839,28 @@ export class UserFavoriteResolverBase extends ResolverBase {
 export class EmployeeCompanyIntegration_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EmployeeID: number;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     ExternalSystemRecordID: string;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
 }
         
 //****************************************************************************
@@ -870,20 +870,20 @@ export class EmployeeCompanyIntegration_ {
 export class UpdateEmployeeCompanyIntegrationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EmployeeID: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Employee Company Integrations
 //****************************************************************************
@@ -935,7 +935,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => EmployeeCompanyIntegration_)
     async UpdateEmployeeCompanyIntegration(
         @Arg('input', () => UpdateEmployeeCompanyIntegrationInput) input: UpdateEmployeeCompanyIntegrationInput,
@@ -966,7 +966,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeCompanyIntegrationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -976,25 +976,25 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
 export class EmployeeRole_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EmployeeID: number;
-      
+          
     @Field(() => Int) 
     RoleID: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     Role: string;
-    
+        
 }
         
 //****************************************************************************
@@ -1004,14 +1004,14 @@ export class EmployeeRole_ {
 export class UpdateEmployeeRoleInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EmployeeID: number;
-
+    
     @Field(() => Int)
     RoleID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Employee Roles
 //****************************************************************************
@@ -1063,7 +1063,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => EmployeeRole_)
     async UpdateEmployeeRole(
         @Arg('input', () => UpdateEmployeeRoleInput) input: UpdateEmployeeRoleInput,
@@ -1094,7 +1094,7 @@ export class EmployeeRoleResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeRoleInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1104,25 +1104,25 @@ export class EmployeeRoleResolver extends ResolverBase {
 export class EmployeeSkill_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EmployeeID: number;
-      
+          
     @Field(() => Int) 
     SkillID: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     Skill: string;
-    
+        
 }
         
 //****************************************************************************
@@ -1132,14 +1132,14 @@ export class EmployeeSkill_ {
 export class UpdateEmployeeSkillInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EmployeeID: number;
-
+    
     @Field(() => Int)
     SkillID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Employee Skills
 //****************************************************************************
@@ -1191,7 +1191,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => EmployeeSkill_)
     async UpdateEmployeeSkill(
         @Arg('input', () => UpdateEmployeeSkillInput) input: UpdateEmployeeSkillInput,
@@ -1222,7 +1222,7 @@ export class EmployeeSkillResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeSkillInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1232,45 +1232,45 @@ export class EmployeeSkillResolver extends ResolverBase {
 export class Role_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true, description: 'Description of the role'}) 
     Description?: string;
-      
+          
     @Field({nullable: true, description: 'The unique ID of the role in the directory being used for authentication, for example an ID in Azure.'}) 
     @MaxLength(500)
     DirectoryID?: string;
-      
+          
     @Field({nullable: true, description: 'The name of the role in the database, this is used for auto-generating permission statements by CodeGen'}) 
     @MaxLength(500)
     SQLName?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EmployeeRole_])
     EmployeeRolesArray: mj_core_schema_server_object_types.EmployeeRole_[]; // Link to EmployeeRoles
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
     EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserRole_])
     UserRolesArray: mj_core_schema_server_object_types.UserRole_[]; // Link to UserRoles
-
+    
     @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
-
+    
     @Field(() => [mj_core_schema_server_object_types.QueryPermission_])
     QueryPermissionsArray: mj_core_schema_server_object_types.QueryPermission_[]; // Link to QueryPermissions
-
+    
 }
         
 //****************************************************************************
@@ -1280,17 +1280,17 @@ export class Role_ {
 export class CreateRoleInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     DirectoryID: string;
-
+    
     @Field({ nullable: true })
     SQLName: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Roles   
@@ -1299,20 +1299,20 @@ export class CreateRoleInput {
 export class UpdateRoleInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     DirectoryID: string;
-
+    
     @Field({ nullable: true })
     SQLName: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Roles
 //****************************************************************************
@@ -1364,7 +1364,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Role_])
     async AllRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Roles', userPayload);
@@ -1372,7 +1372,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Roles', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeRole_])
     async EmployeeRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Roles', userPayload);
@@ -1380,7 +1380,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Roles', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
     async EntityPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
@@ -1388,7 +1388,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
     async UserRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
@@ -1396,7 +1396,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     async AuthorizationRolesArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
@@ -1404,7 +1404,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryPermission_])
     async QueryPermissionsArray(@Root() role_: Role_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
@@ -1412,7 +1412,7 @@ export class RoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Role_)
     async CreateRole(
         @Arg('input', () => CreateRoleInput) input: CreateRoleInput,
@@ -1442,7 +1442,7 @@ export class RoleResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRoleInput) {
     }
-    
+        
     @Mutation(() => Role_)
     async UpdateRole(
         @Arg('input', () => UpdateRoleInput) input: UpdateRoleInput,
@@ -1473,7 +1473,7 @@ export class RoleResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateRoleInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Role_)
     async DeleteRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -1499,7 +1499,7 @@ export class RoleResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1509,32 +1509,32 @@ export class RoleResolver extends ResolverBase {
 export class Skill_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EmployeeSkill_])
     EmployeeSkillsArray: mj_core_schema_server_object_types.EmployeeSkill_[]; // Link to EmployeeSkills
-
+    
     @Field(() => [mj_core_schema_server_object_types.Skill_])
     SkillsArray: mj_core_schema_server_object_types.Skill_[]; // Link to Skills
-
+    
 }
 //****************************************************************************
 // RESOLVER for Skills
@@ -1587,7 +1587,7 @@ export class SkillResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Skill_])
     async AllSkills(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
@@ -1595,7 +1595,7 @@ export class SkillResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeSkill_])
     async EmployeeSkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Skills', userPayload);
@@ -1603,7 +1603,7 @@ export class SkillResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Skills', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Skill_])
     async SkillsArray(@Root() skill_: Skill_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Skills', userPayload);
@@ -1611,7 +1611,7 @@ export class SkillResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Skills', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -1621,33 +1621,33 @@ export class SkillResolver extends ResolverBase {
 export class IntegrationURLFormat_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     IntegrationName?: string;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(1000)
     URLFormat: string;
-      
+          
     @Field(() => Int) 
     IntegrationID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Integration: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     NavigationBaseURL?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(2000)
     FullURLFormat?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -1657,17 +1657,17 @@ export class IntegrationURLFormat_ {
 export class UpdateIntegrationURLFormatInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     IntegrationName: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     URLFormat: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Integration URL Formats
 //****************************************************************************
@@ -1719,7 +1719,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [IntegrationURLFormat_])
     async AllIntegrationURLFormats(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
@@ -1727,7 +1727,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
-
+    
     @Mutation(() => IntegrationURLFormat_)
     async UpdateIntegrationURLFormat(
         @Arg('input', () => UpdateIntegrationURLFormatInput) input: UpdateIntegrationURLFormatInput,
@@ -1758,7 +1758,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateIntegrationURLFormatInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1768,47 +1768,47 @@ export class IntegrationURLFormatResolver extends ResolverBase {
 export class Integration_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     NavigationBaseURL?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ClassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ImportPath?: string;
-      
+          
     @Field(() => Int) 
     BatchMaxRequestCount: number;
-      
+          
     @Field(() => Int) 
     BatchRequestWaitTime: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     CompanyIntegrationsArray: mj_core_schema_server_object_types.CompanyIntegration_[]; // Link to CompanyIntegrations
-
+    
 }
         
 //****************************************************************************
@@ -1818,29 +1818,29 @@ export class Integration_ {
 export class UpdateIntegrationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     NavigationBaseURL: string;
-
+    
     @Field({ nullable: true })
     ClassName: string;
-
+    
     @Field({ nullable: true })
     ImportPath: string;
-
+    
     @Field(() => Int)
     BatchMaxRequestCount: number;
-
+    
     @Field(() => Int)
     BatchRequestWaitTime: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Integrations
 //****************************************************************************
@@ -1892,7 +1892,7 @@ export class IntegrationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Integration_])
     async AllIntegrations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integrations', userPayload);
@@ -1900,7 +1900,7 @@ export class IntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Integrations', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
@@ -1908,7 +1908,7 @@ export class IntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegration_])
     async CompanyIntegrationsArray(@Root() integration_: Integration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integrations', userPayload);
@@ -1916,7 +1916,7 @@ export class IntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Integration_)
     async UpdateIntegration(
         @Arg('input', () => UpdateIntegrationInput) input: UpdateIntegrationInput,
@@ -1947,7 +1947,7 @@ export class IntegrationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateIntegrationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -1957,106 +1957,106 @@ export class IntegrationResolver extends ResolverBase {
 export class CompanyIntegration_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     CompanyName: string;
-      
+          
     @Field() 
     @MaxLength(200)
     IntegrationName: string;
-      
+          
     @Field(() => Boolean, {nullable: true}) 
     IsActive?: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     AccessToken?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RefreshToken?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     TokenExpirationDate?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     APIKey?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemID?: string;
-      
+          
     @Field(() => Boolean) 
     IsExternalSystemReadOnly: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     ClientID?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     ClientSecret?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     CustomAttribute1?: string;
-      
+          
     @Field(() => Int) 
     CompanyID: number;
-      
+          
     @Field(() => Int) 
     IntegrationID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Company: string;
-      
+          
     @Field() 
     @MaxLength(200)
     Integration: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     DriverClassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     DriverImportPath?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     LastRunID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastRunStartedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastRunEndedAt?: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.List_])
     ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-
+    
     @Field(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
     EmployeeCompanyIntegrationsArray: mj_core_schema_server_object_types.EmployeeCompanyIntegration_[]; // Link to EmployeeCompanyIntegrations
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     CompanyIntegrationRunsArray: mj_core_schema_server_object_types.CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
     CompanyIntegrationRecordMapsArray: mj_core_schema_server_object_types.CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
-
+    
 }
         
 //****************************************************************************
@@ -2066,44 +2066,44 @@ export class CompanyIntegration_ {
 export class UpdateCompanyIntegrationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     CompanyName: string;
-
+    
     @Field()
     IntegrationName: string;
-
+    
     @Field(() => Boolean, { nullable: true })
     IsActive: boolean;
-
+    
     @Field({ nullable: true })
     AccessToken: string;
-
+    
     @Field({ nullable: true })
     RefreshToken: string;
-
+    
     @Field({ nullable: true })
     TokenExpirationDate: Date;
-
+    
     @Field({ nullable: true })
     APIKey: string;
-
+    
     @Field({ nullable: true })
     ExternalSystemID: string;
-
+    
     @Field(() => Boolean)
     IsExternalSystemReadOnly: boolean;
-
+    
     @Field({ nullable: true })
     ClientID: string;
-
+    
     @Field({ nullable: true })
     ClientSecret: string;
-
+    
     @Field({ nullable: true })
     CustomAttribute1: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Company Integrations
 //****************************************************************************
@@ -2155,7 +2155,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integrations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
@@ -2163,7 +2163,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EmployeeCompanyIntegration_])
     async EmployeeCompanyIntegrationsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Employee Company Integrations', userPayload);
@@ -2171,7 +2171,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Employee Company Integrations', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
@@ -2179,7 +2179,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() companyintegration_: CompanyIntegration_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
@@ -2187,7 +2187,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => CompanyIntegration_)
     async UpdateCompanyIntegration(
         @Arg('input', () => UpdateCompanyIntegrationInput) input: UpdateCompanyIntegrationInput,
@@ -2218,7 +2218,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -2228,179 +2228,179 @@ export class CompanyIntegrationResolver extends ResolverBase {
 export class EntityField_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     DisplayName?: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
     AutoUpdateDescription: boolean;
-      
+          
     @Field(() => Boolean) 
     IsPrimaryKey: boolean;
-      
+          
     @Field(() => Boolean) 
     IsUnique: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     Type: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     Length?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     Precision?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     Scale?: number;
-      
+          
     @Field(() => Boolean) 
     AllowsNull: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     DefaultValue?: string;
-      
+          
     @Field(() => Boolean) 
     AutoIncrement: boolean;
-      
+          
     @Field() 
     @MaxLength(40)
     ValueListType: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ExtendedType?: string;
-      
+          
     @Field(() => Boolean) 
     DefaultInView: boolean;
-      
+          
     @Field({nullable: true}) 
     ViewCellTemplate?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DefaultColumnWidth?: number;
-      
+          
     @Field(() => Boolean) 
     AllowUpdateAPI: boolean;
-      
+          
     @Field(() => Boolean) 
     AllowUpdateInView: boolean;
-      
+          
     @Field(() => Boolean) 
     IncludeInUserSearchAPI: boolean;
-      
+          
     @Field(() => Boolean) 
     FullTextSearchEnabled: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     UserSearchParamFormatAPI?: string;
-      
+          
     @Field(() => Boolean) 
     IncludeInGeneratedForm: boolean;
-      
+          
     @Field() 
     @MaxLength(20)
     GeneratedFormSection: string;
-      
+          
     @Field(() => Boolean) 
     IsVirtual: boolean;
-      
+          
     @Field(() => Boolean) 
     IsNameField: boolean;
-      
+          
     @Field(() => Int, {nullable: true}) 
     RelatedEntityID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntityFieldName?: string;
-      
+          
     @Field(() => Boolean) 
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntityNameFieldMap?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(510)
     SchemaName: string;
-      
+          
     @Field() 
     @MaxLength(510)
     BaseTable: string;
-      
+          
     @Field() 
     @MaxLength(510)
     BaseView: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     EntityCodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     EntityClassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntity?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntitySchemaName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntityBaseTable?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RelatedEntityBaseView?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     RelatedEntityCodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     RelatedEntityClassName?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EntityFieldValue_])
     EntityFieldValuesArray: mj_core_schema_server_object_types.EntityFieldValue_[]; // Link to EntityFieldValues
-
+    
 }
         
 //****************************************************************************
@@ -2410,74 +2410,74 @@ export class EntityField_ {
 export class CreateEntityFieldInput {
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-
+    
     @Field(() => Boolean)
     IsPrimaryKey: boolean;
-
+    
     @Field(() => Boolean)
     IsUnique: boolean;
-
+    
     @Field({ nullable: true })
     Category: string;
-
+    
     @Field()
     ValueListType: string;
-
+    
     @Field({ nullable: true })
     ExtendedType: string;
-
+    
     @Field(() => Boolean)
     DefaultInView: boolean;
-
+    
     @Field({ nullable: true })
     ViewCellTemplate: string;
-
+    
     @Field(() => Int, { nullable: true })
     DefaultColumnWidth: number;
-
+    
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowUpdateInView: boolean;
-
+    
     @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
-
+    
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-
+    
     @Field({ nullable: true })
     UserSearchParamFormatAPI: string;
-
+    
     @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
-
+    
     @Field()
     GeneratedFormSection: string;
-
+    
     @Field(() => Boolean)
     IsNameField: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     RelatedEntityID: number;
-
+    
     @Field({ nullable: true })
     RelatedEntityFieldName: string;
-
+    
     @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-
+    
     @Field({ nullable: true })
     RelatedEntityNameFieldMap: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Fields   
@@ -2486,77 +2486,77 @@ export class CreateEntityFieldInput {
 export class UpdateEntityFieldInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-
+    
     @Field(() => Boolean)
     IsPrimaryKey: boolean;
-
+    
     @Field(() => Boolean)
     IsUnique: boolean;
-
+    
     @Field({ nullable: true })
     Category: string;
-
+    
     @Field()
     ValueListType: string;
-
+    
     @Field({ nullable: true })
     ExtendedType: string;
-
+    
     @Field(() => Boolean)
     DefaultInView: boolean;
-
+    
     @Field({ nullable: true })
     ViewCellTemplate: string;
-
+    
     @Field(() => Int, { nullable: true })
     DefaultColumnWidth: number;
-
+    
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowUpdateInView: boolean;
-
+    
     @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
-
+    
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-
+    
     @Field({ nullable: true })
     UserSearchParamFormatAPI: string;
-
+    
     @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
-
+    
     @Field()
     GeneratedFormSection: string;
-
+    
     @Field(() => Boolean)
     IsNameField: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     RelatedEntityID: number;
-
+    
     @Field({ nullable: true })
     RelatedEntityFieldName: string;
-
+    
     @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-
+    
     @Field({ nullable: true })
     RelatedEntityNameFieldMap: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Fields
 //****************************************************************************
@@ -2608,7 +2608,7 @@ export class EntityFieldResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [EntityField_])
     async AllEntityFields(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
@@ -2616,7 +2616,7 @@ export class EntityFieldResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityFieldValue_])
     async EntityFieldValuesArray(@Root() entityfield_: EntityField_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
@@ -2624,7 +2624,7 @@ export class EntityFieldResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => EntityField_)
     async CreateEntityField(
         @Arg('input', () => CreateEntityFieldInput) input: CreateEntityFieldInput,
@@ -2654,7 +2654,7 @@ export class EntityFieldResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityFieldInput) {
     }
-    
+        
     @Mutation(() => EntityField_)
     async UpdateEntityField(
         @Arg('input', () => UpdateEntityFieldInput) input: UpdateEntityFieldInput,
@@ -2685,7 +2685,7 @@ export class EntityFieldResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityFieldInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => EntityField_)
     async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -2711,7 +2711,7 @@ export class EntityFieldResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -2721,250 +2721,250 @@ export class EntityFieldResolver extends ResolverBase {
 export class Entity_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     NameSuffix?: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
     AutoUpdateDescription: boolean;
-      
+          
     @Field() 
     @MaxLength(510)
     BaseTable: string;
-      
+          
     @Field() 
     @MaxLength(510)
     BaseView: string;
-      
+          
     @Field(() => Boolean, {description: 'When set to 0, CodeGen no longer generates a base view for the entity.'}) 
     BaseViewGenerated: boolean;
-      
+          
     @Field() 
     @MaxLength(510)
     SchemaName: string;
-      
+          
     @Field(() => Boolean) 
     VirtualEntity: boolean;
-      
+          
     @Field(() => Boolean, {description: 'When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table'}) 
     TrackRecordChanges: boolean;
-      
+          
     @Field(() => Boolean, {description: 'When set to 1, accessing a record by an end-user will result in an Audit Log record being created'}) 
     AuditRecordAccess: boolean;
-      
+          
     @Field(() => Boolean, {description: 'When set to 1, users running a view against this entity will result in an Audit Log record being created.'}) 
     AuditViewRuns: boolean;
-      
+          
     @Field(() => Boolean, {description: 'If set to 0, the entity will not be available at all in the GraphQL API or the object model.'}) 
     IncludeInAPI: boolean;
-      
+          
     @Field(() => Boolean, {description: 'If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.'}) 
     AllowAllRowsAPI: boolean;
-      
+          
     @Field(() => Boolean, {description: 'Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
     AllowUpdateAPI: boolean;
-      
+          
     @Field(() => Boolean, {description: 'Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
     AllowCreateAPI: boolean;
-      
+          
     @Field(() => Boolean, {description: 'Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.'}) 
     AllowDeleteAPI: boolean;
-      
+          
     @Field(() => Boolean, {description: 'Set to 1 if a custom resolver has been created for the entity.'}) 
     CustomResolverAPI: boolean;
-      
+          
     @Field(() => Boolean, {description: 'Enabling this bit will result in search being possible at the API and UI layers'}) 
     AllowUserSearchAPI: boolean;
-      
+          
     @Field(() => Boolean) 
     FullTextSearchEnabled: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     FullTextCatalog?: string;
-      
+          
     @Field(() => Boolean) 
     FullTextCatalogGenerated: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     FullTextIndex?: string;
-      
+          
     @Field(() => Boolean) 
     FullTextIndexGenerated: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     FullTextSearchFunction?: string;
-      
+          
     @Field(() => Boolean) 
     FullTextSearchFunctionGenerated: boolean;
-      
+          
     @Field(() => Int, {nullable: true}) 
     UserViewMaxRows?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     spCreate?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     spUpdate?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     spDelete?: string;
-      
+          
     @Field(() => Boolean) 
     spCreateGenerated: boolean;
-      
+          
     @Field(() => Boolean) 
     spUpdateGenerated: boolean;
-      
+          
     @Field(() => Boolean) 
     spDeleteGenerated: boolean;
-      
+          
     @Field(() => Boolean) 
     CascadeDeletes: boolean;
-      
+          
     @Field(() => Boolean) 
     UserFormGenerated: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     EntityObjectSubclassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     EntityObjectSubclassImport?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     CodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     ClassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     BaseTableCodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     ParentEntity?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     ParentBaseTable?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     ParentBaseView?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EntityField_])
     EntityFieldsArray: mj_core_schema_server_object_types.EntityField_[]; // Link to EntityFields
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
     EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
     EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
     EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserRecordLog_])
     UserRecordLogsArray: mj_core_schema_server_object_types.UserRecordLog_[]; // Link to UserRecordLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     IntegrationURLFormatsArray: mj_core_schema_server_object_types.IntegrationURLFormat_[]; // Link to IntegrationURLFormats
-
+    
     @Field(() => [mj_core_schema_server_object_types.Entity_])
     EntitiesArray: mj_core_schema_server_object_types.Entity_[]; // Link to Entities
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserFavorite_])
     UserFavoritesArray: mj_core_schema_server_object_types.UserFavorite_[]; // Link to UserFavorites
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
     CompanyIntegrationRunDetailsArray: mj_core_schema_server_object_types.CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
-
+    
     @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
     UserApplicationEntitiesArray: mj_core_schema_server_object_types.UserApplicationEntity_[]; // Link to UserApplicationEntities
-
+    
     @Field(() => [mj_core_schema_server_object_types.List_])
     ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserView_])
     UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
-
+    
     @Field(() => [mj_core_schema_server_object_types.RecordChange_])
     RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
-
+    
     @Field(() => [mj_core_schema_server_object_types.AuditLog_])
     AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.ResourceType_])
     ResourceTypesArray: mj_core_schema_server_object_types.ResourceType_[]; // Link to ResourceTypes
-
+    
     @Field(() => [mj_core_schema_server_object_types.TaggedItem_])
     TaggedItemsArray: mj_core_schema_server_object_types.TaggedItem_[]; // Link to TaggedItems
-
+    
     @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
     DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
     CompanyIntegrationRecordMapsArray: mj_core_schema_server_object_types.CompanyIntegrationRecordMap_[]; // Link to CompanyIntegrationRecordMaps
-
+    
     @Field(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     RecordMergeLogsArray: mj_core_schema_server_object_types.RecordMergeLog_[]; // Link to RecordMergeLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.QueryField_])
     QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
-
+    
     @Field(() => [mj_core_schema_server_object_types.Conversation_])
     ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
     EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-
+    
     @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
     DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-
+    
     @Field(() => [mj_core_schema_server_object_types.User_])
     UsersArray: mj_core_schema_server_object_types.User_[]; // Link to Users
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
     EntityRecordDocumentsArray: mj_core_schema_server_object_types.EntityRecordDocument_[]; // Link to EntityRecordDocuments
-
+    
     @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
     FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
     UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
-
+    
 }
         
 //****************************************************************************
@@ -2974,116 +2974,116 @@ export class Entity_ {
 export class CreateEntityInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     NameSuffix: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-
+    
     @Field()
     BaseView: string;
-
+    
     @Field(() => Boolean)
     BaseViewGenerated: boolean;
-
+    
     @Field(() => Boolean)
     VirtualEntity: boolean;
-
+    
     @Field(() => Boolean)
     TrackRecordChanges: boolean;
-
+    
     @Field(() => Boolean)
     AuditRecordAccess: boolean;
-
+    
     @Field(() => Boolean)
     AuditViewRuns: boolean;
-
+    
     @Field(() => Boolean)
     IncludeInAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowCreateAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowDeleteAPI: boolean;
-
+    
     @Field(() => Boolean)
     CustomResolverAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
-
+    
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-
+    
     @Field({ nullable: true })
     FullTextCatalog: string;
-
+    
     @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-
+    
     @Field({ nullable: true })
     FullTextIndex: string;
-
+    
     @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-
+    
     @Field({ nullable: true })
     FullTextSearchFunction: string;
-
+    
     @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     UserViewMaxRows: number;
-
+    
     @Field({ nullable: true })
     spCreate: string;
-
+    
     @Field({ nullable: true })
     spUpdate: string;
-
+    
     @Field({ nullable: true })
     spDelete: string;
-
+    
     @Field(() => Boolean)
     spCreateGenerated: boolean;
-
+    
     @Field(() => Boolean)
     spUpdateGenerated: boolean;
-
+    
     @Field(() => Boolean)
     spDeleteGenerated: boolean;
-
+    
     @Field(() => Boolean)
     CascadeDeletes: boolean;
-
+    
     @Field(() => Boolean)
     UserFormGenerated: boolean;
-
+    
     @Field({ nullable: true })
     EntityObjectSubclassName: string;
-
+    
     @Field({ nullable: true })
     EntityObjectSubclassImport: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entities   
@@ -3092,116 +3092,116 @@ export class CreateEntityInput {
 export class UpdateEntityInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     NameSuffix: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-
+    
     @Field()
     BaseView: string;
-
+    
     @Field(() => Boolean)
     BaseViewGenerated: boolean;
-
+    
     @Field(() => Boolean)
     VirtualEntity: boolean;
-
+    
     @Field(() => Boolean)
     TrackRecordChanges: boolean;
-
+    
     @Field(() => Boolean)
     AuditRecordAccess: boolean;
-
+    
     @Field(() => Boolean)
     AuditViewRuns: boolean;
-
+    
     @Field(() => Boolean)
     IncludeInAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowCreateAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowDeleteAPI: boolean;
-
+    
     @Field(() => Boolean)
     CustomResolverAPI: boolean;
-
+    
     @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
-
+    
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-
+    
     @Field({ nullable: true })
     FullTextCatalog: string;
-
+    
     @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-
+    
     @Field({ nullable: true })
     FullTextIndex: string;
-
+    
     @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-
+    
     @Field({ nullable: true })
     FullTextSearchFunction: string;
-
+    
     @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     UserViewMaxRows: number;
-
+    
     @Field({ nullable: true })
     spCreate: string;
-
+    
     @Field({ nullable: true })
     spUpdate: string;
-
+    
     @Field({ nullable: true })
     spDelete: string;
-
+    
     @Field(() => Boolean)
     spCreateGenerated: boolean;
-
+    
     @Field(() => Boolean)
     spUpdateGenerated: boolean;
-
+    
     @Field(() => Boolean)
     spDeleteGenerated: boolean;
-
+    
     @Field(() => Boolean)
     CascadeDeletes: boolean;
-
+    
     @Field(() => Boolean)
     UserFormGenerated: boolean;
-
+    
     @Field({ nullable: true })
     EntityObjectSubclassName: string;
-
+    
     @Field({ nullable: true })
     EntityObjectSubclassImport: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entities
 //****************************************************************************
@@ -3253,7 +3253,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Entity_])
     async AllEntities(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
@@ -3261,7 +3261,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityField_])
     async EntityFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Fields', userPayload);
@@ -3269,7 +3269,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Fields', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
     async EntityPermissionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
@@ -3277,7 +3277,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
     async EntityRelationshipsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
@@ -3285,7 +3285,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
     async EntityAIActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
@@ -3293,7 +3293,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
     async UserRecordLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
@@ -3301,7 +3301,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.IntegrationURLFormat_])
     async IntegrationURLFormatsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Integration URL Formats', userPayload);
@@ -3309,7 +3309,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Integration URL Formats', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Entity_])
     async EntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entities', userPayload);
@@ -3317,7 +3317,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entities', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
     async UserFavoritesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
@@ -3325,7 +3325,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
@@ -3333,7 +3333,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
@@ -3341,7 +3341,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
@@ -3349,7 +3349,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
@@ -3357,7 +3357,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
@@ -3365,7 +3365,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
     async RecordChangesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
@@ -3373,7 +3373,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
@@ -3381,7 +3381,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.ResourceType_])
     async ResourceTypesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Resource Types', userPayload);
@@ -3389,7 +3389,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.TaggedItem_])
     async TaggedItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
@@ -3397,7 +3397,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DatasetItem_])
     async DatasetItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
@@ -3405,7 +3405,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRecordMap_])
     async CompanyIntegrationRecordMapsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Record Maps', userPayload);
@@ -3413,7 +3413,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     async RecordMergeLogsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
@@ -3421,7 +3421,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryField_])
     async QueryFieldsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
@@ -3429,7 +3429,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
     async ConversationsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
@@ -3437,7 +3437,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
     async EntityDocumentsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
@@ -3445,7 +3445,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
@@ -3453,7 +3453,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.User_])
     async UsersArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
@@ -3461,7 +3461,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityRecordDocument_])
     async EntityRecordDocumentsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Record Documents', userPayload);
@@ -3469,7 +3469,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
     async FileEntityRecordLinksArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
@@ -3477,7 +3477,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
     async UserViewCategoriesArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
@@ -3485,7 +3485,7 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Entity_)
     async CreateEntity(
         @Arg('input', () => CreateEntityInput) input: CreateEntityInput,
@@ -3515,7 +3515,7 @@ export class EntityResolverBase extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityInput) {
     }
-    
+        
     @Mutation(() => Entity_)
     async UpdateEntity(
         @Arg('input', () => UpdateEntityInput) input: UpdateEntityInput,
@@ -3546,7 +3546,7 @@ export class EntityResolverBase extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Entity_)
     async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -3572,7 +3572,7 @@ export class EntityResolverBase extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -3582,145 +3582,145 @@ export class EntityResolverBase extends ResolverBase {
 export class User_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     FirstName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     LastName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Title?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     Email: string;
-      
+          
     @Field() 
     @MaxLength(30)
     Type: string;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field() 
     @MaxLength(20)
     LinkedRecordType: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     EmployeeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     LinkedEntityID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     LinkedEntityRecordID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(202)
     FirstLast?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(162)
     EmployeeFirstLast?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     EmployeeEmail?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     EmployeeTitle?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(162)
     EmployeeSupervisor?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     EmployeeSupervisorEmail?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.UserApplication_])
     UserApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to UserApplications
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserRole_])
     UserRolesArray: mj_core_schema_server_object_types.UserRole_[]; // Link to UserRoles
-
+    
     @Field(() => [mj_core_schema_server_object_types.Workspace_])
     WorkspacesArray: mj_core_schema_server_object_types.Workspace_[]; // Link to Workspaces
-
+    
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
     @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots
-
+    
     @Field(() => [mj_core_schema_server_object_types.RecordChange_])
     RecordChangesArray: mj_core_schema_server_object_types.RecordChange_[]; // Link to RecordChanges
-
+    
     @Field(() => [mj_core_schema_server_object_types.Dashboard_])
     DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserViewRun_])
     UserViewRunsArray: mj_core_schema_server_object_types.UserViewRun_[]; // Link to UserViewRuns
-
+    
     @Field(() => [mj_core_schema_server_object_types.AuditLog_])
     AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.List_])
     ListsArray: mj_core_schema_server_object_types.List_[]; // Link to Lists
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserFavorite_])
     UserFavoritesArray: mj_core_schema_server_object_types.UserFavorite_[]; // Link to UserFavorites
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserRecordLog_])
     UserRecordLogsArray: mj_core_schema_server_object_types.UserRecordLog_[]; // Link to UserRecordLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserView_])
     UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     CompanyIntegrationRunsArray: mj_core_schema_server_object_types.CompanyIntegrationRun_[]; // Link to CompanyIntegrationRuns
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserNotification_])
     UserNotificationsArray: mj_core_schema_server_object_types.UserNotification_[]; // Link to UserNotifications
-
+    
     @Field(() => [mj_core_schema_server_object_types.Conversation_])
     ConversationsArray: mj_core_schema_server_object_types.Conversation_[]; // Link to Conversations
-
+    
     @Field(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     RecordMergeLogsArray: mj_core_schema_server_object_types.RecordMergeLog_[]; // Link to RecordMergeLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.DataContext_])
     DataContextsArray: mj_core_schema_server_object_types.DataContext_[]; // Link to DataContexts
-
+    
     @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
     ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
     UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
-
+    
     @Field(() => [mj_core_schema_server_object_types.DashboardCategory_])
     DashboardCategoriesArray: mj_core_schema_server_object_types.DashboardCategory_[]; // Link to DashboardCategories
-
+    
     @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
     QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
-
+    
 }
         
 //****************************************************************************
@@ -3730,38 +3730,38 @@ export class User_ {
 export class CreateUserInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     FirstName: string;
-
+    
     @Field({ nullable: true })
     LastName: string;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field()
     Email: string;
-
+    
     @Field()
     Type: string;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-
+    
     @Field()
     LinkedRecordType: string;
-
+    
     @Field(() => Int, { nullable: true })
     EmployeeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedEntityRecordID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Users   
@@ -3770,41 +3770,41 @@ export class CreateUserInput {
 export class UpdateUserInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     FirstName: string;
-
+    
     @Field({ nullable: true })
     LastName: string;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field()
     Email: string;
-
+    
     @Field()
     Type: string;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-
+    
     @Field()
     LinkedRecordType: string;
-
+    
     @Field(() => Int, { nullable: true })
     EmployeeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedEntityRecordID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Users
 //****************************************************************************
@@ -3856,7 +3856,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Users', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [User_])
     async AllUsers(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Users', userPayload);
@@ -3864,7 +3864,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Users', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
     async UserApplicationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
@@ -3872,7 +3872,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserRole_])
     async UserRolesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
@@ -3880,7 +3880,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Workspace_])
     async WorkspacesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspaces', userPayload);
@@ -3888,7 +3888,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -3896,7 +3896,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     async ReportSnapshotsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
@@ -3904,7 +3904,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordChange_])
     async RecordChangesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Changes', userPayload);
@@ -3912,7 +3912,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
     async DashboardsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
@@ -3920,7 +3920,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
     async UserViewRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
@@ -3928,7 +3928,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
@@ -3936,7 +3936,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.List_])
     async ListsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Lists', userPayload);
@@ -3944,7 +3944,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserFavorite_])
     async UserFavoritesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Favorites', userPayload);
@@ -3952,7 +3952,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Favorites', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserRecordLog_])
     async UserRecordLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Record Logs', userPayload);
@@ -3960,7 +3960,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
@@ -3968,7 +3968,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRun_])
     async CompanyIntegrationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Runs', userPayload);
@@ -3976,7 +3976,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserNotification_])
     async UserNotificationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Notifications', userPayload);
@@ -3984,7 +3984,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Conversation_])
     async ConversationsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversations', userPayload);
@@ -3992,7 +3992,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeLog_])
     async RecordMergeLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Logs', userPayload);
@@ -4000,7 +4000,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DataContext_])
     async DataContextsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Contexts', userPayload);
@@ -4008,7 +4008,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
     async ReportCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
@@ -4016,7 +4016,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
     async UserViewCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
@@ -4024,7 +4024,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
     async DashboardCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
@@ -4032,7 +4032,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
     async QueryCategoriesArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
@@ -4040,7 +4040,7 @@ export class UserResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => User_)
     async CreateUser(
         @Arg('input', () => CreateUserInput) input: CreateUserInput,
@@ -4070,7 +4070,7 @@ export class UserResolverBase extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserInput) {
     }
-    
+        
     @Mutation(() => User_)
     async UpdateUser(
         @Arg('input', () => UpdateUserInput) input: UpdateUserInput,
@@ -4101,7 +4101,7 @@ export class UserResolverBase extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => User_)
     async DeleteUser(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -4127,7 +4127,7 @@ export class UserResolverBase extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -4137,108 +4137,108 @@ export class UserResolverBase extends ResolverBase {
 export class EntityRelationship_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int, {description: 'Used for display order in generated forms and in other places in the UI where relationships for an entity are shown'}) 
     Sequence: number;
-      
+          
     @Field(() => Int) 
     RelatedEntityID: number;
-      
+          
     @Field(() => Boolean) 
     BundleInAPI: boolean;
-      
+          
     @Field(() => Boolean) 
     IncludeInParentAllQuery: boolean;
-      
+          
     @Field() 
     @MaxLength(40)
     Type: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     EntityKeyField?: string;
-      
+          
     @Field() 
     @MaxLength(510)
     RelatedEntityJoinField: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     JoinView?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     JoinEntityJoinField?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     JoinEntityInverseJoinField?: string;
-      
+          
     @Field(() => Boolean) 
     DisplayInForm: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     DisplayName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(16)
     DisplayUserViewGUID?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityBaseTable: string;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityBaseView: string;
-      
+          
     @Field() 
     @MaxLength(510)
     RelatedEntity: string;
-      
+          
     @Field() 
     @MaxLength(510)
     RelatedEntityBaseTable: string;
-      
+          
     @Field() 
     @MaxLength(510)
     RelatedEntityBaseView: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     RelatedEntityClassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     RelatedEntityCodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     RelatedEntityBaseTableCodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     DisplayUserViewName?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DisplayUserViewID?: number;
-    
+        
 }
         
 //****************************************************************************
@@ -4248,44 +4248,44 @@ export class EntityRelationship_ {
 export class CreateEntityRelationshipInput {
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field(() => Int)
     RelatedEntityID: number;
-
+    
     @Field(() => Boolean)
     BundleInAPI: boolean;
-
+    
     @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-
+    
     @Field()
     Type: string;
-
+    
     @Field({ nullable: true })
     EntityKeyField: string;
-
+    
     @Field()
     RelatedEntityJoinField: string;
-
+    
     @Field({ nullable: true })
     JoinView: string;
-
+    
     @Field({ nullable: true })
     JoinEntityJoinField: string;
-
+    
     @Field({ nullable: true })
     JoinEntityInverseJoinField: string;
-
+    
     @Field(() => Boolean)
     DisplayInForm: boolean;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Relationships   
@@ -4294,47 +4294,47 @@ export class CreateEntityRelationshipInput {
 export class UpdateEntityRelationshipInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field(() => Int)
     RelatedEntityID: number;
-
+    
     @Field(() => Boolean)
     BundleInAPI: boolean;
-
+    
     @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-
+    
     @Field()
     Type: string;
-
+    
     @Field({ nullable: true })
     EntityKeyField: string;
-
+    
     @Field()
     RelatedEntityJoinField: string;
-
+    
     @Field({ nullable: true })
     JoinView: string;
-
+    
     @Field({ nullable: true })
     JoinEntityJoinField: string;
-
+    
     @Field({ nullable: true })
     JoinEntityInverseJoinField: string;
-
+    
     @Field(() => Boolean)
     DisplayInForm: boolean;
-
+    
     @Field({ nullable: true })
     DisplayName: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Relationships
 //****************************************************************************
@@ -4386,7 +4386,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [EntityRelationship_])
     async AllEntityRelationships(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
@@ -4394,7 +4394,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-
+    
     @Mutation(() => EntityRelationship_)
     async CreateEntityRelationship(
         @Arg('input', () => CreateEntityRelationshipInput) input: CreateEntityRelationshipInput,
@@ -4424,7 +4424,7 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityRelationshipInput) {
     }
-    
+        
     @Mutation(() => EntityRelationship_)
     async UpdateEntityRelationship(
         @Arg('input', () => UpdateEntityRelationshipInput) input: UpdateEntityRelationshipInput,
@@ -4455,7 +4455,7 @@ export class EntityRelationshipResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRelationshipInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => EntityRelationship_)
     async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -4481,7 +4481,7 @@ export class EntityRelationshipResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -4491,52 +4491,52 @@ export class EntityRelationshipResolver extends ResolverBase {
 export class UserRecordLog_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     EarliestAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     LatestAt: Date;
-      
+          
     @Field(() => Int) 
     TotalCount: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(200)
     UserName: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(202)
     UserFirstLast?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     UserEmail: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(162)
     UserSupervisor?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     UserSupervisorEmail?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -4546,26 +4546,26 @@ export class UserRecordLog_ {
 export class UpdateUserRecordLogInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field()
     EarliestAt: Date;
-
+    
     @Field()
     LatestAt: Date;
-
+    
     @Field(() => Int)
     TotalCount: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Record Logs
 //****************************************************************************
@@ -4617,7 +4617,7 @@ export class UserRecordLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Record Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => UserRecordLog_)
     async UpdateUserRecordLog(
         @Arg('input', () => UpdateUserRecordLogInput) input: UpdateUserRecordLogInput,
@@ -4648,7 +4648,7 @@ export class UserRecordLogResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserRecordLogInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -4658,104 +4658,104 @@ export class UserRecordLogResolver extends ResolverBase {
 export class UserView_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(16)
     GUID: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
-      
+          
     @Field(() => Boolean) 
     IsShared: boolean;
-      
+          
     @Field(() => Boolean) 
     IsDefault: boolean;
-      
+          
     @Field({nullable: true}) 
     GridState?: string;
-      
+          
     @Field({nullable: true}) 
     FilterState?: string;
-      
+          
     @Field(() => Boolean) 
     CustomFilterState: boolean;
-      
+          
     @Field(() => Boolean) 
     SmartFilterEnabled: boolean;
-      
+          
     @Field({nullable: true}) 
     SmartFilterPrompt?: string;
-      
+          
     @Field({nullable: true}) 
     SmartFilterWhereClause?: string;
-      
+          
     @Field({nullable: true}) 
     SmartFilterExplanation?: string;
-      
+          
     @Field({nullable: true}) 
     WhereClause?: string;
-      
+          
     @Field(() => Boolean) 
     CustomWhereClause: boolean;
-      
+          
     @Field({nullable: true}) 
     SortState?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     CreatedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     UserName: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(202)
     UserFirstLast?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     UserEmail: string;
-      
+          
     @Field() 
     @MaxLength(30)
     UserType: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityBaseView: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EntityRelationship_])
     EntityRelationshipsArray: mj_core_schema_server_object_types.EntityRelationship_[]; // Link to EntityRelationships
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserViewRun_])
     UserViewRunsArray: mj_core_schema_server_object_types.UserViewRun_[]; // Link to UserViewRuns
-
+    
     @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
     DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-
+    
 }
         
 //****************************************************************************
@@ -4765,56 +4765,56 @@ export class UserView_ {
 export class CreateUserViewInput {
     @Field(() => Int)
     UserID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field(() => Boolean)
     IsShared: boolean;
-
+    
     @Field(() => Boolean)
     IsDefault: boolean;
-
+    
     @Field({ nullable: true })
     GridState: string;
-
+    
     @Field({ nullable: true })
     FilterState: string;
-
+    
     @Field(() => Boolean)
     CustomFilterState: boolean;
-
+    
     @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-
+    
     @Field({ nullable: true })
     SmartFilterPrompt: string;
-
+    
     @Field({ nullable: true })
     SmartFilterWhereClause: string;
-
+    
     @Field({ nullable: true })
     SmartFilterExplanation: string;
-
+    
     @Field({ nullable: true })
     WhereClause: string;
-
+    
     @Field(() => Boolean)
     CustomWhereClause: boolean;
-
+    
     @Field({ nullable: true })
     SortState: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User Views   
@@ -4823,59 +4823,59 @@ export class CreateUserViewInput {
 export class UpdateUserViewInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field(() => Boolean)
     IsShared: boolean;
-
+    
     @Field(() => Boolean)
     IsDefault: boolean;
-
+    
     @Field({ nullable: true })
     GridState: string;
-
+    
     @Field({ nullable: true })
     FilterState: string;
-
+    
     @Field(() => Boolean)
     CustomFilterState: boolean;
-
+    
     @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-
+    
     @Field({ nullable: true })
     SmartFilterPrompt: string;
-
+    
     @Field({ nullable: true })
     SmartFilterWhereClause: string;
-
+    
     @Field({ nullable: true })
     SmartFilterExplanation: string;
-
+    
     @Field({ nullable: true })
     WhereClause: string;
-
+    
     @Field(() => Boolean)
     CustomWhereClause: boolean;
-
+    
     @Field({ nullable: true })
     SortState: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Views
 //****************************************************************************
@@ -4927,7 +4927,7 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [UserView_])
     async AllUserViews(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
@@ -4935,7 +4935,7 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityRelationship_])
     async EntityRelationshipsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Relationships', userPayload);
@@ -4943,7 +4943,7 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Relationships', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRun_])
     async UserViewRunsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Runs', userPayload);
@@ -4951,7 +4951,7 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() userview_: UserView_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
@@ -4959,7 +4959,7 @@ export class UserViewResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => UserView_)
     async CreateUserView(
         @Arg('input', () => CreateUserViewInput) input: CreateUserViewInput,
@@ -4989,7 +4989,7 @@ export class UserViewResolverBase extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewInput) {
     }
-    
+        
     @Mutation(() => UserView_)
     async UpdateUserView(
         @Arg('input', () => UpdateUserViewInput) input: UpdateUserViewInput,
@@ -5020,7 +5020,7 @@ export class UserViewResolverBase extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => UserView_)
     async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -5046,7 +5046,7 @@ export class UserViewResolverBase extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -5056,40 +5056,40 @@ export class UserViewResolverBase extends ResolverBase {
 export class CompanyIntegrationRun_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationID: number;
-      
+          
     @Field(() => Int) 
     RunByUserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     StartedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     EndedAt?: Date;
-      
+          
     @Field(() => Int) 
     TotalRecords: number;
-      
+          
     @Field({nullable: true}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     RunByUser: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_])
     CompanyIntegrationRunAPILogsArray: mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_[]; // Link to CompanyIntegrationRunAPILogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.ErrorLog_])
     ErrorLogsArray: mj_core_schema_server_object_types.ErrorLog_[]; // Link to ErrorLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
     CompanyIntegrationRunDetailsArray: mj_core_schema_server_object_types.CompanyIntegrationRunDetail_[]; // Link to CompanyIntegrationRunDetails
-
+    
 }
         
 //****************************************************************************
@@ -5099,26 +5099,26 @@ export class CompanyIntegrationRun_ {
 export class UpdateCompanyIntegrationRunInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field(() => Int)
     RunByUserID: number;
-
+    
     @Field({ nullable: true })
     StartedAt: Date;
-
+    
     @Field({ nullable: true })
     EndedAt: Date;
-
+    
     @Field(() => Int)
     TotalRecords: number;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Company Integration Runs
 //****************************************************************************
@@ -5170,7 +5170,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunAPILog_])
     async CompanyIntegrationRunAPILogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run API Logs', userPayload);
@@ -5178,7 +5178,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
@@ -5186,7 +5186,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.CompanyIntegrationRunDetail_])
     async CompanyIntegrationRunDetailsArray(@Root() companyintegrationrun_: CompanyIntegrationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Company Integration Run Details', userPayload);
@@ -5194,7 +5194,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => CompanyIntegrationRun_)
     async UpdateCompanyIntegrationRun(
         @Arg('input', () => UpdateCompanyIntegrationRunInput) input: UpdateCompanyIntegrationRunInput,
@@ -5225,7 +5225,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -5235,43 +5235,43 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
 export class CompanyIntegrationRunDetail_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationRunID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field() 
     @MaxLength(40)
     Action: string;
-      
+          
     @Field() 
     @MaxLength(8)
     ExecutedAt: Date;
-      
+          
     @Field(() => Boolean) 
     IsSuccess: boolean;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     RunStartedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     RunEndedAt?: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.ErrorLog_])
     ErrorLogsArray: mj_core_schema_server_object_types.ErrorLog_[]; // Link to ErrorLogs
-
+    
 }
         
 //****************************************************************************
@@ -5281,26 +5281,26 @@ export class CompanyIntegrationRunDetail_ {
 export class UpdateCompanyIntegrationRunDetailInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationRunID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field()
     Action: string;
-
+    
     @Field()
     ExecutedAt: Date;
-
+    
     @Field(() => Boolean)
     IsSuccess: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Company Integration Run Details
 //****************************************************************************
@@ -5352,7 +5352,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.ErrorLog_])
     async ErrorLogsArray(@Root() companyintegrationrundetail_: CompanyIntegrationRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Error Logs', userPayload);
@@ -5360,7 +5360,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => CompanyIntegrationRunDetail_)
     async UpdateCompanyIntegrationRunDetail(
         @Arg('input', () => UpdateCompanyIntegrationRunDetailInput) input: UpdateCompanyIntegrationRunDetailInput,
@@ -5391,7 +5391,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunDetailInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -5401,39 +5401,39 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
 export class ErrorLog_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationRunID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationRunDetailID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Code?: string;
-      
+          
     @Field({nullable: true}) 
     Message?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     CreatedBy?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(20)
     Status?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(40)
     Category?: string;
-      
+          
     @Field({nullable: true}) 
     Details?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -5443,32 +5443,32 @@ export class ErrorLog_ {
 export class UpdateErrorLogInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int, { nullable: true })
     CompanyIntegrationRunID: number;
-
+    
     @Field(() => Int, { nullable: true })
     CompanyIntegrationRunDetailID: number;
-
+    
     @Field({ nullable: true })
     Code: string;
-
+    
     @Field({ nullable: true })
     Message: string;
-
+    
     @Field({ nullable: true })
     CreatedBy: string;
-
+    
     @Field({ nullable: true })
     Status: string;
-
+    
     @Field({ nullable: true })
     Category: string;
-
+    
     @Field({ nullable: true })
     Details: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Error Logs
 //****************************************************************************
@@ -5520,7 +5520,7 @@ export class ErrorLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Error Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => ErrorLog_)
     async UpdateErrorLog(
         @Arg('input', () => UpdateErrorLogInput) input: UpdateErrorLogInput,
@@ -5551,7 +5551,7 @@ export class ErrorLogResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateErrorLogInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -5561,29 +5561,29 @@ export class ErrorLogResolver extends ResolverBase {
 export class Application_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     ApplicationEntitiesArray: mj_core_schema_server_object_types.ApplicationEntity_[]; // Link to ApplicationEntities
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserApplication_])
     UserApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to UserApplications
-
+    
 }
         
 //****************************************************************************
@@ -5593,11 +5593,11 @@ export class Application_ {
 export class CreateApplicationInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Applications   
@@ -5606,14 +5606,14 @@ export class CreateApplicationInput {
 export class UpdateApplicationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Applications
 //****************************************************************************
@@ -5665,7 +5665,7 @@ export class ApplicationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Application_])
     async AllApplications(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Applications', userPayload);
@@ -5673,7 +5673,7 @@ export class ApplicationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Applications', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationEntity_])
     async ApplicationEntitiesArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Application Entities', userPayload);
@@ -5681,7 +5681,7 @@ export class ApplicationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserApplication_])
     async UserApplicationsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Applications', userPayload);
@@ -5689,7 +5689,7 @@ export class ApplicationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Application_)
     async CreateApplication(
         @Arg('input', () => CreateApplicationInput) input: CreateApplicationInput,
@@ -5719,7 +5719,7 @@ export class ApplicationResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateApplicationInput) {
     }
-    
+        
     @Mutation(() => Application_)
     async UpdateApplication(
         @Arg('input', () => UpdateApplicationInput) input: UpdateApplicationInput,
@@ -5750,7 +5750,7 @@ export class ApplicationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Application_)
     async DeleteApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -5776,7 +5776,7 @@ export class ApplicationResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -5786,52 +5786,52 @@ export class ApplicationResolver extends ResolverBase {
 export class ApplicationEntity_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ApplicationName?: string;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field(() => Boolean) 
     DefaultForNewUser: boolean;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     Application: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityBaseTable: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     EntityCodeName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     EntityClassName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8000)
     EntityBaseTableCodeName?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -5841,17 +5841,17 @@ export class ApplicationEntity_ {
 export class CreateApplicationEntityInput {
     @Field({ nullable: true })
     ApplicationName: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Application Entities   
@@ -5860,20 +5860,20 @@ export class CreateApplicationEntityInput {
 export class UpdateApplicationEntityInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     ApplicationName: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Application Entities
 //****************************************************************************
@@ -5925,7 +5925,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => ApplicationEntity_)
     async CreateApplicationEntity(
         @Arg('input', () => CreateApplicationEntityInput) input: CreateApplicationEntityInput,
@@ -5955,7 +5955,7 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateApplicationEntityInput) {
     }
-    
+        
     @Mutation(() => ApplicationEntity_)
     async UpdateApplicationEntity(
         @Arg('input', () => UpdateApplicationEntityInput) input: UpdateApplicationEntityInput,
@@ -5986,7 +5986,7 @@ export class ApplicationEntityResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationEntityInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => ApplicationEntity_)
     async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -6012,7 +6012,7 @@ export class ApplicationEntityResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -6022,70 +6022,70 @@ export class ApplicationEntityResolver extends ResolverBase {
 export class EntityPermission_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     RoleName?: string;
-      
+          
     @Field(() => Boolean) 
     CanCreate: boolean;
-      
+          
     @Field(() => Boolean) 
     CanRead: boolean;
-      
+          
     @Field(() => Boolean) 
     CanUpdate: boolean;
-      
+          
     @Field(() => Boolean) 
     CanDelete: boolean;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ReadRLSFilterID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CreateRLSFilterID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     UpdateRLSFilterID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DeleteRLSFilterID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(500)
     RoleSQLName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     CreateRLSFilter?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ReadRLSFilter?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     UpdateRLSFilter?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     DeleteRLSFilter?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -6095,35 +6095,35 @@ export class EntityPermission_ {
 export class CreateEntityPermissionInput {
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field({ nullable: true })
     RoleName: string;
-
+    
     @Field(() => Boolean)
     CanCreate: boolean;
-
+    
     @Field(() => Boolean)
     CanRead: boolean;
-
+    
     @Field(() => Boolean)
     CanUpdate: boolean;
-
+    
     @Field(() => Boolean)
     CanDelete: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     ReadRLSFilterID: number;
-
+    
     @Field(() => Int, { nullable: true })
     CreateRLSFilterID: number;
-
+    
     @Field(() => Int, { nullable: true })
     UpdateRLSFilterID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DeleteRLSFilterID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Permissions   
@@ -6132,38 +6132,38 @@ export class CreateEntityPermissionInput {
 export class UpdateEntityPermissionInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field({ nullable: true })
     RoleName: string;
-
+    
     @Field(() => Boolean)
     CanCreate: boolean;
-
+    
     @Field(() => Boolean)
     CanRead: boolean;
-
+    
     @Field(() => Boolean)
     CanUpdate: boolean;
-
+    
     @Field(() => Boolean)
     CanDelete: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     ReadRLSFilterID: number;
-
+    
     @Field(() => Int, { nullable: true })
     CreateRLSFilterID: number;
-
+    
     @Field(() => Int, { nullable: true })
     UpdateRLSFilterID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DeleteRLSFilterID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Permissions
 //****************************************************************************
@@ -6215,7 +6215,7 @@ export class EntityPermissionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [EntityPermission_])
     async AllEntityPermissions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
@@ -6223,7 +6223,7 @@ export class EntityPermissionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-
+    
     @Mutation(() => EntityPermission_)
     async CreateEntityPermission(
         @Arg('input', () => CreateEntityPermissionInput) input: CreateEntityPermissionInput,
@@ -6253,7 +6253,7 @@ export class EntityPermissionResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityPermissionInput) {
     }
-    
+        
     @Mutation(() => EntityPermission_)
     async UpdateEntityPermission(
         @Arg('input', () => UpdateEntityPermissionInput) input: UpdateEntityPermissionInput,
@@ -6284,7 +6284,7 @@ export class EntityPermissionResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityPermissionInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => EntityPermission_)
     async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -6310,7 +6310,7 @@ export class EntityPermissionResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -6320,28 +6320,28 @@ export class EntityPermissionResolver extends ResolverBase {
 export class UserApplicationEntity_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserApplicationID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Application: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-    
+        
 }
         
 //****************************************************************************
@@ -6351,14 +6351,14 @@ export class UserApplicationEntity_ {
 export class CreateUserApplicationEntityInput {
     @Field(() => Int)
     UserApplicationID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User Application Entities   
@@ -6367,17 +6367,17 @@ export class CreateUserApplicationEntityInput {
 export class UpdateUserApplicationEntityInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserApplicationID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Application Entities
 //****************************************************************************
@@ -6429,7 +6429,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => UserApplicationEntity_)
     async CreateUserApplicationEntity(
         @Arg('input', () => CreateUserApplicationEntityInput) input: CreateUserApplicationEntityInput,
@@ -6459,7 +6459,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput) {
     }
-    
+        
     @Mutation(() => UserApplicationEntity_)
     async UpdateUserApplicationEntity(
         @Arg('input', () => UpdateUserApplicationEntityInput) input: UpdateUserApplicationEntityInput,
@@ -6490,7 +6490,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserApplicationEntityInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => UserApplicationEntity_)
     async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -6516,7 +6516,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -6526,30 +6526,30 @@ export class UserApplicationEntityResolver extends ResolverBase {
 export class UserApplication_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field(() => Int) 
     ApplicationID: number;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-      
+          
     @Field() 
     @MaxLength(100)
     Application: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
     UserApplicationEntitiesArray: mj_core_schema_server_object_types.UserApplicationEntity_[]; // Link to UserApplicationEntities
-
+    
 }
         
 //****************************************************************************
@@ -6559,20 +6559,20 @@ export class UserApplication_ {
 export class UpdateUserApplicationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field(() => Int)
     ApplicationID: number;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Applications
 //****************************************************************************
@@ -6624,7 +6624,7 @@ export class UserApplicationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.UserApplicationEntity_])
     async UserApplicationEntitiesArray(@Root() userapplication_: UserApplication_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Application Entities', userPayload);
@@ -6632,7 +6632,7 @@ export class UserApplicationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Application Entities', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => UserApplication_)
     async UpdateUserApplication(
         @Arg('input', () => UpdateUserApplicationInput) input: UpdateUserApplicationInput,
@@ -6663,7 +6663,7 @@ export class UserApplicationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserApplicationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => UserApplication_)
     async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -6689,7 +6689,7 @@ export class UserApplicationResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -6699,27 +6699,27 @@ export class UserApplicationResolver extends ResolverBase {
 export class CompanyIntegrationRunAPILog_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationRunID: number;
-      
+          
     @Field() 
     @MaxLength(8)
     ExecutedAt: Date;
-      
+          
     @Field(() => Boolean) 
     IsSuccess: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(24)
     RequestMethod?: string;
-      
+          
     @Field({nullable: true}) 
     URL?: string;
-      
+          
     @Field({nullable: true}) 
     Parameters?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -6729,26 +6729,26 @@ export class CompanyIntegrationRunAPILog_ {
 export class UpdateCompanyIntegrationRunAPILogInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationRunID: number;
-
+    
     @Field()
     ExecutedAt: Date;
-
+    
     @Field(() => Boolean)
     IsSuccess: boolean;
-
+    
     @Field({ nullable: true })
     RequestMethod: string;
-
+    
     @Field({ nullable: true })
     URL: string;
-
+    
     @Field({ nullable: true })
     Parameters: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Company Integration Run API Logs
 //****************************************************************************
@@ -6800,7 +6800,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Run API Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => CompanyIntegrationRunAPILog_)
     async UpdateCompanyIntegrationRunAPILog(
         @Arg('input', () => UpdateCompanyIntegrationRunAPILogInput) input: UpdateCompanyIntegrationRunAPILogInput,
@@ -6831,7 +6831,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunAPILogInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -6841,46 +6841,46 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
 export class List_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     EntityID?: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalSystemRecordID?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CompanyIntegrationID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.ListDetail_])
     ListDetailsArray: mj_core_schema_server_object_types.ListDetail_[]; // Link to ListDetails
-
+    
 }
         
 //****************************************************************************
@@ -6890,23 +6890,23 @@ export class List_ {
 export class CreateListInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     EntityID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int, { nullable: true })
     CompanyIntegrationID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Lists   
@@ -6915,26 +6915,26 @@ export class CreateListInput {
 export class UpdateListInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     EntityID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int, { nullable: true })
     CompanyIntegrationID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Lists
 //****************************************************************************
@@ -6986,7 +6986,7 @@ export class ListResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Lists', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.ListDetail_])
     async ListDetailsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('List Details', userPayload);
@@ -6994,7 +6994,7 @@ export class ListResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => List_)
     async CreateList(
         @Arg('input', () => CreateListInput) input: CreateListInput,
@@ -7024,7 +7024,7 @@ export class ListResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateListInput) {
     }
-    
+        
     @Mutation(() => List_)
     async UpdateList(
         @Arg('input', () => UpdateListInput) input: UpdateListInput,
@@ -7055,7 +7055,7 @@ export class ListResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateListInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => List_)
     async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -7081,7 +7081,7 @@ export class ListResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -7091,21 +7091,21 @@ export class ListResolver extends ResolverBase {
 export class ListDetail_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     ListID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field() 
     @MaxLength(200)
     List: string;
-    
+        
 }
         
 //****************************************************************************
@@ -7115,14 +7115,14 @@ export class ListDetail_ {
 export class CreateListDetailInput {
     @Field(() => Int)
     ListID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field(() => Int)
     Sequence: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for List Details   
@@ -7131,17 +7131,17 @@ export class CreateListDetailInput {
 export class UpdateListDetailInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     ListID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field(() => Int)
     Sequence: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for List Details
 //****************************************************************************
@@ -7193,7 +7193,7 @@ export class ListDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => ListDetail_)
     async CreateListDetail(
         @Arg('input', () => CreateListDetailInput) input: CreateListDetailInput,
@@ -7223,7 +7223,7 @@ export class ListDetailResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateListDetailInput) {
     }
-    
+        
     @Mutation(() => ListDetail_)
     async UpdateListDetail(
         @Arg('input', () => UpdateListDetailInput) input: UpdateListDetailInput,
@@ -7254,7 +7254,7 @@ export class ListDetailResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateListDetailInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => ListDetail_)
     async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -7280,7 +7280,7 @@ export class ListDetailResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -7290,28 +7290,28 @@ export class ListDetailResolver extends ResolverBase {
 export class UserViewRun_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserViewID: number;
-      
+          
     @Field() 
     @MaxLength(8)
     RunAt: Date;
-      
+          
     @Field(() => Int) 
     RunByUserID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     UserView: string;
-      
+          
     @Field() 
     @MaxLength(200)
     RunByUser: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.UserViewRunDetail_])
     UserViewRunDetailsArray: mj_core_schema_server_object_types.UserViewRunDetail_[]; // Link to UserViewRunDetails
-
+    
 }
         
 //****************************************************************************
@@ -7321,14 +7321,14 @@ export class UserViewRun_ {
 export class CreateUserViewRunInput {
     @Field(() => Int)
     UserViewID: number;
-
+    
     @Field()
     RunAt: Date;
-
+    
     @Field(() => Int)
     RunByUserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User View Runs   
@@ -7337,17 +7337,17 @@ export class CreateUserViewRunInput {
 export class UpdateUserViewRunInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserViewID: number;
-
+    
     @Field()
     RunAt: Date;
-
+    
     @Field(() => Int)
     RunByUserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User View Runs
 //****************************************************************************
@@ -7399,7 +7399,7 @@ export class UserViewRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User View Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewRunDetail_])
     async UserViewRunDetailsArray(@Root() userviewrun_: UserViewRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Run Details', userPayload);
@@ -7407,7 +7407,7 @@ export class UserViewRunResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => UserViewRun_)
     async CreateUserViewRun(
         @Arg('input', () => CreateUserViewRunInput) input: CreateUserViewRunInput,
@@ -7437,7 +7437,7 @@ export class UserViewRunResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunInput) {
     }
-    
+        
     @Mutation(() => UserViewRun_)
     async UpdateUserViewRun(
         @Arg('input', () => UpdateUserViewRunInput) input: UpdateUserViewRunInput,
@@ -7468,7 +7468,7 @@ export class UserViewRunResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewRunInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -7478,20 +7478,20 @@ export class UserViewRunResolver extends ResolverBase {
 export class UserViewRunDetail_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserViewRunID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field(() => Int) 
     UserViewID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-    
+        
 }
         
 //****************************************************************************
@@ -7501,11 +7501,11 @@ export class UserViewRunDetail_ {
 export class CreateUserViewRunDetailInput {
     @Field(() => Int)
     UserViewRunID: number;
-
+    
     @Field()
     RecordID: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User View Run Details   
@@ -7514,14 +7514,14 @@ export class CreateUserViewRunDetailInput {
 export class UpdateUserViewRunDetailInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserViewRunID: number;
-
+    
     @Field()
     RecordID: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User View Run Details
 //****************************************************************************
@@ -7573,7 +7573,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User View Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => UserViewRunDetail_)
     async CreateUserViewRunDetail(
         @Arg('input', () => CreateUserViewRunDetailInput) input: CreateUserViewRunDetailInput,
@@ -7603,7 +7603,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput) {
     }
-    
+        
     @Mutation(() => UserViewRunDetail_)
     async UpdateUserViewRunDetail(
         @Arg('input', () => UpdateUserViewRunDetailInput) input: UpdateUserViewRunDetailInput,
@@ -7634,7 +7634,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewRunDetailInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -7644,38 +7644,38 @@ export class UserViewRunDetailResolver extends ResolverBase {
 export class WorkflowRun_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     WorkflowName: string;
-      
+          
     @Field() 
     @MaxLength(200)
     ExternalSystemRecordID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     StartedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     EndedAt?: Date;
-      
+          
     @Field() 
     @MaxLength(20)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     Results?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     Workflow: string;
-      
+          
     @Field() 
     @MaxLength(200)
     WorkflowEngineName: string;
-    
+        
 }
         
 //****************************************************************************
@@ -7685,26 +7685,26 @@ export class WorkflowRun_ {
 export class UpdateWorkflowRunInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     WorkflowName: string;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field()
     StartedAt: Date;
-
+    
     @Field({ nullable: true })
     EndedAt: Date;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     Results: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Workflow Runs
 //****************************************************************************
@@ -7756,7 +7756,7 @@ export class WorkflowRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => WorkflowRun_)
     async UpdateWorkflowRun(
         @Arg('input', () => UpdateWorkflowRunInput) input: UpdateWorkflowRunInput,
@@ -7787,7 +7787,7 @@ export class WorkflowRunResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowRunInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -7797,57 +7797,57 @@ export class WorkflowRunResolver extends ResolverBase {
 export class Workflow_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     WorkflowEngineName: string;
-      
+          
     @Field() 
     @MaxLength(100)
     CompanyName: string;
-      
+          
     @Field() 
     @MaxLength(200)
     ExternalSystemRecordID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Boolean, {description: 'If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields'}) 
     AutoRunEnabled: boolean;
-      
+          
     @Field({nullable: true, description: 'Minutes, Hours, Days, Weeks, Months, Years'}) 
     @MaxLength(40)
     AutoRunIntervalUnits?: string;
-      
+          
     @Field(() => Int, {nullable: true, description: 'The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.'}) 
     AutoRunInterval?: number;
-      
+          
     @Field({nullable: true, description: 'If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.'}) 
     @MaxLength(400)
     SubclassName?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     AutoRunIntervalMinutes?: number;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
     @Field(() => [mj_core_schema_server_object_types.WorkflowRun_])
     WorkflowRunsArray: mj_core_schema_server_object_types.WorkflowRun_[]; // Link to WorkflowRuns
-
+    
 }
         
 //****************************************************************************
@@ -7857,35 +7857,35 @@ export class Workflow_ {
 export class UpdateWorkflowInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field()
     WorkflowEngineName: string;
-
+    
     @Field()
     CompanyName: string;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Boolean)
     AutoRunEnabled: boolean;
-
+    
     @Field({ nullable: true })
     AutoRunIntervalUnits: string;
-
+    
     @Field(() => Int, { nullable: true })
     AutoRunInterval: number;
-
+    
     @Field({ nullable: true })
     SubclassName: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Workflows
 //****************************************************************************
@@ -7937,7 +7937,7 @@ export class WorkflowResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -7945,7 +7945,7 @@ export class WorkflowResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.WorkflowRun_])
     async WorkflowRunsArray(@Root() workflow_: Workflow_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflow Runs', userPayload);
@@ -7953,7 +7953,7 @@ export class WorkflowResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Workflow Runs', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Workflow_)
     async UpdateWorkflow(
         @Arg('input', () => UpdateWorkflowInput) input: UpdateWorkflowInput,
@@ -7984,7 +7984,7 @@ export class WorkflowResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -7994,33 +7994,33 @@ export class WorkflowResolver extends ResolverBase {
 export class WorkflowEngine_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(1000)
     DriverPath: string;
-      
+          
     @Field() 
     @MaxLength(200)
     DriverClass: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Workflow_])
     WorkflowsArray: mj_core_schema_server_object_types.Workflow_[]; // Link to Workflows
-
+    
 }
         
 //****************************************************************************
@@ -8030,20 +8030,20 @@ export class WorkflowEngine_ {
 export class UpdateWorkflowEngineInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field()
     DriverPath: string;
-
+    
     @Field()
     DriverClass: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Workflow Engines
 //****************************************************************************
@@ -8095,7 +8095,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workflow Engines', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Workflow_])
     async WorkflowsArray(@Root() workflowengine_: WorkflowEngine_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workflows', userPayload);
@@ -8103,7 +8103,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Workflows', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => WorkflowEngine_)
     async UpdateWorkflowEngine(
         @Arg('input', () => UpdateWorkflowEngineInput) input: UpdateWorkflowEngineInput,
@@ -8134,7 +8134,7 @@ export class WorkflowEngineResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowEngineInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -8144,45 +8144,45 @@ export class WorkflowEngineResolver extends ResolverBase {
 export class RecordChange_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field() 
     @MaxLength(8)
     ChangedAt: Date;
-      
+          
     @Field() 
     ChangesJSON: string;
-      
+          
     @Field() 
     ChangesDescription: string;
-      
+          
     @Field() 
     FullRecordJSON: string;
-      
+          
     @Field() 
     @MaxLength(30)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
 }
         
 //****************************************************************************
@@ -8192,32 +8192,32 @@ export class RecordChange_ {
 export class CreateRecordChangeInput {
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field()
     ChangedAt: Date;
-
+    
     @Field()
     ChangesJSON: string;
-
+    
     @Field()
     ChangesDescription: string;
-
+    
     @Field()
     FullRecordJSON: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Record Changes
 //****************************************************************************
@@ -8269,7 +8269,7 @@ export class RecordChangeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Changes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => RecordChange_)
     async CreateRecordChange(
         @Arg('input', () => CreateRecordChangeInput) input: CreateRecordChangeInput,
@@ -8299,7 +8299,7 @@ export class RecordChangeResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRecordChangeInput) {
     }
-    
+        
 }
 
 //****************************************************************************
@@ -8309,26 +8309,26 @@ export class RecordChangeResolver extends ResolverBase {
 export class UserRole_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     RoleName: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
 }
         
 //****************************************************************************
@@ -8338,11 +8338,11 @@ export class UserRole_ {
 export class CreateUserRoleInput {
     @Field(() => Int)
     UserID: number;
-
+    
     @Field()
     RoleName: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Roles
 //****************************************************************************
@@ -8394,7 +8394,7 @@ export class UserRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [UserRole_])
     async AllUserRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Roles', userPayload);
@@ -8402,7 +8402,7 @@ export class UserRoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Roles', await dataSource.query(sSQL));
         return result;
     }
-
+    
     @Mutation(() => UserRole_)
     async CreateUserRole(
         @Arg('input', () => CreateUserRoleInput) input: CreateUserRoleInput,
@@ -8432,7 +8432,7 @@ export class UserRoleResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserRoleInput) {
     }
-    
+        
     @Mutation(() => UserRole_)
     async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -8458,7 +8458,7 @@ export class UserRoleResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -8468,28 +8468,28 @@ export class UserRoleResolver extends ResolverBase {
 export class RowLevelSecurityFilter_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     FilterText?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EntityPermission_])
     EntityPermissionsArray: mj_core_schema_server_object_types.EntityPermission_[]; // Link to EntityPermissions
-
+    
 }
 //****************************************************************************
 // RESOLVER for Row Level Security Filters
@@ -8542,7 +8542,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [RowLevelSecurityFilter_])
     async AllRowLevelSecurityFilters(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Row Level Security Filters', userPayload);
@@ -8550,7 +8550,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Row Level Security Filters', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityPermission_])
     async EntityPermissionsArray(@Root() rowlevelsecurityfilter_: RowLevelSecurityFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Permissions', userPayload);
@@ -8558,7 +8558,7 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Permissions', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -8568,51 +8568,51 @@ export class RowLevelSecurityFilterResolver extends ResolverBase {
 export class AuditLog_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     AuditLogTypeName?: string;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     AuthorizationName?: string;
-      
+          
     @Field() 
     @MaxLength(100)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     Details?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     EntityID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     RecordID?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -8622,29 +8622,29 @@ export class AuditLog_ {
 export class CreateAuditLogInput {
     @Field({ nullable: true })
     AuditLogTypeName: string;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     AuthorizationName: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     Details: string;
-
+    
     @Field(() => Int, { nullable: true })
     EntityID: number;
-
+    
     @Field({ nullable: true })
     RecordID: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Audit Logs   
@@ -8653,32 +8653,32 @@ export class CreateAuditLogInput {
 export class UpdateAuditLogInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field({ nullable: true })
     AuditLogTypeName: string;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     AuthorizationName: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     Details: string;
-
+    
     @Field(() => Int, { nullable: true })
     EntityID: number;
-
+    
     @Field({ nullable: true })
     RecordID: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Audit Logs
 //****************************************************************************
@@ -8730,7 +8730,7 @@ export class AuditLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => AuditLog_)
     async CreateAuditLog(
         @Arg('input', () => CreateAuditLogInput) input: CreateAuditLogInput,
@@ -8760,7 +8760,7 @@ export class AuditLogResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateAuditLogInput) {
     }
-    
+        
     @Mutation(() => AuditLog_)
     async UpdateAuditLog(
         @Arg('input', () => UpdateAuditLogInput) input: UpdateAuditLogInput,
@@ -8791,7 +8791,7 @@ export class AuditLogResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateAuditLogInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -8801,47 +8801,47 @@ export class AuditLogResolver extends ResolverBase {
 export class Authorization_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field(() => Boolean) 
     UseAuditLog: boolean;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     AuthorizationRolesArray: mj_core_schema_server_object_types.AuthorizationRole_[]; // Link to AuthorizationRoles
-
+    
     @Field(() => [mj_core_schema_server_object_types.Authorization_])
     AuthorizationsArray: mj_core_schema_server_object_types.Authorization_[]; // Link to Authorizations
-
+    
     @Field(() => [mj_core_schema_server_object_types.AuditLogType_])
     AuditLogTypesArray: mj_core_schema_server_object_types.AuditLogType_[]; // Link to AuditLogTypes
-
+    
     @Field(() => [mj_core_schema_server_object_types.AuditLog_])
     AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-
+    
 }
 //****************************************************************************
 // RESOLVER for Authorizations
@@ -8894,7 +8894,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [Authorization_])
     async AllAuthorizations(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
@@ -8902,7 +8902,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.AuthorizationRole_])
     async AuthorizationRolesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
@@ -8910,7 +8910,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Authorization_])
     async AuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorizations', userPayload);
@@ -8918,7 +8918,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorizations', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLogType_])
     async AuditLogTypesArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
@@ -8926,7 +8926,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
@@ -8934,7 +8934,7 @@ export class AuthorizationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -8944,27 +8944,27 @@ export class AuthorizationResolver extends ResolverBase {
 export class AuthorizationRole_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     AuthorizationName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     RoleName?: string;
-      
+          
     @Field() 
     @MaxLength(20)
     Type: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
 }
 //****************************************************************************
 // RESOLVER for Authorization Roles
@@ -9017,7 +9017,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [AuthorizationRole_])
     async AllAuthorizationRoles(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Authorization Roles', userPayload);
@@ -9025,7 +9025,7 @@ export class AuthorizationRoleResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Authorization Roles', await dataSource.query(sSQL));
         return result;
     }
-
+    
 }
 
 //****************************************************************************
@@ -9035,39 +9035,39 @@ export class AuthorizationRoleResolver extends ResolverBase {
 export class AuditLogType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     AuthorizationName?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.AuditLog_])
     AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
-
+    
     @Field(() => [mj_core_schema_server_object_types.AuditLogType_])
     AuditLogTypesArray: mj_core_schema_server_object_types.AuditLogType_[]; // Link to AuditLogTypes
-
+    
 }
 //****************************************************************************
 // RESOLVER for Audit Log Types
@@ -9120,7 +9120,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [AuditLogType_])
     async AllAuditLogTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
@@ -9128,7 +9128,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLog_])
     async AuditLogsArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
@@ -9136,7 +9136,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AuditLogType_])
     async AuditLogTypesArray(@Root() auditlogtype_: AuditLogType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Audit Log Types', userPayload);
@@ -9144,7 +9144,7 @@ export class AuditLogTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Log Types', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -9154,44 +9154,44 @@ export class AuditLogTypeResolver extends ResolverBase {
 export class EntityFieldValue_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityFieldName: string;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Value: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Code?: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityField: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-    
+        
 }
 //****************************************************************************
 // RESOLVER for Entity Field Values
@@ -9244,7 +9244,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [EntityFieldValue_])
     async AllEntityFieldValues(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Field Values', userPayload);
@@ -9252,7 +9252,7 @@ export class EntityFieldValueResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Field Values', await dataSource.query(sSQL));
         return result;
     }
-
+    
 }
 
 //****************************************************************************
@@ -9262,63 +9262,63 @@ export class EntityFieldValueResolver extends ResolverBase {
 export class AIModel_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Vendor?: string;
-      
+          
     @Field(() => Int) 
     AIModelTypeID: number;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     DriverClass?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     DriverImportPath?: string;
-      
+          
     @Field({nullable: true, description: 'The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls'}) 
     @MaxLength(200)
     APIName?: string;
-      
+          
     @Field(() => Int, {nullable: true, description: 'A simplified power rank of each model for a given AI Model Type. For example, if we have GPT 3, GPT 3.5, and GPT 4, we would have a PowerRank of 1 for GPT3, 2 for GPT 3.5, and 3 for GPT 4. This can be used within model families like OpenAI or across all models. For example if you had Llama 2 in the mix which is similar to GPT 3.5 it would also have a PowerRank of 2. This can be used at runtime to pick the most/least powerful or compare model relative power.'}) 
     PowerRank?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     AIModelType: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.AIAction_])
     AIActionsArray: mj_core_schema_server_object_types.AIAction_[]; // Link to AIActions
-
+    
     @Field(() => [mj_core_schema_server_object_types.AIModelAction_])
     AIModelActionsArray: mj_core_schema_server_object_types.AIModelAction_[]; // Link to AIModelActions
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
     EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
-
+    
     @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
     VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
-
+    
 }
         
 //****************************************************************************
@@ -9328,35 +9328,35 @@ export class AIModel_ {
 export class UpdateAIModelInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Vendor: string;
-
+    
     @Field(() => Int)
     AIModelTypeID: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     DriverClass: string;
-
+    
     @Field({ nullable: true })
     DriverImportPath: string;
-
+    
     @Field({ nullable: true })
     APIName: string;
-
+    
     @Field(() => Int, { nullable: true })
     PowerRank: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for AI Models
 //****************************************************************************
@@ -9408,7 +9408,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [AIModel_])
     async AllAIModels(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
@@ -9416,7 +9416,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.AIAction_])
     async AIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
@@ -9424,7 +9424,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.AIModelAction_])
     async AIModelActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
@@ -9432,7 +9432,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
     async EntityAIActionsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
@@ -9440,7 +9440,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.VectorIndex_])
     async VectorIndexesArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
@@ -9448,7 +9448,7 @@ export class AIModelResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => AIModel_)
     async UpdateAIModel(
         @Arg('input', () => UpdateAIModelInput) input: UpdateAIModelInput,
@@ -9479,7 +9479,7 @@ export class AIModelResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -9489,41 +9489,41 @@ export class AIModelResolver extends ResolverBase {
 export class AIAction_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DefaultModelID?: number;
-      
+          
     @Field({nullable: true}) 
     DefaultPrompt?: string;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     DefaultModel?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.AIModelAction_])
     AIModelActionsArray: mj_core_schema_server_object_types.AIModelAction_[]; // Link to AIModelActions
-
+    
     @Field(() => [mj_core_schema_server_object_types.EntityAIAction_])
     EntityAIActionsArray: mj_core_schema_server_object_types.EntityAIAction_[]; // Link to EntityAIActions
-
+    
 }
         
 //****************************************************************************
@@ -9533,23 +9533,23 @@ export class AIAction_ {
 export class UpdateAIActionInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     DefaultModelID: number;
-
+    
     @Field({ nullable: true })
     DefaultPrompt: string;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for AI Actions
 //****************************************************************************
@@ -9601,7 +9601,7 @@ export class AIActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [AIAction_])
     async AllAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Actions', userPayload);
@@ -9609,7 +9609,7 @@ export class AIActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Actions', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.AIModelAction_])
     async AIModelActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
@@ -9617,7 +9617,7 @@ export class AIActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityAIAction_])
     async EntityAIActionsArray(@Root() aiaction_: AIAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
@@ -9625,7 +9625,7 @@ export class AIActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => AIAction_)
     async UpdateAIAction(
         @Arg('input', () => UpdateAIActionInput) input: UpdateAIActionInput,
@@ -9656,7 +9656,7 @@ export class AIActionResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateAIActionInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -9666,32 +9666,32 @@ export class AIActionResolver extends ResolverBase {
 export class AIModelAction_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     AIModelID: number;
-      
+          
     @Field(() => Int) 
     AIActionID: number;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     AIModel: string;
-      
+          
     @Field() 
     @MaxLength(100)
     AIAction: string;
-    
+        
 }
         
 //****************************************************************************
@@ -9701,17 +9701,17 @@ export class AIModelAction_ {
 export class UpdateAIModelActionInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     AIModelID: number;
-
+    
     @Field(() => Int)
     AIActionID: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for AI Model Actions
 //****************************************************************************
@@ -9763,7 +9763,7 @@ export class AIModelActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [AIModelAction_])
     async AllAIModelActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Actions', userPayload);
@@ -9771,7 +9771,7 @@ export class AIModelActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Actions', await dataSource.query(sSQL));
         return result;
     }
-
+    
     @Mutation(() => AIModelAction_)
     async UpdateAIModelAction(
         @Arg('input', () => UpdateAIModelActionInput) input: UpdateAIModelActionInput,
@@ -9802,7 +9802,7 @@ export class AIModelActionResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelActionInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -9812,63 +9812,63 @@ export class AIModelActionResolver extends ResolverBase {
 export class EntityAIAction_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int) 
     AIActionID: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     AIModelID?: number;
-      
+          
     @Field() 
     @MaxLength(50)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Prompt?: string;
-      
+          
     @Field() 
     @MaxLength(30)
     TriggerEvent: string;
-      
+          
     @Field() 
     UserMessage: string;
-      
+          
     @Field() 
     @MaxLength(20)
     OutputType: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     OutputField?: string;
-      
+          
     @Field(() => Boolean) 
     SkipIfOutputFieldNotEmpty: boolean;
-      
+          
     @Field(() => Int, {nullable: true}) 
     OutputEntityID?: number;
-      
+          
     @Field({nullable: true}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(100)
     AIAction: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     AIModel?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputEntity?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -9878,44 +9878,44 @@ export class EntityAIAction_ {
 export class UpdateEntityAIActionInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     AIActionID: number;
-
+    
     @Field(() => Int, { nullable: true })
     AIModelID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Prompt: string;
-
+    
     @Field()
     TriggerEvent: string;
-
+    
     @Field()
     UserMessage: string;
-
+    
     @Field()
     OutputType: string;
-
+    
     @Field({ nullable: true })
     OutputField: string;
-
+    
     @Field(() => Boolean)
     SkipIfOutputFieldNotEmpty: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     OutputEntityID: number;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity AI Actions
 //****************************************************************************
@@ -9967,7 +9967,7 @@ export class EntityAIActionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [EntityAIAction_])
     async AllEntityAIActions(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity AI Actions', userPayload);
@@ -9975,7 +9975,7 @@ export class EntityAIActionResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity AI Actions', await dataSource.query(sSQL));
         return result;
     }
-
+    
     @Mutation(() => EntityAIAction_)
     async UpdateEntityAIAction(
         @Arg('input', () => UpdateEntityAIActionInput) input: UpdateEntityAIActionInput,
@@ -10006,7 +10006,7 @@ export class EntityAIActionResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityAIActionInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -10016,17 +10016,17 @@ export class EntityAIActionResolver extends ResolverBase {
 export class AIModelType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.AIModel_])
     AIModelsArray: mj_core_schema_server_object_types.AIModel_[]; // Link to AIModels
-
+    
 }
         
 //****************************************************************************
@@ -10036,14 +10036,14 @@ export class AIModelType_ {
 export class UpdateAIModelTypeInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for AI Model Types
 //****************************************************************************
@@ -10095,7 +10095,7 @@ export class AIModelTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Query(() => [AIModelType_])
     async AllAIModelTypes(@Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Model Types', userPayload);
@@ -10103,7 +10103,7 @@ export class AIModelTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Model Types', await dataSource.query(sSQL));
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.AIModel_])
     async AIModelsArray(@Root() aimodeltype_: AIModelType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Models', userPayload);
@@ -10111,7 +10111,7 @@ export class AIModelTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('AI Models', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => AIModelType_)
     async UpdateAIModelType(
         @Arg('input', () => UpdateAIModelTypeInput) input: UpdateAIModelTypeInput,
@@ -10142,7 +10142,7 @@ export class AIModelTypeResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelTypeInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -10152,28 +10152,28 @@ export class AIModelTypeResolver extends ResolverBase {
 export class QueueType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     DriverClass: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(400)
     DriverImportPath?: string;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Queue_])
     QueuesArray: mj_core_schema_server_object_types.Queue_[]; // Link to Queues
-
+    
 }
 //****************************************************************************
 // RESOLVER for Queue Types
@@ -10226,7 +10226,7 @@ export class QueueTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queue Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Queue_])
     async QueuesArray(@Root() queuetype_: QueueType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queues', userPayload);
@@ -10234,7 +10234,7 @@ export class QueueTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -10244,82 +10244,82 @@ export class QueueTypeResolver extends ResolverBase {
 export class Queue_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     QueueTypeID: number;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ProcessPID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(60)
     ProcessPlatform?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(30)
     ProcessVersion?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ProcessCwd?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ProcessIPAddress?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ProcessMacAddress?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(50)
     ProcessOSName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(20)
     ProcessOSVersion?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ProcessHostName?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(50)
     ProcessUserID?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ProcessUserName?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     LastHeartbeat: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     QueueType: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.QueueTask_])
     QueueTasksArray: mj_core_schema_server_object_types.QueueTask_[]; // Link to QueueTasks
-
+    
 }
         
 //****************************************************************************
@@ -10329,53 +10329,53 @@ export class Queue_ {
 export class CreateQueueInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     QueueTypeID: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     ProcessPID: number;
-
+    
     @Field({ nullable: true })
     ProcessPlatform: string;
-
+    
     @Field({ nullable: true })
     ProcessVersion: string;
-
+    
     @Field({ nullable: true })
     ProcessCwd: string;
-
+    
     @Field({ nullable: true })
     ProcessIPAddress: string;
-
+    
     @Field({ nullable: true })
     ProcessMacAddress: string;
-
+    
     @Field({ nullable: true })
     ProcessOSName: string;
-
+    
     @Field({ nullable: true })
     ProcessOSVersion: string;
-
+    
     @Field({ nullable: true })
     ProcessHostName: string;
-
+    
     @Field({ nullable: true })
     ProcessUserID: string;
-
+    
     @Field({ nullable: true })
     ProcessUserName: string;
-
+    
     @Field()
     LastHeartbeat: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Queues   
@@ -10384,56 +10384,56 @@ export class CreateQueueInput {
 export class UpdateQueueInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     QueueTypeID: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     ProcessPID: number;
-
+    
     @Field({ nullable: true })
     ProcessPlatform: string;
-
+    
     @Field({ nullable: true })
     ProcessVersion: string;
-
+    
     @Field({ nullable: true })
     ProcessCwd: string;
-
+    
     @Field({ nullable: true })
     ProcessIPAddress: string;
-
+    
     @Field({ nullable: true })
     ProcessMacAddress: string;
-
+    
     @Field({ nullable: true })
     ProcessOSName: string;
-
+    
     @Field({ nullable: true })
     ProcessOSVersion: string;
-
+    
     @Field({ nullable: true })
     ProcessHostName: string;
-
+    
     @Field({ nullable: true })
     ProcessUserID: string;
-
+    
     @Field({ nullable: true })
     ProcessUserName: string;
-
+    
     @Field()
     LastHeartbeat: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Queues
 //****************************************************************************
@@ -10485,7 +10485,7 @@ export class QueueResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queues', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.QueueTask_])
     async QueueTasksArray(@Root() queue_: Queue_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queue Tasks', userPayload);
@@ -10493,7 +10493,7 @@ export class QueueResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Queue_)
     async CreateQueue(
         @Arg('input', () => CreateQueueInput) input: CreateQueueInput,
@@ -10523,7 +10523,7 @@ export class QueueResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueueInput) {
     }
-    
+        
     @Mutation(() => Queue_)
     async UpdateQueue(
         @Arg('input', () => UpdateQueueInput) input: UpdateQueueInput,
@@ -10554,7 +10554,7 @@ export class QueueResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueueInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -10564,41 +10564,41 @@ export class QueueResolver extends ResolverBase {
 export class QueueTask_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     QueueID: number;
-      
+          
     @Field() 
     @MaxLength(20)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     StartedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     EndedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     Data?: string;
-      
+          
     @Field({nullable: true}) 
     Options?: string;
-      
+          
     @Field({nullable: true}) 
     Output?: string;
-      
+          
     @Field({nullable: true}) 
     ErrorMessage?: string;
-      
+          
     @Field({nullable: true}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(100)
     Queue: string;
-    
+        
 }
         
 //****************************************************************************
@@ -10608,32 +10608,32 @@ export class QueueTask_ {
 export class CreateQueueTaskInput {
     @Field(() => Int)
     QueueID: number;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     StartedAt: Date;
-
+    
     @Field({ nullable: true })
     EndedAt: Date;
-
+    
     @Field({ nullable: true })
     Data: string;
-
+    
     @Field({ nullable: true })
     Options: string;
-
+    
     @Field({ nullable: true })
     Output: string;
-
+    
     @Field({ nullable: true })
     ErrorMessage: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Queue Tasks   
@@ -10642,35 +10642,35 @@ export class CreateQueueTaskInput {
 export class UpdateQueueTaskInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     QueueID: number;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     StartedAt: Date;
-
+    
     @Field({ nullable: true })
     EndedAt: Date;
-
+    
     @Field({ nullable: true })
     Data: string;
-
+    
     @Field({ nullable: true })
     Options: string;
-
+    
     @Field({ nullable: true })
     Output: string;
-
+    
     @Field({ nullable: true })
     ErrorMessage: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Queue Tasks
 //****************************************************************************
@@ -10722,7 +10722,7 @@ export class QueueTaskResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queue Tasks', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => QueueTask_)
     async CreateQueueTask(
         @Arg('input', () => CreateQueueTaskInput) input: CreateQueueTaskInput,
@@ -10752,7 +10752,7 @@ export class QueueTaskResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueueTaskInput) {
     }
-    
+        
     @Mutation(() => QueueTask_)
     async UpdateQueueTask(
         @Arg('input', () => UpdateQueueTaskInput) input: UpdateQueueTaskInput,
@@ -10783,7 +10783,7 @@ export class QueueTaskResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueueTaskInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -10793,31 +10793,31 @@ export class QueueTaskResolver extends ResolverBase {
 export class Dashboard_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
-      
+          
     @Field() 
     UIConfigDetails: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     User?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -10827,20 +10827,20 @@ export class Dashboard_ {
 export class CreateDashboardInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field()
     UIConfigDetails: string;
-
+    
     @Field(() => Int, { nullable: true })
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Dashboards   
@@ -10849,23 +10849,23 @@ export class CreateDashboardInput {
 export class UpdateDashboardInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field()
     UIConfigDetails: string;
-
+    
     @Field(() => Int, { nullable: true })
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Dashboards
 //****************************************************************************
@@ -10918,7 +10918,7 @@ export class DashboardResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => Dashboard_)
     async CreateDashboard(
         @Arg('input', () => CreateDashboardInput) input: CreateDashboardInput,
@@ -10948,7 +10948,7 @@ export class DashboardResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDashboardInput) {
     }
-    
+        
     @Mutation(() => Dashboard_)
     async UpdateDashboard(
         @Arg('input', () => UpdateDashboardInput) input: UpdateDashboardInput,
@@ -10979,7 +10979,7 @@ export class DashboardResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Dashboard_)
     async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -11005,7 +11005,7 @@ export class DashboardResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -11015,17 +11015,17 @@ export class DashboardResolver extends ResolverBase {
 export class OutputTriggerType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
 //****************************************************************************
 // RESOLVER for Output Trigger Types
@@ -11079,7 +11079,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Output Trigger Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() outputtriggertype_: OutputTriggerType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -11087,7 +11087,7 @@ export class OutputTriggerTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -11097,20 +11097,20 @@ export class OutputTriggerTypeResolver extends ResolverBase {
 export class OutputFormatType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     DisplayFormat?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
 //****************************************************************************
 // RESOLVER for Output Format Types
@@ -11164,7 +11164,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Output Format Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() outputformattype_: OutputFormatType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -11172,7 +11172,7 @@ export class OutputFormatTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -11182,17 +11182,17 @@ export class OutputFormatTypeResolver extends ResolverBase {
 export class OutputDeliveryType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
 //****************************************************************************
 // RESOLVER for Output Delivery Types
@@ -11246,7 +11246,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Output Delivery Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() outputdeliverytype_: OutputDeliveryType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -11254,7 +11254,7 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -11264,106 +11264,106 @@ export class OutputDeliveryTypeResolver extends ResolverBase {
 export class Report_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field() 
     @MaxLength(40)
     SharingScope: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ConversationID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ConversationDetailID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DataContextID?: number;
-      
+          
     @Field({nullable: true}) 
     Configuration?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     OutputTriggerTypeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     OutputFormatTypeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     OutputDeliveryTypeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     OutputEventID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     OutputFrequency?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputTargetEmail?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     OutputWorkflowID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Category?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Conversation?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     DataContext?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputTriggerType?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputFormatType?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputDeliveryType?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     OutputEvent?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     OutputWorkflow?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     ReportSnapshotsArray: mj_core_schema_server_object_types.ReportSnapshot_[]; // Link to ReportSnapshots
-
+    
 }
         
 //****************************************************************************
@@ -11373,53 +11373,53 @@ export class Report_ {
 export class CreateReportInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field()
     SharingScope: string;
-
+    
     @Field(() => Int, { nullable: true })
     ConversationID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ConversationDetailID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DataContextID: number;
-
+    
     @Field({ nullable: true })
     Configuration: string;
-
+    
     @Field(() => Int, { nullable: true })
     OutputTriggerTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     OutputFormatTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     OutputDeliveryTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     OutputEventID: number;
-
+    
     @Field({ nullable: true })
     OutputFrequency: string;
-
+    
     @Field({ nullable: true })
     OutputTargetEmail: string;
-
+    
     @Field(() => Int, { nullable: true })
     OutputWorkflowID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Reports   
@@ -11428,56 +11428,56 @@ export class CreateReportInput {
 export class UpdateReportInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field()
     SharingScope: string;
-
+    
     @Field(() => Int, { nullable: true })
     ConversationID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ConversationDetailID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DataContextID: number;
-
+    
     @Field({ nullable: true })
     Configuration: string;
-
+    
     @Field(() => Int, { nullable: true })
     OutputTriggerTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     OutputFormatTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     OutputDeliveryTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     OutputEventID: number;
-
+    
     @Field({ nullable: true })
     OutputFrequency: string;
-
+    
     @Field({ nullable: true })
     OutputTargetEmail: string;
-
+    
     @Field(() => Int, { nullable: true })
     OutputWorkflowID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Reports
 //****************************************************************************
@@ -11529,7 +11529,7 @@ export class ReportResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.ReportSnapshot_])
     async ReportSnapshotsArray(@Root() report_: Report_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Snapshots', userPayload);
@@ -11537,7 +11537,7 @@ export class ReportResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Report_)
     async CreateReport(
         @Arg('input', () => CreateReportInput) input: CreateReportInput,
@@ -11567,7 +11567,7 @@ export class ReportResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateReportInput) {
     }
-    
+        
     @Mutation(() => Report_)
     async UpdateReport(
         @Arg('input', () => UpdateReportInput) input: UpdateReportInput,
@@ -11598,7 +11598,7 @@ export class ReportResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateReportInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Report_)
     async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -11624,7 +11624,7 @@ export class ReportResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -11634,28 +11634,28 @@ export class ReportResolver extends ResolverBase {
 export class ReportSnapshot_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     ReportID: number;
-      
+          
     @Field() 
     ResultSet: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field(() => Int, {nullable: true}) 
     UserID?: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Report: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     User?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -11665,14 +11665,14 @@ export class ReportSnapshot_ {
 export class CreateReportSnapshotInput {
     @Field(() => Int)
     ReportID: number;
-
+    
     @Field()
     ResultSet: string;
-
+    
     @Field(() => Int, { nullable: true })
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Report Snapshots   
@@ -11681,17 +11681,17 @@ export class CreateReportSnapshotInput {
 export class UpdateReportSnapshotInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     ReportID: number;
-
+    
     @Field()
     ResultSet: string;
-
+    
     @Field(() => Int, { nullable: true })
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Report Snapshots
 //****************************************************************************
@@ -11743,7 +11743,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Report Snapshots', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => ReportSnapshot_)
     async CreateReportSnapshot(
         @Arg('input', () => CreateReportSnapshotInput) input: CreateReportSnapshotInput,
@@ -11773,7 +11773,7 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateReportSnapshotInput) {
     }
-    
+        
     @Mutation(() => ReportSnapshot_)
     async UpdateReportSnapshot(
         @Arg('input', () => UpdateReportSnapshotInput) input: UpdateReportSnapshotInput,
@@ -11804,7 +11804,7 @@ export class ReportSnapshotResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateReportSnapshotInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => ReportSnapshot_)
     async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -11830,7 +11830,7 @@ export class ReportSnapshotResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -11840,40 +11840,40 @@ export class ReportSnapshotResolver extends ResolverBase {
 export class ResourceType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(510)
     DisplayName: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Icon?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     EntityID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.WorkspaceItem_])
     WorkspaceItemsArray: mj_core_schema_server_object_types.WorkspaceItem_[]; // Link to WorkspaceItems
-
+    
 }
 //****************************************************************************
 // RESOLVER for Resource Types
@@ -11927,7 +11927,7 @@ export class ResourceTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Resource Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.WorkspaceItem_])
     async WorkspaceItemsArray(@Root() resourcetype_: ResourceType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
@@ -11935,7 +11935,7 @@ export class ResourceTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -11945,31 +11945,31 @@ export class ResourceTypeResolver extends ResolverBase {
 export class Tag_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field() 
     @MaxLength(510)
     DisplayName: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Tag_])
     TagsArray: mj_core_schema_server_object_types.Tag_[]; // Link to Tags
-
+    
     @Field(() => [mj_core_schema_server_object_types.TaggedItem_])
     TaggedItemsArray: mj_core_schema_server_object_types.TaggedItem_[]; // Link to TaggedItems
-
+    
 }
 //****************************************************************************
 // RESOLVER for Tags
@@ -12023,7 +12023,7 @@ export class TagResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Tag_])
     async TagsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tags', userPayload);
@@ -12031,7 +12031,7 @@ export class TagResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Tags', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.TaggedItem_])
     async TaggedItemsArray(@Root() tag_: Tag_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Tagged Items', userPayload);
@@ -12039,7 +12039,7 @@ export class TagResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -12049,25 +12049,25 @@ export class TagResolver extends ResolverBase {
 export class TaggedItem_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     TagID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Tag: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-    
+        
 }
 //****************************************************************************
 // RESOLVER for Tagged Items
@@ -12121,7 +12121,7 @@ export class TaggedItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Tagged Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
 }
 
 //****************************************************************************
@@ -12131,24 +12131,24 @@ export class TaggedItemResolver extends ResolverBase {
 export class Workspace_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.WorkspaceItem_])
     WorkspaceItemsArray: mj_core_schema_server_object_types.WorkspaceItem_[]; // Link to WorkspaceItems
-
+    
 }
         
 //****************************************************************************
@@ -12158,14 +12158,14 @@ export class Workspace_ {
 export class CreateWorkspaceInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Workspaces   
@@ -12174,17 +12174,17 @@ export class CreateWorkspaceInput {
 export class UpdateWorkspaceInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Workspaces
 //****************************************************************************
@@ -12237,7 +12237,7 @@ export class WorkspaceResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workspaces', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.WorkspaceItem_])
     async WorkspaceItemsArray(@Root() workspace_: Workspace_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Workspace Items', userPayload);
@@ -12245,7 +12245,7 @@ export class WorkspaceResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Workspace_)
     async CreateWorkspace(
         @Arg('input', () => CreateWorkspaceInput) input: CreateWorkspaceInput,
@@ -12275,7 +12275,7 @@ export class WorkspaceResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceInput) {
     }
-    
+        
     @Mutation(() => Workspace_)
     async UpdateWorkspace(
         @Arg('input', () => UpdateWorkspaceInput) input: UpdateWorkspaceInput,
@@ -12306,7 +12306,7 @@ export class WorkspaceResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkspaceInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Workspace_)
     async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -12332,7 +12332,7 @@ export class WorkspaceResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -12342,38 +12342,38 @@ export class WorkspaceResolver extends ResolverBase {
 export class WorkspaceItem_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     WorkSpaceID: number;
-      
+          
     @Field(() => Int) 
     ResourceTypeID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     ResourceRecordID?: string;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field({nullable: true}) 
     Configuration?: string;
-      
+          
     @Field() 
     @MaxLength(510)
     WorkSpace: string;
-      
+          
     @Field() 
     @MaxLength(510)
     ResourceType: string;
-    
+        
 }
         
 //****************************************************************************
@@ -12383,26 +12383,26 @@ export class WorkspaceItem_ {
 export class CreateWorkspaceItemInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     WorkSpaceID: number;
-
+    
     @Field(() => Int)
     ResourceTypeID: number;
-
+    
     @Field({ nullable: true })
     ResourceRecordID: string;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field({ nullable: true })
     Configuration: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Workspace Items   
@@ -12411,29 +12411,29 @@ export class CreateWorkspaceItemInput {
 export class UpdateWorkspaceItemInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     WorkSpaceID: number;
-
+    
     @Field(() => Int)
     ResourceTypeID: number;
-
+    
     @Field({ nullable: true })
     ResourceRecordID: string;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field({ nullable: true })
     Configuration: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Workspace Items
 //****************************************************************************
@@ -12486,7 +12486,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Workspace Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => WorkspaceItem_)
     async CreateWorkspaceItem(
         @Arg('input', () => CreateWorkspaceItemInput) input: CreateWorkspaceItemInput,
@@ -12516,7 +12516,7 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceItemInput) {
     }
-    
+        
     @Mutation(() => WorkspaceItem_)
     async UpdateWorkspaceItem(
         @Arg('input', () => UpdateWorkspaceItemInput) input: UpdateWorkspaceItemInput,
@@ -12547,7 +12547,7 @@ export class WorkspaceItemResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkspaceItemInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => WorkspaceItem_)
     async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -12573,7 +12573,7 @@ export class WorkspaceItemResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -12583,25 +12583,25 @@ export class WorkspaceItemResolver extends ResolverBase {
 export class Dataset_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.DatasetItem_])
     DatasetItemsArray: mj_core_schema_server_object_types.DatasetItem_[]; // Link to DatasetItems
-
+    
 }
 //****************************************************************************
 // RESOLVER for Datasets
@@ -12654,7 +12654,7 @@ export class DatasetResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Datasets', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.DatasetItem_])
     async DatasetItemsArray(@Root() dataset_: Dataset_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dataset Items', userPayload);
@@ -12662,7 +12662,7 @@ export class DatasetResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL));
         return result;
     }
-    
+        
 }
 
 //****************************************************************************
@@ -12672,43 +12672,43 @@ export class DatasetResolver extends ResolverBase {
 export class DatasetItem_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Code: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     DatasetName?: string;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field({nullable: true}) 
     WhereClause?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     DateFieldToCheck: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-    
+        
 }
 //****************************************************************************
 // RESOLVER for Dataset Items
@@ -12761,7 +12761,7 @@ export class DatasetItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Dataset Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
 }
 
 //****************************************************************************
@@ -12771,42 +12771,42 @@ export class DatasetItemResolver extends ResolverBase {
 export class ConversationDetail_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     ConversationID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalID?: string;
-      
+          
     @Field() 
     @MaxLength(40)
     Role: string;
-      
+          
     @Field() 
     Message: string;
-      
+          
     @Field({nullable: true}) 
     Error?: string;
-      
+          
     @Field(() => Boolean) 
     HiddenToUser: boolean;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Conversation?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
         
 //****************************************************************************
@@ -12816,23 +12816,23 @@ export class ConversationDetail_ {
 export class CreateConversationDetailInput {
     @Field(() => Int)
     ConversationID: number;
-
+    
     @Field({ nullable: true })
     ExternalID: string;
-
+    
     @Field()
     Role: string;
-
+    
     @Field()
     Message: string;
-
+    
     @Field({ nullable: true })
     Error: string;
-
+    
     @Field(() => Boolean)
     HiddenToUser: boolean;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Conversation Details   
@@ -12841,26 +12841,26 @@ export class CreateConversationDetailInput {
 export class UpdateConversationDetailInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     ConversationID: number;
-
+    
     @Field({ nullable: true })
     ExternalID: string;
-
+    
     @Field()
     Role: string;
-
+    
     @Field()
     Message: string;
-
+    
     @Field({ nullable: true })
     Error: string;
-
+    
     @Field(() => Boolean)
     HiddenToUser: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Conversation Details
 //****************************************************************************
@@ -12912,7 +12912,7 @@ export class ConversationDetailResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() conversationdetail_: ConversationDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -12920,7 +12920,7 @@ export class ConversationDetailResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => ConversationDetail_)
     async CreateConversationDetail(
         @Arg('input', () => CreateConversationDetailInput) input: CreateConversationDetailInput,
@@ -12950,7 +12950,7 @@ export class ConversationDetailResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateConversationDetailInput) {
     }
-    
+        
     @Mutation(() => ConversationDetail_)
     async UpdateConversationDetail(
         @Arg('input', () => UpdateConversationDetailInput) input: UpdateConversationDetailInput,
@@ -12981,7 +12981,7 @@ export class ConversationDetailResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateConversationDetailInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => ConversationDetail_)
     async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -13007,7 +13007,7 @@ export class ConversationDetailResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -13017,59 +13017,59 @@ export class ConversationDetailResolver extends ResolverBase {
 export class Conversation_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ExternalID?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Name?: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(100)
     Type: string;
-      
+          
     @Field(() => Boolean) 
     IsArchived: boolean;
-      
+          
     @Field(() => Int, {nullable: true}) 
     LinkedEntityID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     LinkedRecordID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     DataContextID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     LinkedEntity?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.ConversationDetail_])
     ConversationDetailsArray: mj_core_schema_server_object_types.ConversationDetail_[]; // Link to ConversationDetails
-
+    
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
         
 //****************************************************************************
@@ -13079,32 +13079,32 @@ export class Conversation_ {
 export class CreateConversationInput {
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     ExternalID: string;
-
+    
     @Field({ nullable: true })
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field()
     Type: string;
-
+    
     @Field(() => Boolean)
     IsArchived: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedRecordID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DataContextID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Conversations   
@@ -13113,35 +13113,35 @@ export class CreateConversationInput {
 export class UpdateConversationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     ExternalID: string;
-
+    
     @Field({ nullable: true })
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field()
     Type: string;
-
+    
     @Field(() => Boolean)
     IsArchived: boolean;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
-
+    
     @Field(() => Int, { nullable: true })
     LinkedRecordID: number;
-
+    
     @Field(() => Int, { nullable: true })
     DataContextID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Conversations
 //****************************************************************************
@@ -13193,7 +13193,7 @@ export class ConversationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Conversations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.ConversationDetail_])
     async ConversationDetailsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Conversation Details', userPayload);
@@ -13201,7 +13201,7 @@ export class ConversationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() conversation_: Conversation_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -13209,7 +13209,7 @@ export class ConversationResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Conversation_)
     async CreateConversation(
         @Arg('input', () => CreateConversationInput) input: CreateConversationInput,
@@ -13239,7 +13239,7 @@ export class ConversationResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateConversationInput) {
     }
-    
+        
     @Mutation(() => Conversation_)
     async UpdateConversation(
         @Arg('input', () => UpdateConversationInput) input: UpdateConversationInput,
@@ -13270,7 +13270,7 @@ export class ConversationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateConversationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => Conversation_)
     async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -13296,7 +13296,7 @@ export class ConversationResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -13306,45 +13306,45 @@ export class ConversationResolver extends ResolverBase {
 export class UserNotification_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Title?: string;
-      
+          
     @Field({nullable: true}) 
     Message?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ResourceTypeID?: number;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ResourceRecordID?: number;
-      
+          
     @Field({nullable: true}) 
     ResourceConfiguration?: string;
-      
+          
     @Field(() => Boolean) 
     Unread: boolean;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     ReadAt?: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
 }
         
 //****************************************************************************
@@ -13354,29 +13354,29 @@ export class UserNotification_ {
 export class CreateUserNotificationInput {
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field({ nullable: true })
     Message: string;
-
+    
     @Field(() => Int, { nullable: true })
     ResourceTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ResourceRecordID: number;
-
+    
     @Field({ nullable: true })
     ResourceConfiguration: string;
-
+    
     @Field(() => Boolean)
     Unread: boolean;
-
+    
     @Field({ nullable: true })
     ReadAt: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User Notifications   
@@ -13385,32 +13385,32 @@ export class CreateUserNotificationInput {
 export class UpdateUserNotificationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     Title: string;
-
+    
     @Field({ nullable: true })
     Message: string;
-
+    
     @Field(() => Int, { nullable: true })
     ResourceTypeID: number;
-
+    
     @Field(() => Int, { nullable: true })
     ResourceRecordID: number;
-
+    
     @Field({ nullable: true })
     ResourceConfiguration: string;
-
+    
     @Field(() => Boolean)
     Unread: boolean;
-
+    
     @Field({ nullable: true })
     ReadAt: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User Notifications
 //****************************************************************************
@@ -13462,7 +13462,7 @@ export class UserNotificationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User Notifications', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => UserNotification_)
     async CreateUserNotification(
         @Arg('input', () => CreateUserNotificationInput) input: CreateUserNotificationInput,
@@ -13492,7 +13492,7 @@ export class UserNotificationResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserNotificationInput) {
     }
-    
+        
     @Mutation(() => UserNotification_)
     async UpdateUserNotification(
         @Arg('input', () => UpdateUserNotificationInput) input: UpdateUserNotificationInput,
@@ -13523,7 +13523,7 @@ export class UserNotificationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserNotificationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => UserNotification_)
     async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -13549,7 +13549,7 @@ export class UserNotificationResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -13559,28 +13559,28 @@ export class UserNotificationResolver extends ResolverBase {
 export class SchemaInfo_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     SchemaName: string;
-      
+          
     @Field(() => Int) 
     EntityIDMin: number;
-      
+          
     @Field(() => Int) 
     EntityIDMax: number;
-      
+          
     @Field({nullable: true}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
 }
         
 //****************************************************************************
@@ -13590,17 +13590,17 @@ export class SchemaInfo_ {
 export class CreateSchemaInfoInput {
     @Field()
     SchemaName: string;
-
+    
     @Field(() => Int)
     EntityIDMin: number;
-
+    
     @Field(() => Int)
     EntityIDMax: number;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Schema Info   
@@ -13609,20 +13609,20 @@ export class CreateSchemaInfoInput {
 export class UpdateSchemaInfoInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     SchemaName: string;
-
+    
     @Field(() => Int)
     EntityIDMin: number;
-
+    
     @Field(() => Int)
     EntityIDMax: number;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Schema Info
 //****************************************************************************
@@ -13674,7 +13674,7 @@ export class SchemaInfoResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Schema Info', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => SchemaInfo_)
     async CreateSchemaInfo(
         @Arg('input', () => CreateSchemaInfoInput) input: CreateSchemaInfoInput,
@@ -13704,7 +13704,7 @@ export class SchemaInfoResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateSchemaInfoInput) {
     }
-    
+        
     @Mutation(() => SchemaInfo_)
     async UpdateSchemaInfo(
         @Arg('input', () => UpdateSchemaInfoInput) input: UpdateSchemaInfoInput,
@@ -13735,7 +13735,7 @@ export class SchemaInfoResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateSchemaInfoInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -13745,33 +13745,33 @@ export class SchemaInfoResolver extends ResolverBase {
 export class CompanyIntegrationRecordMap_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     CompanyIntegrationID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     ExternalSystemRecordID: string;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     EntityRecordID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-    
+        
 }
         
 //****************************************************************************
@@ -13781,17 +13781,17 @@ export class CompanyIntegrationRecordMap_ {
 export class CreateCompanyIntegrationRecordMapInput {
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     EntityRecordID: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Company Integration Record Maps   
@@ -13800,20 +13800,20 @@ export class CreateCompanyIntegrationRecordMapInput {
 export class UpdateCompanyIntegrationRecordMapInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     CompanyIntegrationID: number;
-
+    
     @Field()
     ExternalSystemRecordID: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     EntityRecordID: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Company Integration Record Maps
 //****************************************************************************
@@ -13865,7 +13865,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Company Integration Record Maps', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => CompanyIntegrationRecordMap_)
     async CreateCompanyIntegrationRecordMap(
         @Arg('input', () => CreateCompanyIntegrationRecordMapInput) input: CreateCompanyIntegrationRecordMapInput,
@@ -13895,7 +13895,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput) {
     }
-    
+        
     @Mutation(() => CompanyIntegrationRecordMap_)
     async UpdateCompanyIntegrationRecordMap(
         @Arg('input', () => UpdateCompanyIntegrationRecordMapInput) input: UpdateCompanyIntegrationRecordMapInput,
@@ -13926,7 +13926,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRecordMapInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -13936,61 +13936,61 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
 export class RecordMergeLog_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     SurvivingRecordID: string;
-      
+          
     @Field(() => Int) 
     InitiatedByUserID: number;
-      
+          
     @Field() 
     @MaxLength(20)
     ApprovalStatus: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ApprovedByUserID?: number;
-      
+          
     @Field() 
     @MaxLength(20)
     ProcessingStatus: string;
-      
+          
     @Field() 
     @MaxLength(8)
     ProcessingStartedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     ProcessingEndedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     ProcessingLog?: string;
-      
+          
     @Field({nullable: true}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     UpdatedAt?: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(200)
     InitiatedByUser: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
     RecordMergeDeletionLogsArray: mj_core_schema_server_object_types.RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
-
+    
 }
         
 //****************************************************************************
@@ -14000,35 +14000,35 @@ export class RecordMergeLog_ {
 export class CreateRecordMergeLogInput {
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     SurvivingRecordID: string;
-
+    
     @Field(() => Int)
     InitiatedByUserID: number;
-
+    
     @Field()
     ApprovalStatus: string;
-
+    
     @Field(() => Int, { nullable: true })
     ApprovedByUserID: number;
-
+    
     @Field()
     ProcessingStatus: string;
-
+    
     @Field()
     ProcessingStartedAt: Date;
-
+    
     @Field({ nullable: true })
     ProcessingEndedAt: Date;
-
+    
     @Field({ nullable: true })
     ProcessingLog: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Record Merge Logs   
@@ -14037,38 +14037,38 @@ export class CreateRecordMergeLogInput {
 export class UpdateRecordMergeLogInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     SurvivingRecordID: string;
-
+    
     @Field(() => Int)
     InitiatedByUserID: number;
-
+    
     @Field()
     ApprovalStatus: string;
-
+    
     @Field(() => Int, { nullable: true })
     ApprovedByUserID: number;
-
+    
     @Field()
     ProcessingStatus: string;
-
+    
     @Field()
     ProcessingStartedAt: Date;
-
+    
     @Field({ nullable: true })
     ProcessingEndedAt: Date;
-
+    
     @Field({ nullable: true })
     ProcessingLog: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Record Merge Logs
 //****************************************************************************
@@ -14120,7 +14120,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Merge Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
     async RecordMergeDeletionLogsArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
@@ -14128,7 +14128,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => RecordMergeLog_)
     async CreateRecordMergeLog(
         @Arg('input', () => CreateRecordMergeLogInput) input: CreateRecordMergeLogInput,
@@ -14158,7 +14158,7 @@ export class RecordMergeLogResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeLogInput) {
     }
-    
+        
     @Mutation(() => RecordMergeLog_)
     async UpdateRecordMergeLog(
         @Arg('input', () => UpdateRecordMergeLogInput) input: UpdateRecordMergeLogInput,
@@ -14189,7 +14189,7 @@ export class RecordMergeLogResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeLogInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -14199,29 +14199,29 @@ export class RecordMergeLogResolver extends ResolverBase {
 export class RecordMergeDeletionLog_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     RecordMergeLogID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     DeletedRecordID: string;
-      
+          
     @Field() 
     @MaxLength(20)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     ProcessingLog?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
 }
         
 //****************************************************************************
@@ -14231,17 +14231,17 @@ export class RecordMergeDeletionLog_ {
 export class CreateRecordMergeDeletionLogInput {
     @Field(() => Int)
     RecordMergeLogID: number;
-
+    
     @Field()
     DeletedRecordID: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     ProcessingLog: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Record Merge Deletion Logs   
@@ -14250,20 +14250,20 @@ export class CreateRecordMergeDeletionLogInput {
 export class UpdateRecordMergeDeletionLogInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     RecordMergeLogID: number;
-
+    
     @Field()
     DeletedRecordID: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     ProcessingLog: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Record Merge Deletion Logs
 //****************************************************************************
@@ -14315,7 +14315,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => RecordMergeDeletionLog_)
     async CreateRecordMergeDeletionLog(
         @Arg('input', () => CreateRecordMergeDeletionLogInput) input: CreateRecordMergeDeletionLogInput,
@@ -14345,7 +14345,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput) {
     }
-    
+        
     @Mutation(() => RecordMergeDeletionLog_)
     async UpdateRecordMergeDeletionLog(
         @Arg('input', () => UpdateRecordMergeDeletionLogInput) input: UpdateRecordMergeDeletionLogInput,
@@ -14376,7 +14376,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -14386,63 +14386,63 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
 export class QueryField_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     QueryID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     Sequence: number;
-      
+          
     @Field({description: 'The base type, not including parameters, in SQL. For example this field would be nvarchar or decimal, and wouldn\'t include type parameters. The SQLFullType field provides that information.'}) 
     @MaxLength(100)
     SQLBaseType: string;
-      
+          
     @Field({description: 'The full SQL type for the field, for example datetime or nvarchar(10) etc.'}) 
     @MaxLength(200)
     SQLFullType: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     SourceEntityID?: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceFieldName?: string;
-      
+          
     @Field(() => Boolean) 
     IsComputed: boolean;
-      
+          
     @Field({nullable: true}) 
     ComputationDescription?: string;
-      
+          
     @Field(() => Boolean) 
     IsSummary: boolean;
-      
+          
     @Field({nullable: true}) 
     SummaryDescription?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Query: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     SourceEntity?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -14452,41 +14452,41 @@ export class QueryField_ {
 export class CreateQueryFieldInput {
     @Field(() => Int)
     QueryID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field()
     SQLBaseType: string;
-
+    
     @Field()
     SQLFullType: string;
-
+    
     @Field(() => Int, { nullable: true })
     SourceEntityID: number;
-
+    
     @Field({ nullable: true })
     SourceFieldName: string;
-
+    
     @Field(() => Boolean)
     IsComputed: boolean;
-
+    
     @Field({ nullable: true })
     ComputationDescription: string;
-
+    
     @Field(() => Boolean)
     IsSummary: boolean;
-
+    
     @Field({ nullable: true })
     SummaryDescription: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Query Fields   
@@ -14495,44 +14495,44 @@ export class CreateQueryFieldInput {
 export class UpdateQueryFieldInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     QueryID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     Sequence: number;
-
+    
     @Field()
     SQLBaseType: string;
-
+    
     @Field()
     SQLFullType: string;
-
+    
     @Field(() => Int, { nullable: true })
     SourceEntityID: number;
-
+    
     @Field({ nullable: true })
     SourceFieldName: string;
-
+    
     @Field(() => Boolean)
     IsComputed: boolean;
-
+    
     @Field({ nullable: true })
     ComputationDescription: string;
-
+    
     @Field(() => Boolean)
     IsSummary: boolean;
-
+    
     @Field({ nullable: true })
     SummaryDescription: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Query Fields
 //****************************************************************************
@@ -14584,7 +14584,7 @@ export class QueryFieldResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => QueryField_)
     async CreateQueryField(
         @Arg('input', () => CreateQueryFieldInput) input: CreateQueryFieldInput,
@@ -14614,7 +14614,7 @@ export class QueryFieldResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueryFieldInput) {
     }
-    
+        
     @Mutation(() => QueryField_)
     async UpdateQueryField(
         @Arg('input', () => UpdateQueryFieldInput) input: UpdateQueryFieldInput,
@@ -14645,7 +14645,7 @@ export class QueryFieldResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryFieldInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -14655,42 +14655,42 @@ export class QueryFieldResolver extends ResolverBase {
 export class QueryCategory_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
     QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
-
+    
     @Field(() => [mj_core_schema_server_object_types.Query_])
     QueriesArray: mj_core_schema_server_object_types.Query_[]; // Link to Queries
-
+    
 }
         
 //****************************************************************************
@@ -14700,17 +14700,17 @@ export class QueryCategory_ {
 export class CreateQueryCategoryInput {
     @Field()
     Name: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Query Categories   
@@ -14719,20 +14719,20 @@ export class CreateQueryCategoryInput {
 export class UpdateQueryCategoryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Query Categories
 //****************************************************************************
@@ -14784,7 +14784,7 @@ export class QueryCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryCategory_])
     async QueryCategoriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Categories', userPayload);
@@ -14792,7 +14792,7 @@ export class QueryCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Query_])
     async QueriesArray(@Root() querycategory_: QueryCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Queries', userPayload);
@@ -14800,7 +14800,7 @@ export class QueryCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => QueryCategory_)
     async CreateQueryCategory(
         @Arg('input', () => CreateQueryCategoryInput) input: CreateQueryCategoryInput,
@@ -14830,7 +14830,7 @@ export class QueryCategoryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueryCategoryInput) {
     }
-    
+        
     @Mutation(() => QueryCategory_)
     async UpdateQueryCategory(
         @Arg('input', () => UpdateQueryCategoryInput) input: UpdateQueryCategoryInput,
@@ -14861,7 +14861,7 @@ export class QueryCategoryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => QueryCategory_)
     async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -14887,7 +14887,7 @@ export class QueryCategoryResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -14897,54 +14897,54 @@ export class QueryCategoryResolver extends ResolverBase {
 export class Query_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
-      
+          
     @Field({nullable: true}) 
     SQL?: string;
-      
+          
     @Field({nullable: true}) 
     OriginalSQL?: string;
-      
+          
     @Field({nullable: true}) 
     Feedback?: string;
-      
+          
     @Field() 
     @MaxLength(30)
     Status: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     QualityRank?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     Category?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.QueryField_])
     QueryFieldsArray: mj_core_schema_server_object_types.QueryField_[]; // Link to QueryFields
-
+    
     @Field(() => [mj_core_schema_server_object_types.QueryPermission_])
     QueryPermissionsArray: mj_core_schema_server_object_types.QueryPermission_[]; // Link to QueryPermissions
-
+    
     @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
     DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-
+    
 }
         
 //****************************************************************************
@@ -14954,29 +14954,29 @@ export class Query_ {
 export class CreateQueryInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field({ nullable: true })
     SQL: string;
-
+    
     @Field({ nullable: true })
     OriginalSQL: string;
-
+    
     @Field({ nullable: true })
     Feedback: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field(() => Int, { nullable: true })
     QualityRank: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Queries   
@@ -14985,32 +14985,32 @@ export class CreateQueryInput {
 export class UpdateQueryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field({ nullable: true })
     SQL: string;
-
+    
     @Field({ nullable: true })
     OriginalSQL: string;
-
+    
     @Field({ nullable: true })
     Feedback: string;
-
+    
     @Field()
     Status: string;
-
+    
     @Field(() => Int, { nullable: true })
     QualityRank: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Queries
 //****************************************************************************
@@ -15062,7 +15062,7 @@ export class QueryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Queries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryField_])
     async QueryFieldsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Fields', userPayload);
@@ -15070,7 +15070,7 @@ export class QueryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Query Fields', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.QueryPermission_])
     async QueryPermissionsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Query Permissions', userPayload);
@@ -15078,7 +15078,7 @@ export class QueryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() query_: Query_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
@@ -15086,7 +15086,7 @@ export class QueryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => Query_)
     async CreateQuery(
         @Arg('input', () => CreateQueryInput) input: CreateQueryInput,
@@ -15116,7 +15116,7 @@ export class QueryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueryInput) {
     }
-    
+        
     @Mutation(() => Query_)
     async UpdateQuery(
         @Arg('input', () => UpdateQueryInput) input: UpdateQueryInput,
@@ -15147,7 +15147,7 @@ export class QueryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -15157,22 +15157,22 @@ export class QueryResolver extends ResolverBase {
 export class QueryPermission_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     QueryID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     RoleName: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
 }
         
 //****************************************************************************
@@ -15182,11 +15182,11 @@ export class QueryPermission_ {
 export class CreateQueryPermissionInput {
     @Field(() => Int)
     QueryID: number;
-
+    
     @Field()
     RoleName: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Query Permissions   
@@ -15195,14 +15195,14 @@ export class CreateQueryPermissionInput {
 export class UpdateQueryPermissionInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     QueryID: number;
-
+    
     @Field()
     RoleName: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Query Permissions
 //****************************************************************************
@@ -15254,7 +15254,7 @@ export class QueryPermissionResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Query Permissions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => QueryPermission_)
     async CreateQueryPermission(
         @Arg('input', () => CreateQueryPermissionInput) input: CreateQueryPermissionInput,
@@ -15284,7 +15284,7 @@ export class QueryPermissionResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateQueryPermissionInput) {
     }
-    
+        
     @Mutation(() => QueryPermission_)
     async UpdateQueryPermission(
         @Arg('input', () => UpdateQueryPermissionInput) input: UpdateQueryPermissionInput,
@@ -15315,7 +15315,7 @@ export class QueryPermissionResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -15325,36 +15325,36 @@ export class QueryPermissionResolver extends ResolverBase {
 export class VectorIndex_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     VectorDatabaseID: number;
-      
+          
     @Field(() => Int) 
     EmbeddingModelID: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     VectorDatabase: string;
-      
+          
     @Field() 
     @MaxLength(100)
     EmbeddingModel: string;
-    
+        
 }
         
 //****************************************************************************
@@ -15364,17 +15364,17 @@ export class VectorIndex_ {
 export class CreateVectorIndexInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     VectorDatabaseID: number;
-
+    
     @Field(() => Int)
     EmbeddingModelID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Vector Indexes   
@@ -15383,20 +15383,20 @@ export class CreateVectorIndexInput {
 export class UpdateVectorIndexInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     VectorDatabaseID: number;
-
+    
     @Field(() => Int)
     EmbeddingModelID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Vector Indexes
 //****************************************************************************
@@ -15448,7 +15448,7 @@ export class VectorIndexResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => VectorIndex_)
     async CreateVectorIndex(
         @Arg('input', () => CreateVectorIndexInput) input: CreateVectorIndexInput,
@@ -15478,7 +15478,7 @@ export class VectorIndexResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateVectorIndexInput) {
     }
-    
+        
     @Mutation(() => VectorIndex_)
     async UpdateVectorIndex(
         @Arg('input', () => UpdateVectorIndexInput) input: UpdateVectorIndexInput,
@@ -15509,7 +15509,7 @@ export class VectorIndexResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorIndexInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -15519,25 +15519,25 @@ export class VectorIndexResolver extends ResolverBase {
 export class EntityDocumentType_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
     EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
-
+    
 }
         
 //****************************************************************************
@@ -15547,11 +15547,11 @@ export class EntityDocumentType_ {
 export class CreateEntityDocumentTypeInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Document Types   
@@ -15560,14 +15560,14 @@ export class CreateEntityDocumentTypeInput {
 export class UpdateEntityDocumentTypeInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Document Types
 //****************************************************************************
@@ -15619,7 +15619,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Document Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
     async EntityDocumentsArray(@Root() entitydocumenttype_: EntityDocumentType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Documents', userPayload);
@@ -15627,7 +15627,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => EntityDocumentType_)
     async CreateEntityDocumentType(
         @Arg('input', () => CreateEntityDocumentTypeInput) input: CreateEntityDocumentTypeInput,
@@ -15657,7 +15657,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput) {
     }
-    
+        
     @Mutation(() => EntityDocumentType_)
     async UpdateEntityDocumentType(
         @Arg('input', () => UpdateEntityDocumentTypeInput) input: UpdateEntityDocumentTypeInput,
@@ -15688,7 +15688,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -15698,34 +15698,34 @@ export class EntityDocumentTypeResolver extends ResolverBase {
 export class EntityDocumentRun_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityDocumentID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     StartedAt?: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     EndedAt?: Date;
-      
+          
     @Field({description: 'Can be Pending, In Progress, Completed, or Failed'}) 
     @MaxLength(30)
     Status: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(500)
     EntityDocument: string;
-    
+        
 }
         
 //****************************************************************************
@@ -15735,17 +15735,17 @@ export class EntityDocumentRun_ {
 export class CreateEntityDocumentRunInput {
     @Field(() => Int)
     EntityDocumentID: number;
-
+    
     @Field({ nullable: true })
     StartedAt: Date;
-
+    
     @Field({ nullable: true })
     EndedAt: Date;
-
+    
     @Field()
     Status: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Document Runs   
@@ -15754,20 +15754,20 @@ export class CreateEntityDocumentRunInput {
 export class UpdateEntityDocumentRunInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EntityDocumentID: number;
-
+    
     @Field({ nullable: true })
     StartedAt: Date;
-
+    
     @Field({ nullable: true })
     EndedAt: Date;
-
+    
     @Field()
     Status: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Document Runs
 //****************************************************************************
@@ -15819,7 +15819,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => EntityDocumentRun_)
     async CreateEntityDocumentRun(
         @Arg('input', () => CreateEntityDocumentRunInput) input: CreateEntityDocumentRunInput,
@@ -15849,7 +15849,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput) {
     }
-    
+        
     @Mutation(() => EntityDocumentRun_)
     async UpdateEntityDocumentRun(
         @Arg('input', () => UpdateEntityDocumentRunInput) input: UpdateEntityDocumentRunInput,
@@ -15880,7 +15880,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -15890,33 +15890,33 @@ export class EntityDocumentRunResolver extends ResolverBase {
 export class VectorDatabase_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     DefaultURL?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     ClassKey?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
     VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
-
+    
 }
         
 //****************************************************************************
@@ -15926,17 +15926,17 @@ export class VectorDatabase_ {
 export class CreateVectorDatabaseInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     DefaultURL: string;
-
+    
     @Field({ nullable: true })
     ClassKey: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Vector Databases   
@@ -15945,20 +15945,20 @@ export class CreateVectorDatabaseInput {
 export class UpdateVectorDatabaseInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     DefaultURL: string;
-
+    
     @Field({ nullable: true })
     ClassKey: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Vector Databases
 //****************************************************************************
@@ -16010,7 +16010,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Vector Databases', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.VectorIndex_])
     async VectorIndexesArray(@Root() vectordatabase_: VectorDatabase_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
@@ -16018,7 +16018,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => VectorDatabase_)
     async CreateVectorDatabase(
         @Arg('input', () => CreateVectorDatabaseInput) input: CreateVectorDatabaseInput,
@@ -16048,7 +16048,7 @@ export class VectorDatabaseResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateVectorDatabaseInput) {
     }
-    
+        
     @Mutation(() => VectorDatabase_)
     async UpdateVectorDatabase(
         @Arg('input', () => UpdateVectorDatabaseInput) input: UpdateVectorDatabaseInput,
@@ -16079,7 +16079,7 @@ export class VectorDatabaseResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -16089,39 +16089,39 @@ export class VectorDatabaseResolver extends ResolverBase {
 export class EntityRecordDocument_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field({nullable: true}) 
     DocumentText?: string;
-      
+          
     @Field(() => Int) 
     VectorIndexID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     VectorID?: string;
-      
+          
     @Field({nullable: true}) 
     VectorJSON?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     EntityRecordUpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
 }
         
 //****************************************************************************
@@ -16131,26 +16131,26 @@ export class EntityRecordDocument_ {
 export class CreateEntityRecordDocumentInput {
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field({ nullable: true })
     DocumentText: string;
-
+    
     @Field(() => Int)
     VectorIndexID: number;
-
+    
     @Field({ nullable: true })
     VectorID: string;
-
+    
     @Field({ nullable: true })
     VectorJSON: string;
-
+    
     @Field()
     EntityRecordUpdatedAt: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Record Documents   
@@ -16159,29 +16159,29 @@ export class CreateEntityRecordDocumentInput {
 export class UpdateEntityRecordDocumentInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-
+    
     @Field({ nullable: true })
     DocumentText: string;
-
+    
     @Field(() => Int)
     VectorIndexID: number;
-
+    
     @Field({ nullable: true })
     VectorID: string;
-
+    
     @Field({ nullable: true })
     VectorJSON: string;
-
+    
     @Field()
     EntityRecordUpdatedAt: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Record Documents
 //****************************************************************************
@@ -16233,7 +16233,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Record Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => EntityRecordDocument_)
     async CreateEntityRecordDocument(
         @Arg('input', () => CreateEntityRecordDocumentInput) input: CreateEntityRecordDocumentInput,
@@ -16263,7 +16263,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput) {
     }
-    
+        
     @Mutation(() => EntityRecordDocument_)
     async UpdateEntityRecordDocument(
         @Arg('input', () => UpdateEntityRecordDocumentInput) input: UpdateEntityRecordDocumentInput,
@@ -16294,7 +16294,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -16304,43 +16304,43 @@ export class EntityRecordDocumentResolver extends ResolverBase {
 export class EntityDocument_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(500)
     Name: string;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int) 
     TypeID: number;
-      
+          
     @Field() 
     @MaxLength(30)
     Status: string;
-      
+          
     @Field({nullable: true}) 
     Template?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-      
+          
     @Field() 
     @MaxLength(200)
     Type: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
     EntityDocumentRunsArray: mj_core_schema_server_object_types.EntityDocumentRun_[]; // Link to EntityDocumentRuns
-
+    
 }
         
 //****************************************************************************
@@ -16350,20 +16350,20 @@ export class EntityDocument_ {
 export class CreateEntityDocumentInput {
     @Field()
     Name: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     TypeID: number;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     Template: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Entity Documents   
@@ -16372,23 +16372,23 @@ export class CreateEntityDocumentInput {
 export class UpdateEntityDocumentInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     TypeID: number;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     Template: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Entity Documents
 //****************************************************************************
@@ -16440,7 +16440,7 @@ export class EntityDocumentResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
     async EntityDocumentRunsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
@@ -16448,7 +16448,7 @@ export class EntityDocumentResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => EntityDocument_)
     async CreateEntityDocument(
         @Arg('input', () => CreateEntityDocumentInput) input: CreateEntityDocumentInput,
@@ -16478,7 +16478,7 @@ export class EntityDocumentResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentInput) {
     }
-    
+        
     @Mutation(() => EntityDocument_)
     async UpdateEntityDocument(
         @Arg('input', () => UpdateEntityDocumentInput) input: UpdateEntityDocumentInput,
@@ -16509,7 +16509,7 @@ export class EntityDocumentResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -16519,61 +16519,61 @@ export class EntityDocumentResolver extends ResolverBase {
 export class DataContextItem_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int, {description: 'Foreign key to the DataContext table'}) 
     DataContextID: number;
-      
+          
     @Field({description: 'The type of the item, either "view", "query", "full_entity", "single_record", or "sql"'}) 
     @MaxLength(100)
     Type: string;
-      
+          
     @Field(() => Int, {nullable: true, description: 'Only used if Type=\'view\''}) 
     ViewID?: number;
-      
+          
     @Field(() => Int, {nullable: true, description: 'Only used if Type=\'query\''}) 
     QueryID?: number;
-      
+          
     @Field(() => Int, {nullable: true, description: 'Used if type=\'full_entity\' or type=\'single_record\''}) 
     EntityID?: number;
-      
+          
     @Field({nullable: true, description: 'The Primary Key value for the record, only used when Type=\'single_record\''}) 
     @MaxLength(510)
     RecordID?: string;
-      
+          
     @Field({nullable: true, description: 'Only used when Type=sql'}) 
     SQL?: string;
-      
+          
     @Field({nullable: true, description: 'Optionally used to cache results of an item. This can be used for performance optimization, and also for having snapshots of data for historical comparisons.'}) 
     DataJSON?: string;
-      
+          
     @Field({nullable: true, description: 'If DataJSON is populated, this field will show the date the the data was captured'}) 
     @MaxLength(8)
     LastRefreshedAt?: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(510)
     DataContext: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     View?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Query?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Entity?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -16583,32 +16583,32 @@ export class DataContextItem_ {
 export class CreateDataContextItemInput {
     @Field(() => Int)
     DataContextID: number;
-
+    
     @Field()
     Type: string;
-
+    
     @Field(() => Int, { nullable: true })
     ViewID: number;
-
+    
     @Field(() => Int, { nullable: true })
     QueryID: number;
-
+    
     @Field(() => Int, { nullable: true })
     EntityID: number;
-
+    
     @Field({ nullable: true })
     RecordID: string;
-
+    
     @Field({ nullable: true })
     SQL: string;
-
+    
     @Field({ nullable: true })
     DataJSON: string;
-
+    
     @Field({ nullable: true })
     LastRefreshedAt: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Data Context Items   
@@ -16617,35 +16617,35 @@ export class CreateDataContextItemInput {
 export class UpdateDataContextItemInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     DataContextID: number;
-
+    
     @Field()
     Type: string;
-
+    
     @Field(() => Int, { nullable: true })
     ViewID: number;
-
+    
     @Field(() => Int, { nullable: true })
     QueryID: number;
-
+    
     @Field(() => Int, { nullable: true })
     EntityID: number;
-
+    
     @Field({ nullable: true })
     RecordID: string;
-
+    
     @Field({ nullable: true })
     SQL: string;
-
+    
     @Field({ nullable: true })
     DataJSON: string;
-
+    
     @Field({ nullable: true })
     LastRefreshedAt: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Data Context Items
 //****************************************************************************
@@ -16697,7 +16697,7 @@ export class DataContextItemResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => DataContextItem_)
     async CreateDataContextItem(
         @Arg('input', () => CreateDataContextItemInput) input: CreateDataContextItemInput,
@@ -16727,7 +16727,7 @@ export class DataContextItemResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDataContextItemInput) {
     }
-    
+        
     @Mutation(() => DataContextItem_)
     async UpdateDataContextItem(
         @Arg('input', () => UpdateDataContextItemInput) input: UpdateDataContextItemInput,
@@ -16758,7 +16758,7 @@ export class DataContextItemResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextItemInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -16768,39 +16768,39 @@ export class DataContextItemResolver extends ResolverBase {
 export class DataContext_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(8)
     LastRefreshedAt?: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.DataContextItem_])
     DataContextItemsArray: mj_core_schema_server_object_types.DataContextItem_[]; // Link to DataContextItems
-
+    
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
         
 //****************************************************************************
@@ -16810,17 +16810,17 @@ export class DataContext_ {
 export class CreateDataContextInput {
     @Field()
     Name: string;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     LastRefreshedAt: Date;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Data Contexts   
@@ -16829,20 +16829,20 @@ export class CreateDataContextInput {
 export class UpdateDataContextInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field(() => Int)
     UserID: number;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field({ nullable: true })
     LastRefreshedAt: Date;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Data Contexts
 //****************************************************************************
@@ -16894,7 +16894,7 @@ export class DataContextResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Data Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.DataContextItem_])
     async DataContextItemsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Data Context Items', userPayload);
@@ -16902,7 +16902,7 @@ export class DataContextResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Data Context Items', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() datacontext_: DataContext_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -16910,7 +16910,7 @@ export class DataContextResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => DataContext_)
     async CreateDataContext(
         @Arg('input', () => CreateDataContextInput) input: CreateDataContextInput,
@@ -16940,7 +16940,7 @@ export class DataContextResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDataContextInput) {
     }
-    
+        
     @Mutation(() => DataContext_)
     async UpdateDataContext(
         @Arg('input', () => UpdateDataContextInput) input: UpdateDataContextInput,
@@ -16971,7 +16971,7 @@ export class DataContextResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -16981,45 +16981,45 @@ export class DataContextResolver extends ResolverBase {
 export class UserViewCategory_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
     UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
-
+    
     @Field(() => [mj_core_schema_server_object_types.UserView_])
     UserViewsArray: mj_core_schema_server_object_types.UserView_[]; // Link to UserViews
-
+    
 }
         
 //****************************************************************************
@@ -17029,20 +17029,20 @@ export class UserViewCategory_ {
 export class CreateUserViewCategoryInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for User View Categories   
@@ -17051,23 +17051,23 @@ export class CreateUserViewCategoryInput {
 export class UpdateUserViewCategoryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for User View Categories
 //****************************************************************************
@@ -17119,7 +17119,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.UserViewCategory_])
     async UserViewCategoriesArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User View Categories', userPayload);
@@ -17127,7 +17127,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.UserView_])
     async UserViewsArray(@Root() userviewcategory_: UserViewCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('User Views', userPayload);
@@ -17135,7 +17135,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User Views', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => UserViewCategory_)
     async CreateUserViewCategory(
         @Arg('input', () => CreateUserViewCategoryInput) input: CreateUserViewCategoryInput,
@@ -17165,7 +17165,7 @@ export class UserViewCategoryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateUserViewCategoryInput) {
     }
-    
+        
     @Mutation(() => UserViewCategory_)
     async UpdateUserViewCategory(
         @Arg('input', () => UpdateUserViewCategoryInput) input: UpdateUserViewCategoryInput,
@@ -17196,7 +17196,7 @@ export class UserViewCategoryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => UserViewCategory_)
     async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -17222,7 +17222,7 @@ export class UserViewCategoryResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -17232,42 +17232,42 @@ export class UserViewCategoryResolver extends ResolverBase {
 export class DashboardCategory_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.Dashboard_])
     DashboardsArray: mj_core_schema_server_object_types.Dashboard_[]; // Link to Dashboards
-
+    
     @Field(() => [mj_core_schema_server_object_types.DashboardCategory_])
     DashboardCategoriesArray: mj_core_schema_server_object_types.DashboardCategory_[]; // Link to DashboardCategories
-
+    
 }
         
 //****************************************************************************
@@ -17277,17 +17277,17 @@ export class DashboardCategory_ {
 export class CreateDashboardCategoryInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Dashboard Categories   
@@ -17296,20 +17296,20 @@ export class CreateDashboardCategoryInput {
 export class UpdateDashboardCategoryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Dashboard Categories
 //****************************************************************************
@@ -17361,7 +17361,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.Dashboard_])
     async DashboardsArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboards', userPayload);
@@ -17369,7 +17369,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.DashboardCategory_])
     async DashboardCategoriesArray(@Root() dashboardcategory_: DashboardCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Dashboard Categories', userPayload);
@@ -17377,7 +17377,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Dashboard Categories', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => DashboardCategory_)
     async CreateDashboardCategory(
         @Arg('input', () => CreateDashboardCategoryInput) input: CreateDashboardCategoryInput,
@@ -17407,7 +17407,7 @@ export class DashboardCategoryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateDashboardCategoryInput) {
     }
-    
+        
     @Mutation(() => DashboardCategory_)
     async UpdateDashboardCategory(
         @Arg('input', () => UpdateDashboardCategoryInput) input: UpdateDashboardCategoryInput,
@@ -17438,7 +17438,7 @@ export class DashboardCategoryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => DashboardCategory_)
     async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -17464,7 +17464,7 @@ export class DashboardCategoryResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -17474,42 +17474,42 @@ export class DashboardCategoryResolver extends ResolverBase {
 export class ReportCategory_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(200)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field(() => Int) 
     UserID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     User: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.ReportCategory_])
     ReportCategoriesArray: mj_core_schema_server_object_types.ReportCategory_[]; // Link to ReportCategories
-
+    
     @Field(() => [mj_core_schema_server_object_types.Report_])
     ReportsArray: mj_core_schema_server_object_types.Report_[]; // Link to Reports
-
+    
 }
         
 //****************************************************************************
@@ -17519,17 +17519,17 @@ export class ReportCategory_ {
 export class CreateReportCategoryInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Report Categories   
@@ -17538,20 +17538,20 @@ export class CreateReportCategoryInput {
 export class UpdateReportCategoryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-
+    
     @Field(() => Int)
     UserID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Report Categories
 //****************************************************************************
@@ -17603,7 +17603,7 @@ export class ReportCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.ReportCategory_])
     async ReportCategoriesArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Report Categories', userPayload);
@@ -17611,7 +17611,7 @@ export class ReportCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Report Categories', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.Report_])
     async ReportsArray(@Root() reportcategory_: ReportCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Reports', userPayload);
@@ -17619,7 +17619,7 @@ export class ReportCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Reports', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => ReportCategory_)
     async CreateReportCategory(
         @Arg('input', () => CreateReportCategoryInput) input: CreateReportCategoryInput,
@@ -17649,7 +17649,7 @@ export class ReportCategoryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateReportCategoryInput) {
     }
-    
+        
     @Mutation(() => ReportCategory_)
     async UpdateReportCategory(
         @Arg('input', () => UpdateReportCategoryInput) input: UpdateReportCategoryInput,
@@ -17680,7 +17680,7 @@ export class ReportCategoryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateReportCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => ReportCategory_)
     async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -17706,7 +17706,7 @@ export class ReportCategoryResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -17716,39 +17716,39 @@ export class ReportCategoryResolver extends ResolverBase {
 export class FileStorageProvider_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(100)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field() 
     @MaxLength(200)
     ServerDriverKey: string;
-      
+          
     @Field() 
     @MaxLength(200)
     ClientDriverKey: string;
-      
+          
     @Field(() => Int) 
     Priority: number;
-      
+          
     @Field(() => Boolean) 
     IsActive: boolean;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.File_])
     FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
-
+    
 }
         
 //****************************************************************************
@@ -17758,23 +17758,23 @@ export class FileStorageProvider_ {
 export class CreateFileStorageProviderInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field()
     ServerDriverKey: string;
-
+    
     @Field()
     ClientDriverKey: string;
-
+    
     @Field(() => Int)
     Priority: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for File Storage Providers   
@@ -17783,26 +17783,26 @@ export class CreateFileStorageProviderInput {
 export class UpdateFileStorageProviderInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field()
     ServerDriverKey: string;
-
+    
     @Field()
     ClientDriverKey: string;
-
+    
     @Field(() => Int)
     Priority: number;
-
+    
     @Field(() => Boolean)
     IsActive: boolean;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for File Storage Providers
 //****************************************************************************
@@ -17854,7 +17854,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('File Storage Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.File_])
     async FilesArray(@Root() filestorageprovider_: FileStorageProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Files', userPayload);
@@ -17862,7 +17862,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => FileStorageProvider_)
     async CreateFileStorageProvider(
         @Arg('input', () => CreateFileStorageProviderInput) input: CreateFileStorageProviderInput,
@@ -17892,7 +17892,7 @@ export class FileStorageProviderResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateFileStorageProviderInput) {
     }
-    
+        
     @Mutation(() => FileStorageProvider_)
     async UpdateFileStorageProvider(
         @Arg('input', () => UpdateFileStorageProviderInput) input: UpdateFileStorageProviderInput,
@@ -17923,7 +17923,7 @@ export class FileStorageProviderResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -17933,51 +17933,51 @@ export class FileStorageProviderResolver extends ResolverBase {
 export class File_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(1000)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int) 
     ProviderID: number;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(100)
     ContentType?: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(1000)
     ProviderKey?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
-      
+          
     @Field({description: 'Pending, Uploading, Uploaded, Deleting, Deleted'}) 
     @MaxLength(40)
     Status: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(100)
     Provider: string;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
     FileEntityRecordLinksArray: mj_core_schema_server_object_types.FileEntityRecordLink_[]; // Link to FileEntityRecordLinks
-
+    
 }
         
 //****************************************************************************
@@ -17987,26 +17987,26 @@ export class File_ {
 export class CreateFileInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     ProviderID: number;
-
+    
     @Field({ nullable: true })
     ContentType: string;
-
+    
     @Field({ nullable: true })
     ProviderKey: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field()
     Status: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Files   
@@ -18015,29 +18015,29 @@ export class CreateFileInput {
 export class UpdateFileInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int)
     ProviderID: number;
-
+    
     @Field({ nullable: true })
     ContentType: string;
-
+    
     @Field({ nullable: true })
     ProviderKey: string;
-
+    
     @Field(() => Int, { nullable: true })
     CategoryID: number;
-
+    
     @Field()
     Status: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Files
 //****************************************************************************
@@ -18089,7 +18089,7 @@ export class FileResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Files', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.FileEntityRecordLink_])
     async FileEntityRecordLinksArray(@Root() file_: File_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Entity Record Links', userPayload);
@@ -18097,7 +18097,7 @@ export class FileResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => File_)
     async CreateFile(
         @Arg('input', () => CreateFileInput) input: CreateFileInput,
@@ -18127,7 +18127,7 @@ export class FileResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateFileInput) {
     }
-    
+        
     @Mutation(() => File_)
     async UpdateFile(
         @Arg('input', () => UpdateFileInput) input: UpdateFileInput,
@@ -18158,7 +18158,7 @@ export class FileResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => File_)
     async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -18184,7 +18184,7 @@ export class FileResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -18194,35 +18194,35 @@ export class FileResolver extends ResolverBase {
 export class FileCategory_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     Name: string;
-      
+          
     @Field({nullable: true}) 
     Description?: string;
-      
+          
     @Field(() => Int, {nullable: true}) 
     ParentID?: number;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
-    
+        
     @Field(() => [mj_core_schema_server_object_types.File_])
     FilesArray: mj_core_schema_server_object_types.File_[]; // Link to Files
-
+    
     @Field(() => [mj_core_schema_server_object_types.FileCategory_])
     FileCategoriesArray: mj_core_schema_server_object_types.FileCategory_[]; // Link to FileCategories
-
+    
 }
         
 //****************************************************************************
@@ -18232,14 +18232,14 @@ export class FileCategory_ {
 export class CreateFileCategoryInput {
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for File Categories   
@@ -18248,17 +18248,17 @@ export class CreateFileCategoryInput {
 export class UpdateFileCategoryInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field()
     Name: string;
-
+    
     @Field({ nullable: true })
     Description: string;
-
+    
     @Field(() => Int, { nullable: true })
     ParentID: number;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for File Categories
 //****************************************************************************
@@ -18310,7 +18310,7 @@ export class FileCategoryResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-  
+      
     @FieldResolver(() => [mj_core_schema_server_object_types.File_])
     async FilesArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Files', userPayload);
@@ -18318,7 +18318,7 @@ export class FileCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Files', await dataSource.query(sSQL));
         return result;
     }
-      
+          
     @FieldResolver(() => [mj_core_schema_server_object_types.FileCategory_])
     async FileCategoriesArray(@Root() filecategory_: FileCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('File Categories', userPayload);
@@ -18326,7 +18326,7 @@ export class FileCategoryResolver extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('File Categories', await dataSource.query(sSQL));
         return result;
     }
-    
+        
     @Mutation(() => FileCategory_)
     async CreateFileCategory(
         @Arg('input', () => CreateFileCategoryInput) input: CreateFileCategoryInput,
@@ -18356,7 +18356,7 @@ export class FileCategoryResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateFileCategoryInput) {
     }
-    
+        
     @Mutation(() => FileCategory_)
     async UpdateFileCategory(
         @Arg('input', () => UpdateFileCategoryInput) input: UpdateFileCategoryInput,
@@ -18387,7 +18387,7 @@ export class FileCategoryResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileCategoryInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
     @Mutation(() => FileCategory_)
     async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
@@ -18413,7 +18413,7 @@ export class FileCategoryResolver extends ResolverBase {
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -18423,33 +18423,33 @@ export class FileCategoryResolver extends ResolverBase {
 export class FileEntityRecordLink_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     FileID: number;
-      
+          
     @Field(() => Int) 
     EntityID: number;
-      
+          
     @Field() 
     @MaxLength(510)
     RecordID: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(1000)
     File: string;
-      
+          
     @Field() 
     @MaxLength(510)
     Entity: string;
-    
+        
 }
         
 //****************************************************************************
@@ -18459,14 +18459,14 @@ export class FileEntityRecordLink_ {
 export class CreateFileEntityRecordLinkInput {
     @Field(() => Int)
     FileID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for File Entity Record Links   
@@ -18475,17 +18475,17 @@ export class CreateFileEntityRecordLinkInput {
 export class UpdateFileEntityRecordLinkInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     FileID: number;
-
+    
     @Field(() => Int)
     EntityID: number;
-
+    
     @Field()
     RecordID: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for File Entity Record Links
 //****************************************************************************
@@ -18537,7 +18537,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('File Entity Record Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => FileEntityRecordLink_)
     async CreateFileEntityRecordLink(
         @Arg('input', () => CreateFileEntityRecordLinkInput) input: CreateFileEntityRecordLinkInput,
@@ -18567,7 +18567,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput) {
     }
-    
+        
     @Mutation(() => FileEntityRecordLink_)
     async UpdateFileEntityRecordLink(
         @Arg('input', () => UpdateFileEntityRecordLinkInput) input: UpdateFileEntityRecordLinkInput,
@@ -18598,7 +18598,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }
 
 //****************************************************************************
@@ -18608,46 +18608,46 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
 export class VersionInstallation_ {  
     @Field(() => Int) 
     ID: number;
-      
+          
     @Field(() => Int) 
     MajorVersion: number;
-      
+          
     @Field(() => Int) 
     MinorVersion: number;
-      
+          
     @Field(() => Int) 
     PatchVersion: number;
-      
+          
     @Field({nullable: true, description: 'What type of installation was applied'}) 
     @MaxLength(40)
     Type?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     InstalledAt: Date;
-      
+          
     @Field({description: 'Pending, Complete, Failed'}) 
     @MaxLength(40)
     Status: string;
-      
+          
     @Field({nullable: true, description: 'Any logging that was saved from the installation process'}) 
     InstallLog?: string;
-      
+          
     @Field({nullable: true, description: 'Optional, comments the administrator wants to save for each installed version'}) 
     Comments?: string;
-      
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
-      
+          
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-      
+          
     @Field({nullable: true}) 
     @MaxLength(604)
     CompleteVersion?: string;
-    
+        
 }
         
 //****************************************************************************
@@ -18657,29 +18657,29 @@ export class VersionInstallation_ {
 export class CreateVersionInstallationInput {
     @Field(() => Int)
     MajorVersion: number;
-
+    
     @Field(() => Int)
     MinorVersion: number;
-
+    
     @Field(() => Int)
     PatchVersion: number;
-
+    
     @Field({ nullable: true })
     Type: string;
-
+    
     @Field()
     InstalledAt: Date;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     InstallLog: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
         
 //****************************************************************************
 // INPUT TYPE for Version Installations   
@@ -18688,32 +18688,32 @@ export class CreateVersionInstallationInput {
 export class UpdateVersionInstallationInput {
     @Field(() => Int)
     ID: number;
-
+    
     @Field(() => Int)
     MajorVersion: number;
-
+    
     @Field(() => Int)
     MinorVersion: number;
-
+    
     @Field(() => Int)
     PatchVersion: number;
-
+    
     @Field({ nullable: true })
     Type: string;
-
+    
     @Field()
     InstalledAt: Date;
-
+    
     @Field()
     Status: string;
-
+    
     @Field({ nullable: true })
     InstallLog: string;
-
+    
     @Field({ nullable: true })
     Comments: string;
-}
-
+    }
+    
 //****************************************************************************
 // RESOLVER for Version Installations
 //****************************************************************************
@@ -18765,7 +18765,7 @@ export class VersionInstallationResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Version Installations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-
+    
     @Mutation(() => VersionInstallation_)
     async CreateVersionInstallation(
         @Arg('input', () => CreateVersionInstallationInput) input: CreateVersionInstallationInput,
@@ -18795,7 +18795,7 @@ export class VersionInstallationResolver extends ResolverBase {
     }
     protected async AfterCreate(dataSource: DataSource, input: CreateVersionInstallationInput) {
     }
-    
+        
     @Mutation(() => VersionInstallation_)
     async UpdateVersionInstallation(
         @Arg('input', () => UpdateVersionInstallationInput) input: UpdateVersionInstallationInput,
@@ -18826,5 +18826,5 @@ export class VersionInstallationResolver extends ResolverBase {
     protected async AfterUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput) {
         const i = input, d = dataSource; // prevent error
     }
-
+    
 }

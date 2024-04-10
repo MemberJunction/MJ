@@ -153,3 +153,4 @@ export class QueryFieldDetailsComponent extends BaseFormSectionComponent {
 export function LoadQueryFieldDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

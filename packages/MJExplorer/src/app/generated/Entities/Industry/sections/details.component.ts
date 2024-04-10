@@ -65,3 +65,4 @@ export class IndustryDetailsComponent extends BaseFormSectionComponent {
 export function LoadIndustryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

@@ -208,7 +208,7 @@ import { FileDetailsComponent, LoadFileDetailsComponent } from "./Entities/File/
 import { FileCategoryDetailsComponent, LoadFileCategoryDetailsComponent } from "./Entities/FileCategory/sections/details.component"
 import { FileEntityRecordLinkDetailsComponent, LoadFileEntityRecordLinkDetailsComponent } from "./Entities/FileEntityRecordLink/sections/details.component"
 import { VersionInstallationDetailsComponent, LoadVersionInstallationDetailsComponent } from "./Entities/VersionInstallation/sections/details.component"
-
+    
 
 @NgModule({
 declarations: [
@@ -251,7 +251,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_0 { }
-
+    
 
 
 @NgModule({
@@ -295,7 +295,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_1 { }
-
+    
 
 
 @NgModule({
@@ -339,7 +339,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_2 { }
-
+    
 
 
 @NgModule({
@@ -383,7 +383,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_3 { }
-
+    
 
 
 @NgModule({
@@ -427,7 +427,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_4 { }
-
+    
 
 
 @NgModule({
@@ -471,7 +471,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_5 { }
-
+    
 
 
 @NgModule({
@@ -515,7 +515,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_6 { }
-
+    
 
 
 @NgModule({
@@ -559,7 +559,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_7 { }
-
+    
 
 
 @NgModule({
@@ -603,7 +603,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_8 { }
-
+    
 
 
 @NgModule({
@@ -630,7 +630,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_9 { }
-
+    
 
 
 @NgModule({
@@ -650,7 +650,7 @@ imports: [
 ]
 })
 export class CoreGeneratedFormsModule { }
-
+    
 export function LoadCoreGeneratedForms() {
     // This function doesn't do much, but it calls each generated form's loader function
     // which in turn calls the sections for that generated form. Ultimately, those bits of 
@@ -841,3 +841,4 @@ export function LoadCoreGeneratedForms() {
     LoadFileEntityRecordLinkDetailsComponent();
     LoadVersionInstallationDetailsComponent();
 }
+    

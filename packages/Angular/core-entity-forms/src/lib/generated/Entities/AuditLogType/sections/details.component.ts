@@ -81,3 +81,4 @@ export class AuditLogTypeDetailsComponent extends BaseFormSectionComponent {
 export function LoadAuditLogTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

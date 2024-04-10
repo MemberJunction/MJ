@@ -89,3 +89,4 @@ export class DashboardCategoryDetailsComponent extends BaseFormSectionComponent 
 export function LoadDashboardCategoryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

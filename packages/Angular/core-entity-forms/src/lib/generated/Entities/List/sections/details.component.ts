@@ -105,3 +105,4 @@ export class ListDetailsComponent extends BaseFormSectionComponent {
 export function LoadListDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      
