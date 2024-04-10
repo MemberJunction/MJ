@@ -73,3 +73,4 @@ export class FileCategoryDetailsComponent extends BaseFormSectionComponent {
 export function LoadFileCategoryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

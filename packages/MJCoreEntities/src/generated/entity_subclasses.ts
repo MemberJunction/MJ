@@ -1,6 +1,6 @@
 import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-
+    
     /**
      * Companies - strongly typed entity sub-class
      * * Schema: __mj
@@ -30,7 +30,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -38,7 +38,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(50)
@@ -89,7 +89,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -99,7 +99,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Domain
         * * Display Name: Domain
@@ -113,7 +113,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Employees - strongly typed entity sub-class
      * * Schema: __mj
@@ -143,7 +143,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -151,7 +151,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: BCMID
         * * Display Name: BCMID
@@ -161,7 +161,7 @@ import { RegisterClass } from "@memberjunction/global";
         get BCMID(): string {  
             return this.Get('BCMID');
         }
-    
+        
         /**
         * * Field Name: FirstName
         * * Display Name: First Name
@@ -258,7 +258,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -268,7 +268,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -277,7 +277,7 @@ import { RegisterClass } from "@memberjunction/global";
         get FirstLast(): string | null {  
             return this.Get('FirstLast');
         }
-    
+        
         /**
         * * Field Name: Supervisor
         * * Display Name: Supervisor
@@ -286,7 +286,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Supervisor(): string | null {  
             return this.Get('Supervisor');
         }
-    
+        
         /**
         * * Field Name: SupervisorFirstName
         * * Display Name: Supervisor First Name
@@ -295,7 +295,7 @@ import { RegisterClass } from "@memberjunction/global";
         get SupervisorFirstName(): string | null {  
             return this.Get('SupervisorFirstName');
         }
-    
+        
         /**
         * * Field Name: SupervisorLastName
         * * Display Name: Supervisor Last Name
@@ -304,7 +304,7 @@ import { RegisterClass } from "@memberjunction/global";
         get SupervisorLastName(): string | null {  
             return this.Get('SupervisorLastName');
         }
-    
+        
         /**
         * * Field Name: SupervisorEmail
         * * Display Name: Supervisor Email
@@ -313,10 +313,10 @@ import { RegisterClass } from "@memberjunction/global";
         get SupervisorEmail(): string | null {  
             return this.Get('SupervisorEmail');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Favorites - strongly typed entity sub-class
      * * Schema: __mj
@@ -346,7 +346,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -354,7 +354,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -399,7 +399,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -409,7 +409,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -417,7 +417,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
@@ -426,7 +426,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseTable(): string {  
             return this.Get('EntityBaseTable');
         }
-    
+        
         /**
         * * Field Name: EntityBaseView
         * * Display Name: Entity Base View
@@ -435,10 +435,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseView(): string {  
             return this.Get('EntityBaseView');
         }
-    
+        
 
     }
-    
+        
     /**
      * Employee Company Integrations - strongly typed entity sub-class
      * * Schema: __mj
@@ -467,7 +467,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Employee Company Integrations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -479,7 +479,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Employee Company Integrations, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -487,7 +487,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
@@ -544,7 +544,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -554,10 +554,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Employee Roles - strongly typed entity sub-class
      * * Schema: __mj
@@ -586,7 +586,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Employee Roles - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -598,7 +598,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Employee Roles, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -607,7 +607,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
@@ -641,7 +641,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -651,7 +651,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Role
         * * Display Name: Role
@@ -660,10 +660,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Role(): string {  
             return this.Get('Role');
         }
-    
+        
 
     }
-    
+        
     /**
      * Employee Skills - strongly typed entity sub-class
      * * Schema: __mj
@@ -692,7 +692,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Employee Skills - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -704,7 +704,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Employee Skills, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -713,7 +713,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EmployeeID
         * * Display Name: Employee ID
@@ -747,7 +747,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -757,7 +757,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Skill
         * * Display Name: Skill
@@ -766,10 +766,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Skill(): string {  
             return this.Get('Skill');
         }
-    
+        
 
     }
-    
+        
     /**
      * Roles - strongly typed entity sub-class
      * * Schema: __mj
@@ -799,7 +799,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -807,7 +807,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(50)
@@ -861,7 +861,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -871,10 +871,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Skills - strongly typed entity sub-class
      * * Schema: __mj
@@ -904,7 +904,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Skills - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -916,7 +916,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Skills, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Skills - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -928,7 +928,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Skills, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -936,7 +936,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(50)
@@ -968,7 +968,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -978,7 +978,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -987,10 +987,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
 
     }
-    
+        
     /**
      * Integration URL Formats - strongly typed entity sub-class
      * * Schema: __mj
@@ -1020,7 +1020,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Integration URL Formats - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -1032,7 +1032,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Integration URL Formats, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -1040,7 +1040,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: IntegrationName
         * * Display Name: Integration Name
@@ -1083,7 +1083,7 @@ import { RegisterClass } from "@memberjunction/global";
         get IntegrationID(): number {  
             return this.Get('IntegrationID');
         }
-    
+        
         /**
         * * Field Name: Integration
         * * Display Name: Integration
@@ -1092,7 +1092,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Integration(): string {  
             return this.Get('Integration');
         }
-    
+        
         /**
         * * Field Name: NavigationBaseURL
         * * Display Name: Navigation Base URL
@@ -1101,7 +1101,7 @@ import { RegisterClass } from "@memberjunction/global";
         get NavigationBaseURL(): string | null {  
             return this.Get('NavigationBaseURL');
         }
-    
+        
         /**
         * * Field Name: FullURLFormat
         * * Display Name: Full URLFormat
@@ -1110,10 +1110,10 @@ import { RegisterClass } from "@memberjunction/global";
         get FullURLFormat(): string | null {  
             return this.Get('FullURLFormat');
         }
-    
+        
 
     }
-    
+        
     /**
      * Integrations - strongly typed entity sub-class
      * * Schema: __mj
@@ -1143,7 +1143,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Integrations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -1155,7 +1155,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Integrations, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -1163,7 +1163,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
@@ -1250,7 +1250,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -1260,10 +1260,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Company Integrations - strongly typed entity sub-class
      * * Schema: __mj
@@ -1293,7 +1293,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Company Integrations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -1305,7 +1305,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Company Integrations, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -1313,7 +1313,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: CompanyName
         * * Display Name: Company Name
@@ -1401,7 +1401,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -1411,7 +1411,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: ExternalSystemID
         * * Display Name: ExternalSystem
@@ -1476,7 +1476,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CompanyID(): number {  
             return this.Get('CompanyID');
         }
-    
+        
         /**
         * * Field Name: IntegrationID
         * * Display Name: Integration ID
@@ -1485,7 +1485,7 @@ import { RegisterClass } from "@memberjunction/global";
         get IntegrationID(): number {  
             return this.Get('IntegrationID');
         }
-    
+        
         /**
         * * Field Name: Company
         * * SQL Data Type: nvarchar(50)
@@ -1493,7 +1493,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Company(): string {  
             return this.Get('Company');
         }
-    
+        
         /**
         * * Field Name: Integration
         * * SQL Data Type: nvarchar(100)
@@ -1501,7 +1501,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Integration(): string {  
             return this.Get('Integration');
         }
-    
+        
         /**
         * * Field Name: DriverClassName
         * * Display Name: Driver Class Name
@@ -1510,7 +1510,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DriverClassName(): string | null {  
             return this.Get('DriverClassName');
         }
-    
+        
         /**
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
@@ -1519,7 +1519,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DriverImportPath(): string | null {  
             return this.Get('DriverImportPath');
         }
-    
+        
         /**
         * * Field Name: LastRunID
         * * Display Name: LastRun
@@ -1528,7 +1528,7 @@ import { RegisterClass } from "@memberjunction/global";
         get LastRunID(): number | null {  
             return this.Get('LastRunID');
         }
-    
+        
         /**
         * * Field Name: LastRunStartedAt
         * * Display Name: Last Run Started At
@@ -1537,7 +1537,7 @@ import { RegisterClass } from "@memberjunction/global";
         get LastRunStartedAt(): Date | null {  
             return this.Get('LastRunStartedAt');
         }
-    
+        
         /**
         * * Field Name: LastRunEndedAt
         * * Display Name: Last Run Ended At
@@ -1546,10 +1546,10 @@ import { RegisterClass } from "@memberjunction/global";
         get LastRunEndedAt(): Date | null {  
             return this.Get('LastRunEndedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Fields - strongly typed entity sub-class
      * * Schema: __mj
@@ -1579,7 +1579,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -1587,7 +1587,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -1597,7 +1597,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityID(): number {  
             return this.Get('EntityID');
         }
-    
+        
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
@@ -1606,7 +1606,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Sequence(): number {  
             return this.Get('Sequence');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(255)
@@ -1614,7 +1614,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Name(): string {  
             return this.Get('Name');
         }
-    
+        
         /**
         * * Field Name: DisplayName
         * * Display Name: Display Name
@@ -1691,7 +1691,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Type(): string {  
             return this.Get('Type');
         }
-    
+        
         /**
         * * Field Name: Length
         * * SQL Data Type: int
@@ -1699,7 +1699,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Length(): number | null {  
             return this.Get('Length');
         }
-    
+        
         /**
         * * Field Name: Precision
         * * SQL Data Type: int
@@ -1707,7 +1707,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Precision(): number | null {  
             return this.Get('Precision');
         }
-    
+        
         /**
         * * Field Name: Scale
         * * SQL Data Type: int
@@ -1715,7 +1715,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Scale(): number | null {  
             return this.Get('Scale');
         }
-    
+        
         /**
         * * Field Name: AllowsNull
         * * Display Name: Allows Null
@@ -1725,7 +1725,7 @@ import { RegisterClass } from "@memberjunction/global";
         get AllowsNull(): boolean {  
             return this.Get('AllowsNull');
         }
-    
+        
         /**
         * * Field Name: DefaultValue
         * * Display Name: Default Value
@@ -1734,7 +1734,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DefaultValue(): string | null {  
             return this.Get('DefaultValue');
         }
-    
+        
         /**
         * * Field Name: AutoIncrement
         * * Display Name: Auto Increment
@@ -1744,7 +1744,7 @@ import { RegisterClass } from "@memberjunction/global";
         get AutoIncrement(): boolean {  
             return this.Get('AutoIncrement');
         }
-    
+        
         /**
         * * Field Name: ValueListType
         * * Display Name: Value List Type
@@ -1899,7 +1899,7 @@ import { RegisterClass } from "@memberjunction/global";
         get IsVirtual(): boolean {  
             return this.Get('IsVirtual');
         }
-    
+        
         /**
         * * Field Name: IsNameField
         * * Display Name: Is Name Field
@@ -1967,7 +1967,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -1977,7 +1977,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -1985,7 +1985,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: SchemaName
         * * Display Name: Schema Name
@@ -1994,7 +1994,7 @@ import { RegisterClass } from "@memberjunction/global";
         get SchemaName(): string {  
             return this.Get('SchemaName');
         }
-    
+        
         /**
         * * Field Name: BaseTable
         * * Display Name: Base Table
@@ -2003,7 +2003,7 @@ import { RegisterClass } from "@memberjunction/global";
         get BaseTable(): string {  
             return this.Get('BaseTable');
         }
-    
+        
         /**
         * * Field Name: BaseView
         * * Display Name: Base View
@@ -2012,7 +2012,7 @@ import { RegisterClass } from "@memberjunction/global";
         get BaseView(): string {  
             return this.Get('BaseView');
         }
-    
+        
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
@@ -2021,7 +2021,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
         }
-    
+        
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
@@ -2030,7 +2030,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
         }
-    
+        
         /**
         * * Field Name: RelatedEntity
         * * Display Name: Related Entity
@@ -2039,7 +2039,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntity(): string | null {  
             return this.Get('RelatedEntity');
         }
-    
+        
         /**
         * * Field Name: RelatedEntitySchemaName
         * * Display Name: Related Entity Schema Name
@@ -2048,7 +2048,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntitySchemaName(): string | null {  
             return this.Get('RelatedEntitySchemaName');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityBaseTable
         * * Display Name: Related Entity Base Table
@@ -2057,7 +2057,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityBaseTable(): string | null {  
             return this.Get('RelatedEntityBaseTable');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityBaseView
         * * Display Name: Related Entity Base View
@@ -2066,7 +2066,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityBaseView(): string | null {  
             return this.Get('RelatedEntityBaseView');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
@@ -2075,7 +2075,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
@@ -2084,10 +2084,10 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entities - strongly typed entity sub-class
      * * Schema: __mj
@@ -2117,7 +2117,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -2125,7 +2125,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
@@ -2190,7 +2190,7 @@ import { RegisterClass } from "@memberjunction/global";
         get BaseTable(): string {  
             return this.Get('BaseTable');
         }
-    
+        
         /**
         * * Field Name: BaseView
         * * Display Name: Base View
@@ -2224,7 +2224,7 @@ import { RegisterClass } from "@memberjunction/global";
         get SchemaName(): string {  
             return this.Get('SchemaName');
         }
-    
+        
         /**
         * * Field Name: VirtualEntity
         * * Display Name: Virtual Entity
@@ -2584,7 +2584,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -2594,7 +2594,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -2603,7 +2603,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CodeName(): string | null {  
             return this.Get('CodeName');
         }
-    
+        
         /**
         * * Field Name: ClassName
         * * Display Name: Class Name
@@ -2612,7 +2612,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ClassName(): string | null {  
             return this.Get('ClassName');
         }
-    
+        
         /**
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
@@ -2621,7 +2621,7 @@ import { RegisterClass } from "@memberjunction/global";
         get BaseTableCodeName(): string | null {  
             return this.Get('BaseTableCodeName');
         }
-    
+        
         /**
         * * Field Name: ParentEntity
         * * Display Name: Parent Entity
@@ -2630,7 +2630,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentEntity(): string | null {  
             return this.Get('ParentEntity');
         }
-    
+        
         /**
         * * Field Name: ParentBaseTable
         * * Display Name: Parent Base Table
@@ -2639,7 +2639,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentBaseTable(): string | null {  
             return this.Get('ParentBaseTable');
         }
-    
+        
         /**
         * * Field Name: ParentBaseView
         * * Display Name: Parent Base View
@@ -2648,10 +2648,10 @@ import { RegisterClass } from "@memberjunction/global";
         get ParentBaseView(): string | null {  
             return this.Get('ParentBaseView');
         }
-    
+        
 
     }
-    
+        
     /**
      * Users - strongly typed entity sub-class
      * * Schema: __mj
@@ -2681,7 +2681,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -2689,7 +2689,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
@@ -2824,7 +2824,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -2834,7 +2834,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -2843,7 +2843,7 @@ import { RegisterClass } from "@memberjunction/global";
         get FirstLast(): string | null {  
             return this.Get('FirstLast');
         }
-    
+        
         /**
         * * Field Name: EmployeeFirstLast
         * * Display Name: Employee First Last
@@ -2852,7 +2852,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EmployeeFirstLast(): string | null {  
             return this.Get('EmployeeFirstLast');
         }
-    
+        
         /**
         * * Field Name: EmployeeEmail
         * * Display Name: Employee Email
@@ -2861,7 +2861,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EmployeeEmail(): string | null {  
             return this.Get('EmployeeEmail');
         }
-    
+        
         /**
         * * Field Name: EmployeeTitle
         * * Display Name: Employee Title
@@ -2870,7 +2870,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EmployeeTitle(): string | null {  
             return this.Get('EmployeeTitle');
         }
-    
+        
         /**
         * * Field Name: EmployeeSupervisor
         * * Display Name: Employee Supervisor
@@ -2879,7 +2879,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EmployeeSupervisor(): string | null {  
             return this.Get('EmployeeSupervisor');
         }
-    
+        
         /**
         * * Field Name: EmployeeSupervisorEmail
         * * Display Name: Employee Supervisor Email
@@ -2888,10 +2888,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EmployeeSupervisorEmail(): string | null {  
             return this.Get('EmployeeSupervisorEmail');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Relationships - strongly typed entity sub-class
      * * Schema: __mj
@@ -2921,7 +2921,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -2929,7 +2929,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -3093,7 +3093,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DisplayUserViewGUID(): string | null {  
             return this.Get('DisplayUserViewGUID');
         }
-    
+        
         /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
@@ -3103,7 +3103,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -3113,7 +3113,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -3121,7 +3121,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
@@ -3130,7 +3130,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseTable(): string {  
             return this.Get('EntityBaseTable');
         }
-    
+        
         /**
         * * Field Name: EntityBaseView
         * * Display Name: Entity Base View
@@ -3139,7 +3139,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseView(): string {  
             return this.Get('EntityBaseView');
         }
-    
+        
         /**
         * * Field Name: RelatedEntity
         * * Display Name: Related Entity
@@ -3148,7 +3148,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntity(): string {  
             return this.Get('RelatedEntity');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityBaseTable
         * * Display Name: Related Entity Base Table
@@ -3157,7 +3157,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityBaseTable(): string {  
             return this.Get('RelatedEntityBaseTable');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityBaseView
         * * Display Name: Related Entity Base View
@@ -3166,7 +3166,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityBaseView(): string {  
             return this.Get('RelatedEntityBaseView');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
@@ -3175,7 +3175,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
@@ -3184,7 +3184,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
         }
-    
+        
         /**
         * * Field Name: RelatedEntityBaseTableCodeName
         * * Display Name: Related Entity Base Table Code Name
@@ -3193,7 +3193,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RelatedEntityBaseTableCodeName(): string | null {  
             return this.Get('RelatedEntityBaseTableCodeName');
         }
-    
+        
         /**
         * * Field Name: DisplayUserViewName
         * * Display Name: Display User View Name
@@ -3202,7 +3202,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DisplayUserViewName(): string | null {  
             return this.Get('DisplayUserViewName');
         }
-    
+        
         /**
         * * Field Name: DisplayUserViewID
         * * Display Name: Display User View ID
@@ -3211,10 +3211,10 @@ import { RegisterClass } from "@memberjunction/global";
         get DisplayUserViewID(): number | null {  
             return this.Get('DisplayUserViewID');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Record Logs - strongly typed entity sub-class
      * * Schema: __mj
@@ -3243,7 +3243,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * User Record Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -3255,7 +3255,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for User Record Logs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -3263,7 +3263,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -3343,7 +3343,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: UserName
         * * Display Name: User Name
@@ -3352,7 +3352,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserName(): string {  
             return this.Get('UserName');
         }
-    
+        
         /**
         * * Field Name: UserFirstLast
         * * Display Name: User First Last
@@ -3361,7 +3361,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserFirstLast(): string | null {  
             return this.Get('UserFirstLast');
         }
-    
+        
         /**
         * * Field Name: UserEmail
         * * Display Name: User Email
@@ -3370,7 +3370,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserEmail(): string {  
             return this.Get('UserEmail');
         }
-    
+        
         /**
         * * Field Name: UserSupervisor
         * * Display Name: User Supervisor
@@ -3379,7 +3379,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserSupervisor(): string | null {  
             return this.Get('UserSupervisor');
         }
-    
+        
         /**
         * * Field Name: UserSupervisorEmail
         * * Display Name: User Supervisor Email
@@ -3388,10 +3388,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UserSupervisorEmail(): string | null {  
             return this.Get('UserSupervisorEmail');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Views - strongly typed entity sub-class
      * * Schema: __mj
@@ -3421,7 +3421,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -3429,7 +3429,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -3473,7 +3473,7 @@ import { RegisterClass } from "@memberjunction/global";
         get GUID(): string {  
             return this.Get('GUID');
         }
-    
+        
         /**
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
@@ -3642,7 +3642,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date | null {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -3652,7 +3652,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date | null {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: UserName
         * * Display Name: User Name
@@ -3661,7 +3661,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserName(): string {  
             return this.Get('UserName');
         }
-    
+        
         /**
         * * Field Name: UserFirstLast
         * * Display Name: User First Last
@@ -3670,7 +3670,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserFirstLast(): string | null {  
             return this.Get('UserFirstLast');
         }
-    
+        
         /**
         * * Field Name: UserEmail
         * * Display Name: User Email
@@ -3679,7 +3679,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserEmail(): string {  
             return this.Get('UserEmail');
         }
-    
+        
         /**
         * * Field Name: UserType
         * * Display Name: User Type
@@ -3688,7 +3688,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserType(): string {  
             return this.Get('UserType');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -3697,7 +3697,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: EntityBaseView
         * * Display Name: Entity Base View
@@ -3706,10 +3706,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseView(): string {  
             return this.Get('EntityBaseView');
         }
-    
+        
 
     }
-    
+        
     /**
      * Company Integration Runs - strongly typed entity sub-class
      * * Schema: __mj
@@ -3738,7 +3738,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Company Integration Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -3750,7 +3750,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Company Integration Runs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -3758,7 +3758,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: CompanyIntegrationID
         * * Display Name: CompanyIntegration ID
@@ -3834,10 +3834,10 @@ import { RegisterClass } from "@memberjunction/global";
         get RunByUser(): string {  
             return this.Get('RunByUser');
         }
-    
+        
 
     }
-    
+        
     /**
      * Company Integration Run Details - strongly typed entity sub-class
      * * Schema: __mj
@@ -3866,7 +3866,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Company Integration Run Details - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -3878,7 +3878,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Company Integration Run Details, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -3886,7 +3886,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
@@ -3963,7 +3963,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: RunStartedAt
         * * Display Name: Run Started At
@@ -3972,7 +3972,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RunStartedAt(): Date | null {  
             return this.Get('RunStartedAt');
         }
-    
+        
         /**
         * * Field Name: RunEndedAt
         * * Display Name: Run Ended At
@@ -3981,10 +3981,10 @@ import { RegisterClass } from "@memberjunction/global";
         get RunEndedAt(): Date | null {  
             return this.Get('RunEndedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Error Logs - strongly typed entity sub-class
      * * Schema: __mj
@@ -4013,7 +4013,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Error Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -4025,7 +4025,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Error Logs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4033,7 +4033,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: CompanyIntegrationRun ID
@@ -4087,7 +4087,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: CreatedBy
         * * Display Name: Created By
@@ -4132,7 +4132,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Applications - strongly typed entity sub-class
      * * Schema: __mj
@@ -4162,7 +4162,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4170,7 +4170,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(50)
@@ -4200,7 +4200,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -4210,10 +4210,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Application Entities - strongly typed entity sub-class
      * * Schema: __mj
@@ -4243,7 +4243,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4251,7 +4251,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ApplicationName
         * * Display Name: Application Name
@@ -4307,7 +4307,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -4317,7 +4317,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Application
         * * SQL Data Type: nvarchar(50)
@@ -4325,7 +4325,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Application(): string {  
             return this.Get('Application');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -4333,7 +4333,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: EntityBaseTable
         * * Display Name: Entity Base Table
@@ -4342,7 +4342,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseTable(): string {  
             return this.Get('EntityBaseTable');
         }
-    
+        
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
@@ -4351,7 +4351,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
         }
-    
+        
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
@@ -4360,7 +4360,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
         }
-    
+        
         /**
         * * Field Name: EntityBaseTableCodeName
         * * Display Name: Entity Base Table Code Name
@@ -4369,10 +4369,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityBaseTableCodeName(): string | null {  
             return this.Get('EntityBaseTableCodeName');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Permissions - strongly typed entity sub-class
      * * Schema: __mj
@@ -4402,7 +4402,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4410,7 +4410,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -4540,7 +4540,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -4550,7 +4550,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -4558,7 +4558,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: RoleSQLName
         * * Display Name: Role SQLName
@@ -4567,7 +4567,7 @@ import { RegisterClass } from "@memberjunction/global";
         get RoleSQLName(): string | null {  
             return this.Get('RoleSQLName');
         }
-    
+        
         /**
         * * Field Name: CreateRLSFilter
         * * Display Name: Create RLSFilter
@@ -4576,7 +4576,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreateRLSFilter(): string | null {  
             return this.Get('CreateRLSFilter');
         }
-    
+        
         /**
         * * Field Name: ReadRLSFilter
         * * Display Name: Read RLSFilter
@@ -4585,7 +4585,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ReadRLSFilter(): string | null {  
             return this.Get('ReadRLSFilter');
         }
-    
+        
         /**
         * * Field Name: UpdateRLSFilter
         * * Display Name: Update RLSFilter
@@ -4594,7 +4594,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdateRLSFilter(): string | null {  
             return this.Get('UpdateRLSFilter');
         }
-    
+        
         /**
         * * Field Name: DeleteRLSFilter
         * * Display Name: Delete RLSFilter
@@ -4603,10 +4603,10 @@ import { RegisterClass } from "@memberjunction/global";
         get DeleteRLSFilter(): string | null {  
             return this.Get('DeleteRLSFilter');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Application Entities - strongly typed entity sub-class
      * * Schema: __mj
@@ -4635,7 +4635,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4643,7 +4643,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserApplicationID
         * * Display Name: UserApplication ID
@@ -4687,7 +4687,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Application(): string {  
             return this.Get('Application');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -4696,7 +4696,7 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -4705,10 +4705,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Applications - strongly typed entity sub-class
      * * Schema: __mj
@@ -4737,7 +4737,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4745,7 +4745,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -4801,7 +4801,7 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
         /**
         * * Field Name: Application
         * * Display Name: Application
@@ -4810,10 +4810,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Application(): string {  
             return this.Get('Application');
         }
-    
+        
 
     }
-    
+        
     /**
      * Company Integration Run API Logs - strongly typed entity sub-class
      * * Schema: __mj
@@ -4842,7 +4842,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Company Integration Run API Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -4854,7 +4854,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Company Integration Run API Logs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4862,7 +4862,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: CompanyIntegrationRunID
         * * Display Name: Company Integration Run ID
@@ -4941,7 +4941,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Lists - strongly typed entity sub-class
      * * Schema: __mj
@@ -4971,7 +4971,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -4979,7 +4979,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
@@ -5056,7 +5056,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -5066,7 +5066,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -5075,7 +5075,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string | null {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -5084,10 +5084,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * List Details - strongly typed entity sub-class
      * * Schema: __mj
@@ -5117,7 +5117,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5125,7 +5125,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ListID
         * * Display Name: List ID
@@ -5168,10 +5168,10 @@ import { RegisterClass } from "@memberjunction/global";
         get List(): string {  
             return this.Get('List');
         }
-    
+        
 
     }
-    
+        
     /**
      * User View Runs - strongly typed entity sub-class
      * * Schema: __mj
@@ -5201,7 +5201,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * User View Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -5213,7 +5213,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for User View Runs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5221,7 +5221,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserViewID
         * * Display Name: User View ID
@@ -5265,7 +5265,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserView(): string {  
             return this.Get('UserView');
         }
-    
+        
         /**
         * * Field Name: RunByUser
         * * Display Name: Run By User
@@ -5274,10 +5274,10 @@ import { RegisterClass } from "@memberjunction/global";
         get RunByUser(): string {  
             return this.Get('RunByUser');
         }
-    
+        
 
     }
-    
+        
     /**
      * User View Run Details - strongly typed entity sub-class
      * * Schema: __mj
@@ -5307,7 +5307,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * User View Run Details - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -5319,7 +5319,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for User View Run Details, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5327,7 +5327,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserViewRunID
         * * Display Name: User View Run ID
@@ -5359,7 +5359,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UserViewID(): number {  
             return this.Get('UserViewID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity
@@ -5368,10 +5368,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityID(): number {  
             return this.Get('EntityID');
         }
-    
+        
 
     }
-    
+        
     /**
      * Workflow Runs - strongly typed entity sub-class
      * * Schema: __mj
@@ -5400,7 +5400,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Workflow Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -5412,7 +5412,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Workflow Runs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5420,7 +5420,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: WorkflowName
         * * Display Name: Workflow Name
@@ -5501,7 +5501,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Workflow(): string {  
             return this.Get('Workflow');
         }
-    
+        
         /**
         * * Field Name: WorkflowEngineName
         * * Display Name: Workflow Engine Name
@@ -5510,10 +5510,10 @@ import { RegisterClass } from "@memberjunction/global";
         get WorkflowEngineName(): string {  
             return this.Get('WorkflowEngineName');
         }
-    
+        
 
     }
-    
+        
     /**
      * Workflows - strongly typed entity sub-class
      * * Schema: __mj
@@ -5542,7 +5542,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Workflows - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -5554,7 +5554,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Workflows, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5562,7 +5562,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
@@ -5627,7 +5627,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -5637,7 +5637,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: AutoRunEnabled
         * * Display Name: Auto Run Enabled
@@ -5703,10 +5703,10 @@ import { RegisterClass } from "@memberjunction/global";
         get AutoRunIntervalMinutes(): number | null {  
             return this.Get('AutoRunIntervalMinutes');
         }
-    
+        
 
     }
-    
+        
     /**
      * Workflow Engines - strongly typed entity sub-class
      * * Schema: __mj
@@ -5735,7 +5735,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Workflow Engines - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -5747,7 +5747,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Workflow Engines, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5755,7 +5755,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(100)
@@ -5807,7 +5807,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -5817,10 +5817,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Record Changes - strongly typed entity sub-class
      * * Schema: __mj
@@ -5850,7 +5850,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Record Changes - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -5862,7 +5862,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Record Changes, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * SQL Data Type: int
@@ -5870,7 +5870,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -5984,7 +5984,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -5993,10 +5993,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Roles - strongly typed entity sub-class
      * * Schema: __mj
@@ -6025,7 +6025,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6034,7 +6034,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -6068,7 +6068,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6078,7 +6078,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -6087,10 +6087,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Row Level Security Filters - strongly typed entity sub-class
      * * Schema: __mj
@@ -6119,7 +6119,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Row Level Security Filters - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -6131,7 +6131,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Row Level Security Filters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Row Level Security Filters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -6143,7 +6143,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Row Level Security Filters, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6152,7 +6152,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -6195,7 +6195,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6205,10 +6205,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Audit Logs - strongly typed entity sub-class
      * * Schema: __mj
@@ -6237,7 +6237,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Audit Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -6249,7 +6249,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Audit Logs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6258,7 +6258,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: AuditLogTypeName
         * * Display Name: Audit Log Type Name
@@ -6365,7 +6365,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6375,7 +6375,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -6384,7 +6384,7 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -6393,10 +6393,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string | null {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Authorizations - strongly typed entity sub-class
      * * Schema: __mj
@@ -6425,7 +6425,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Authorizations - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -6437,7 +6437,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Authorizations, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Authorizations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -6449,7 +6449,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Authorizations, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6458,7 +6458,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
@@ -6526,7 +6526,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6536,7 +6536,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -6545,10 +6545,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
 
     }
-    
+        
     /**
      * Authorization Roles - strongly typed entity sub-class
      * * Schema: __mj
@@ -6577,7 +6577,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Authorization Roles - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -6589,7 +6589,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Authorization Roles, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Authorization Roles - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -6601,7 +6601,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Authorization Roles, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6610,7 +6610,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: AuthorizationName
         * * Display Name: Authorization Name
@@ -6660,7 +6660,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6670,10 +6670,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Audit Log Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -6702,7 +6702,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Audit Log Types - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -6714,7 +6714,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Audit Log Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Audit Log Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -6726,7 +6726,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Audit Log Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6735,7 +6735,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ParentID
         * * Display Name: Parent ID
@@ -6791,7 +6791,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6801,7 +6801,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -6810,10 +6810,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Field Values - strongly typed entity sub-class
      * * Schema: __mj
@@ -6842,7 +6842,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Entity Field Values - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -6854,7 +6854,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Entity Field Values, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Entity Field Values - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -6866,7 +6866,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Entity Field Values, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -6875,7 +6875,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -6953,7 +6953,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -6963,7 +6963,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: EntityField
         * * Display Name: Entity Field
@@ -6972,7 +6972,7 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityField(): string {  
             return this.Get('EntityField');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -6981,10 +6981,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * AI Models - strongly typed entity sub-class
      * * Schema: __mj
@@ -7014,7 +7014,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * AI Models - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7026,7 +7026,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for AI Models, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7035,7 +7035,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -7148,7 +7148,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -7158,7 +7158,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: AIModelType
         * * Display Name: AIModel Type
@@ -7167,10 +7167,10 @@ import { RegisterClass } from "@memberjunction/global";
         get AIModelType(): string {  
             return this.Get('AIModelType');
         }
-    
+        
 
     }
-    
+        
     /**
      * AI Actions - strongly typed entity sub-class
      * * Schema: __mj
@@ -7200,7 +7200,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * AI Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7212,7 +7212,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for AI Actions, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7221,7 +7221,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -7288,7 +7288,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -7298,7 +7298,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: DefaultModel
         * * Display Name: Default Model
@@ -7307,10 +7307,10 @@ import { RegisterClass } from "@memberjunction/global";
         get DefaultModel(): string | null {  
             return this.Get('DefaultModel');
         }
-    
+        
 
     }
-    
+        
     /**
      * AI Model Actions - strongly typed entity sub-class
      * * Schema: __mj
@@ -7340,7 +7340,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * AI Model Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7352,7 +7352,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for AI Model Actions, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7361,7 +7361,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: AIModelID
         * * Display Name: AI Model ID
@@ -7407,7 +7407,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -7417,7 +7417,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: AIModel
         * * Display Name: AIModel
@@ -7426,7 +7426,7 @@ import { RegisterClass } from "@memberjunction/global";
         get AIModel(): string {  
             return this.Get('AIModel');
         }
-    
+        
         /**
         * * Field Name: AIAction
         * * Display Name: AIAction
@@ -7435,10 +7435,10 @@ import { RegisterClass } from "@memberjunction/global";
         get AIAction(): string {  
             return this.Get('AIAction');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity AI Actions - strongly typed entity sub-class
      * * Schema: __mj
@@ -7468,7 +7468,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Entity AI Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7480,7 +7480,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Entity AI Actions, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7489,7 +7489,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -7645,7 +7645,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: AIAction
         * * Display Name: AIAction
@@ -7654,7 +7654,7 @@ import { RegisterClass } from "@memberjunction/global";
         get AIAction(): string {  
             return this.Get('AIAction');
         }
-    
+        
         /**
         * * Field Name: AIModel
         * * Display Name: AIModel
@@ -7663,7 +7663,7 @@ import { RegisterClass } from "@memberjunction/global";
         get AIModel(): string | null {  
             return this.Get('AIModel');
         }
-    
+        
         /**
         * * Field Name: OutputEntity
         * * Display Name: Output Entity
@@ -7672,10 +7672,10 @@ import { RegisterClass } from "@memberjunction/global";
         get OutputEntity(): string | null {  
             return this.Get('OutputEntity');
         }
-    
+        
 
     }
-    
+        
     /**
      * AI Model Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -7705,7 +7705,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * AI Model Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7717,7 +7717,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for AI Model Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7726,7 +7726,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -7751,7 +7751,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Queue Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -7780,7 +7780,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Queue Types - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -7792,7 +7792,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Queue Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Queue Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7804,7 +7804,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Queue Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7813,7 +7813,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -7872,7 +7872,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Queues - strongly typed entity sub-class
      * * Schema: __mj
@@ -7902,7 +7902,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Queues - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -7914,7 +7914,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Queues, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7923,7 +7923,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -8112,7 +8112,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -8122,7 +8122,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: QueueType
         * * Display Name: Queue Type
@@ -8131,10 +8131,10 @@ import { RegisterClass } from "@memberjunction/global";
         get QueueType(): string {  
             return this.Get('QueueType');
         }
-    
+        
 
     }
-    
+        
     /**
      * Queue Tasks - strongly typed entity sub-class
      * * Schema: __mj
@@ -8163,7 +8163,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Queue Tasks - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -8175,7 +8175,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Queue Tasks, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -8184,7 +8184,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: QueueID
         * * Display Name: Queue ID
@@ -8299,10 +8299,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Queue(): string {  
             return this.Get('Queue');
         }
-    
+        
 
     }
-    
+        
     /**
      * Dashboards - strongly typed entity sub-class
      * * Schema: __mj
@@ -8332,7 +8332,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -8341,7 +8341,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -8407,7 +8407,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Category(): string | null {  
             return this.Get('Category');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -8416,10 +8416,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string | null {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Output Trigger Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -8448,7 +8448,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Output Trigger Types - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -8460,7 +8460,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Output Trigger Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Output Trigger Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -8472,7 +8472,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Output Trigger Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -8481,7 +8481,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -8506,7 +8506,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Output Format Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -8535,7 +8535,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Output Format Types - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -8547,7 +8547,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Output Format Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Output Format Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -8559,7 +8559,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Output Format Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -8568,7 +8568,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -8604,7 +8604,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Output Delivery Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -8633,7 +8633,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Output Delivery Types - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -8645,7 +8645,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Output Delivery Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Output Delivery Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -8657,7 +8657,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Output Delivery Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -8666,7 +8666,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -8691,7 +8691,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
 
     }
-    
+        
     /**
      * Reports - strongly typed entity sub-class
      * * Schema: __mj
@@ -8720,7 +8720,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -8729,7 +8729,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -8931,7 +8931,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -8941,7 +8941,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Category
         * * Display Name: Category
@@ -8950,7 +8950,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Category(): string | null {  
             return this.Get('Category');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -8959,7 +8959,7 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
         /**
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -8968,7 +8968,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Conversation(): string | null {  
             return this.Get('Conversation');
         }
-    
+        
         /**
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -8977,7 +8977,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DataContext(): string | null {  
             return this.Get('DataContext');
         }
-    
+        
         /**
         * * Field Name: OutputTriggerType
         * * Display Name: Output Trigger Type
@@ -8986,7 +8986,7 @@ import { RegisterClass } from "@memberjunction/global";
         get OutputTriggerType(): string | null {  
             return this.Get('OutputTriggerType');
         }
-    
+        
         /**
         * * Field Name: OutputFormatType
         * * Display Name: Output Format Type
@@ -8995,7 +8995,7 @@ import { RegisterClass } from "@memberjunction/global";
         get OutputFormatType(): string | null {  
             return this.Get('OutputFormatType');
         }
-    
+        
         /**
         * * Field Name: OutputDeliveryType
         * * Display Name: Output Delivery Type
@@ -9004,7 +9004,7 @@ import { RegisterClass } from "@memberjunction/global";
         get OutputDeliveryType(): string | null {  
             return this.Get('OutputDeliveryType');
         }
-    
+        
         /**
         * * Field Name: OutputEvent
         * * Display Name: Output Event
@@ -9013,7 +9013,7 @@ import { RegisterClass } from "@memberjunction/global";
         get OutputEvent(): string | null {  
             return this.Get('OutputEvent');
         }
-    
+        
         /**
         * * Field Name: OutputWorkflow
         * * Display Name: Output Workflow
@@ -9022,10 +9022,10 @@ import { RegisterClass } from "@memberjunction/global";
         get OutputWorkflow(): string | null {  
             return this.Get('OutputWorkflow');
         }
-    
+        
 
     }
-    
+        
     /**
      * Report Snapshots - strongly typed entity sub-class
      * * Schema: __mj
@@ -9054,7 +9054,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9063,7 +9063,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ReportID
         * * Display Name: Report ID
@@ -9096,7 +9096,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -9117,7 +9117,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Report(): string {  
             return this.Get('Report');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -9126,10 +9126,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string | null {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Resource Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -9158,7 +9158,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Resource Types - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -9170,7 +9170,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Resource Types, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Resource Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -9182,7 +9182,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Resource Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9191,7 +9191,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -9257,7 +9257,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -9267,7 +9267,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -9276,10 +9276,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string | null {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Tags - strongly typed entity sub-class
      * * Schema: __mj
@@ -9309,7 +9309,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Tags - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -9321,7 +9321,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Tags, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Tags - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -9333,7 +9333,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Tags, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9342,7 +9342,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -9396,10 +9396,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
 
     }
-    
+        
     /**
      * Tagged Items - strongly typed entity sub-class
      * * Schema: __mj
@@ -9429,7 +9429,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Tagged Items - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -9441,7 +9441,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Tagged Items, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9450,7 +9450,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: TagID
         * * Display Name: Tag ID
@@ -9494,7 +9494,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Tag(): string {  
             return this.Get('Tag');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -9503,10 +9503,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Workspaces - strongly typed entity sub-class
      * * Schema: __mj
@@ -9536,7 +9536,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9545,7 +9545,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -9588,10 +9588,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Workspace Items - strongly typed entity sub-class
      * * Schema: __mj
@@ -9621,7 +9621,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9630,7 +9630,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -9718,7 +9718,7 @@ import { RegisterClass } from "@memberjunction/global";
         get WorkSpace(): string {  
             return this.Get('WorkSpace');
         }
-    
+        
         /**
         * * Field Name: ResourceType
         * * Display Name: Resource Type
@@ -9727,10 +9727,10 @@ import { RegisterClass } from "@memberjunction/global";
         get ResourceType(): string {  
             return this.Get('ResourceType');
         }
-    
+        
 
     }
-    
+        
     /**
      * Datasets - strongly typed entity sub-class
      * * Schema: __mj
@@ -9760,7 +9760,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Datasets - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -9772,7 +9772,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Datasets, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Datasets - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -9784,7 +9784,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Datasets, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9793,7 +9793,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -9825,7 +9825,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -9835,10 +9835,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Dataset Items - strongly typed entity sub-class
      * * Schema: __mj
@@ -9868,7 +9868,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Dataset Items - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -9880,7 +9880,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for Dataset Items, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-            
+                
         /**
         * Dataset Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -9892,7 +9892,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Dataset Items, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -9901,7 +9901,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Code
         * * Display Name: Code
@@ -9991,7 +9991,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10001,7 +10001,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -10010,10 +10010,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Conversation Details - strongly typed entity sub-class
      * * Schema: __mj
@@ -10042,7 +10042,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -10051,7 +10051,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: ConversationID
         * * Display Name: Conversation ID
@@ -10135,7 +10135,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10145,7 +10145,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -10154,10 +10154,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Conversation(): string | null {  
             return this.Get('Conversation');
         }
-    
+        
 
     }
-    
+        
     /**
      * Conversations - strongly typed entity sub-class
      * * Schema: __mj
@@ -10186,7 +10186,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -10195,7 +10195,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -10308,7 +10308,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10318,7 +10318,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -10327,7 +10327,7 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
         /**
         * * Field Name: LinkedEntity
         * * Display Name: Linked Entity
@@ -10336,10 +10336,10 @@ import { RegisterClass } from "@memberjunction/global";
         get LinkedEntity(): string | null {  
             return this.Get('LinkedEntity');
         }
-    
+        
 
     }
-    
+        
     /**
      * User Notifications - strongly typed entity sub-class
      * * Schema: __mj
@@ -10368,7 +10368,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -10377,7 +10377,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -10477,7 +10477,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10487,7 +10487,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -10496,10 +10496,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Schema Info - strongly typed entity sub-class
      * * Schema: __mj
@@ -10529,7 +10529,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Schema Info - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -10541,7 +10541,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Schema Info, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -10550,7 +10550,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: SchemaName
         * * Display Name: Schema Name
@@ -10604,7 +10604,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10614,10 +10614,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Company Integration Record Maps - strongly typed entity sub-class
      * * Schema: __mj
@@ -10646,7 +10646,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Company Integration Record Maps - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -10658,7 +10658,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Company Integration Record Maps, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -10667,7 +10667,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: CompanyIntegrationID
         * * Display Name: Company Integration ID
@@ -10723,7 +10723,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10733,7 +10733,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -10742,10 +10742,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Record Merge Logs - strongly typed entity sub-class
      * * Schema: __mj
@@ -10774,7 +10774,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Record Merge Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -10786,7 +10786,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Record Merge Logs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -10795,7 +10795,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -10930,7 +10930,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -10940,7 +10940,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date | null {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -10949,7 +10949,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: InitiatedByUser
         * * Display Name: Initiated By User
@@ -10958,10 +10958,10 @@ import { RegisterClass } from "@memberjunction/global";
         get InitiatedByUser(): string {  
             return this.Get('InitiatedByUser');
         }
-    
+        
 
     }
-    
+        
     /**
      * Record Merge Deletion Logs - strongly typed entity sub-class
      * * Schema: __mj
@@ -10990,7 +10990,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Record Merge Deletion Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11002,7 +11002,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Record Merge Deletion Logs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11011,7 +11011,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: RecordMergeLogID
         * * Display Name: Record Merge Log ID
@@ -11072,7 +11072,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11082,10 +11082,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Query Fields - strongly typed entity sub-class
      * * Schema: __mj
@@ -11114,7 +11114,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Query Fields - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11126,7 +11126,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Query Fields, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11135,7 +11135,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: QueryID
         * * Display Name: Query ID
@@ -11283,7 +11283,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11293,7 +11293,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Query
         * * Display Name: Query
@@ -11302,7 +11302,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Query(): string {  
             return this.Get('Query');
         }
-    
+        
         /**
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
@@ -11311,10 +11311,10 @@ import { RegisterClass } from "@memberjunction/global";
         get SourceEntity(): string | null {  
             return this.Get('SourceEntity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Query Categories - strongly typed entity sub-class
      * * Schema: __mj
@@ -11343,7 +11343,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11352,7 +11352,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -11396,7 +11396,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11406,7 +11406,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -11427,7 +11427,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -11436,10 +11436,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Queries - strongly typed entity sub-class
      * * Schema: __mj
@@ -11469,7 +11469,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Queries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11481,7 +11481,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Queries, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11490,7 +11490,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -11597,7 +11597,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11607,7 +11607,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Category
         * * Display Name: Category
@@ -11616,10 +11616,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Category(): string | null {  
             return this.Get('Category');
         }
-    
+        
 
     }
-    
+        
     /**
      * Query Permissions - strongly typed entity sub-class
      * * Schema: __mj
@@ -11648,7 +11648,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Query Permissions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11660,7 +11660,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Query Permissions, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11669,7 +11669,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: QueryID
         * * Display Name: Query ID
@@ -11703,7 +11703,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11713,10 +11713,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Vector Indexes - strongly typed entity sub-class
      * * Schema: __mj
@@ -11745,7 +11745,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Vector Indexes - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11757,7 +11757,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Vector Indexes, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11766,7 +11766,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -11822,7 +11822,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11832,7 +11832,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database
@@ -11841,7 +11841,7 @@ import { RegisterClass } from "@memberjunction/global";
         get VectorDatabase(): string {  
             return this.Get('VectorDatabase');
         }
-    
+        
         /**
         * * Field Name: EmbeddingModel
         * * Display Name: Embedding Model
@@ -11850,10 +11850,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EmbeddingModel(): string {  
             return this.Get('EmbeddingModel');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Document Types - strongly typed entity sub-class
      * * Schema: __mj
@@ -11882,7 +11882,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Entity Document Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11894,7 +11894,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Entity Document Types, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11903,7 +11903,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -11935,7 +11935,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -11945,10 +11945,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Document Runs - strongly typed entity sub-class
      * * Schema: __mj
@@ -11977,7 +11977,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Entity Document Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -11989,7 +11989,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Entity Document Runs, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -11998,7 +11998,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityDocumentID
         * * Display Name: Entity Document ID
@@ -12060,7 +12060,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12070,7 +12070,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
@@ -12079,10 +12079,10 @@ import { RegisterClass } from "@memberjunction/global";
         get EntityDocument(): string {  
             return this.Get('EntityDocument');
         }
-    
+        
 
     }
-    
+        
     /**
      * Vector Databases - strongly typed entity sub-class
      * * Schema: __mj
@@ -12111,7 +12111,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Vector Databases - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -12123,7 +12123,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Vector Databases, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12132,7 +12132,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -12186,7 +12186,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12196,10 +12196,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Record Documents - strongly typed entity sub-class
      * * Schema: __mj
@@ -12228,7 +12228,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Entity Record Documents - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -12240,7 +12240,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Entity Record Documents, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12249,7 +12249,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -12337,7 +12337,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12347,10 +12347,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Entity Documents - strongly typed entity sub-class
      * * Schema: __mj
@@ -12379,7 +12379,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Entity Documents - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -12391,7 +12391,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Entity Documents, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12400,7 +12400,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -12472,7 +12472,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12482,7 +12482,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -12491,7 +12491,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
         /**
         * * Field Name: Type
         * * Display Name: Type
@@ -12500,10 +12500,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Type(): string {  
             return this.Get('Type');
         }
-    
+        
 
     }
-    
+        
     /**
      * Data Context Items - strongly typed entity sub-class
      * * Schema: __mj
@@ -12533,7 +12533,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Data Context Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -12545,7 +12545,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12554,7 +12554,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: DataContextID
         * * Display Name: Data Context ID
@@ -12683,7 +12683,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12693,7 +12693,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: DataContext
         * * Display Name: Data Context
@@ -12702,7 +12702,7 @@ import { RegisterClass } from "@memberjunction/global";
         get DataContext(): string {  
             return this.Get('DataContext');
         }
-    
+        
         /**
         * * Field Name: View
         * * Display Name: View
@@ -12711,7 +12711,7 @@ import { RegisterClass } from "@memberjunction/global";
         get View(): string | null {  
             return this.Get('View');
         }
-    
+        
         /**
         * * Field Name: Query
         * * Display Name: Query
@@ -12720,7 +12720,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Query(): string | null {  
             return this.Get('Query');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -12729,10 +12729,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string | null {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Data Contexts - strongly typed entity sub-class
      * * Schema: __mj
@@ -12762,7 +12762,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Data Contexts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -12774,7 +12774,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12783,7 +12783,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -12838,7 +12838,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12848,7 +12848,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -12857,10 +12857,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * User View Categories - strongly typed entity sub-class
      * * Schema: __mj
@@ -12889,7 +12889,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12898,7 +12898,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -12942,7 +12942,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -12952,7 +12952,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: EntityID
         * * Display Name: Entity ID
@@ -12985,7 +12985,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -12994,10 +12994,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Dashboard Categories - strongly typed entity sub-class
      * * Schema: __mj
@@ -13026,7 +13026,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13035,7 +13035,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -13079,7 +13079,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13089,7 +13089,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -13110,7 +13110,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -13119,10 +13119,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * Report Categories - strongly typed entity sub-class
      * * Schema: __mj
@@ -13151,7 +13151,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13160,7 +13160,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -13204,7 +13204,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13214,7 +13214,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: UserID
         * * Display Name: User ID
@@ -13235,7 +13235,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
         /**
         * * Field Name: User
         * * Display Name: User
@@ -13244,10 +13244,10 @@ import { RegisterClass } from "@memberjunction/global";
         get User(): string {  
             return this.Get('User');
         }
-    
+        
 
     }
-    
+        
     /**
      * File Storage Providers - strongly typed entity sub-class
      * * Schema: __mj
@@ -13276,7 +13276,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * File Storage Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -13288,7 +13288,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for File Storage Providers, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13297,7 +13297,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -13375,7 +13375,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13385,10 +13385,10 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
 
     }
-    
+        
     /**
      * Files - strongly typed entity sub-class
      * * Schema: __mj
@@ -13417,7 +13417,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13426,7 +13426,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -13517,7 +13517,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13527,7 +13527,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Provider
         * * Display Name: Provider
@@ -13536,7 +13536,7 @@ import { RegisterClass } from "@memberjunction/global";
         get Provider(): string {  
             return this.Get('Provider');
         }
-    
+        
         /**
         * * Field Name: Category
         * * Display Name: Category
@@ -13545,10 +13545,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Category(): string | null {  
             return this.Get('Category');
         }
-    
+        
 
     }
-    
+        
     /**
      * File Categories - strongly typed entity sub-class
      * * Schema: __mj
@@ -13577,7 +13577,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13586,7 +13586,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: Name
         * * Display Name: Name
@@ -13630,7 +13630,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13640,7 +13640,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: Parent
         * * Display Name: Parent
@@ -13649,10 +13649,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Parent(): string | null {  
             return this.Get('Parent');
         }
-    
+        
 
     }
-    
+        
     /**
      * File Entity Record Links - strongly typed entity sub-class
      * * Schema: __mj
@@ -13681,7 +13681,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * File Entity Record Links - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -13693,7 +13693,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for File Entity Record Links, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13702,7 +13702,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: FileID
         * * Display Name: File ID
@@ -13747,7 +13747,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13757,7 +13757,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: File
         * * Display Name: File
@@ -13766,7 +13766,7 @@ import { RegisterClass } from "@memberjunction/global";
         get File(): string {  
             return this.Get('File');
         }
-    
+        
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -13775,10 +13775,10 @@ import { RegisterClass } from "@memberjunction/global";
         get Entity(): string {  
             return this.Get('Entity');
         }
-    
+        
 
     }
-    
+        
     /**
      * Version Installations - strongly typed entity sub-class
      * * Schema: __mj
@@ -13807,7 +13807,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-        
+            
         /**
         * Version Installations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -13819,7 +13819,7 @@ import { RegisterClass } from "@memberjunction/global";
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for Version Installations, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        
+            
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -13828,7 +13828,7 @@ import { RegisterClass } from "@memberjunction/global";
         get ID(): number {  
             return this.Get('ID');
         }
-    
+        
         /**
         * * Field Name: MajorVersion
         * * Display Name: Major Version
@@ -13942,7 +13942,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
         }
-    
+        
         /**
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
@@ -13952,7 +13952,7 @@ import { RegisterClass } from "@memberjunction/global";
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
         }
-    
+        
         /**
         * * Field Name: CompleteVersion
         * * Display Name: Complete Version
@@ -13961,7 +13961,7 @@ import { RegisterClass } from "@memberjunction/global";
         get CompleteVersion(): string | null {  
             return this.Get('CompleteVersion');
         }
-    
+        
 
     }
-    
+        

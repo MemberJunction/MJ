@@ -177,3 +177,4 @@ export class UserDetailsComponent extends BaseFormSectionComponent {
 export function LoadUserDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

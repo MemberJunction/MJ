@@ -65,3 +65,4 @@ export class ContactRoleDetailsComponent extends BaseFormSectionComponent {
 export function LoadContactRoleDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

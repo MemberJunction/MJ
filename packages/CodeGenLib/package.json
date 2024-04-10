@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/codegen-lib",
   "version": "1.0.6",
-  "description": "Library used by the CodeGen executable to generate code for the MemberJunction platform",
+  "description": "Library used by the CodeGen executable to generate code for the MemberJunction platform. Contains a reusable object model that can be called by any other server-side application/library.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

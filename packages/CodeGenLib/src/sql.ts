@@ -4,9 +4,15 @@ import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { DataSource } from "typeorm";
 import { outputDir } from "./config";
-import { newEntityList } from "./manageMetadata";
+import { ManageMetadataBase } from "./manageMetadata";
+import { RegisterClass } from "@memberjunction/global";
 
 
+/**
+ * Base class for SQL Utility functions, you can sub-class this class to create your own SQL Utility functions/override existing functionality.
+ */
+@RegisterClass(SQLUtilityBase)
+export class SQLUtilityBase {
 /**
  * Returns a file name for a given DB Object given a type, schema and object name.
  * The basic format is to have a directory for each schema, and within each directory
@@ -20,7 +26,7 @@ import { newEntityList } from "./manageMetadata";
  * @param schema 
  * @param objectName 
  */
-export function getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function', 
+public getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function', 
                                     schema: string, 
                                     objectName: string, 
                                     isPermissions: boolean,
@@ -29,7 +35,7 @@ export function getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_func
    return path.join(schema, `${objectName}.${type}${type==='full_text_search_function' ? '.fulltext' : ''}${isPermissions ? '.permissions' : ''}${isGenerated ? '.generated' : ''}.sql`);
 }
 
-export async function recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean): Promise<boolean> {
+public async recompileAllBaseViews(ds: DataSource, excludeSchemas: string[], applyPermissions: boolean): Promise<boolean> {
     let bSuccess: boolean = true; // start off true
     const md: Metadata = new Metadata();
     for (let i = 0; i < md.Entities.length; ++i) {  
@@ -39,11 +45,11 @@ export async function recompileAllBaseViews(ds: DataSource, excludeSchemas: stri
          if ( e.BaseViewGenerated && // only do this for entities that have a base view generated
                e.IncludeInAPI && // only do this for entities that are included in the API
                !e.VirtualEntity && // do not include virtual entities
-               !newEntityList.includes(e.Name)) {
+               !ManageMetadataBase.newEntityList.includes(e.Name)) {
             // only do this if base view generated and for NON-virtual entities, 
             // custom base views should be defined in the BEFORE SQL Scripts 
             // and NOT for newly created entities         
-            bSuccess = await recompileSingleBaseView(ds, e, applyPermissions) && bSuccess;
+            bSuccess = await this.recompileSingleBaseView(ds, e, applyPermissions) && bSuccess;
          }
       }
     }
@@ -51,22 +57,22 @@ export async function recompileAllBaseViews(ds: DataSource, excludeSchemas: stri
     if (!bSuccess) {
          // temp thing for debug, let's dump the new entity list to see what's up
          console.warn('New Entity List:');
-         console.warn('    ' + newEntityList.join('\n    '));
+         console.warn('    ' + ManageMetadataBase.newEntityList.join('\n    '));
     }
     return bSuccess;
  }
  
- export async function recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
-   const file = getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
+ public async recompileSingleBaseView(ds: DataSource, entity: EntityInfo, applyPermissions: boolean): Promise<boolean> {
+   const file = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, entity.BaseViewGenerated);
    const filePath = path.join(outputDir('SQL', true), file);
    if (fs.existsSync(filePath)) {
-      const recompileResult = await executeSQLFile(ds, filePath, true)
+      const recompileResult = await this.executeSQLFile(ds, filePath, true)
       if (applyPermissions) {
          // now apply permissions
-         const permissionsFile = getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
+         const permissionsFile = this.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, entity.BaseViewGenerated);
          const permissionsFilePath = path.join(outputDir('SQL', true), permissionsFile);
          if (fs.existsSync(permissionsFilePath)) {
-            return await executeSQLFile(ds, permissionsFilePath, true) && recompileResult;
+            return await this.executeSQLFile(ds, permissionsFilePath, true) && recompileResult;
          }
       }  
       else
@@ -78,12 +84,12 @@ export async function recompileAllBaseViews(ds: DataSource, excludeSchemas: stri
    }
  }
  
- export async function executeSQLFile(ds: DataSource, filePath: string, inChunks : boolean): Promise<boolean> {
+ public async executeSQLFile(ds: DataSource, filePath: string, inChunks : boolean): Promise<boolean> {
     const scriptSQL = fs.readFileSync(filePath, 'utf-8');
-    return executeSQLScript(ds, scriptSQL, inChunks);
+    return this.executeSQLScript(ds, scriptSQL, inChunks);
  }
  
- export async function executeSQLScript(ds: DataSource, scriptText: string, inChunks : boolean): Promise<boolean> {
+ public async executeSQLScript(ds: DataSource, scriptText: string, inChunks : boolean): Promise<boolean> {
     try {
       if (!scriptText || scriptText.length == 0)
          return true; // nothing to do
@@ -112,4 +118,4 @@ export async function recompileAllBaseViews(ds: DataSource, excludeSchemas: stri
        return false;
     }
  }
- 
+}

@@ -53,7 +53,7 @@ import { InvoiceDetailsComponent, LoadInvoiceDetailsComponent } from "./Entities
 import { ActivityAttachmentDetailsComponent, LoadActivityAttachmentDetailsComponent } from "./Entities/ActivityAttachment/sections/details.component"
 import { PaymentTermsTypeDetailsComponent, LoadPaymentTermsTypeDetailsComponent } from "./Entities/PaymentTermsType/sections/details.component"
 import { InvoiceStatusTypeDetailsComponent, LoadInvoiceStatusTypeDetailsComponent } from "./Entities/InvoiceStatusType/sections/details.component"
-
+    
 
 @NgModule({
 declarations: [
@@ -96,7 +96,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_0 { }
-
+    
 
 
 @NgModule({
@@ -128,7 +128,7 @@ exports: [
 ]
 })
 export class GeneratedForms_SubModule_1 { }
-
+    
 
 
 @NgModule({
@@ -140,7 +140,7 @@ imports: [
 ]
 })
 export class GeneratedFormsModule { }
-
+    
 export function LoadGeneratedForms() {
     // This function doesn't do much, but it calls each generated form's loader function
     // which in turn calls the sections for that generated form. Ultimately, those bits of 
@@ -176,3 +176,4 @@ export function LoadGeneratedForms() {
     LoadPaymentTermsTypeDetailsComponent();
     LoadInvoiceStatusTypeDetailsComponent();
 }
+    

@@ -65,3 +65,4 @@ export class TagDetailsComponent extends BaseFormSectionComponent {
 export function LoadTagDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      
