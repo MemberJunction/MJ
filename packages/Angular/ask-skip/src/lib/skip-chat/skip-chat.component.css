@@ -1,5 +1,5 @@
 .chat-container {
-    padding: 0px;
+    padding: 5px;
     display: flex;
     flex-direction: row;
     height: 100%;
@@ -17,6 +17,7 @@
     display: flex;
     flex-direction: column;
     position: relative; /* Add this line if the wrapper needs to be a reference point */
+    background-color: #f9f9f9;
 }
 
 .new-conversation {
@@ -40,6 +41,7 @@
     padding: 0;
     padding-block: 0;
 }
+
 
 .conversation-history > button {
     height: 25px;
@@ -84,7 +86,18 @@
 }
 
 .embedded-conversations {
+    margin-left: 3px;
+    margin-top: 5px;
     font-size: 10pt;
+    color: rgb(48, 48, 235);
+}
+.embedded-conversations > span {
+    margin-top: 4px;
+    margin-left: 5px;
+    cursor: pointer;
+}
+.conversation-item-linked {
+    color: rgb(48, 48, 235);
 }
 
 .welcome-message img {
@@ -217,6 +230,8 @@
 .conversation-item-selected {
     background-color: rgba(0, 0, 0, 0.15);
 }
+
+
 .conversation-item > .conversation-icon {
     margin-right: 11px;
 }
