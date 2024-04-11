@@ -336,6 +336,10 @@ foreach ($lib in $libraries) {
 ############################################################################################################
 # GET USER INPUT ON OPTIONS
 $publishToNPM = Read-Host "Do you want to publish to npm? (y/n)"
+$bumpVersions = "n"
+if ($publishToNPM -eq "n") {
+    $bumpVersions = Read-Host "Do you want to bump patch versions on all packages? Default: No (y/n)"
+}
 $ignoreBuildLog = Read-Host "Do you want to ignore the build log (and build/publish EVERYTHING, regardless of if things changed)? (y/n)"
 $alignVersions = "n"
 $newVersion = @{
@@ -417,8 +421,8 @@ foreach ($libObject in $libraries) {
                 # STANDARDIZED version number (major, minor, patch)
                 Update-Version $newVersion 
             }
-            else {
-                # we are NOT aligning version numbers, rather we are just updating the patch version number
+            elseif($bumpVersions -eq "y") {
+                # we are NOT aligning version numbers, rather we are just updating the patch version number if bump versions is true, otherwise we do nothing here
                 Update-Version
             }
         }

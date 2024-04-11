@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-auth-services",
-  "version": "1.0.6",
+  "version": "1.0.7-next.0",
   "description": "MemberJunction Explorer: Authentication Services",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,7 +27,7 @@
     "@azure/msal-angular": "^3.0.11"
   },
   "dependencies": {
-    "@memberjunction/core": "^1.0.6",
+    "@memberjunction/core": "^1.0.7-next.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

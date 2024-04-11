@@ -1,11 +1,16 @@
 import { BaseLLM, GetAIAPIKey } from "@memberjunction/ai";
 import { AdvancedGenerationFeature, configInfo } from "./config";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import { LogError } from "@memberjunction/core";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
 export type PromptDefinition = { feature: string, systemPrompt: string, userMessage: string };
+
+/**
+ * This class is responsible for managing the advanced generation capabilities of the system. You can override the class to provide your own implementation.
+ */
+@RegisterClass(AdvancedGeneration)
 export class AdvancedGeneration {
     private static _prompts: PromptDefinition[] = [
         {

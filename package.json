@@ -1,6 +1,7 @@
 {
   "name": "memberjunction-workspace",
   "version": "1.0.8",
+  "license": "ISC",
   "workspaces": [
     "packages/*",
     "packages/AI/*",
@@ -8,14 +9,19 @@
     "packages/AngularElements/*"
   ],
   "scripts": {
-    "build": "turbo build --filter=!mj_explorer",
+    "build": "turbo build --filter='!mj_*'",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
-    "docs": "typedoc"
+    "docs": "typedoc",
+    "change": "beachball change",
+    "checkchange": "beachball check --verbose",
+    "release": "beachball publish --access public"
   },
+  "repository": "https://github.com/MemberJunction/MJ.git",
   "dependencies": {
     "archiver": "^7.0.0"
   },
   "devDependencies": {
+    "beachball": "^2.43.0",
     "turbo": "^1.12.5",
     "typedoc": "^0.25.12",
     "typedoc-plugin-missing-exports": "^2.2.0"

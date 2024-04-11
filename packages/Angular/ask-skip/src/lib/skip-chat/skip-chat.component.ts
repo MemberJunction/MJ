@@ -119,6 +119,22 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
+  public splitterCollapseStateChanged(e: boolean) {
+    this.sharedService.InvokeManualResize();
+  }
+
+  public GetConversationItemClass(item: ConversationEntity) {
+    let classInfo: string = ''
+    if (this.SelectedConversation?.ID === item.ID)
+      classInfo += 'conversation-item-selected';
+    if (item.LinkedEntityID && item.LinkedRecordID) {
+      // an embedded conversation
+      classInfo += ' conversation-item-linked';
+    }
+
+    return classInfo;
+  }
+
   protected SetSkipStatusMessage(message: string, delay: number) {
     if (delay && delay > 0) {
       setTimeout(() => {
@@ -288,6 +304,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     }
   }
 
+  public FlipEmbeddedConversationState() {
+    this.IncludeLinkedConversationsInList = !this.IncludeLinkedConversationsInList;
+    this.loadConversations();
+  }
+  
   protected async loadConversations(conversationIdToLoad: number | undefined = undefined) {
     let cachedConversations = MJGlobal.Instance.ObjectCache.Find<ConversationEntity[]>('Conversations');
     if (!cachedConversations) {

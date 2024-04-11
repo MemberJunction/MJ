@@ -1,4 +1,4 @@
-import { logError, logStatus } from "./logging";
+import { logError } from "./logging";
 
 const fs = require('fs');
 const fse = require('fs-extra');
@@ -69,6 +69,3 @@ export function combineFiles(directory: string, combinedFileName: string, patter
     fs.writeFileSync(combinedFilePath, combinedContent);
     console.log(`      Combined file created at ${combinedFilePath}`);
 }
-
-// Usage example
-//combineFiles('path/to/directory', 'combinedFile.sql', '*.permissions.generated.sql', true);

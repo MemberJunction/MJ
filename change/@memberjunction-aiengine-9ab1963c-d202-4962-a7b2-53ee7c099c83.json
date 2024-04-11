@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Add build and publish automation",
+  "packageName": "@memberjunction/aiengine",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}

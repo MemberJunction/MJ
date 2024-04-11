@@ -35,8 +35,6 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   public DrillDowns: DrillDownInfo[] = [];
 
   @ViewChild('drillDownComponent', {static: false}) drillDownComponent!: DynamicReportDrillDownComponent;
-  @ViewChild('tabComponent') tabComponent!: MJTabStripComponent;
-
 
   constructor (public sharedService: SharedService, private router: Router, private cdRef: ChangeDetectorRef) {}
 
@@ -77,7 +75,6 @@ export class DynamicReportComponent implements AfterViewInit, AfterViewChecked {
   async ngAfterViewInit() {
     await this.RefreshMatchingReport();
     setTimeout(() => {
-      this.tabComponent.SelectedTabIndex = 0; // make sure the first tab is selected
       SharedService.Instance.InvokeManualResize(250); // resize the tab strip and its contents after short delay
     }, 100);
   }

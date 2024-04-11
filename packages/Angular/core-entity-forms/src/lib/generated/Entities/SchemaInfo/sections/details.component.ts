@@ -73,3 +73,4 @@ export class SchemaInfoDetailsComponent extends BaseFormSectionComponent {
 export function LoadSchemaInfoDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
+      

@@ -2,81 +2,88 @@ import { EntityFieldValueListType, EntityInfo, TypeScriptTypeFromSQLType } from 
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from './util';
-
-export function generateAllEntitySubClasses(entities: EntityInfo[], directory: string): boolean {
-    try {   
-        const sContent = generateEntitySubClassFileHeader() + entities.map(e => generateEntitySubClass(e, false)).join('')
-        makeDir(directory);
-        fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), sContent);
-
-        return true;
-    } catch (err) {
-        console.error(err);
-        return false;
-    }
-}
-export function generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-`
-}
+import { RegisterClass } from '@memberjunction/global';
 
 /**
- * 
- * @param entity 
- * @param includeFileHeader 
+ * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
-export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false ) : string { 
-    if (entity.PrimaryKeys.length === 0) {
-        console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`)
+@RegisterClass(EntitySubClassGeneratorBase)
+export class EntitySubClassGeneratorBase {
+    public generateAllEntitySubClasses(entities: EntityInfo[], directory: string): boolean {
+        try {   
+            const sContent = this.generateEntitySubClassFileHeader() + entities.map(e => this.generateEntitySubClass(e, false)).join('')
+            makeDir(directory);
+            fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), sContent);
+    
+            return true;
+        } catch (err) {
+            console.error(err);
+            return false;
+        }
     }
-    else {
-        const fields: string = entity.Fields.map(e => {
-            let values: string = '';
-            let valueList: string = '';
-            if (e.ValueListType && 
-                e.ValueListType.length > 0 && 
-                e.ValueListType.trim().toLowerCase() !== 'none') {
-                values = e.EntityFieldValues.map(v => `\n        *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
-                valueList = `\n        * * Value List Type: ${e.ValueListType}\n        * * Possible Values `+ values  
-            }
-            let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
-            if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
-                // construct a typeString that is a union of the possible values
-                const quotes = e.NeedsQuotes ? "'" : '';
-                typeString = e.EntityFieldValues.map(v => `${quotes}${v.Value}${quotes}`).join(' | ');
-                if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
-                    // special case becuase a user can enter whatever they want
-                    typeString += ' | ' + TypeScriptTypeFromSQLType(e.Type);
+    
+    public generateEntitySubClassFileHeader(): string {
+        return `import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
+import { RegisterClass } from "@memberjunction/global";
+    `
+    }
+    
+    /**
+     * 
+     * @param entity 
+     * @param includeFileHeader 
+     */
+    public generateEntitySubClass(entity: EntityInfo, includeFileHeader: boolean = false ) : string { 
+        if (entity.PrimaryKeys.length === 0) {
+            console.warn(`Entity ${entity.Name} has no primary keys.  Skipping.`)
+        }
+        else {
+            const fields: string = entity.Fields.map(e => {
+                let values: string = '';
+                let valueList: string = '';
+                if (e.ValueListType && 
+                    e.ValueListType.length > 0 && 
+                    e.ValueListType.trim().toLowerCase() !== 'none') {
+                    values = e.EntityFieldValues.map(v => `\n        *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`).join('');
+                    valueList = `\n        * * Value List Type: ${e.ValueListType}\n        * * Possible Values `+ values  
                 }
-                // finally, add the null type if it allows null
-                if (e.AllowsNull) {
-                    typeString += ' | null';
+                let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
+                if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+                    // construct a typeString that is a union of the possible values
+                    const quotes = e.NeedsQuotes ? "'" : '';
+                    typeString = e.EntityFieldValues.map(v => `${quotes}${v.Value}${quotes}`).join(' | ');
+                    if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
+                        // special case becuase a user can enter whatever they want
+                        typeString += ' | ' + TypeScriptTypeFromSQLType(e.Type);
+                    }
+                    // finally, add the null type if it allows null
+                    if (e.AllowsNull) {
+                        typeString += ' | null';
+                    }
                 }
-            }
-            let sRet: string = `        /**
+                let sRet: string = `        /**
         * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n        * * Display Name: ' + e.DisplayName : ''}
         * * SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' +  e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n        * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n        * * Description: ' + e.Description : ''}
         */
         get ${e.CodeName}(): ${typeString} {  
             return this.Get('${e.Name}');
         }
-    `
-            if (!e.ReadOnly) {
-                sRet += `    set ${e.CodeName}(value: ${typeString}) {
+        `
+                if (!e.ReadOnly) {
+                    sRet += `set ${e.CodeName}(value: ${typeString}) {
             this.Set('${e.Name}', value);
         }`
-            }
-            return sRet + '\n';
-        }).join('')
-
-        const sClassName: string = `${entity.ClassName}Entity`
-        const subClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
-        const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
-        const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
-        const subClassImportStatement: string = subClass.length > 0 && subClassImport.length > 0 ? `import { ${subClass} } from '${subClassImport}';\n` : '';
-        const loadFieldString: string = entity.PrimaryKeys.map(f => `${f.CodeName}: ${f.TSType}`).join(', ');
-        const loadFunction: string = `    /**
+                }
+                return sRet + '\n';
+            }).join('')
+    
+            const sClassName: string = `${entity.ClassName}Entity`
+            const subClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
+            const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
+            const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
+            const subClassImportStatement: string = subClass.length > 0 && subClassImport.length > 0 ? `import { ${subClass} } from '${subClassImport}';\n` : '';
+            const loadFieldString: string = entity.PrimaryKeys.map(f => `${f.CodeName}: ${f.TSType}`).join(', ');
+            const loadFunction: string = `    /**
         * Loads the ${entity.Name} record from the database
         ${entity.PrimaryKeys.map(f => `* @param ${f.CodeName}: ${f.TSType} - primary key value to load the ${entity.Name} record.`).join('\n    ')}
         * @param EntityRelationshipsToLoad - (optional) the relationships to load
@@ -92,8 +99,8 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
             ${entity.PrimaryKeys.map(f => `pkeyValues.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-    `    
-        const deleteFunction: string = entity.AllowDeleteAPI ? '' : `    
+        `    
+            const deleteFunction: string = entity.AllowDeleteAPI ? '' : `    
         /**
         * ${entity.Name} - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
         * @public
@@ -105,9 +112,9 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
         public async Delete(): Promise<boolean> {
             throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
         } 
-        `
-
-        const saveFunction: string = entity.AllowCreateAPI || entity.AllowUpdateAPI ? '' : `    
+            `
+    
+            const saveFunction: string = entity.AllowCreateAPI || entity.AllowUpdateAPI ? '' : `    
         /**
         * ${entity.Name} - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
         * @public
@@ -119,9 +126,9 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
         public async Save(options?: EntitySaveOptions) : Promise<boolean> {
             throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
         } 
-        `
-
-        let sRet: string = `
+            `
+    
+            let sRet: string = `
     /**
      * ${entity.Name} - strongly typed entity sub-class
      * * Schema: ${entity.SchemaName}
@@ -137,10 +144,12 @@ export function generateEntitySubClass(entity: EntityInfo, includeFileHeader: bo
     ${loadFunction}${saveFunction}${deleteFunction}
     ${fields}
     }
-    `
-        if (includeFileHeader)
-            sRet = generateEntitySubClassFileHeader() + sRet;
-        
-        return sRet
+        `
+            if (includeFileHeader)
+                sRet = this.generateEntitySubClassFileHeader() + sRet;
+            
+            return sRet
+        }
     }
 }
+
