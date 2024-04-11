@@ -23,7 +23,7 @@
     "@angular/core": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/ng-container-directives": "^1.0.4",
+    "@memberjunction/ng-container-directives": "^1.0.6",
     "@memberjunction/ng-shared": "^1.0.6",
     "tslib": "^2.3.0"
   },

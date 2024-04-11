@@ -14,6 +14,11 @@ export const dbInstanceName = env.get('DB_INSTANCE_NAME').asString();
 export const dbTrustServerCertificate = env.get('DB_TRUST_SERVER_CERTIFICATE').asBool();
 
 export const graphqlPort = env.get('PORT').default('4000').asPortNumber();
+
+export const ___codeGenAPIURL = env.get('CODEGEN_API_URL').asString();
+export const ___codeGenAPIPort = env.get('CODEGEN_API_PORT').default('3999').asPortNumber();
+export const ___codeGenAPISubmissionDelay = env.get('CODEGEN_API_SUBMISSION_DELAY').default(5000).asIntPositive();
+
 export const graphqlRootPath = env.get('ROOT_PATH').default('/').asString();
 
 export const webClientID = env.get('WEB_CLIENT_ID').asString();
