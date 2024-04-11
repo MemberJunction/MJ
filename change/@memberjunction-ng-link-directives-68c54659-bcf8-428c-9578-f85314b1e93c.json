@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Add build and publish automation",
-  "packageName": "@memberjunction/ng-link-directives",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}
