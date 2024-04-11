@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "API Engine for MemberJunction CodeGen",
   "main": "src/index.ts",
+  "private": true,
   "scripts": {
     "dev:debug": "ts-node-dev --transpile-only --respawn --inspect=4321 --project tsconfig.json src/index.ts",
     "dev": "ts-node-dev --transpile-only --respawn --project tsconfig.json src/index.ts",

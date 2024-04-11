@@ -15,4 +15,4 @@ Feel free to open issues or pull requests if you have suggestions or fixes.
 
 ## License
 
-MIT License
+ISC License
