@@ -27,4 +27,4 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Run check script
-        run: npx beachball check --verbose
+        run: npx beachball check --verbose --branch ${{ github.event.pull_request.base.ref }}
