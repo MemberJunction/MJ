@@ -54,5 +54,5 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
         run: 
-          npm run release -- --prerelease-prefix next --tag next --token "$NPM_TOKEN"
+          npm run release -- --branch origin/next --prerelease-prefix next --tag next --token "$NPM_TOKEN"
  

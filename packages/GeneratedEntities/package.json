@@ -1,6 +1,6 @@
 {
   "name": "mj_generatedentities",
-  "version": "1.0.0",
+  "version": "1.0.1-next.0",
   "description": "Generated Entity Subclasses - Automatically Created and Maintained by MemberJunction CodeGen",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,7 +19,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/core": "^1.0.6",
-    "@memberjunction/global": "^1.0.6"
+    "@memberjunction/core": "^1.0.7-next.0",
+    "@memberjunction/global": "^1.0.7-next.0"
   }
 }
