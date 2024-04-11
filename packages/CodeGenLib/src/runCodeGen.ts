@@ -23,7 +23,7 @@ export class RunCodeGenBase {
     /**
      * This method is called to setup the data source for the code generation process. You can override this method to customize the data source setup process.
      */
-    protected async setupDataSource() {
+    public async setupDataSource() {
         /****************************************************************************************
         // First, setup the data source and make sure the metadata and related stuff for MJCore is initialized
         ****************************************************************************************/

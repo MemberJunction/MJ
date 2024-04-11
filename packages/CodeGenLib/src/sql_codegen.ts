@@ -177,7 +177,7 @@ export class SQLCodeGenBase {
      * @param directory The directory to save the generated SQL files to
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
-    public async generateAndExecuteEntitySQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, batchSize: number = 5): Promise<boolean> {
+    public async generateAndExecuteEntitySQLToSeparateFiles(ds: DataSource, entities: EntityInfo[], directory: string, onlyPermissions: boolean, writeFiles: boolean = true, batchSize: number = 5): Promise<boolean> {
         try {
             let bFail: boolean = false;
             const totalEntities = entities.length;
@@ -190,7 +190,7 @@ export class SQLCodeGenBase {
                         logError(`SKIPPING ENTITY: Entity ${e.Name}, because it does not have a primary key field defined. A table must have a primary key defined to quality to be a MemberJunction entity`);
                         return false;
                     }
-                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions);
+                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles(ds, e, directory, onlyPermissions, writeFiles);
                 });
     
                 const results = await Promise.all(promises);
@@ -222,10 +222,11 @@ export class SQLCodeGenBase {
     
     
     
-    public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean): Promise<boolean> {
+    public async generateAndExecuteSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, writeFiles: boolean = true): Promise<boolean> {
         try {
-            const sSQL = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions); // this creates the files and returns a single string with all the SQL we can then execute
-            return await this.SQLUtilityObject.executeSQLScript(ds, sSQL, true)
+            const {sql, permissionsSQL} = await this.generateSingleEntitySQLToSeparateFiles(ds, entity, directory, onlyPermissions, writeFiles); // this creates the files and returns a single string with all the SQL we can then execute
+            return await this.SQLUtilityObject.executeSQLScript(ds, sql, true) && 
+                   await this.SQLUtilityObject.executeSQLScript(ds, permissionsSQL, true);
         }
         catch (err) {
             logError(err);
@@ -233,29 +234,34 @@ export class SQLCodeGenBase {
         }
     }
     
-    public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean): Promise<string> {
+    public async generateSingleEntitySQLToSeparateFiles(ds: DataSource, entity: EntityInfo, directory: string, onlyPermissions: boolean, writeFiles: boolean = true): Promise<{sql: string, permissionsSQL: string}> {
         try {
             // create the directory if it doesn't exist
-            if (!fs.existsSync(directory))
+            if (writeFiles && !fs.existsSync(directory))
                 fs.mkdirSync(directory, { recursive: true }); 
     
             // now do the same thing for the /schema directory within the provided directory
             const schemaDirectory = path.join(directory, entity.SchemaName);
-            if (!fs.existsSync(schemaDirectory))
+            if (writeFiles && !fs.existsSync(schemaDirectory))
                 fs.mkdirSync(schemaDirectory, { recursive: true }); // create the directory if it doesn't exist
     
             let sRet: string = ''
+            let permissionsSQL: string = ''
             // BASE VIEW  
             if (!onlyPermissions && entity.BaseViewGenerated && !entity.VirtualEntity) {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(entity,entity.BaseView) + await this.generateBaseView(ds, entity)
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, false, true));
-                fs.writeFileSync(filePath, s)
+                if (writeFiles)
+                    fs.writeFileSync(filePath, s)
                 sRet += s + '\nGO\n';
             }
             // always generate permissions for the base view
             const s = this.generateSingleEntitySQLFileHeader(entity, 'Permissions for ' + entity.BaseView) + this.generateViewPermissions(entity)
-            fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true)), s)
+            if (s.length > 0) 
+                permissionsSQL += s + '\nGO\n'; 
+            if (writeFiles)
+                fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('view', entity.SchemaName, entity.BaseView, true, true)), s)
     
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -268,11 +274,15 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions && entity.spCreateGenerated) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPCreate(entity)
-                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)
+                    if (writeFiles)
+                        fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Create) + '\n\n';           
-                fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
+                if (s.length > 0) 
+                    permissionsSQL += s + '\nGO\n'; 
+                if (writeFiles)
+                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
     
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -286,11 +296,15 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions && entity.spUpdateGenerated) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPUpdate(entity)
-                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)    
+                    if (writeFiles)
+                        fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)    
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Update) + '\n\n';
-                fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
+                if (s.length > 0) 
+                    permissionsSQL += s + '\nGO\n';     
+                if (writeFiles)
+                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
     
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -304,11 +318,15 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions && entity.spDeleteGenerated) {
                     // generate the delete SP
                     const s = this.generateSingleEntitySQLFileHeader(entity, spName) + this.generateSPDelete(entity)
-                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)
+                    if (writeFiles)
+                        fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, false, true)), s)
                     sRet += s + '\nGO\n';
                 }
                 const s = this.generateSPPermissions(entity, spName, SPType.Delete) + '\n\n';
-                fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
+                if (s.length > 0) 
+                    permissionsSQL += s + '\nGO\n';     
+                if (writeFiles)
+                    fs.writeFileSync(path.join(directory, this.SQLUtilityObject.getDBObjectFileName('sp', entity.SchemaName, spName, true, true)), s)
     
                 // now, append the permissions to the return string IF we did NOT generate the proc - because if we generated the proc, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -323,13 +341,18 @@ export class SQLCodeGenBase {
                 if (!onlyPermissions) {
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, false, true));
-                    fs.writeFileSync(filePath, ft.sql)
+                    if (writeFiles)
+                        fs.writeFileSync(filePath, ft.sql)
                     sRet += ft.sql + '\nGO\n';
                 }
     
                 const sP = this.generateFullTextSearchFunctionPermissions(entity, ft.functionName) + '\n\n';
+                if (sP.length > 0) 
+                    permissionsSQL += sP + '\nGO\n'; 
+    
                 const filePath = path.join(directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', entity.SchemaName, entity.BaseTable, true, true));
-                fs.writeFileSync(filePath, sP)
+                if (writeFiles)
+                    fs.writeFileSync(filePath, sP)
                 
                 // now, append the permissions to the return string IF we did NOT generate the function - because if we generated the function, that
                 // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
@@ -337,7 +360,7 @@ export class SQLCodeGenBase {
                     sRet += sP + '\nGO\n';
             }
     
-            return sRet
+            return {sql: sRet, permissionsSQL: permissionsSQL};
         }
         catch (err) {
             logError(err)

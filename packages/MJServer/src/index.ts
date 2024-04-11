@@ -32,6 +32,7 @@ export { NewUserBase } from './auth/newUsers';
 export { configInfo } from './config';
 export * from './directives';
 export * from './entitySubclasses/userViewEntity.server';
+export * from './entitySubclasses/entityPermissions.server';
 export * from './types';
 export { TokenExpiredError } from './auth';
 
@@ -43,15 +44,10 @@ export * from './resolvers/AskSkipResolver';
 export * from './resolvers/ColorResolver';
 export * from './resolvers/DatasetResolver';
 export * from './resolvers/EntityRecordNameResolver';
-//export * from '../../MJAPI/src/resolvers/EntityResolver';
 export * from './resolvers/MergeRecordsResolver';
 export * from './resolvers/ReportResolver';
 
 export * from './generated/generated'
-
-
-//export * from '../../MJAPI/src/resolvers/UserFavoriteResolver';
-//export * from '../../MJAPI/src/resolvers/UserViewResolver';
 
 import { resolve } from 'node:path';
 
