@@ -7,7 +7,7 @@ import { IMetadataProvider, LogStatus, RunView, RunViewParams, RunViewResult, Us
 import { currentUserEmail } from "../config";
 import { IProcedureResult, Request } from 'mssql';
 import { Embeddings, GetAIAPIKey} from '@memberjunction/ai';
-import { UpdateOptions, VectorDBBase } from '@memberjunction/ai-vectordb';
+import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
 import { AIModelEntity, VectorDatabaseEntity } from '@memberjunction/core-entities';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -49,8 +49,6 @@ export class EntityVectorSyncer {
     public async syncEntityDocuments(): Promise<void> {
         this.start();
         await this.setupDBConnection();
-        console.log("Connected to SQL Server");
-        console.log("Syncing entities...");
 
         const aiModel: AIModelEntity = this.GetAIModel();
         const vectorDB: VectorDatabaseEntity = this.GetVectorDatabase();

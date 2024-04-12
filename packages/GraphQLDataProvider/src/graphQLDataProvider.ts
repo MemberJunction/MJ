@@ -463,13 +463,10 @@ npm
 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {params: {
             ...params,
-            PrimaryKeyValues: params.PrimaryKeyValues.map(pkv => {
+            RecordIDs: params.RecordIDs.map(recordID => {
                 // map each pkv so that its Value is a string
-                return { 
-                            FieldName: pkv.FieldName, 
-                            Value: pkv.Value.toString()
-                       }
-                })
+                return recordID.GetValuesAsString();
+            })
         }});
 
         if(data && data.GetRecordDuplicates){

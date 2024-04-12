@@ -6,7 +6,7 @@
         <span *ngIf="selectedFolderID" title="Folder" class="title-folder fa-regular fa-folder fa-2xl"></span>
         <h4>{{title}}</h4>
       </div>
-      <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="data" themeColor="info">
+      <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="createButtonDropdownData" themeColor="info">
         <span class="fa-solid fa-plus"></span>
         Create New
       </kendo-dropdownbutton>

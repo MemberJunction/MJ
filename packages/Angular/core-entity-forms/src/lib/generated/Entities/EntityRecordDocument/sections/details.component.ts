@@ -45,6 +45,10 @@ import { EntityRecordDocumentEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity Document ID</label>
+            <kendo-numerictextbox [(value)]="record.EntityDocumentID" ></kendo-numerictextbox>   
         </div> 
     </div>
     <div *ngIf="!this.EditMode" class="record-form">
@@ -84,6 +88,10 @@ import { EntityRecordDocumentEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Entity Document ID</label>
+            <span >{{FormatValue('EntityDocumentID', 0)}}</span>
         </div>
     </div>
 </div>

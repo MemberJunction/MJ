@@ -12348,6 +12348,17 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
         
+        /**
+        * * Field Name: EntityDocumentID
+        * * Display Name: Entity Document ID
+        * * SQL Data Type: int
+        */
+        get EntityDocumentID(): number {  
+            return this.Get('EntityDocumentID');
+        }
+        set EntityDocumentID(value: number) {
+            this.Set('EntityDocumentID', value);
+        }
 
     }
         
@@ -12396,6 +12407,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
         */
         get ID(): number {  
             return this.Get('ID');
@@ -12483,6 +12495,28 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
         
+        /**
+        * * Field Name: VectorDatabaseID
+        * * Display Name: Vector Database ID
+        * * SQL Data Type: int
+        */
+        get VectorDatabaseID(): number {  
+            return this.Get('VectorDatabaseID');
+        }
+        set VectorDatabaseID(value: number) {
+            this.Set('VectorDatabaseID', value);
+        }
+        /**
+        * * Field Name: AIModelID
+        * * Display Name: AIModel ID
+        * * SQL Data Type: int
+        */
+        get AIModelID(): number {  
+            return this.Get('AIModelID');
+        }
+        set AIModelID(value: number) {
+            this.Set('AIModelID', value);
+        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity

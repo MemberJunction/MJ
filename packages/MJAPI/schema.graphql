@@ -2188,11 +2188,10 @@ type PaymentTermsType_ {
 }
 
 input PotentialDuplicateRequestType {
-  EntitiyID: Int
-  EntityDocumentID: Int!
-  EntityName: String
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  EntityDocumentID: Int
+  EntityID: Int!
   ProbabilityScore: Int
+  RecordIDs: [PrimaryKeyValueBaseInputType!]!
 }
 
 type PotentialDuplicateResponseType {
@@ -2203,6 +2202,10 @@ type PotentialDuplicateResponseType {
 type PotentialDuplicateType {
   PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   ProbabilityScore: Float!
+}
+
+input PrimaryKeyValueBaseInputType {
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
 }
 
 input PrimaryKeyValueInputType {

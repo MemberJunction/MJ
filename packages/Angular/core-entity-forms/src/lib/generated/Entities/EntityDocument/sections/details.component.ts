@@ -39,6 +39,14 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
             <span >{{FormatValue('UpdatedAt', 0)}}</span>   
         </div>               
         <div class="record-form-row">
+            <label class="fieldLabel">Vector Database ID</label>
+            <kendo-numerictextbox [(value)]="record.VectorDatabaseID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
+            <label class="fieldLabel">AIModel ID</label>
+            <kendo-numerictextbox [(value)]="record.AIModelID" ></kendo-numerictextbox>   
+        </div>               
+        <div class="record-form-row">
             <label class="fieldLabel">Entity</label>
             <span >{{FormatValue('Entity', 0)}}</span>   
         </div>               
@@ -76,6 +84,14 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         <div class="record-form-row">
             <label class="fieldLabel">Updated At</label>
             <span >{{FormatValue('UpdatedAt', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">Vector Database ID</label>
+            <span >{{FormatValue('VectorDatabaseID', 0)}}</span>
+        </div>              
+        <div class="record-form-row">
+            <label class="fieldLabel">AIModel ID</label>
+            <span >{{FormatValue('AIModelID', 0)}}</span>
         </div>              
         <div class="record-form-row">
             <label class="fieldLabel">Entity</label>

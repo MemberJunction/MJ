@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from "type-graphql";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError } from '@memberjunction/core';
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError, PrimaryKeyValueBase } from '@memberjunction/core';
 import {PrimaryKeyValueInputType, PrimaryKeyValueOutputType} from './MergeRecordsResolver'
 import { AppContext } from "../types";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -7,20 +7,23 @@ import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 @InputType()
 export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => Int)
-  EntityDocumentID: number;
+  EntityID: number;
 
-  @Field(() => [PrimaryKeyValueInputType])
-  PrimaryKeyValues: PrimaryKeyValueInputType[];
+  @Field(() => [PrimaryKeyValueBaseInputType])
+  RecordIDs: PrimaryKeyValueBase[];
 
   @Field(() => Int, { nullable: true })
-  EntitiyID: number;
-
-  @Field(() => String, { nullable: true })
-  EntityName: string;
+  EntityDocumentID: number;
 
   @Field(() => Int, { nullable: true })
   ProbabilityScore: number;
+  
+}
 
+@InputType()
+export class PrimaryKeyValueBaseInputType extends PrimaryKeyValueBase {
+  @Field(() => [PrimaryKeyValueInputType])
+  PrimaryKeyValues: PrimaryKeyValue[];
 }
 
 @ObjectType()

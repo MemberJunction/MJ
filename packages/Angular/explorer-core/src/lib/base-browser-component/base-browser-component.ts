@@ -67,30 +67,37 @@ export class BaseBrowserComponent {
         }
 
         this.items = [];
-        if(!params?.skiploadEntityData){
-            const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
-            this.items.push(...this.createItemsFromEntityData(entityData));
-            this.entityData = entityData;
-        }
-
+        
         if(!params?.skipLoadCategoryData){
             const categories: Folder[] = await this.RunView(this.categoryEntityName, categoryItemFilter);
-            this.items.push(...this.createItemsFromFolders(categories));
+            const folders: Item[] = this.createItemsFromFolders(categories);
+            if(params?.sortItemsAfterLoad){
+                this.sortItems(folders);
+            } 
+            this.items.push(...folders);
             this.folders = categories;
         }
-        
-        if(params?.sortItemsAfterLoad){
-            this.sortItems();
+
+        if(!params?.skiploadEntityData){
+            const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
+            const entityItems: Item[] = this.createItemsFromEntityData(entityData);
+            if(params?.sortItemsAfterLoad){
+                this.sortItems(entityItems);
+            }  
+            this.items.push(...entityItems);
+            this.entityData = entityData;
         }
 
         this.showLoader = false;
     }
 
     //maybe pass in a sort function for custom sorting?
-    protected sortItems(): void {
-        this.items.sort(function(a, b){
-            if(a.Name < b.Name) { return -1; }
-            if(a.Name > b.Name) { return 1; }
+    protected sortItems(items: Item[]): void {
+        items.sort(function(a, b){
+            let aName = a.Name.toLocaleLowerCase();
+            let bName = b.Name.toLocaleLowerCase();
+            if(aName < bName) { return -1; }
+            if(aName > bName) { return 1; }
             return 0;
         });
     }

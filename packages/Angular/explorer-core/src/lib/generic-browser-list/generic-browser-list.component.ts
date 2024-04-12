@@ -73,7 +73,7 @@ export class GenericBrowserListComponent implements OnInit{
   public createFolderDialogOpened: boolean = false;
   private newFolderText: string = "Sample Folder";
 
-  data = [
+  public createButtonDropdownData = [
     { text: "Folder" },
   ];
 
@@ -85,7 +85,7 @@ export class GenericBrowserListComponent implements OnInit{
 
   public ngOnInit(): void {
     if(!this.disableAddButton){
-      this.data.unshift({ text: this.resourceName });
+      this.createButtonDropdownData.unshift({ text: this.resourceName });
     }
   }
   

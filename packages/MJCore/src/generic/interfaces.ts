@@ -54,8 +54,10 @@ export class PrimaryKeyValueBase {
     */
     PrimaryKeyValues: PrimaryKeyValue[];
 
-    //MJ Server's DuplicateRecordResolve has a copy of this property
-    //changes here should be applied there as well
+    /**
+     * MJ Server's DuplicateRecordResolve has a copy of this property
+     * changes here should be applied there as well
+     */
     GetCompositeKey(): string {
         
         if(!this.PrimaryKeyValues){
@@ -70,25 +72,38 @@ export class PrimaryKeyValueBase {
             return keyValue.Value.toString();
         }).join(", ");
     }
+
+    /**
+     * Returns a copy of the PrimaryKeyValues array but with the Value properties as string
+     */
+    GetValuesAsString(): PrimaryKeyValue[] {
+        return this.PrimaryKeyValues.map((keyValue, index) => {
+            return {
+                FieldName: keyValue.FieldName,
+                Value: keyValue.Value.toString()
+            }
+        });
+    }
 }
 
 export class PotentialDuplicate extends PrimaryKeyValueBase {
     ProbabilityScore: number
 }
 
-export class PotentialDuplicateRequest extends PrimaryKeyValueBase {
-    /**
-    * The ID of the entity document to use
-    **/
-    EntityDocumentID: number;
+export class PotentialDuplicateRequest {
     /**
     * The ID of the entity the record belongs to
     **/
-    EntityID?: number;
+    EntityID: number;
     /**
-    * The name of the entity the record belongs to
+     * The Primary Key values of each record
+     * we're checking for duplicates
+     */
+    RecordIDs: PrimaryKeyValueBase[]; 
+    /**
+    * The ID of the entity document to use
     **/
-    EntityName?: string;
+    EntityDocumentID?: number;
     /**
     * The minimum score in order to consider a record a potential duplicate
     **/
@@ -187,7 +202,7 @@ export interface IMetadataProvider {
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
      * 
-     * @param params object containing many properties used in fetching records and determining which ones to return
+     * @param params Object containing many properties used in fetching records and determining which ones to return
      */
     GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
 

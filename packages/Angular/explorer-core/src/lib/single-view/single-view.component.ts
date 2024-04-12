@@ -42,7 +42,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   }
 
   private async initialLoad() {
-    const md = new Metadata()
+    const md = new Metadata();
     if (this.viewId || this.viewName) {
       let view: UserViewEntity | null = null;
       if (this.viewId)
@@ -57,6 +57,8 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
           this.selectedEntity = e
           this.showSearch = e.AllowUserSearchAPI
         }
+
+        let result = await md.GetRecordDuplicates({ EntityID: view.EntityID, RecordIDs: [], EntityDocumentID: 0, ProbabilityScore: 0 }, md.CurrentUser);
       }
     }
     else if (this.entityName && this.entityName.length > 0) {
