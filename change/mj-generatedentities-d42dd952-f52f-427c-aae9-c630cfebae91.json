@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Update build and publish automation",
+  "packageName": "mj_generatedentities",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
