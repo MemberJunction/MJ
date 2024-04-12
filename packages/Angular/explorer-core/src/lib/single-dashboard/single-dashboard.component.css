@@ -76,3 +76,7 @@ line-height: 28px;
 .button-spacing {
     margin-right: 8px
 }
+
+.btn-wrapper > button {
+    margin-left: 5px;
+}
