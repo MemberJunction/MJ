@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/skip-types",
+  "entries": [
+    {
+      "date": "Fri, 12 Apr 2024 16:36:26 GMT",
+      "version": "1.0.8-next.2",
+      "tag": "@memberjunction/skip-types_v1.0.8-next.2",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/skip-types",
+            "commit": "8029b4d88db85f10e051f5c1de9524a8747a4979",
+            "comment": "Update build and publish automation"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/skip-types",
+            "comment": "Bump @memberjunction/core-entities to v1.0.8-next.2",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/skip-types",
+            "comment": "Bump @memberjunction/data-context to v1.0.8-next.2",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}
