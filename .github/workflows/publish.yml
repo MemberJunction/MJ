@@ -1,6 +1,10 @@
 name: Build and publish new package versions
 
 on:
+  push:
+    branches:
+      - main
+
   workflow_dispatch:
 
 concurrency:
