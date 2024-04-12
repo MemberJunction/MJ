@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-forms",
-  "version": "1.0.7-next.0",
+  "version": "1.0.7",
   "description": "MemberJunction: Angular Base Form Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,10 +25,10 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/global": "^1.0.7-next.0",
-    "@memberjunction/core": "^1.0.7-next.0",
-    "@memberjunction/ng-record-changes": "^1.0.7-next.0",
-    "@memberjunction/ng-tabstrip": "^1.0.7-next.0",
+    "@memberjunction/global": "^1.0.7",
+    "@memberjunction/core": "^1.0.7",
+    "@memberjunction/ng-record-changes": "^1.0.7",
+    "@memberjunction/ng-tabstrip": "^1.0.7",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "tslib": "^2.3.0"
   },
