@@ -52,8 +52,9 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
-        run: 
-          npm run release -- --token "$NPM_TOKEN"
+        run: |
+          echo "generateChangelog: true " > .beachballrc
+          npm run release -- --branch origin/main --token "$NPM_TOKEN"
  
       - name: Publish changes to npm next packages
         if: ${{ env.BRANCH == 'next' }}
