@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/ng-explorer-core
 
-This log was last generated on Sat, 13 Apr 2024 02:32:44 GMT and should not be manually modified.
+This log was last generated on Sat, 13 Apr 2024 14:38:29 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.0.9
+
+Sat, 13 Apr 2024 14:38:29 GMT
+
+### Patches
+
+- Testing build and publish system (craig.adam@bluecypress.io)
 
 ## 1.0.8
 

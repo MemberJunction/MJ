@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
-This log was last generated on Sat, 13 Apr 2024 02:32:44 GMT and should not be manually modified.
+This log was last generated on Sat, 13 Apr 2024 14:38:29 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.0.9
+
+Sat, 13 Apr 2024 14:38:29 GMT
+
+### Patches
+
+- Bump @memberjunction/ng-explorer-core to v1.0.9
 
 ## 1.0.8
 

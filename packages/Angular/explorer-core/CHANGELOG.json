@@ -2,6 +2,21 @@
   "name": "@memberjunction/ng-explorer-core",
   "entries": [
     {
+      "date": "Sat, 13 Apr 2024 14:38:29 GMT",
+      "version": "1.0.9",
+      "tag": "@memberjunction/ng-explorer-core_v1.0.9",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-explorer-core",
+            "commit": "f15816566a782602d38081e8d9565a04e24e3a28",
+            "comment": "Testing build and publish system"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 13 Apr 2024 02:32:44 GMT",
       "version": "1.0.8",
       "tag": "@memberjunction/ng-explorer-core_v1.0.8",
