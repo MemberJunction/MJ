@@ -54,23 +54,28 @@
       (reorder)="onReorder($event)"
       (resize)="onResize($event)"
     >
-      <kendo-tilelayout-item (mouseenter)="onMouseEnter($event)" (mouseleave)="onMouseOut($event)" [ngClass]="[getSelectedComponentStyle(this)]" *ngFor="let item of items" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
-        <kendo-tilelayout-item-header [ngClass]="['dashboard-item-header', getIsEditingItemHeaderStyle()]">
-          {{item.title}}
-          <div *ngIf="!isEditingDashboard">
-            <div class="btn-wrapper">
-              <button kendoButton (click)="toggleEditDashboard(true)">
-                <span class="k-icon k-i-edit"></span>
-              </button>
-              <button kendoButton (click)="showConfirmDeleteDashboardItem(item)"><span
-                  class="k-icon k-i-delete"></span></button>
-            </div>
-          </div>
-        </kendo-tilelayout-item-header>
-        <kendo-tilelayout-item-body [ngClass]="[getIsEditingItemBodyStyle()]">
-          <mj-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></mj-resource>
-        </kendo-tilelayout-item-body>
-      </kendo-tilelayout-item>
+      @for(item of items; track item.uniqueId) {
+        <kendo-tilelayout-item (mouseenter)="onMouseEnter($event)" (mouseleave)="onMouseOut($event)" [ngClass]="[getSelectedComponentStyle(this)]" [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
+          <kendo-tilelayout-item-header [ngClass]="['dashboard-item-header', getIsEditingItemHeaderStyle()]">
+            {{item.title}}
+            @if(!isEditingDashboard) {
+              <div>
+                <div class="btn-wrapper">
+                  <button kendoButton (click)="toggleEditDashboard(true)">
+                    <span class="fa-solid fa-pen-to-square"></span>
+                  </button>
+                  <button kendoButton (click)="showConfirmDeleteDashboardItem(item)">
+                    <span class="fa-solid fa-trash"></span>
+                  </button>
+                </div>
+              </div>
+            }
+          </kendo-tilelayout-item-header>
+          <kendo-tilelayout-item-body [ngClass]="[getIsEditingItemBodyStyle()]">
+            <mj-resource [Data]="item.ResourceData" [isVisible]="true" (ContentLoadingStarted)="loadingStarted($event)" (ContentLoadingComplete)="loadingComplete($event)"></mj-resource>
+          </kendo-tilelayout-item-body>
+        </kendo-tilelayout-item>
+      }
     </kendo-tilelayout>
   </div>
 </div>

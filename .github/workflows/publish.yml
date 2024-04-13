@@ -1,6 +1,10 @@
 name: Build and publish new package versions
 
 on:
+  push:
+    branches:
+      - main
+
   workflow_dispatch:
 
 concurrency:
@@ -55,6 +59,7 @@ jobs:
         if: ${{ env.BRANCH == 'next' }}
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
-        run: 
-          npm run release -- --keep-change-files --branch origin/next --prerelease-prefix next --tag next --token "$NPM_TOKEN"
+        run: |
+          echo "generateChangelog: false" > .beachballrc
+          npm run release -- --keep-change-files --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
  
