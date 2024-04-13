@@ -1,0 +1,7 @@
+{
+  "comment": "Testing build and publish system",
+  "type": "patch",
+  "packageName": "@memberjunction/ng-explorer-core",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
