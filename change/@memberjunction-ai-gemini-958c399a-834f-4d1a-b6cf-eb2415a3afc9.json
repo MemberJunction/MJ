@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Update build and publish automation",
-  "packageName": "@memberjunction/ai-gemini",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}
