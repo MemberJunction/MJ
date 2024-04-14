@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Trivial change to test detection",
+  "packageName": "@memberjunction/ng-file-storage",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
