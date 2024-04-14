@@ -1,7 +1,7 @@
 import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
+import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
  
  
@@ -28,9 +28,6 @@ export class SimpleRecordListComponent implements OnInit {
 
   public isLoading: boolean = false;
   public records: BaseEntity[] = [];
-
-
-  public kendoSVGIcon = kendoSVGIcon
 
   constructor(private router: Router) { 
   } 
@@ -129,7 +126,11 @@ export class SimpleRecordListComponent implements OnInit {
   }
 
   public async onEditOrNewRecordFormClosed(result: 'Save' | 'Cancel') {
+    if (!this.editOrNewRecord)
+      return; // this can happen if the user closes the form before the record is loaded
+
     this.showEditOrNewRecordForm = false;
+   
     if (result === 'Save') {
       // the dialog already saved the record, just check to make sure it was saved and if so, navigate
       if (this.editOrNewRecord.IsSaved) {

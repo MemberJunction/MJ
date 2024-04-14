@@ -1,8 +1,7 @@
 import { Component, OnInit, Input, SimpleChanges, OnChanges } from '@angular/core';
 
-import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
-import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
+import { RoleEntity, UserEntity } from '@memberjunction/core-entities';
  
 import { Router } from '@angular/router';
 import { UserRoleEntity_Ext } from '../single-role/single-role.component';
@@ -34,8 +33,6 @@ export class UserRolesGridComponent implements OnInit, OnChanges {
    * The user record we are working with, required if Mode is 'Users'
    */
   @Input() UserRecord: UserEntity | null = null;
-
-  public kendoSVGIcon = kendoSVGIcon
 
   constructor(private router: Router) { 
   } 

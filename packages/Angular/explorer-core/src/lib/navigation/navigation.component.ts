@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef, viewChildren, ViewChildren, QueryList } from '@angular/core';
+import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, HostBinding, AfterViewInit, Renderer2, Input, ChangeDetectorRef } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
@@ -9,10 +9,8 @@ import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { WorkspaceEntity, WorkspaceItemEntity, UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { Title } from '@angular/platform-browser';
-import { StubData } from '../../generic/app-nav-view.types';
-import { Item, ItemType, TreeItem } from '../../generic/Item.types';
+import { ItemType, TreeItem } from '../../generic/Item.types';
 import { MJTabStripComponent, TabClosedEvent, TabContextMenuEvent, TabEvent } from '@memberjunction/ng-tabstrip';
-import { letterSpaceIcon } from '@progress/kendo-svg-icons';
 
 export interface Tab {
   id?: number;
@@ -948,7 +946,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Ask Skip',
       path: '/askskip',
-      svgIcon: this.sharedService.kendoSVGIcon('user')
+      icon: "fa-solid fa-robot"
     }
     this.drawerItems.push(drawerItem);
   }
@@ -959,7 +957,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: true,
       text: 'Home',
       path: '/home',
-      svgIcon: this.sharedService.kendoSVGIcon('home') 
+      icon: "fa-solid fa-house"
     }
     this.drawerItems.push(drawerItem);
   }
@@ -970,7 +968,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Settings',
       path: '/settings',
-      svgIcon: this.sharedService.kendoSVGIcon('gear') 
+      icon: "fa-solid fa-gear"
     }
     this.drawerItems.push(drawerItem);
   }
@@ -990,7 +988,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         selected: false,
         text: 'Files',
         path: '/files',
-        svgIcon: this.sharedService.kendoSVGIcon('folder'),
+        icon: "fa-regular fa-folder"
       };
       this.drawerItems.push(drawerItem);
     }
@@ -1003,7 +1001,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Data',
       path: '/data',
-      svgIcon: this.sharedService.kendoSVGIcon('data') 
+      icon: "fa-solid fa-database"
     }
     this.drawerItems.push(drawerItem);
   }
@@ -1011,14 +1009,12 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   protected async loadResourceType(key: string, resourceType: string, path: string, currentUserID: number) {
     const rt = this.sharedService.ResourceTypeByName(resourceType)
     if (rt) {
-      const icon = rt.Icon;
-
       const drawerItem = {
         id: key,
         selected: false,
         text: resourceType,
         path: path,
-        svgIcon: icon ? this.sharedService.kendoSVGIcon(icon) : null
+        icon: rt.Icon ? rt.Icon : "fa-regular fa-file-alt"
       }
       this.drawerItems.push(drawerItem); 
     }
@@ -1041,6 +1037,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public toggle() {
     this.drawer.toggle();
+    this.mini = !this.mini;
     this.sharedService.InvokeManualResize();
   }
 }

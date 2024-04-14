@@ -1,8 +1,7 @@
-import { Component, OnInit, Input, SimpleChanges, OnChanges, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular/core';
 
-import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
-import { kendoSVGIcon } from '@memberjunction/ng-shared'
-import { ApplicationEntity, RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { Metadata } from '@memberjunction/core';
+import { ApplicationEntity } from '@memberjunction/core-entities';
 import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
 
  
@@ -19,8 +18,6 @@ export class SingleApplicationComponent implements OnInit {
   public gridHeight: number = 750;
   public isLoading: boolean = false;
   public Record: ApplicationEntity | null = null;
-
-  public kendoSVGIcon = kendoSVGIcon
 
   public showEntityEditingForm: boolean = false;
 

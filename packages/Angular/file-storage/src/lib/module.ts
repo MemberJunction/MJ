@@ -8,7 +8,6 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { GridModule } from '@progress/kendo-angular-grid';
-import { IconsModule } from '@progress/kendo-angular-icons';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
@@ -35,7 +34,6 @@ import { FilesGridComponent } from './files-grid/files-grid';
     CompareRecordsModule,
     ContainerDirectivesModule,
     ButtonsModule,
-    IconsModule,
     LabelModule,
     GridModule,
     DropDownsModule,

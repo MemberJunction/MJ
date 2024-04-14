@@ -14,8 +14,8 @@
                 <td *ngFor="let c of Columns; let i = index">
                     <span>{{ r.Get(c) }}</span>
                     <span *ngIf="i === 0 && (this.AllowDelete || this.AllowEdit)">
-                        <kendo-svgicon *ngIf="this.AllowEdit" class='icon' [icon]="kendoSVGIcon('pencil')" (click)="editRecord($event, r)"></kendo-svgicon> 
-                        <kendo-svgicon *ngIf="this.AllowEdit" class='icon' [icon]="kendoSVGIcon('trash')" (click)="deleteRecord($event, r)"></kendo-svgicon>
+                        <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)"></span>
+                        <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)"></span>
                     </span>
                 </td>
             </tr>

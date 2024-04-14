@@ -1,7 +1,6 @@
 import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChanges } from '@angular/core';
 
 import { Metadata, RunView } from '@memberjunction/core';
-import { kendoSVGIcon } from '@memberjunction/ng-shared'
 import { EntityPermissionEntity } from '@memberjunction/core-entities';
 
 
@@ -29,9 +28,6 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   public permissions: EntityPermissionEntity[] = [];
   public gridHeight: number = 750;
   public isLoading: boolean = false;
-
-
-  public kendoSVGIcon = kendoSVGIcon 
 
   constructor() { 
   } 

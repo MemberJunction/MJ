@@ -7,7 +7,6 @@ import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { IconsModule } from '@progress/kendo-angular-icons';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
@@ -44,7 +43,6 @@ import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
     CompareRecordsModule,
     ContainerDirectivesModule,
     ButtonsModule,
-    IconsModule,
     DropDownsModule,
     EntityPermissionsModule,
     MJTabStripModule,

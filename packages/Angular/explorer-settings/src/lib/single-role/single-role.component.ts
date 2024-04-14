@@ -1,8 +1,7 @@
-import { Component, OnInit, Input, SimpleChanges, OnChanges, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular/core';
 
-import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { kendoSVGIcon } from '@memberjunction/ng-shared'
-import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { BaseEntity, Metadata } from '@memberjunction/core';
+import { RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
 
@@ -55,8 +54,6 @@ export class SingleRoleComponent implements OnInit {
   public isLoading: boolean = false;
   public RoleRecord: RoleEntity | null = null;
 
-
-  public kendoSVGIcon = kendoSVGIcon
 
   public showEntityEditingForm: boolean = false;
 

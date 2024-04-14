@@ -19,7 +19,9 @@
         (cellClick)="cellClickHandler($event)"
         >
         <ng-template kendoGridToolbarTemplate>
-            <button fillMode="outline" themeColor="info" kendoButton (click)="doExcelExport()" ><kendo-svgicon [icon]="kendoSVGIcon('fileExcel')" ></kendo-svgicon>Export to Excel</button>
+            <button fillMode="outline" themeColor="info" kendoButton (click)="doExcelExport()" >
+                <span class="fa-regular fa-file-excel"></span>Export to Excel
+            </button>
             <button
                 kendoButton
                 
@@ -27,7 +29,7 @@
                 *ngIf="showRefreshButton"
                 (click)="RefreshFromSavedParams()" >
                 Refresh
-                <kendo-svgicon [icon]="kendoSVGIcon('arrowRotateCcwSmall')"></kendo-svgicon>
+                <span class="fa-solid fa-arrow-rotate-left"></span>
             </button>
         </ng-template>
 
