@@ -92,31 +92,6 @@ export class FillContainer implements OnInit, OnDestroy {
     this._resizeSubscription?.unsubscribe();
   }
 
-  // protected getParent(element: HTMLElement): HTMLElement | null {
-  //   const parent = element.parentElement;
-  //   if (parent && parent.nodeName === 'APP-ROOT') {
-  //     let curElement = parent.parentElement;
-  //     // go to root of the DOM to get HTML element as that has size info
-  //     while (curElement && curElement.nodeName !== 'HTML') {
-  //       curElement = curElement.parentElement;
-  //     }
-  //     return curElement;
-  //   }
-  //   else if (parent) {
-  //     let style = window.getComputedStyle(parent);
-  //     let display = style.getPropertyValue('display');
-      
-  //     if (display === 'block') {
-  //       return parent;
-  //     } 
-  //     else {
-  //       return this.getParent(parent); // recursive call, need to go up the DOM until we find a block element
-  //     }      
-  //   }
-  //   else
-  //     return null; // no parent
-  // }
-
   protected getParent(element: HTMLElement): HTMLElement | null {
     let curElement: HTMLElement | null = element;
     while (curElement && curElement.nodeName !== 'HTML') {
