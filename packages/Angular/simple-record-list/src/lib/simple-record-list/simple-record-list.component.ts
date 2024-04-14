@@ -11,11 +11,29 @@ import { Router } from '@angular/router';
   styleUrls: ['./simple-record-list.component.css']
 })
 export class SimpleRecordListComponent implements OnInit {
+  /**
+   * Name of the entity to display records for.
+   */
   @Input() EntityName: string = '';
+  /**
+   * List of columns to display in the grid. If empty and the entity has > 10 columns, those columns marked as DefaultInView=1 will be used, otherwise the first 10 columns will be used.
+   */
   @Input() Columns: string[] = [];
+  /**
+   * Name of the column to sort by. If empty, no sorting is done.
+   */
   @Input() SortBy: string = '';
+  /**
+   * If true, the delete button will be shown for each record.
+   */
   @Input() AllowDelete: boolean = true;
+  /**
+   * If true, the new button will be shown.
+   */
   @Input() AllowNew: boolean = true;
+  /**
+   * If true, the edit button will be shown for each record.
+   */
   @Input() AllowEdit: boolean = true;
   /**
    * If AllowEdit or AllowNew is true, this is the section name to display for editing a new or existing record.
