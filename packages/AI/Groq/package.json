@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-groq",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "MemberJunction Wrapper for Groq AI LPU inference engine",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "^1.0.8",
-    "@memberjunction/global": "^1.0.8",
+    "@memberjunction/ai": "^1.0.9",
+    "@memberjunction/global": "^1.0.9",
     "groq-sdk": "^0.3.2"
   }
 }
