@@ -34,11 +34,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build packages
-        run: npm run build
-
       - name: Validate change set
         run: npm run checkchange
+
+      - name: Build packages
+        run: npm run build
       
       - name: Set up git credentials
         run: |
@@ -50,17 +50,13 @@ jobs:
       
       - name: Publish changes to npm main packages
         if: ${{ env.BRANCH == 'main' }}
+        run: npm run release -- --branch origin/main --token "$NPM_TOKEN"
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
-        run: |
-          echo "generateChangelog: true " > .beachballrc
-          npm run release -- --branch origin/main --token "$NPM_TOKEN"
  
       - name: Publish changes to npm next packages
         if: ${{ env.BRANCH == 'next' }}
+        run: npm run release -- --no-push --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
-        run: |
-          echo "generateChangelog: false" > .beachballrc
-          npm run release -- --keep-change-files --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
  
