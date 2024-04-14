@@ -52,7 +52,6 @@
     "@progress/kendo-angular-charts": "~15.1.0",
     "@progress/kendo-angular-indicators": "~15.1.0",
     "@progress/kendo-angular-filter": "~15.1.0",
-    "@progress/kendo-svg-icons": "~2.1.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

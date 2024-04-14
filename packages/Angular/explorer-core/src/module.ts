@@ -11,7 +11,6 @@ import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { FilterModule } from "@progress/kendo-angular-filter";
 import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
-import { IconModule, IconsModule } from '@progress/kendo-angular-icons';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
@@ -136,8 +135,6 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     DialogsModule,
     InputsModule,
     LabelModule,
-    IconModule,
-    IconsModule,
     CompareRecordsModule,
     RecordChangesModule,
     ContainerDirectivesModule,

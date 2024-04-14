@@ -19,7 +19,7 @@
       <div *ngFor="let entity of entityViews">
         <kendo-card class="card-wrapper">
           <kendo-card-header class="k-hstack view-card">
-            <kendo-svgicon [icon]="sharedService.kendoSVGIcon('table')"></kendo-svgicon>
+            <span class="fa-solid fa-table"></span>
             <div class="btn-wrapper">
               <button kendoButton fillMode="flat" (click)="editView(entity)">
                 <span class="fa-solid fa-pen-to-square"></span>

@@ -1,7 +1,7 @@
 import { Directive, ElementRef, Input, OnDestroy, OnInit } from '@angular/core';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { fromEvent, Subscription } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { debounceTime, throttleTime, tap, finalize } from 'rxjs/operators';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 @Directive({
@@ -13,67 +13,103 @@ export class FillContainer implements OnInit, OnDestroy {
   @Input() rightMargin: number = 0;
   @Input() bottomMargin: number = 0;
 
+
+  public static DisableResize: boolean = false;
+  public static OutputDebugInfo: boolean = false;
+  protected static OutputDebugMessage(message: string): void {
+    if (FillContainer.OutputDebugInfo) {
+      console.log(message);
+    }
+  }
+
   constructor(private elementRef: ElementRef) {
   }
 
   private _resizeDebounceTime: number = 100;
   private _resizeEndDebounceTime: number = 500;
+
+  private _resizeSubscription: Subscription | null = null;
+  private _resizeImmediateSubscription: Subscription | null = null;
+
   ngOnInit(): void {
     const el = this.elementRef.nativeElement as HTMLElement;
     if (el && el.style) { 
+      // initial resize
+      FillContainer.OutputDebugMessage('');
+      FillContainer.OutputDebugMessage('Initial resize event');
       this.resizeElement();
-      // This will fire more frequently while the user is resizing
-      this.resizeImmediateSubscription = fromEvent(window, 'resize')
+
+      // This will fire more frequently while the user is resizing so use a shorter debounce time
+      this._resizeImmediateSubscription = fromEvent(window, 'resize')
         .pipe(debounceTime(this._resizeDebounceTime))
-        .subscribe(() => this.resizeElement());
+        .subscribe(() => {
+          FillContainer.OutputDebugMessage('');
+          FillContainer.OutputDebugMessage('RECEIVED resize event');
+          this.resizeElement()
+        });
   
       // This will fire once the user has stopped resizing for _resizeEndDebounceTime milliseconds
-      this.resizeEndSubscription = fromEvent(window, 'resize')
+      this._resizeSubscription = fromEvent(window, 'resize')
         .pipe(debounceTime(this._resizeEndDebounceTime))
-        .subscribe(() => this.resizeElement());
+        .subscribe(() => {
+          FillContainer.OutputDebugMessage('');
+          FillContainer.OutputDebugMessage('RECEIVED resize end event');
+          this.resizeElement()
+        });
+
+      // // Subscribe once but handle both scenarios
+      // this._resizeSubscription = fromEvent(window, 'resize').pipe(
+      //   throttleTime(this._resizeDebounceTime),  // handles frequent resizes
+      //   tap(() => {
+      //     this.resizeElement();
+      //     FillContainer.OutputDebugMessage('RECEIVED resize event');
+      //   }),
+      //   debounceTime(this._resizeEndDebounceTime),  // handles end of resizing
+      //   finalize(() => {
+      //     this.resizeElement();
+      //     FillContainer.OutputDebugMessage('RECEIVED resize end event');
+      //   })
+      // ).subscribe();
+        
   
       // also subscribe to MJGlobal events so we can monitor for a manually invoked resize event request
       // from another component
-      MJGlobal.Instance.GetEventListener(true).subscribe((event) => {
+      MJGlobal.Instance.GetEventListener(true)
+        //.pipe(debounceTime(this._resizeDebounceTime))
+        .subscribe((event) => {
         if (event.event === MJEventType.ManualResizeRequest) {
+          FillContainer.OutputDebugMessage('');
+          FillContainer.OutputDebugMessage('RECEIVED manual resize request');
           this.resizeElement();
         }
       });  
     }
   }
 
-  private resizeImmediateSubscription: Subscription | null = null;
-  private resizeEndSubscription: Subscription | null = null;
 
   ngOnDestroy(): void {
-    this.resizeImmediateSubscription?.unsubscribe();
-    this.resizeEndSubscription?.unsubscribe();
+    this._resizeImmediateSubscription?.unsubscribe();
+    this._resizeSubscription?.unsubscribe();
   }
 
-  getParent(element: HTMLElement): HTMLElement | null {
-    const parent = element.parentElement;
-    if (parent && parent.nodeName === 'APP-ROOT') {
-      let curElement = parent.parentElement;
-      // go to root of the DOM to get HTML element as that has size info
-      while (curElement && curElement.nodeName !== 'HTML') {
-        curElement = curElement.parentElement;
+  protected getParent(element: HTMLElement): HTMLElement | null {
+    let curElement: HTMLElement | null = element;
+    while (curElement && curElement.nodeName !== 'HTML') {
+      if (curElement.parentElement && window.getComputedStyle(curElement.parentElement).display === 'block') {
+        return curElement.parentElement;
       }
-      return curElement;
+      curElement = curElement.parentElement;
     }
-    else if (parent) {
-      let style = window.getComputedStyle(parent);
-      let display = style.getPropertyValue('display');
-      
-      if (display === 'block') {
-        return parent;
-      } else {
-        return this.getParent(parent); // recursive call, need to go up the DOM until we find a block element
-      }      
-    }
-    else
-      return null; // no parent
+    return curElement;
   }
-  resizeElement(): void {
+  
+
+  protected resizeElement(): void {
+    if (FillContainer.DisableResize) {
+      // global disable flag
+      return;
+    }
+
     const element = this.elementRef.nativeElement as HTMLElement;
     try {
       if (element && element.style && !this.shouldSkipResize(element)) {
@@ -85,6 +121,8 @@ export class FillContainer implements OnInit, OnDestroy {
             LogStatus('skipping hidden element: ' + parent.nodeName )
           }
           else {
+            FillContainer.OutputDebugMessage('Resizing element: ' + element.nodeName + ' parent: ' + parent.nodeName);
+
             const parentRect = parent.getBoundingClientRect();
             if (parent.nodeName === 'HTML') {
               parentRect.height = window.innerHeight;

@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
-import { SVGIcon, folderIcon } from "@progress/kendo-svg-icons";
+
 @Component({
   selector: 'app-generic-browse-list',
   templateUrl: './generic-browse-list.component.html',

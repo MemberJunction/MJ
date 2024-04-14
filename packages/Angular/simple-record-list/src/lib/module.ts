@@ -6,7 +6,6 @@ import { FormsModule } from '@angular/forms';
 // Kendo UI Angular imports
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { IconsModule } from '@progress/kendo-angular-icons';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
@@ -27,7 +26,6 @@ import { SimpleRecordListComponent } from './simple-record-list/simple-record-li
     DialogsModule,
     ContainerDirectivesModule,
     ButtonsModule,
-    IconsModule,
     DropDownsModule,
     DialogsModule,
     EntityFormDialogModule,

@@ -1,14 +1,11 @@
 import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit } from '@angular/core';
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, RunQueryParams, RunQuery } from '@memberjunction/core';
+import { Metadata, BaseEntity, LogError, PrimaryKeyValue, RunQueryParams, RunQuery } from '@memberjunction/core';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, SelectableSettings} from "@progress/kendo-angular-grid";
 
-
-import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
-import { kendoSVGIcon } from '@memberjunction/ng-shared'
 
 export type GridRowClickedEvent = {
   entityId: number;
@@ -191,6 +188,4 @@ export class QueryGridComponent implements OnInit, AfterViewInit {
       return Object.keys(firstRow);
     }
   }
-
-  public kendoSVGIcon = kendoSVGIcon
 }

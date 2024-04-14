@@ -23,8 +23,7 @@
   },
   "peerDependencies": {
     "@angular/common": "~17.2.2",
-    "@angular/core": "~17.2.2",
-    "@progress/kendo-svg-icons": "^2.1.0"
+    "@angular/core": "~17.2.2"
   },
   "dependencies": {
     "@memberjunction/core": "^1.0.8",

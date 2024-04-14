@@ -5,7 +5,6 @@ import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@me
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable } from 'rxjs';
 import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
-import { kendoSVGIcon } from './util';
 
 @Injectable({
   providedIn: 'root'
@@ -315,11 +314,6 @@ export class SharedService {
     else
       return null 
   }
-  
-  public kendoSVGIcon(iconName: string) {
-    return kendoSVGIcon(iconName);
-  }
-
 }
 
 export const HtmlListType = {

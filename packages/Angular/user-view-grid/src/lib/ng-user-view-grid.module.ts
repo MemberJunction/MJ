@@ -9,7 +9,6 @@ import { GridModule } from '@progress/kendo-angular-grid';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { IconsModule } from '@progress/kendo-angular-icons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 
@@ -31,7 +30,6 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     ButtonsModule,
     CompareRecordsModule,
     ContainerDirectivesModule,
-    IconsModule,
     LayoutModule,
     InputsModule
   ],

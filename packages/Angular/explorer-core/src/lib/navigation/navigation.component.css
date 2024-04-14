@@ -8,6 +8,11 @@
   margin-left: 10px;
 }
 
+.drawer-item-icon {
+  width: 12px;
+  height: 12px;
+}
+
 .context-menu {
   position: fixed;
   z-index: 9999;

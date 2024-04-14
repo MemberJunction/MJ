@@ -1,7 +1,6 @@
 import { Component, OnInit, Input, SimpleChanges, OnChanges, ViewChild, ChangeDetectorRef } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
-import { kendoSVGIcon } from '@memberjunction/ng-shared'
 import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
 
@@ -20,9 +19,6 @@ export class SingleUserComponent implements OnInit {
   public isLoading: boolean = false;
   public UserRecord: UserEntity | null = null;
   public UserViewsParams: RunViewParams | undefined;
-
-  public kendoSVGIcon = kendoSVGIcon
-
   public showEntityEditingForm: boolean = false;
 
   constructor(private cdRef: ChangeDetectorRef) { 

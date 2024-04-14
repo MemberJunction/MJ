@@ -25,21 +25,21 @@
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
       <div *ngIf="isEditingDashboard; else edit_dashboard_buttons">
         <kendo-button (click)="onClickSaveDashboard()">
-          <kendo-svgicon [icon]="sharedService.kendoSVGIcon('check')"></kendo-svgicon>
+          <span class="fa-solid fa-check"></span>
           Save
         </kendo-button>
         <kendo-button (click)="onclickCancelChanges()">
-          <kendo-svgicon [icon]="sharedService.kendoSVGIcon('cancel')"></kendo-svgicon>
+          <span class="fa-solid fa-xmark"></span>
           Cancel
         </kendo-button>
       </div>
       <ng-template #edit_dashboard_buttons>
         <kendo-button (click)="addItem()">
-          <kendo-svgicon [icon]="sharedService.kendoSVGIcon('plus')"></kendo-svgicon>
+          <span class="fa-solid fa-plus"></span>
           Add Item
         </kendo-button>
         <kendo-button (click)="toggleEditDashboard(true)" >
-          <kendo-svgicon [icon]="sharedService.kendoSVGIcon('gear')"></kendo-svgicon>
+          <span class="fa-solid fa-gear"></span>
           Edit Dashboard
         </kendo-button>
       </ng-template>

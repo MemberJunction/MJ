@@ -1,8 +1,7 @@
-import { Component, Input, Output, ViewChild, ViewContainerRef, OnChanges, SimpleChanges, EventEmitter } from '@angular/core';
+import { Component, Input, Output, ViewChild, ViewContainerRef, EventEmitter } from '@angular/core';
 
 import { BaseEntity } from '@memberjunction/core';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
-import { UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
+import { SharedService } from '@memberjunction/ng-shared'
 import { ClassRegistration, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
  

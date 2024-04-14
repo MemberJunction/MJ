@@ -4,7 +4,6 @@ import { CommonModule } from '@angular/common';
 // Kendo UI Angular imports
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { IconsModule } from '@progress/kendo-angular-icons';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -22,7 +21,6 @@ import { EntityFormDialog } from './entity-form-dialog/entity-form-dialog.compon
     CompareRecordsModule,
     ContainerDirectivesModule,
     ButtonsModule,
-    IconsModule,
     DialogsModule,
   ],
   exports: [
