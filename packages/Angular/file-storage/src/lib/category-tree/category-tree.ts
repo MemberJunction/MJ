@@ -65,7 +65,7 @@ export class CategoryTreeComponent implements OnInit {
     const { ID } = fileCategory;
     const success = await fileCategory.Delete();
     if (!success) {
-      console.error('Unable to delete file category', fileCategory);
+      console.error('Unable to delete file category:', fileCategory);
       this.sharedService.CreateSimpleNotification(`Unable to delete category '${fileCategory.Name}'`, 'error');
       return;
     }

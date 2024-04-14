@@ -4,6 +4,7 @@
  * @type {import('beachball').BeachballConfig}
  */
 module.exports = {
+  generateChangelog: process.env.BRANCH === 'main',
   bumpDeps: true,
   groups: [
     {
