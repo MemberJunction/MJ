@@ -3,19 +3,44 @@ import { BaseEntity, EntityFieldTSType } from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
 
 
+/**
+ * This component is used to automatically generate a UI for any field in a given BaseEntity object. The CodeGen tool will generate forms and form sections that
+ * use this component. This component automatically determines the type of the field and generates the appropriate UI element for it. It is possible to use other
+ * elements to render a field as desired in a custom form, think of this component as a nice "base" component you can use for many cases, and you can create custom
+ * components for field rendering/editing when needed.
+ */
 @Component({
     selector: 'mj-form-field',
     styleUrl: './base-field-component.css',
     templateUrl: './base-field-component.html'
 })
 export class MJFormField extends BaseRecordComponent {
+    /**
+     * The record object that contains the field to be rendered. This object should be an instance of BaseEntity or a derived class.
+     */
     @Input() record!: BaseEntity;
+    /**
+     * EditMode must be bound to the containing form's edit mode/state. When the form is in edit mode, the field will be rendered as an editable control (if not a read only field), otherwise the field will be rendered read-only.
+     */
     @Input() EditMode: boolean = false;
+    /**
+     * The name of the field in the entity to be rendered.
+     */
     @Input() FieldName: string = '';
+    /**
+     * The type of control to be rendered for the field. The default is 'textbox'. Other possible values are 'textarea', 'numerictextbox', 'datepicker', 'checkbox', 'dropdownlist', 'combobox'.
+     */
     @Input() Type: 'textbox' | 'textarea' | 'numerictextbox' | 'datepicker' | 'checkbox' | 'dropdownlist' | 'combobox' = 'textbox';
+    /**
+     * Optional, the type of link field that should be shown. Email and URL fields will be rendered as hyperlinks, Record fields will be rendered as links to the record. The default is 'None'. Record Fields are only
+     * valid when the FieldName field is a foreign key field to another entity.
+     */
     @Input() LinkType: 'Email' | 'URL' | 'Record' | 'None' = 'None';
     
     private _displayName: string | null = null;
+    /**
+     * Display Name to show on the the control. By default, this is derived from the DisplayName in the entity field metadata, and can be overridden if desired by setting this property manually. Leave it empty to use the default.
+     */
     @Input() 
     public get DisplayName(): string {
         if (!this._displayName) {
@@ -33,6 +58,10 @@ export class MJFormField extends BaseRecordComponent {
     }
 
     private _possibleValues: string[] | null = null;
+    /**
+     * The possible values for the field. This is only used when the field is a dropdownlist or combobox. The possible values are derived from the EntityFieldValues in the entity field metadata. 
+     * If the field is not a dropdownlist or combobox, this property is ignored. If you would like to specify a custom list of values, you can set this property manually.
+     */
     @Input() get PossibleValues(): string[] {
         if (!this._possibleValues) {
             const ef = this.record.Fields.find(f => f.Name == this.FieldName)?.EntityFieldInfo;
@@ -70,6 +99,9 @@ export class MJFormField extends BaseRecordComponent {
     }
     @Output() ValueChange = new EventEmitter<any>();
 
+    /**
+     * Returns true if the field is read only. This is determined by the ReadOnly property in the entity field metadata.
+     */
     public get IsFieldReadOnly(): boolean {
         const f = this.record.Fields.find(f => f.Name == this.FieldName);
         if (f)
