@@ -3,7 +3,9 @@
   <div class="main-fav-wrapper">
     <div class="title-wrapper">
       <div class="title-flex-display">
-        <span *ngIf="selectedFolderID" title="Folder" class="title-folder fa-regular fa-folder fa-2xl"></span>
+        @if(selectedFolderID){
+          <span title="Folder" class="title-folder fa-regular fa-folder fa-2xl"></span>
+        }
         <h4>{{title}}</h4>
       </div>
       <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="createButtonDropdownData" themeColor="info">
@@ -45,48 +47,55 @@
 
     <div class="main-area">
       <kendo-loader *ngIf="showLoader" type="converging-spinner"></kendo-loader>
-      <div *ngIf="!showLoader">
-        <kendo-grid *ngIf="displayAsGrid" (cellClick)="onCellItemClicked($event)" [kendoGridBinding]="items">
-          <kendo-grid-column field="Name" title="Name"></kendo-grid-column>
-          <kendo-grid-column field="Size" title="Size"></kendo-grid-column>
-          <kendo-grid-column field="LastOpened" title="Last Opened"></kendo-grid-column>
-          <kendo-grid-column field="ModifiedBy" title="Modified By"></kendo-grid-column>
-          <kendo-grid-column title="">
-            <ng-template kendoGridCellTemplate let-dataItem>
-              <div class="grid-wrapper">
-                <button *ngIf="!disableEditButton" class="list-btn" (click)="editItem(dataItem)">
-                  <i class="fa-regular fa-pen-to-square"></i>
-                </button>
-                <button class="list-btn" (click)="deleteItem(dataItem)">
-                  <i class="fa-regular fa-trash-can"></i>
-                </button>
-              </div>
-            </ng-template>
-          </kendo-grid-column>
-        </kendo-grid>
-        <div *ngIf="!displayAsGrid" class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap">
-          <div *ngFor="let d of items">
-            <kendo-card class="card-wrapper cursor-pointer">
-              <div class="list-item-icon">
-                <button *ngIf="!disableEditButton" (click)="editItem(d)" class="list-btn">
-                  <span class="fa-regular fa-pen-to-square"></span>
-                </button>
-                <button (click)="deleteItem(d)" class="list-btn">
-                  <span class="fa-regular fa-trash-can"></span>
-                </button>
-              </div>
-              <kendo-card-body (click)="itemClick(d)">
-                  <span *ngIf="d.Type === 'Folder'" title="Folder" class="fa-3x fa-regular fa-folder"></span>
-                  <span *ngIf="d.Type !== 'Folder'" [title]="resourceName" class="fa-3x fa-solid fa-table-cells"></span>
-                  <div class="padding-top-small">
-                    <h5 kendoCardTitle>{{ d.Name }}</h5>
-                    <p kendoCardSubtitle>{{ d.Description }}</p>
-                  </div>
-              </kendo-card-body>
-            </kendo-card>
+      @if(!showLoader){
+        @if(displayAsGrid){
+          <kendo-grid (cellClick)="onCellItemClicked($event)" [kendoGridBinding]="items">
+            <kendo-grid-column field="Name" title="Name"></kendo-grid-column>
+            <kendo-grid-column field="Size" title="Size"></kendo-grid-column>
+            <kendo-grid-column field="LastOpened" title="Last Opened"></kendo-grid-column>
+            <kendo-grid-column field="ModifiedBy" title="Modified By"></kendo-grid-column>
+            <kendo-grid-column title="">
+              <ng-template kendoGridCellTemplate let-dataItem>
+                <div class="grid-wrapper">
+                  @if(disableEditButton){
+                    <button class="list-btn" (click)="editItem(dataItem)">
+                      <i class="fa-regular fa-pen-to-square"></i>
+                    </button>
+                  }
+                  <button class="list-btn" (click)="deleteItem(dataItem)">
+                    <i class="fa-regular fa-trash-can"></i>
+                  </button>
+                </div>
+              </ng-template>
+            </kendo-grid-column>
+          </kendo-grid>
+        }
+        @else{
+          <div class="card-list k-d-flex k-flex-row k-h-full k-flex-wrap">
+            @for(item of items; track item){
+              <kendo-card class="card-wrapper cursor-pointer">
+                <div class="list-item-icon">
+                  @if(!disableEditButton){
+                    <button (click)="editItem(item)" class="list-btn">
+                      <span class="fa-regular fa-pen-to-square"></span>
+                    </button>
+                  }
+                  <button (click)="deleteItem(item)" class="list-btn">
+                    <span class="fa-regular fa-trash-can"></span>
+                  </button>
+                </div>
+                <kendo-card-body (click)="itemClick(item)">
+                    <span (title)="item.Name" [ngClass]="getIconForResourceType(item)"></span>
+                    <div class="padding-top-small">
+                      <h5 kendoCardTitle>{{ item.Name }}</h5>
+                      <p kendoCardSubtitle>{{ item.Description }}</p>
+                    </div>
+                </kendo-card-body>
+              </kendo-card>
+            }
           </div>
-        </div>
-      </div>
+        }
+      }
     </div>
   </div>
 
