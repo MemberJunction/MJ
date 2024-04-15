@@ -9,15 +9,19 @@
       <ng-template kendoGridCellTemplate let-dataItem>
         <kendo-button
           [disabled]="dataItem.Status!=='Uploaded'"
-          [svgIcon]="kendoSVGIcon('download')"
           (click)="downloadFile(dataItem)"
-        ></kendo-button>
-        <kendo-button [disabled]="!canBeDeleted(dataItem)" [svgIcon]="kendoSVGIcon('trash')" (click)="deleteFile(dataItem)"></kendo-button>
+        >
+          <span class="fa-solid fa-download"></span>
+        </kendo-button>
+        <kendo-button [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
+          <span class="fa-solid fa-trash-can"></span>
+        </kendo-button>
         <kendo-button
           [disabled]="dataItem.Status!=='Uploaded'"
-          [svgIcon]="kendoSVGIcon('pencil')"
           (click)="editFile = dataItem"
-        ></kendo-button>
+        >
+          <span class="fa-solid fa-pen-to-square"></span>
+        </kendo-button>
       </ng-template>
     </kendo-grid-column>
   </kendo-grid>

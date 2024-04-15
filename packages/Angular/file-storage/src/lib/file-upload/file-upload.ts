@@ -3,7 +3,6 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 
-import { kendoSVGIcon } from '@memberjunction/ng-shared';
 import { FileInfo, SelectEvent } from '@progress/kendo-angular-upload';
 import { z } from 'zod';
 
@@ -64,7 +63,6 @@ const FileUploadMutationSchema = z.object({
   styleUrls: ['./file-upload.css'],
 })
 export class FileUploadComponent implements OnInit {
-  public kendoSVGIcon = kendoSVGIcon;
   public isUploading = false;
   private defaultProviderID = -1;
   private md = new Metadata();

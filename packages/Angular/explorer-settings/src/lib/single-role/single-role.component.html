@@ -7,8 +7,9 @@
             <tbody>
                 <tr>
                     <th scope="row">Role</th>
-                    <td>{{RoleRecord.Name}}
-                        <kendo-svgicon class='edit-icon' [icon]="kendoSVGIcon('pencil')" (click)="EditRecord()"></kendo-svgicon>
+                    <td>
+                        {{RoleRecord.Name}}
+                        <span class="fa-solid fa-pen-to-square" (click)="EditRecord()"></span>
                     </td>
                 </tr>
                 <tr>

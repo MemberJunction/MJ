@@ -36,16 +36,6 @@
       >
         <div *ngFor="let d of items">
           <kendo-card class="card-wrapper">
-            <!-- <kendo-card-header class="k-hstack view-card">
-                  <kendo-svgicon name="table" [icon]="sharedService.kendoSVGIcon(iconName)"></kendo-svgicon>
-                  <div class="btn-wrapper">
-                    <button kendoButton fillMode="flat">
-                      <span class="k-icon k-i-edit"></span>
-                    </button>
-                    <button kendoButton fillMode="flat" (click)="deleteItem(d)"><span
-                        class="k-icon k-i-delete"></span></button>
-                  </div>
-                </kendo-card-header> -->
             <kendo-card-body (click)="itemClick(d)">
               <div class="list-item-icon">
                 <button class="common-btn">
@@ -133,9 +123,6 @@
                 </button>
               </div>
               <div class="view-card-content-list k-cursor-pointer">
-                <!-- <svg width="51" height="50" viewBox="0 0 51 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M46.9678 19.4062C46.6712 18.992 46.1906 18.7473 45.6792 18.75H44.1078V14.0625C44.1078 13.6481 43.9423 13.2507 43.6475 12.9577C43.3528 12.6645 42.9531 12.5 42.5363 12.5H26.036L21.793 6.875C21.4963 6.48161 21.0306 6.25 20.5359 6.25H4.82125C4.40448 6.25 4.00476 6.41455 3.71008 6.70767C3.41526 7.00063 3.24978 7.39808 3.24978 7.8125V42.1875C3.24847 42.5259 3.34685 42.8571 3.53265 43.1406C3.83925 43.5371 4.31838 43.7637 4.82125 43.75H37.8219C38.1449 43.7498 38.46 43.6507 38.7242 43.4663C38.9886 43.2817 39.1893 43.0207 39.2991 42.7188L47.1564 20.8438C47.3345 20.3628 47.2639 19.8257 46.9678 19.4062ZM6.39271 9.375H19.7501L23.9931 15C24.2898 15.3934 24.7555 15.625 25.2502 15.625H40.9648V18.75H12.6786C12.3556 18.7502 12.0405 18.8493 11.7763 19.0337C11.5119 19.2183 11.3112 19.4793 11.2014 19.7812L6.39271 33.1721V9.375ZM36.7064 40.625H7.05314L13.7949 21.875H43.4482L36.7064 40.625Z" fill="#1B1C1E"/>
-                      </svg> -->
                 <svg
                   width="46"
                   height="46"

@@ -1,0 +1,26 @@
+{
+  "name": "@memberjunction/core",
+  "entries": [
+    {
+      "date": "Sat, 13 Apr 2024 02:32:44 GMT",
+      "version": "1.0.8",
+      "tag": "@memberjunction/core_v1.0.8",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/core",
+            "commit": "132a31efd0093b6674265ea4b5063f741a89b867",
+            "comment": "Update build and publish automation"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v1.0.8",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -8,43 +8,33 @@ import { UserViewRunDetailEntity } from '@memberjunction/core-entities';
     selector: 'gen-userviewrundetail-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User View Run ID</label>
-            <kendo-numerictextbox [(value)]="record.UserViewRunID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Record</label>
-            <kendo-textarea [(ngModel)]="record.RecordID" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User View</label>
-            <span >{{FormatValue('UserViewID', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User View Run ID</label>
-            <span mjFieldLink [record]="record" fieldName="UserViewRunID" >{{FormatValue('UserViewRunID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Record</label>
-            <span >{{FormatValue('RecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User View</label>
-            <span >{{FormatValue('UserViewID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('EntityID', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="UserViewRunID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UserViewID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

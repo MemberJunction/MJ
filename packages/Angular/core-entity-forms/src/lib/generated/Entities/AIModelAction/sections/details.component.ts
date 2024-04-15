@@ -8,67 +8,52 @@ import { AIModelActionEntity } from '@memberjunction/core-entities';
     selector: 'gen-aimodelaction-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Model ID</label>
-            <kendo-numerictextbox [(value)]="record.AIModelID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Action ID</label>
-            <kendo-numerictextbox [(value)]="record.AIActionID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Is Active</label>
-            <input type="checkbox" [(ngModel)]="record.IsActive" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AIModel</label>
-            <span >{{FormatValue('AIModel', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AIAction</label>
-            <span >{{FormatValue('AIAction', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Model ID</label>
-            <span mjFieldLink [record]="record" fieldName="AIModelID" >{{FormatValue('AIModelID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Action ID</label>
-            <span mjFieldLink [record]="record" fieldName="AIActionID" >{{FormatValue('AIActionID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Is Active</label>
-            <span >{{FormatValue('IsActive', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AIModel</label>
-            <span >{{FormatValue('AIModel', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AIAction</label>
-            <span >{{FormatValue('AIAction', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="AIModelID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIActionID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIAction"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

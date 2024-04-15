@@ -8,107 +8,82 @@ import { WorkflowEntity } from '@memberjunction/core-entities';
     selector: 'gen-workflow-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textbox [(ngModel)]="record.Name"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <kendo-textbox [(ngModel)]="record.Description"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Workflow Engine Name</label>
-            <kendo-textbox [(ngModel)]="record.WorkflowEngineName"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Company Name</label>
-            <kendo-textbox [(ngModel)]="record.CompanyName"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">External System Record</label>
-            <kendo-textbox [(ngModel)]="record.ExternalSystemRecordID"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Enabled</label>
-            <input type="checkbox" [(ngModel)]="record.AutoRunEnabled" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Interval Units</label>
-            <kendo-dropdownlist [data]="['Years', 'Months', 'Weeks', 'Days', 'Hours', 'Minutes']" [(ngModel)]="record.AutoRunIntervalUnits!" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Interval</label>
-            <kendo-numerictextbox [(value)]="record.AutoRunInterval!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Subclass Name</label>
-            <kendo-textarea [(ngModel)]="record.SubclassName" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Interval Minutes</label>
-            <span >{{FormatValue('AutoRunIntervalMinutes', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <span >{{FormatValue('Description', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Workflow Engine Name</label>
-            <span mjFieldLink [record]="record" fieldName="WorkflowEngineName" >{{FormatValue('WorkflowEngineName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Company Name</label>
-            <span mjFieldLink [record]="record" fieldName="CompanyName" >{{FormatValue('CompanyName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">External System Record</label>
-            <span >{{FormatValue('ExternalSystemRecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Enabled</label>
-            <span >{{FormatValue('AutoRunEnabled', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Interval Units</label>
-            <span >{{FormatValue('AutoRunIntervalUnits', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Interval</label>
-            <span >{{FormatValue('AutoRunInterval', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Subclass Name</label>
-            <span >{{FormatValue('SubclassName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Run Interval Minutes</label>
-            <span >{{FormatValue('AutoRunIntervalMinutes', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="WorkflowEngineName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CompanyName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ExternalSystemRecordID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AutoRunEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AutoRunIntervalUnits"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AutoRunInterval"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SubclassName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AutoRunIntervalMinutes"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

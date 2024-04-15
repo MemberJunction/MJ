@@ -8,99 +8,74 @@ import { VersionInstallationEntity } from '@memberjunction/core-entities';
     selector: 'gen-versioninstallation-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Major Version</label>
-            <kendo-numerictextbox [(value)]="record.MajorVersion" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Minor Version</label>
-            <kendo-numerictextbox [(value)]="record.MinorVersion" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Patch Version</label>
-            <kendo-numerictextbox [(value)]="record.PatchVersion" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Type</label>
-            <kendo-dropdownlist [data]="['New', 'Upgrade']" [(ngModel)]="record.Type!" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Installed At</label>
-            <kendo-datepicker [(value)]="record.InstalledAt" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <kendo-dropdownlist [data]="['Pending', 'In Progress', 'Complete', 'Failed']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Install Log</label>
-            <kendo-textbox [(ngModel)]="record.InstallLog"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <kendo-textbox [(ngModel)]="record.Comments"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Complete Version</label>
-            <span >{{FormatValue('CompleteVersion', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Major Version</label>
-            <span >{{FormatValue('MajorVersion', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Minor Version</label>
-            <span >{{FormatValue('MinorVersion', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Patch Version</label>
-            <span >{{FormatValue('PatchVersion', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Type</label>
-            <span >{{FormatValue('Type', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Installed At</label>
-            <span >{{FormatValue('InstalledAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <span >{{FormatValue('Status', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Install Log</label>
-            <span >{{FormatValue('InstallLog', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <span >{{FormatValue('Comments', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Complete Version</label>
-            <span >{{FormatValue('CompleteVersion', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="MajorVersion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="MinorVersion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="PatchVersion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="InstalledAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="InstallLog"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Comments"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CompleteVersion"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

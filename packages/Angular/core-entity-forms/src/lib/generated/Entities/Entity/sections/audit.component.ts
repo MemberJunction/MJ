@@ -8,27 +8,20 @@ import { EntityEntity } from '@memberjunction/core-entities';
     selector: 'gen-entity-form-audit',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Audit Record Access</label>
-            <input type="checkbox" [(ngModel)]="record.AuditRecordAccess" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Audit View Runs</label>
-            <input type="checkbox" [(ngModel)]="record.AuditViewRuns" kendoCheckBox />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Audit Record Access</label>
-            <span >{{FormatValue('AuditRecordAccess', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Audit View Runs</label>
-            <span >{{FormatValue('AuditViewRuns', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="AuditRecordAccess"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AuditViewRuns"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

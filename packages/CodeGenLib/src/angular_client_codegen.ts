@@ -305,7 +305,7 @@ export function Load${entity.ClassName}FormComponent() {
                     </mj-tab-body>`
               }
       
-              const { readModeHTML, editModeHTML } = this.generateSectionHTMLForAngular(entity, section);
+              const formHTML = this.generateSectionHTMLForAngular(entity, section);
       
               section.ComponentCode = `import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -317,11 +317,8 @@ import { ${entity.ClassName}Entity } from '${entity.SchemaName === mjCoreSchema 
     selector: 'gen-${entity.ClassName.toLowerCase()}-form-${sectionName}',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: \`<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-    ${editModeHTML}
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-    ${readModeHTML}
+    <div class="record-form">
+${formHTML}
     </div>
 </div>
     \`
@@ -343,9 +340,8 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
           return sections;
       }
       
-      protected generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormSectionInfo): { readModeHTML: string, editModeHTML: string } {
-          let readModeHTML: string = ''
-          let editModeHTML: string = ''
+      protected generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormSectionInfo): string {
+          let html: string = ''
       
           for (const field of entity.Fields) {
               if (field.IncludeInGeneratedForm) {
@@ -365,68 +361,64 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                   if (bMatch && field.Name.toLowerCase() !== 'id') {
                       section.Fields.push(field) // add the field to the section fields array
       
-                      // next, generate HTML for the field
-                      const linkDirective = field.RelatedEntity && field.RelatedEntity.length > 0 ? `mjFieldLink [record]="record" fieldName="${field.CodeName}" ` : ''
-                      const linkNoTextDirective = field.RelatedEntity && field.RelatedEntity.length > 0 ? `mjFieldLink [record]="record" fieldName="${field.CodeName}" [replaceText]="false" ` : ''
-                      const webLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'url' ? `mjWebLink [field]="record.GetFieldByName('${field.CodeName}')" ` : '';
-                      const emailLinkDirective = field.ExtendedType && field.ExtendedType.length > 0 && field.ExtendedType.trim().toLowerCase() === 'email' ? `mjEmailLink [field]="record.GetFieldByName('${field.CodeName}')" ` : '';
-                      readModeHTML += `              
-        <div class="record-form-row">
-            <label class="fieldLabel">${field.DisplayNameOrName}</label>
-            <span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.CodeName}', 0)}}</span>
-        </div>`
-      
-                      let editControl = '';
-                      let bReadOnly: boolean = false;
-          
-                      if (!field.ReadOnly) {
-                          // first, check to see if we have a ValueListType != None, if so, generate a dropdown. 
-                          // If value list type is ListOrUserEntry, then generate a combobox, if ValueListType = List, then generate a dropdown
-                          if (field.ValueListTypeEnum !== EntityFieldValueListType.None) {
-                              // build the possible values list
-                              const quotes = field.NeedsQuotes ? "'" : '';
-                              const itemsString = '[' + field.EntityFieldValues.map(v => `${quotes}${v.Value}${quotes}`).join(', ') + ']';
-                              if (field.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
-                                  // combo box
-                                  editControl = `<kendo-combobox [data]="${itemsString}" [allowCustom]="true" [(ngModel)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-combobox>`  
-                              }
-                              else if (field.ValueListTypeEnum === EntityFieldValueListType.List) {
-                                  // dropdown
-                                  editControl = `<kendo-dropdownlist [data]="${itemsString}" [(ngModel)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-dropdownlist>`  
-                              }
-                          }
-                          else {
-                              // no value list, generate a text box, checkbox, or date picker
-                              if (field.TSType === EntityFieldTSType.Boolean)
-                                  editControl = `<input type="checkbox" [(ngModel)]="record.${field.CodeName}" kendoCheckBox />`
-                              else if (field.TSType === EntityFieldTSType.Date)
-                                  editControl = `<kendo-datepicker [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-datepicker>` // if the field allows null, then add the ! to the end of the field name because the datepicker expects a date object, not null
-                              else if (field.TSType === EntityFieldTSType.Number)
-                                  editControl = `<kendo-numerictextbox [(value)]="record.${field.CodeName}${field.AllowsNull ? "!" : ""}" ></kendo-numerictextbox>` // if the field allows null, then add the ! to the end of the field name because the numerictextbox expects a number, not null
-                              else if (field.TSType === EntityFieldTSType.String) {
-                                  if (field.MaxLength > 100)
-                                      editControl = `<kendo-textarea [(ngModel)]="record.${field.CodeName}" ></kendo-textarea>`
-                                  else
-                                      editControl = `<kendo-textbox [(ngModel)]="record.${field.CodeName}"  />`
-                              }
-                          }
-                      }
-                      else {
-                          // read only field
-                          editControl = `<span ${linkDirective}${webLinkDirective}${emailLinkDirective}>{{FormatValue('${field.CodeName}', 0)}}</span>`
-                          bReadOnly = true;
-                      }
-      
-                      editModeHTML += `              
-        <div class="record-form-row">
-            <label class="fieldLabel">${field.DisplayNameOrName}</label>
-            ${editControl}   
-        </div> `
+                    let editControl = 'textbox'; // default to textbox
+                    if (!field.ReadOnly) {
+                        // first, check to see if we have a ValueListType != None, if so, generate a dropdown. 
+                        // If value list type is ListOrUserEntry, then generate a combobox, if ValueListType = List, then generate a dropdown
+                        if (field.ValueListTypeEnum !== EntityFieldValueListType.None) {
+                            // build the possible values list
+                            if (field.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
+                                // combo box
+                                editControl = `combobox`  
+                            }
+                            else if (field.ValueListTypeEnum === EntityFieldValueListType.List) {
+                                // dropdown
+                                editControl = `dropdownlist`  
+                            }
+                        }
+                        else {
+                            // no value list, generate a text box, checkbox, or date picker
+                            if (field.TSType === EntityFieldTSType.Boolean)
+                                editControl = `checkbox`
+                            else if (field.TSType === EntityFieldTSType.Date)
+                                editControl = `datepicker`  
+                            else if (field.TSType === EntityFieldTSType.Number)
+                                editControl = `numerictextbox`
+                            else if (field.TSType === EntityFieldTSType.String) {
+                                if (field.MaxLength > 100)
+                                    editControl = `textarea`
+                                else
+                                    editControl = `textbox`
+                            }
+                        }
+                    }
+
+                    let linkType = null;
+                    if (field.RelatedEntity && field.RelatedEntity.length > 0)
+                        linkType = 'Record'
+                    else if (field.ExtendedType && field.ExtendedType.length > 0) { 
+                        switch (field.ExtendedType.trim().toLowerCase()) {
+                            case 'url':
+                                linkType = 'URL'
+                                break;
+                            case 'email':
+                                linkType = 'Email'
+                                break;
+                        }
+                    }
+                    // next, generate HTML for the field
+                    html += `        <mj-form-field
+            [record]="record"
+            FieldName="${field.CodeName}"
+            Type="${editControl}"
+            [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}
+        ></mj-form-field>
+`
                   }
               }
           }
       
-          return { readModeHTML, editModeHTML };
+          return html;
       }
       
       protected generateRelatedEntityTabs(entity: EntityInfo, startIndex: number): string[] {

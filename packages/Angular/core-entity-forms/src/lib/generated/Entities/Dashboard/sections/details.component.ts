@@ -8,67 +8,52 @@ import { DashboardEntity } from '@memberjunction/core-entities';
     selector: 'gen-dashboard-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textarea [(ngModel)]="record.Name" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <kendo-textbox [(ngModel)]="record.Description"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Category ID</label>
-            <kendo-numerictextbox [(value)]="record.CategoryID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">UIConfig Details</label>
-            <kendo-textbox [(ngModel)]="record.UIConfigDetails"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User ID</label>
-            <kendo-numerictextbox [(value)]="record.UserID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Category</label>
-            <span >{{FormatValue('Category', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User</label>
-            <span >{{FormatValue('User', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <span >{{FormatValue('Description', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Category ID</label>
-            <span mjFieldLink [record]="record" fieldName="CategoryID" >{{FormatValue('CategoryID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">UIConfig Details</label>
-            <span >{{FormatValue('UIConfigDetails', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User ID</label>
-            <span mjFieldLink [record]="record" fieldName="UserID" >{{FormatValue('UserID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Category</label>
-            <span >{{FormatValue('Category', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User</label>
-            <span >{{FormatValue('User', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CategoryID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UIConfigDetails"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UserID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

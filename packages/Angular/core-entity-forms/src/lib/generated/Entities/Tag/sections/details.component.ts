@@ -8,51 +8,39 @@ import { TagEntity } from '@memberjunction/core-entities';
     selector: 'gen-tag-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textarea [(ngModel)]="record.Name" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Display Name</label>
-            <kendo-textarea [(ngModel)]="record.DisplayName" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <kendo-textbox [(ngModel)]="record.Description"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent ID</label>
-            <kendo-numerictextbox [(value)]="record.ParentID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent</label>
-            <span >{{FormatValue('Parent', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Display Name</label>
-            <span >{{FormatValue('DisplayName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <span >{{FormatValue('Description', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent ID</label>
-            <span mjFieldLink [record]="record" fieldName="ParentID" >{{FormatValue('ParentID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent</label>
-            <span >{{FormatValue('Parent', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="DisplayName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ParentID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Parent"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

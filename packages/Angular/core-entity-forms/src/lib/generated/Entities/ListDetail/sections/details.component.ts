@@ -8,43 +8,33 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
     selector: 'gen-listdetail-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">List ID</label>
-            <kendo-numerictextbox [(value)]="record.ListID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Record</label>
-            <kendo-textarea [(ngModel)]="record.RecordID" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Sequence</label>
-            <kendo-numerictextbox [(value)]="record.Sequence" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">List</label>
-            <span >{{FormatValue('List', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">List ID</label>
-            <span mjFieldLink [record]="record" fieldName="ListID" >{{FormatValue('ListID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Record</label>
-            <span >{{FormatValue('RecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Sequence</label>
-            <span >{{FormatValue('Sequence', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">List</label>
-            <span >{{FormatValue('List', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="ListID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Sequence"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="List"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

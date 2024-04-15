@@ -1,4 +1,4 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, ViewContainerRef, Renderer2} from '@angular/core';
+import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, Renderer2} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
@@ -14,7 +14,6 @@ import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
-import { kendoSVGIcon } from '@memberjunction/ng-shared';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 
 
@@ -846,8 +845,5 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     else  
       throw new Error("Unable to get export data");    
   }
- 
-  public kendoSVGIcon = kendoSVGIcon;
-
 }
  

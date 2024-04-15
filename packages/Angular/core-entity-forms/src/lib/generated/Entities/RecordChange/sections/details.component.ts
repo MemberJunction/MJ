@@ -8,99 +8,76 @@ import { RecordChangeEntity } from '@memberjunction/core-entities';
     selector: 'gen-recordchange-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Record</label>
-            <kendo-textarea [(ngModel)]="record.RecordID" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User ID</label>
-            <kendo-numerictextbox [(value)]="record.UserID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Changed At</label>
-            <kendo-datepicker [(value)]="record.ChangedAt" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Changes JSON</label>
-            <kendo-textbox [(ngModel)]="record.ChangesJSON"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Changes Description</label>
-            <kendo-textbox [(ngModel)]="record.ChangesDescription"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Record JSON</label>
-            <kendo-textbox [(ngModel)]="record.FullRecordJSON"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <kendo-dropdownlist [data]="['Pending', 'Complete']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <kendo-textbox [(ngModel)]="record.Comments"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User</label>
-            <span >{{FormatValue('User', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Record</label>
-            <span >{{FormatValue('RecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User ID</label>
-            <span mjFieldLink [record]="record" fieldName="UserID" >{{FormatValue('UserID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Changed At</label>
-            <span >{{FormatValue('ChangedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Changes JSON</label>
-            <span >{{FormatValue('ChangesJSON', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Changes Description</label>
-            <span >{{FormatValue('ChangesDescription', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Record JSON</label>
-            <span >{{FormatValue('FullRecordJSON', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <span >{{FormatValue('Status', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <span >{{FormatValue('Comments', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User</label>
-            <span >{{FormatValue('User', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UserID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ChangedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ChangesJSON"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ChangesDescription"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullRecordJSON"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Comments"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

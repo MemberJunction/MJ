@@ -1,7 +1,7 @@
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity } from '@memberjunction/core-entities';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
+import { SharedService } from '@memberjunction/ng-shared';
 
 import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
 import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
@@ -19,8 +19,6 @@ export class CategoryTreeComponent implements OnInit {
   public newCategoryName = '';
   public selectedKeys = [];
   public renameFileCategory: FileCategoryEntity | undefined;
-
-  public kendoSVGIcon = kendoSVGIcon;
 
   public categoriesData: FileCategoryEntity[] = [];
 
@@ -67,7 +65,7 @@ export class CategoryTreeComponent implements OnInit {
     const { ID } = fileCategory;
     const success = await fileCategory.Delete();
     if (!success) {
-      console.error('Unable to delete file category', fileCategory);
+      console.error('Unable to delete file category:', fileCategory);
       this.sharedService.CreateSimpleNotification(`Unable to delete category '${fileCategory.Name}'`, 'error');
       return;
     }

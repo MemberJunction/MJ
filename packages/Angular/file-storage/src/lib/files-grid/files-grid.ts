@@ -3,7 +3,7 @@ import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/cor
 import { RunView } from '@memberjunction/core';
 import { FileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared';
+import { SharedService } from '@memberjunction/ng-shared';
 import { z } from 'zod';
 import { FileUploadEvent } from '../file-upload/file-upload';
 
@@ -62,7 +62,6 @@ export class FilesGridComponent implements OnInit, OnChanges {
   public files: FileEntity[] = [];
   public isLoading: boolean = false;
   public editFile: FileEntity | undefined;
-  public kendoSVGIcon = kendoSVGIcon;
 
   constructor(private sharedService: SharedService) {}
 

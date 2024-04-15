@@ -8,91 +8,69 @@ import { EntityRecordDocumentEntity } from '@memberjunction/core-entities';
     selector: 'gen-entityrecorddocument-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Record ID</label>
-            <kendo-textarea [(ngModel)]="record.RecordID" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Document Text</label>
-            <kendo-textbox [(ngModel)]="record.DocumentText"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Vector Index ID</label>
-            <kendo-numerictextbox [(value)]="record.VectorIndexID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Vector ID</label>
-            <kendo-textbox [(ngModel)]="record.VectorID"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Vector JSON</label>
-            <kendo-textbox [(ngModel)]="record.VectorJSON"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Record Updated At</label>
-            <kendo-datepicker [(value)]="record.EntityRecordUpdatedAt" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Document ID</label>
-            <kendo-numerictextbox [(value)]="record.EntityDocumentID" ></kendo-numerictextbox>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Record ID</label>
-            <span >{{FormatValue('RecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Document Text</label>
-            <span >{{FormatValue('DocumentText', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Vector Index ID</label>
-            <span >{{FormatValue('VectorIndexID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Vector ID</label>
-            <span >{{FormatValue('VectorID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Vector JSON</label>
-            <span >{{FormatValue('VectorJSON', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Record Updated At</label>
-            <span >{{FormatValue('EntityRecordUpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Document ID</label>
-            <span >{{FormatValue('EntityDocumentID', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="DocumentText"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="VectorIndexID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="VectorID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="VectorJSON"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityRecordUpdatedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityDocumentID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

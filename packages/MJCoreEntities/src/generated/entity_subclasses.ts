@@ -2785,6 +2785,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EmployeeID
         * * Display Name: Employee
         * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Employees (vwEmployees.ID)
         */
         get EmployeeID(): number | null {  
             return this.Get('EmployeeID');

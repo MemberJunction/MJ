@@ -8,59 +8,44 @@ import { EntityEntity } from '@memberjunction/core-entities';
     selector: 'gen-entity-form-db',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">spCreate</label>
-            <kendo-textarea [(ngModel)]="record.spCreate" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">spUpdate</label>
-            <kendo-textarea [(ngModel)]="record.spUpdate" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">spDelete</label>
-            <kendo-textarea [(ngModel)]="record.spDelete" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">sp CreateGenerated</label>
-            <input type="checkbox" [(ngModel)]="record.spCreateGenerated" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">sp Update Generated</label>
-            <input type="checkbox" [(ngModel)]="record.spUpdateGenerated" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">sp Delete Generated</label>
-            <input type="checkbox" [(ngModel)]="record.spDeleteGenerated" kendoCheckBox />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">spCreate</label>
-            <span >{{FormatValue('spCreate', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">spUpdate</label>
-            <span >{{FormatValue('spUpdate', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">spDelete</label>
-            <span >{{FormatValue('spDelete', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">sp CreateGenerated</label>
-            <span >{{FormatValue('spCreateGenerated', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">sp Update Generated</label>
-            <span >{{FormatValue('spUpdateGenerated', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">sp Delete Generated</label>
-            <span >{{FormatValue('spDeleteGenerated', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="spCreate"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="spUpdate"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="spDelete"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="spCreateGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="spUpdateGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="spDeleteGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

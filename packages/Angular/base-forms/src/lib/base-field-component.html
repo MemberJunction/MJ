@@ -1,0 +1,51 @@
+<!-- 
+    Using a blend of *ngIf and the new @switch control flow because of a bug in early Angular 17 where 
+    the @if wrapping the @switch didn't fully remove elements when swtiching back and forth. In the future if Angular fixes the bug
+    we can get rid of the *ngIf outer div blocks and instead use @if and contain the @switch within the same div block.
+-->
+@if (record.IsSaved || !IsFieldReadOnly) {
+    <!-- We only render a field if the record is either saved, or the field is editable. Meaning, for NEW records, we only show editable fields -->
+    <div class="record-form-row" *ngIf="!EditMode || IsFieldReadOnly">
+        <label *ngIf="ShowLabel">{{DisplayName}}</label>
+        @switch (LinkType) {
+            @case ('None') {
+                <span>{{FormatValue(FieldName, 0)}}</span>
+            }
+            @case ('Email') {
+                <span mjEmailLink [field]="record.GetFieldByName(FieldName)" >{{FormatValue(FieldName, 0)}}</span>
+            }
+            @case ('URL') {
+                <span mjWebLink [field]="record.GetFieldByName(FieldName)" >{{FormatValue(FieldName, 0)}}</span>
+            }
+            @case ('Record') {
+                <span mjFieldLink [record]="record" [fieldName]="FieldName" >{{FormatValue(FieldName, 0)}}</span>
+            }
+        }
+    </div>         
+    <div class="record-form-row" *ngIf="EditMode && !IsFieldReadOnly">
+        <label *ngIf="ShowLabel">{{DisplayName}}</label>
+        @switch (Type) {
+            @case ('textbox') {
+                <kendo-textbox [(ngModel)]="Value"  />   
+            }
+            @case ('textarea') {
+                <kendo-textarea [(ngModel)]="Value" ></kendo-textarea>
+            }
+            @case ('numerictextbox') {
+                <kendo-numerictextbox [(value)]="Value"  />   
+            }
+            @case ('datepicker') {
+                <kendo-datepicker [(value)]="Value"></kendo-datepicker>
+            }
+            @case ('checkbox') {
+                <input type="checkbox" [(ngModel)]="Value" kendoCheckBox />   
+            }
+            @case ('dropdownlist') {
+                <kendo-dropdownlist [data]="PossibleValues" [(ngModel)]="Value"></kendo-dropdownlist>   
+            }
+            @case ('combobox') {
+                <kendo-combobox [data]="PossibleValues" [allowCustom]="true" [(ngModel)]="Value"></kendo-combobox>
+            }
+        }
+    </div>         
+}
