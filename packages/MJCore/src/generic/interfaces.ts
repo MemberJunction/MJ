@@ -108,6 +108,7 @@ export class PotentialDuplicateRequest {
     * The minimum score in order to consider a record a potential duplicate
     **/
     ProbabilityScore?: number;
+
     /**
     * Additional options to pass to the provider
     **/
@@ -117,6 +118,7 @@ export class PotentialDuplicateRequest {
 export class PotentialDuplicateResponse {
     EntityID: number;
     Duplicates: PotentialDuplicate[];
+    
 }
 
 export interface IEntityDataProvider {

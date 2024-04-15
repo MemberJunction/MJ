@@ -10,7 +10,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase  } from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -461,13 +461,18 @@ npm
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: {
-            ...params,
+        let request = {
+            EntityID: params.EntityID,
+            EntityDocumentID: params.EntityDocumentID,
+            ProbabilityScore: params.ProbabilityScore,
+            Options: params.Options,
             RecordIDs: params.RecordIDs.map(recordID => {
-                // map each pkv so that its Value is a string
-                return recordID.GetValuesAsString();
+                let pkv = new PrimaryKeyValueBase();
+                pkv.PrimaryKeyValues = recordID.GetValuesAsString();
+                return pkv;
             })
-        }});
+        }
+        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: request});
 
         if(data && data.GetRecordDuplicates){
             return data.GetRecordDuplicates;

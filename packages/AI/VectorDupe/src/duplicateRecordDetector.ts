@@ -1,5 +1,5 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { RunViewResult, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, PrimaryKeyValue, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import { RunViewResult, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, PrimaryKeyValue, Metadata, RunView, UserInfo, LogError, BaseEntity } from "@memberjunction/core";
 import { EntityDocument } from "./generic/entity.types";
 import { LogStatus } from "@memberjunction/core";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
@@ -12,7 +12,7 @@ export class DuplicateRecordDetector {
     _contextUser: UserInfo;
     _runView: RunView;
     _vectorDB: VectorDBBase;
-    _embedding: Embeddings
+    _embedding: Embeddings;
 
     public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {        
         const md = new Metadata();
@@ -38,12 +38,12 @@ export class DuplicateRecordDetector {
             }
         }
 
-        if(!entityDocument){
-            let results: PotentialDuplicateResponse = {
-                EntityID: entityDocument.EntityID,
-                Duplicates: []
-            };
+        let results: PotentialDuplicateResponse = {
+            EntityID: entityDocument.EntityID,
+            Duplicates: []
+        };
 
+        if(!entityDocument){
             return results;
         }
 
@@ -66,27 +66,42 @@ export class DuplicateRecordDetector {
             throw Error(`No API Key found for Vector Database ${vectorDB.ClassKey}`);
         }
 
-        LogStatus(`Embedding API Key: ${embeddingAPIKey} VectorDB API Key: ${vectorDBAPIKey}`);
-
-        let reg = MJGlobal.Instance.ClassFactory.GetAllRegistrations(Embeddings);
-        LogStatus(JSON.stringify(reg));
-        
-        let dbreg = MJGlobal.Instance.ClassFactory.GetAllRegistrations(VectorDBBase);
-        LogStatus(JSON.stringify(dbreg));
-
+        //LogStatus(`Embedding API Key: ${embeddingAPIKey} VectorDB API Key: ${vectorDBAPIKey}`);
         this._embedding = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, aiModel.DriverClass, embeddingAPIKey)
         this._vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey);
 
-        LogStatus(typeof this._embedding);
-        LogStatus(typeof this._vectorDB);
+        if(!this._embedding){
+            throw Error(`Failed to create Embeddings instance for AI Model ${aiModel.DriverClass}`);
+        }
 
-        let test = await this._embedding.EmbedText({ text: "test", model: "test" });
-        LogStatus(test);
+        if(!this._vectorDB){
+            throw Error(`Failed to create Vector Database instance for ${vectorDB.ClassKey}`);
+        }
 
-        let results: PotentialDuplicateResponse = {
-            EntityID: entityDocument.EntityID,
-            Duplicates: []
-        };
+        let records = await this.GetRecordsByEntityID(params.EntityID, params.RecordIDs);
+
+        const recordTemplates: string[] = records.map((record: BaseEntity) => {
+            return this.parseStringTemplate(entityDocument.Template, record);
+        });
+
+        let embedTextsResult = await this._embedding.EmbedTexts({ texts: recordTemplates, model: "mistral-embed" });        
+
+        let recordDict = {};
+        params.RecordIDs.forEach((recordID, index) => {
+            recordDict[recordID.GetCompositeKey()] = embedTextsResult.vectors[index];
+        });
+
+        const topK: number = 10;
+        for(let index = 0; index < embedTextsResult.vectors.length; index++){
+            const vector: number[] = embedTextsResult.vectors[index];
+            const queryResult = await this._vectorDB.queryIndex({vector: vector, topK: topK, includeMetadata: true, includeValues: true });
+            if(!queryResult.success){
+                continue;
+            }
+
+            console.log(queryResult.data.matches[0]);
+            //const duplicateRecords = this.processDuplicateRecords(queryResult.data.matches, entityDocument);
+        }
 
         return results;
 
@@ -142,6 +157,38 @@ export class DuplicateRecordDetector {
         return EDEntity;
     }
 
+    private async GetRecordsByEntityID(entityID: number, recordIDs: PrimaryKeyValueBase[]): Promise<BaseEntity[]> {
+        const rvResult = await this._runView.RunView({
+            EntityName: "Entities",
+            ExtraFilter: `ID = ${entityID}`
+        }, this._contextUser);
+
+        if(!rvResult.Success){
+            throw new Error(rvResult.ErrorMessage);
+        }
+
+        const entity: EntityEntity = rvResult.Results[0] as EntityEntity;
+        const rvResult2 = await this._runView.RunView({
+            EntityName: entity.Name,
+            ExtraFilter: this.buildExtraFilter(recordIDs),
+            ResultType: 'entity_object'
+        }, this._contextUser);
+
+        if(!rvResult2.Success){
+            throw new Error(rvResult2.ErrorMessage);
+        }
+
+        return rvResult2.Results;
+    }
+
+    private buildExtraFilter(keyValues: PrimaryKeyValueBase[]): string {
+        return keyValues.map((keyValue) => {
+            return keyValue.PrimaryKeyValues.map((keys: PrimaryKeyValue) => {
+                return `${keys.FieldName} = '${keys.Value}'`;
+            }).join(" AND ");
+        }).join("\n OR ");
+    }
+
     private async createEntityDocumentForEntity(entityID: number, vectorDatabase: VectorDatabaseEntity, AIModel: AIModelEntity): Promise<EntityDocumentEntity | null> {
 
         const entity: EntityEntity = await this.runViewForSingleValue<EntityEntity>("Entities", `ID = ${entityID}`);
@@ -190,35 +237,8 @@ export class DuplicateRecordDetector {
         }
     }
 
-    private async getEntityRecord(entityName: string, keyValues: PrimaryKeyValueBase[]): Promise<any> {
-        if(!keyValues || keyValues.length === 0){
-            return null;
-        }
-
-        const rvResult: RunViewResult = await this._runView.RunView({
-            EntityName: entityName,
-            ExtraFilter: this.buildExtraFilter(keyValues[0].PrimaryKeyValues)
-        }, this._contextUser);
-
-        if(!rvResult || rvResult.RowCount === 0){
-            
-            return null;
-        }
-        else{
-            const vdResults = rvResult?.Results as any[];
-            const entityDocument: EntityDocument = vdResults[0];
-            return entityDocument;
-        }
-    }
-
-    private buildExtraFilter(keyValues: PrimaryKeyValue[]): string {
-        return keyValues.map((keyValue, index) => {
-            return keyValue.FieldName + " = " + keyValue.Value;
-        }).join(" AND ");
-    }
-
     //this is specific to pinecone, should be moved there
-    private processDuplicateRecords(queryResult: any, entityDocument: EntityDocument): PotentialDuplicateResponse {
+    private processDuplicateRecords(queryResult: any, entityDocument: EntityDocumentEntity): PotentialDuplicateResponse {
         let results: PotentialDuplicateResponse = {
             EntityID: entityDocument.EntityID,
             Duplicates: []
@@ -226,7 +246,7 @@ export class DuplicateRecordDetector {
 
         for(let duplicate of queryResult){
 
-            if(duplicate.score > 1){
+            if(duplicate.score >= 1){
                 //this is likely the record we wanted duplicates of
                 continue;
             }

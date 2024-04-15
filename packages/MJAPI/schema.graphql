@@ -1436,6 +1436,7 @@ type Employee_ {
   SupervisorLastName: String
   Title: String
   UpdatedAt: Timestamp!
+  UsersArray: [User_!]!
 }
 
 """
