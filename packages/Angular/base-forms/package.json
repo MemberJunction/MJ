@@ -29,7 +29,11 @@
     "@memberjunction/core": "^1.0.8",
     "@memberjunction/ng-record-changes": "^1.0.8",
     "@memberjunction/ng-tabstrip": "^1.0.8",
+    "@memberjunction/ng-link-directives": "^1.0.8",
     "@progress/kendo-angular-buttons": "~15.1.0",
+    "@progress/kendo-angular-dropdowns": "~15.1.0",
+    "@progress/kendo-angular-inputs": "~15.1.0",
+    "@progress/kendo-angular-dateinputs": "~15.1.0",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

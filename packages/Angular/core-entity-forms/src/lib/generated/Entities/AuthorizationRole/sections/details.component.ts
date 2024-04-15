@@ -8,51 +8,40 @@ import { AuthorizationRoleEntity } from '@memberjunction/core-entities';
     selector: 'gen-authorizationrole-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Authorization Name</label>
-            <kendo-textbox [(ngModel)]="record.AuthorizationName"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Role Name</label>
-            <kendo-textbox [(ngModel)]="record.RoleName"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Type</label>
-            <kendo-dropdownlist [data]="['Allow', 'Deny']" [(ngModel)]="record.Type" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Authorization Name</label>
-            <span mjFieldLink [record]="record" fieldName="AuthorizationName" >{{FormatValue('AuthorizationName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Role Name</label>
-            <span mjFieldLink [record]="record" fieldName="RoleName" >{{FormatValue('RoleName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Type</label>
-            <span >{{FormatValue('Type', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="AuthorizationName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RoleName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

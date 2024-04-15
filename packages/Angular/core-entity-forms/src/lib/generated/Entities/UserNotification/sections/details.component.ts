@@ -8,99 +8,75 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
     selector: 'gen-usernotification-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User ID</label>
-            <kendo-numerictextbox [(value)]="record.UserID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Title</label>
-            <kendo-textarea [(ngModel)]="record.Title" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Message</label>
-            <kendo-textbox [(ngModel)]="record.Message"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Resource Type ID</label>
-            <kendo-numerictextbox [(value)]="record.ResourceTypeID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Resource Record ID</label>
-            <kendo-numerictextbox [(value)]="record.ResourceRecordID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Resource Configuration</label>
-            <kendo-textbox [(ngModel)]="record.ResourceConfiguration"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Unread</label>
-            <input type="checkbox" [(ngModel)]="record.Unread" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Read At</label>
-            <kendo-datepicker [(value)]="record.ReadAt!" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User</label>
-            <span >{{FormatValue('User', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User ID</label>
-            <span mjFieldLink [record]="record" fieldName="UserID" >{{FormatValue('UserID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Title</label>
-            <span >{{FormatValue('Title', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Message</label>
-            <span >{{FormatValue('Message', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Resource Type ID</label>
-            <span >{{FormatValue('ResourceTypeID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Resource Record ID</label>
-            <span >{{FormatValue('ResourceRecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Resource Configuration</label>
-            <span >{{FormatValue('ResourceConfiguration', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Unread</label>
-            <span >{{FormatValue('Unread', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Read At</label>
-            <span >{{FormatValue('ReadAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User</label>
-            <span >{{FormatValue('User', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="UserID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Title"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Message"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ResourceTypeID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ResourceRecordID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ResourceConfiguration"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Unread"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ReadAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="User"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

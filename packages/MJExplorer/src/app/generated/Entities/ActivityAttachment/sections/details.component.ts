@@ -8,35 +8,26 @@ import { ActivityAttachmentEntity } from 'mj_generatedentities';
     selector: 'gen-activityattachment-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Attachments</label>
-            <kendo-textarea [(ngModel)]="record.Attachments" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Attachments</label>
-            <span >{{FormatValue('Attachments', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Attachments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

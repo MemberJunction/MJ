@@ -689,11 +689,13 @@ input CreateEmployeeInput {
 }
 
 input CreateEntityDocumentInput {
+  AIModelID: Int!
   EntityID: Int!
   Name: String!
   Status: String!
   Template: String
   TypeID: Int!
+  VectorDatabaseID: Int!
 }
 
 input CreateEntityDocumentRunInput {
@@ -789,6 +791,7 @@ input CreateEntityPermissionInput {
 
 input CreateEntityRecordDocumentInput {
   DocumentText: String
+  EntityDocumentID: Int!
   EntityID: Int!
   EntityRecordUpdatedAt: Timestamp!
   RecordID: String!
@@ -1433,6 +1436,7 @@ type Employee_ {
   SupervisorLastName: String
   Title: String
   UpdatedAt: Timestamp!
+  UsersArray: [User_!]!
 }
 
 """
@@ -1487,6 +1491,7 @@ type EntityDocumentType_ {
 }
 
 type EntityDocument_ {
+  AIModelID: Int!
   CreatedAt: Timestamp!
   Entity: String!
   EntityDocumentRunsArray: [EntityDocumentRun_!]!
@@ -1498,6 +1503,7 @@ type EntityDocument_ {
   Type: String!
   TypeID: Int!
   UpdatedAt: Timestamp!
+  VectorDatabaseID: Int!
 }
 
 type EntityFieldValue_ {
@@ -1598,6 +1604,7 @@ type EntityPermission_ {
 type EntityRecordDocument_ {
   CreatedAt: Timestamp!
   DocumentText: String
+  EntityDocumentID: Int!
   EntityID: Int!
   EntityRecordUpdatedAt: Timestamp!
   ID: Int!
@@ -4673,12 +4680,14 @@ input UpdateEntityAIActionInput {
 }
 
 input UpdateEntityDocumentInput {
+  AIModelID: Int!
   EntityID: Int!
   ID: Int!
   Name: String!
   Status: String!
   Template: String
   TypeID: Int!
+  VectorDatabaseID: Int!
 }
 
 input UpdateEntityDocumentRunInput {
@@ -4778,6 +4787,7 @@ input UpdateEntityPermissionInput {
 
 input UpdateEntityRecordDocumentInput {
   DocumentText: String
+  EntityDocumentID: Int!
   EntityID: Int!
   EntityRecordUpdatedAt: Timestamp!
   ID: Int!
@@ -5475,6 +5485,7 @@ type VectorDatabase_ {
   CreatedAt: Timestamp!
   DefaultURL: String
   Description: String
+  EntityDocumentsArray: [EntityDocument_!]!
   ID: Int!
   Name: String!
   UpdatedAt: Timestamp!

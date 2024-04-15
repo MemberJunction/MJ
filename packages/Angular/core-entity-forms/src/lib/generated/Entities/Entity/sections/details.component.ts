@@ -8,203 +8,153 @@ import { EntityEntity } from '@memberjunction/core-entities';
     selector: 'gen-entity-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent ID</label>
-            <kendo-numerictextbox [(value)]="record.ParentID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Name Suffix</label>
-            <kendo-textarea [(ngModel)]="record.NameSuffix" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Update Description</label>
-            <input type="checkbox" [(ngModel)]="record.AutoUpdateDescription" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Base View Generated</label>
-            <input type="checkbox" [(ngModel)]="record.BaseViewGenerated" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Virtual Entity</label>
-            <input type="checkbox" [(ngModel)]="record.VirtualEntity" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Search Enabled</label>
-            <input type="checkbox" [(ngModel)]="record.FullTextSearchEnabled" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Catalog</label>
-            <kendo-textarea [(ngModel)]="record.FullTextCatalog" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Catalog Generated</label>
-            <input type="checkbox" [(ngModel)]="record.FullTextCatalogGenerated" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Index</label>
-            <kendo-textarea [(ngModel)]="record.FullTextIndex" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Index Generated</label>
-            <input type="checkbox" [(ngModel)]="record.FullTextIndexGenerated" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Search Function</label>
-            <kendo-textarea [(ngModel)]="record.FullTextSearchFunction" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Search Function Generated</label>
-            <input type="checkbox" [(ngModel)]="record.FullTextSearchFunctionGenerated" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User View Max Rows</label>
-            <kendo-numerictextbox [(value)]="record.UserViewMaxRows!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Cascade Deletes</label>
-            <input type="checkbox" [(ngModel)]="record.CascadeDeletes" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Object Subclass Name</label>
-            <kendo-textarea [(ngModel)]="record.EntityObjectSubclassName" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Object Subclass Import</label>
-            <kendo-textarea [(ngModel)]="record.EntityObjectSubclassImport" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Code Name</label>
-            <span >{{FormatValue('CodeName', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Class Name</label>
-            <span >{{FormatValue('ClassName', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Base Table Code Name</label>
-            <span >{{FormatValue('BaseTableCodeName', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent Entity</label>
-            <span >{{FormatValue('ParentEntity', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent Base Table</label>
-            <span >{{FormatValue('ParentBaseTable', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent Base View</label>
-            <span >{{FormatValue('ParentBaseView', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent ID</label>
-            <span mjFieldLink [record]="record" fieldName="ParentID" >{{FormatValue('ParentID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Name Suffix</label>
-            <span >{{FormatValue('NameSuffix', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Auto Update Description</label>
-            <span >{{FormatValue('AutoUpdateDescription', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Base View Generated</label>
-            <span >{{FormatValue('BaseViewGenerated', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Virtual Entity</label>
-            <span >{{FormatValue('VirtualEntity', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Search Enabled</label>
-            <span >{{FormatValue('FullTextSearchEnabled', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Catalog</label>
-            <span >{{FormatValue('FullTextCatalog', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Catalog Generated</label>
-            <span >{{FormatValue('FullTextCatalogGenerated', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Index</label>
-            <span >{{FormatValue('FullTextIndex', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Index Generated</label>
-            <span >{{FormatValue('FullTextIndexGenerated', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Search Function</label>
-            <span >{{FormatValue('FullTextSearchFunction', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Full Text Search Function Generated</label>
-            <span >{{FormatValue('FullTextSearchFunctionGenerated', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User View Max Rows</label>
-            <span >{{FormatValue('UserViewMaxRows', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Cascade Deletes</label>
-            <span >{{FormatValue('CascadeDeletes', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Object Subclass Name</label>
-            <span >{{FormatValue('EntityObjectSubclassName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity Object Subclass Import</label>
-            <span >{{FormatValue('EntityObjectSubclassImport', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Code Name</label>
-            <span >{{FormatValue('CodeName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Class Name</label>
-            <span >{{FormatValue('ClassName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Base Table Code Name</label>
-            <span >{{FormatValue('BaseTableCodeName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent Entity</label>
-            <span >{{FormatValue('ParentEntity', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent Base Table</label>
-            <span >{{FormatValue('ParentBaseTable', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Parent Base View</label>
-            <span >{{FormatValue('ParentBaseView', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="ParentID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="NameSuffix"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AutoUpdateDescription"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="BaseViewGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="VirtualEntity"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextSearchEnabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextCatalog"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextCatalogGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextIndex"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextIndexGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextSearchFunction"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FullTextSearchFunctionGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UserViewMaxRows"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CascadeDeletes"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityObjectSubclassName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityObjectSubclassImport"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CodeName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ClassName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="BaseTableCodeName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ParentEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ParentBaseTable"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ParentBaseView"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

@@ -8,19 +8,14 @@ import { EntityEntity } from '@memberjunction/core-entities';
     selector: 'gen-entity-form-ui',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User Form Generated</label>
-            <input type="checkbox" [(ngModel)]="record.UserFormGenerated" kendoCheckBox />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User Form Generated</label>
-            <span >{{FormatValue('UserFormGenerated', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="UserFormGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

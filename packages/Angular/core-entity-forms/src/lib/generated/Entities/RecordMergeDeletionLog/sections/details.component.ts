@@ -8,59 +8,45 @@ import { RecordMergeDeletionLogEntity } from '@memberjunction/core-entities';
     selector: 'gen-recordmergedeletionlog-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Record Merge Log ID</label>
-            <kendo-numerictextbox [(value)]="record.RecordMergeLogID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Deleted Record ID</label>
-            <kendo-textarea [(ngModel)]="record.DeletedRecordID" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <kendo-dropdownlist [data]="['Pending', 'Complete', 'Error']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Processing Log</label>
-            <kendo-textbox [(ngModel)]="record.ProcessingLog"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Record Merge Log ID</label>
-            <span mjFieldLink [record]="record" fieldName="RecordMergeLogID" >{{FormatValue('RecordMergeLogID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Deleted Record ID</label>
-            <span >{{FormatValue('DeletedRecordID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <span >{{FormatValue('Status', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Processing Log</label>
-            <span >{{FormatValue('ProcessingLog', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="RecordMergeLogID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="DeletedRecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ProcessingLog"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `
