@@ -6,7 +6,7 @@
 @if (record.IsSaved || !IsFieldReadOnly) {
     <!-- We only render a field if the record is either saved, or the field is editable. Meaning, for NEW records, we only show editable fields -->
     <div class="record-form-row" *ngIf="!EditMode || IsFieldReadOnly">
-        <label>{{DisplayName}}</label>
+        <label *ngIf="ShowLabel">{{DisplayName}}</label>
         @switch (LinkType) {
             @case ('None') {
                 <span>{{FormatValue(FieldName, 0)}}</span>
@@ -23,7 +23,7 @@
         }
     </div>         
     <div class="record-form-row" *ngIf="EditMode && !IsFieldReadOnly">
-        <label>{{DisplayName}}</label>
+        <label *ngIf="ShowLabel">{{DisplayName}}</label>
         @switch (Type) {
             @case ('textbox') {
                 <kendo-textbox [(ngModel)]="Value"  />   

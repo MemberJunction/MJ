@@ -6,6 +6,9 @@ export type RunReportParams = {
     ReportID: number
 }
 
+/**
+ * Class used to run a report and return the results.
+ */
 export class RunReport  {
     //private static _Provider: IRunViewProvider;
 

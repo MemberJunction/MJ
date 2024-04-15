@@ -2,6 +2,9 @@ import { BaseInfo } from "./baseInfo";
 import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 
+/**
+ * Metadata about a single stored query in the database.
+ */
 export class QueryInfo extends BaseInfo {
     public Name: string = null
     public Description: string  = null

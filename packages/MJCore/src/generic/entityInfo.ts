@@ -906,6 +906,9 @@ export const ValidationErrorType = {
 export type ValidationErrorType = typeof ValidationErrorType[keyof typeof ValidationErrorType];
 
 
+/**
+ * Information about a single validation error
+ */
 export class ValidationErrorInfo {
     Source: string
     Message: string
@@ -920,6 +923,9 @@ export class ValidationErrorInfo {
     }
 }
 
+/**
+ * The result of a validation check 
+ */
 export class ValidationResult {
     Success: boolean
     Errors: ValidationErrorInfo[] = []

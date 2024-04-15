@@ -10,7 +10,7 @@ export * from './util'
 export * from './ObjectCache'
 
 /**
- * Global class used for coordinating events and components across MemberJunction
+ * Global class used for coordinating events, creating class instances, and managing components across MemberJunction
  */
 export class MJGlobal {
     // subjects for observables to handle eventing
@@ -56,6 +56,9 @@ export class MJGlobal {
         this._components.push(component);
     }
 
+    /**
+     * Resets the class to its initial state. Use very carefully and sparingly.
+     */
     public Reset() {
         this._components = [];
 
@@ -85,6 +88,9 @@ export class MJGlobal {
         return withReplay ? this._eventsReplay$ : this._events$;
     }
 
+    /**
+     * Returns the global instance of the MJGlobal class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of MJGlobal, always use this method to get the instance.
+     */
     public static get Instance(): MJGlobal {
         if (!MJGlobal._instance)
             MJGlobal._instance = new MJGlobal();
@@ -92,6 +98,9 @@ export class MJGlobal {
         return MJGlobal._instance;
     }
 
+    /**
+     * Returns the instance of ClassFactory you should use in your application. Access this via the MJGlobal.Instance.ClassFactory property.
+     */
     public get ClassFactory(): ClassFactory {
         return this._classFactory;
     }

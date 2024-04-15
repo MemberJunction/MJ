@@ -36,6 +36,11 @@ export class MJFormField extends BaseRecordComponent {
      * valid when the FieldName field is a foreign key field to another entity.
      */
     @Input() LinkType: 'Email' | 'URL' | 'Record' | 'None' = 'None';
+
+    /**
+     * If set to false, the label for the field will not be shown. The default is true.
+     */
+    @Input() ShowLabel: boolean = true;
     
     private _displayName: string | null = null;
     /**
