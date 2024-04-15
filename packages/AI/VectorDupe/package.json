@@ -18,7 +18,6 @@
     "@memberjunction/ai": "^1.0.8",
     "@memberjunction/ai-vectordb": "^1.0.8",
     "@memberjunction/ai-vectors": "^1.0.8",
-    "@memberjunction/ai-vectors-pinecone": "^1.0.8",
     "@memberjunction/aiengine": "^1.0.8",
     "@memberjunction/core": "^1.0.8",
     "@memberjunction/global": "^1.0.8",

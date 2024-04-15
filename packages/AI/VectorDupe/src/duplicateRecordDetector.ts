@@ -24,9 +24,6 @@ export class DuplicateRecordDetector {
             this._runView = new RunView();
         }
 
-        const vectorDB: VectorDatabaseEntity = this.GetVectorDatabase();
-        const aiModel: AIModelEntity = this.GetAIModel();
-
         let entityDocument: EntityDocumentEntity | null = null;
         if(params.EntityDocumentID){
             entityDocument = await this.getEntityDocument(params.EntityDocumentID);
@@ -35,18 +32,12 @@ export class DuplicateRecordDetector {
             entityDocument = await this.getFirstActiveEntityDocumentForEntity(params.EntityID);
             if(!entityDocument){
                 LogStatus(`No active Entity Document found for entity ${params.EntityID}, creating one`);
-                entityDocument = await this.createEntityDocumentForEntity(params.EntityID, vectorDB.ID, aiModel.ID);
+                const defaultVectorDB: VectorDatabaseEntity = this.GetVectorDatabase();
+                const defaultAIModel: AIModelEntity = this.GetAIModel();
+                entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
             }
         }
 
-        let results: PotentialDuplicateResponse = {
-            EntityID: entityDocument.EntityID,
-            Duplicates: []
-        };
-
-        return results;
-
-        /*
         if(!entityDocument){
             let results: PotentialDuplicateResponse = {
                 EntityID: entityDocument.EntityID,
@@ -56,22 +47,50 @@ export class DuplicateRecordDetector {
             return results;
         }
 
-        const aiModel: AIModelEntity = this.GetAIModel();
-        const vectorDB: VectorDatabaseEntity = this.GetVectorDatabase();
+        LogStatus(`Using vector database ${entityDocument.VectorDatabaseID} and AI Model ${entityDocument.AIModelID}`);
+
+        const vectorDB: VectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
+        const aiModel: AIModelEntity = this.GetAIModel(entityDocument.AIModelID);
+
+        LogStatus(`AIModel driver class: ${aiModel.DriverClass}`);
+        LogStatus(`VectorDB class key: ${vectorDB.ClassKey}`);
+
         const embeddingAPIKey: string = GetAIAPIKey(aiModel.DriverClass);
         const vectorDBAPIKey: string = GetAIAPIKey(vectorDB.ClassKey);
 
-        LogStatus("Embedding API Key: ", embeddingAPIKey);
-        LogStatus("Vector Database API Key: ", vectorDBAPIKey);
+        if(!embeddingAPIKey){
+            throw Error(`No API Key found for AI Model ${aiModel.DriverClass}`);
+        }
+
+        if(!vectorDBAPIKey){
+            throw Error(`No API Key found for Vector Database ${vectorDB.ClassKey}`);
+        }
+
+        LogStatus(`Embedding API Key: ${embeddingAPIKey} VectorDB API Key: ${vectorDBAPIKey}`);
+
+        let reg = MJGlobal.Instance.ClassFactory.GetAllRegistrations(Embeddings);
+        LogStatus(JSON.stringify(reg));
+        
+        let dbreg = MJGlobal.Instance.ClassFactory.GetAllRegistrations(VectorDBBase);
+        LogStatus(JSON.stringify(dbreg));
 
         this._embedding = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, aiModel.DriverClass, embeddingAPIKey)
         this._vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey);
 
-        if(!entityDocument){
-            LogStatus("Entity Document not found");
-            return { EntityID: params.EntityDocumentID, Duplicates: [] };
-        }
+        LogStatus(typeof this._embedding);
+        LogStatus(typeof this._vectorDB);
 
+        let test = await this._embedding.EmbedText({ text: "test", model: "test" });
+        LogStatus(test);
+
+        let results: PotentialDuplicateResponse = {
+            EntityID: entityDocument.EntityID,
+            Duplicates: []
+        };
+
+        return results;
+
+        /*
         //then get the entity we are looking for duplicates of
         const entityRecord = await this.getEntityRecord(entityDocument.Type, params.RecordIDs);
 
@@ -123,7 +142,7 @@ export class DuplicateRecordDetector {
         return EDEntity;
     }
 
-    private async createEntityDocumentForEntity(entityID: number, vectorDatabaseID: number, AIModelID: number): Promise<EntityDocumentEntity | null> {
+    private async createEntityDocumentForEntity(entityID: number, vectorDatabase: VectorDatabaseEntity, AIModel: AIModelEntity): Promise<EntityDocumentEntity | null> {
 
         const entity: EntityEntity = await this.runViewForSingleValue<EntityEntity>("Entities", `ID = ${entityID}`);
         if(!entity){
@@ -153,14 +172,13 @@ export class DuplicateRecordDetector {
         const md: Metadata = new Metadata();
         const entityDocument: EntityDocumentEntity = await md.GetEntityObject<EntityDocumentEntity>("Entity Documents");
         entityDocument.NewRecord();
-        entityDocument.Set("Name", `Duplicate Record Entity Document for ${entity.Name}`);
+        entityDocument.Set("Name", `Duplicate Record Entity Document for the ${entity.Name} entity using vector database ${vectorDatabase.Name} and AI Model ${AIModel.Name}`);
         entityDocument.Set("EntityID", entityID);
         entityDocument.Set("TypeID", 9); //hardcoded, but we know that 9 is the ID for Record Duplicates
         entityDocument.Set("Status", "Active");
         entityDocument.Set("Template", EDTemplate);
-        entityDocument.Set("VectorDatabaseID", vectorDatabaseID);
-        entityDocument.Set("AIModelID", AIModelID);
-        LogStatus(`${AIModelID}`);
+        entityDocument.Set("VectorDatabaseID", vectorDatabase.ID);
+        entityDocument.Set("AIModelID", AIModel.ID);
         entityDocument.ContextCurrentUser = this._contextUser;
         let saveResult = await entityDocument.Save();
         if(saveResult){
@@ -239,28 +257,36 @@ export class DuplicateRecordDetector {
         return String.raw({ raw: parts }, ...parameters);
     }
 
-    /**
-     * Brabs the first AI model that is of type 3 (Embeddings). 
-     */
-    protected GetAIModel(): AIModelEntityExtended {
+    protected GetAIModel(id?: number): AIModelEntityExtended {
         /*elim this hardcoding by adding virtual field for Type to AI Models entity*/
-        const model: AIModelEntityExtended = AIEngine.Models.find(m => m.AIModelTypeID === 1);
+        let model: AIModelEntityExtended;
+        if(id){
+            model = AIEngine.Models.find(m => m.AIModelTypeID === 3 && m.ID === id);
+        }
+        else{
+            model = AIEngine.Models.find(m => m.AIModelTypeID === 3);
+        }
+
         if(!model){
             throw new Error("No AI Model found");
         }
         return model;
     }
 
-    /**
-     * Grabs the first vector database
-     */
-    protected GetVectorDatabase(): VectorDatabaseEntity {
+    protected GetVectorDatabase(id?: number): VectorDatabaseEntity {
         if(AIEngine.VectorDatabases.length > 0){
-            return AIEngine.VectorDatabases[0];
+            if(id){
+                let vectorDB = AIEngine.VectorDatabases.find(vd => vd.ID === id);
+                if(vectorDB){
+                    return vectorDB;
+                }
+            }
+            else{
+                return AIEngine.VectorDatabases[0];
+            }
         }
-        else{
-            throw new Error("No Vector Databases found");
-        }
+
+        throw new Error("No Vector Databases found");
     }
 
     private async runViewForSingleValue<T>(entityName: string, extraFilter: string): Promise<T | null> {

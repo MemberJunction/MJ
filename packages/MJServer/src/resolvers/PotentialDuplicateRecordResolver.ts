@@ -4,6 +4,12 @@ import {PrimaryKeyValueInputType, PrimaryKeyValueOutputType} from './MergeRecord
 import { AppContext } from "../types";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
+//load the default vectorDB and embedding model
+import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
+import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
+LoadMistralEmbedding();
+LoadPineconeVectorDB();
+
 @InputType()
 export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => Int)

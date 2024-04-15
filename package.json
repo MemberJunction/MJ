@@ -9,7 +9,7 @@
     "packages/AngularElements/*"
   ],
   "scripts": {
-    "build": "turbo build --filter='!mj_*'",
+    "build": "turbo build --filter=!mj_explorer",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "docs": "typedoc",
     "change": "beachball change",

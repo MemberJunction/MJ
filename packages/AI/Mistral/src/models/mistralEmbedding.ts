@@ -4,7 +4,7 @@ import { MistralClient } from './mistralClient';
 import { EmbeddingResponse } from "../generic/mistral.types";
 
 
-@RegisterClass(Embeddings, 'MistralEmbedding')
+@RegisterClass(Embeddings, 'MistralEmbedding', 1)
 export class MistralEmbedding extends Embeddings {
     static _client: MistralClient;
 
@@ -24,4 +24,8 @@ export class MistralEmbedding extends Embeddings {
             data: response.data[0].embedding
         }
     }
+}
+
+export function LoadMistralEmbedding() {
+    // this does nothing but prevents the class from being removed by the tree shaker
 }
