@@ -461,15 +461,12 @@ export class GenericBrowserListComponent implements OnInit{
     }
   }
 
-  public getClassesForItem(item: Item): string {
+  public getIconForResourceType(item: Item): string {
     if(!item){
       return "";
     }
 
     const LargeClass: string = "fa-3x ";
-
-    console.log(this.ItemEntityName);
-
     if(item.Type === ItemType.Folder){  
       return LargeClass + "fa-regular fa-folder";
     }

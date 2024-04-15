@@ -85,7 +85,7 @@
                   </button>
                 </div>
                 <kendo-card-body (click)="itemClick(item)">
-                    <span (title)="item.Name" [ngClass]="getClassesForItem(item)"></span>
+                    <span (title)="item.Name" [ngClass]="getIconForResourceType(item)"></span>
                     <div class="padding-top-small">
                       <h5 kendoCardTitle>{{ item.Name }}</h5>
                       <p kendoCardSubtitle>{{ item.Description }}</p>
