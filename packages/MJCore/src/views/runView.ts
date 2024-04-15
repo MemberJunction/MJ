@@ -100,7 +100,7 @@ export type RunViewParams = {
 } 
 
 /**
- * Class for runnings views in a generic, tier-independent manner - uses a provider model for 
+ * Class for running views in a generic, tier-independent manner - uses a provider model for 
  * implementation transparently from the viewpoint of the consumer of the class.
  */
 export class RunView  {

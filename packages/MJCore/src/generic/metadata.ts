@@ -12,6 +12,10 @@ import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } fro
  */
 export class Metadata {
     private static _globalProviderKey: string = 'MJ_MetadataProvider';
+    /**
+     * When an application initializes, the Provider package that is being used for that application will handle setting the provider globally via this static property. 
+     * This is done so that the provider can be accessed from anywhere in the application without having to pass it around. This pattern is used sparingly in MJ.
+     */
     public static get Provider(): IMetadataProvider {
         const g = MJGlobal.Instance.GetGlobalObjectStore();
         if (g)

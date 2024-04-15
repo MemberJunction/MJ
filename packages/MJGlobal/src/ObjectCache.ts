@@ -12,7 +12,8 @@ export class ObjectCacheEntry<T = any> {
 }
 
 /**
- * ObjectCache can be used to cache objects as needed by any application in memory. These objects are NOT persisted to disk or any other storage medium, so they are only good for the lifetime of the application
+ * ObjectCache can be used to cache objects as needed by any application in memory. These objects are NOT persisted to disk or any other storage medium, so they are only good for the lifetime of the application.
+ * Do not attempt to directly instantiate this class, instead use the static Instance property of the MJGlobal class to get the instance of the ObjectCache for your application within that instance of MJGlobal.
  */
 export class ObjectCache {
     // our internal array is an array of ObjectCacheEntry objects

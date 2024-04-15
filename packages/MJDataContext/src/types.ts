@@ -8,7 +8,10 @@ export class DataContextFieldInfo {
     Description?: string;
 }
 
-@RegisterClass(DataContextItem) // this is the base class and the default implementation for the DataContextItem object, other implementations can be registered as well with higher priorities
+/**
+ * Base class and the default implementation for the DataContextItem object, other implementations (sub-classes) can be registered as well with higher priorities to take over for this particular class.
+ */
+@RegisterClass(DataContextItem) 
 export class DataContextItem {
     /**
      * The type of the item, either "view", "query", "full_entity", or "sql", or "single_record"
@@ -664,7 +667,7 @@ export class DataContext {
     }
 
     /**
-     * This method will load the data for the data context items associated with the data context. This method must be called ONLY after the . This method will return a promise that will resolve to true if the data was loaded successfully, and false if it was not.
+     * This method will load the data for the data context items associated with the data context. This method must be called ONLY after LoadMetadata(). This method will return a promise that will resolve to true if the data was loaded successfully, and false if it was not.
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
      * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
