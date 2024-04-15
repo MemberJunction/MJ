@@ -12408,7 +12408,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ID
         * * Display Name: ID
         * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
         */
         get ID(): number {  
             return this.Get('ID');
