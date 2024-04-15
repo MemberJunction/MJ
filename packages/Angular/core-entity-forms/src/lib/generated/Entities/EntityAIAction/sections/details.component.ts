@@ -8,139 +8,108 @@ import { EntityAIActionEntity } from '@memberjunction/core-entities';
     selector: 'gen-entityaiaction-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.EntityID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Action ID</label>
-            <kendo-numerictextbox [(value)]="record.AIActionID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Model ID</label>
-            <kendo-numerictextbox [(value)]="record.AIModelID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textbox [(ngModel)]="record.Name"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Prompt</label>
-            <kendo-textbox [(ngModel)]="record.Prompt"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Trigger Event</label>
-            <kendo-dropdownlist [data]="['after save', 'before save']" [(ngModel)]="record.TriggerEvent" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User Message</label>
-            <kendo-textbox [(ngModel)]="record.UserMessage"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Type</label>
-            <kendo-dropdownlist [data]="['entity', 'field']" [(ngModel)]="record.OutputType" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Field</label>
-            <kendo-textbox [(ngModel)]="record.OutputField"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Skip If Output Field Not Empty</label>
-            <input type="checkbox" [(ngModel)]="record.SkipIfOutputFieldNotEmpty" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Entity ID</label>
-            <kendo-numerictextbox [(value)]="record.OutputEntityID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <kendo-textbox [(ngModel)]="record.Comments"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AIAction</label>
-            <span >{{FormatValue('AIAction', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">AIModel</label>
-            <span >{{FormatValue('AIModel', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Entity</label>
-            <span >{{FormatValue('OutputEntity', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="EntityID" >{{FormatValue('EntityID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Action ID</label>
-            <span mjFieldLink [record]="record" fieldName="AIActionID" >{{FormatValue('AIActionID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AI Model ID</label>
-            <span mjFieldLink [record]="record" fieldName="AIModelID" >{{FormatValue('AIModelID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Prompt</label>
-            <span >{{FormatValue('Prompt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Trigger Event</label>
-            <span >{{FormatValue('TriggerEvent', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User Message</label>
-            <span >{{FormatValue('UserMessage', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Type</label>
-            <span >{{FormatValue('OutputType', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Field</label>
-            <span >{{FormatValue('OutputField', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Skip If Output Field Not Empty</label>
-            <span >{{FormatValue('SkipIfOutputFieldNotEmpty', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Entity ID</label>
-            <span mjFieldLink [record]="record" fieldName="OutputEntityID" >{{FormatValue('OutputEntityID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <span >{{FormatValue('Comments', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Entity</label>
-            <span >{{FormatValue('Entity', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AIAction</label>
-            <span >{{FormatValue('AIAction', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">AIModel</label>
-            <span >{{FormatValue('AIModel', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Output Entity</label>
-            <span >{{FormatValue('OutputEntity', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="EntityID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIActionID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIModelID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Prompt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="TriggerEvent"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UserMessage"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="OutputType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="OutputField"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SkipIfOutputFieldNotEmpty"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="OutputEntityID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Comments"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIAction"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="AIModel"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="OutputEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

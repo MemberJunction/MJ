@@ -8,51 +8,40 @@ import { UserViewRunEntity } from '@memberjunction/core-entities';
     selector: 'gen-userviewrun-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User View ID</label>
-            <kendo-numerictextbox [(value)]="record.UserViewID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Run At</label>
-            <kendo-datepicker [(value)]="record.RunAt" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Run By User ID</label>
-            <kendo-numerictextbox [(value)]="record.RunByUserID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">User View</label>
-            <span >{{FormatValue('UserView', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Run By User</label>
-            <span >{{FormatValue('RunByUser', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">User View ID</label>
-            <span mjFieldLink [record]="record" fieldName="UserViewID" >{{FormatValue('UserViewID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Run At</label>
-            <span >{{FormatValue('RunAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Run By User ID</label>
-            <span mjFieldLink [record]="record" fieldName="RunByUserID" >{{FormatValue('RunByUserID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">User View</label>
-            <span >{{FormatValue('UserView', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Run By User</label>
-            <span >{{FormatValue('RunByUser', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="UserViewID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RunAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RunByUserID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UserView"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RunByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

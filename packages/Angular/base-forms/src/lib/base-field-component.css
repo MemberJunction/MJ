@@ -1,0 +1,32 @@
+.record-form-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+} 
+  
+  
+.record-form-row label {
+    font-weight: bold;
+    padding-right: 10px;
+    width: 240px;
+    margin-bottom: 0;
+}
+
+
+
+@media (min-width: 768px) {
+    .record-form-row {
+      flex-direction: row;
+      align-items: center;
+    }
+  
+    .record-form-row label {
+      width: 240px;
+      margin-bottom: 0;
+    }
+  }
+  

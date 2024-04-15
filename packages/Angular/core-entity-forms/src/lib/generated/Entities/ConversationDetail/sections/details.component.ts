@@ -8,83 +8,63 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
     selector: 'gen-conversationdetail-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Conversation ID</label>
-            <kendo-numerictextbox [(value)]="record.ConversationID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">External ID</label>
-            <kendo-textbox [(ngModel)]="record.ExternalID"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Role</label>
-            <kendo-dropdownlist [data]="['User', 'AI', 'Error']" [(ngModel)]="record.Role" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Message</label>
-            <kendo-textbox [(ngModel)]="record.Message"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Error</label>
-            <kendo-textbox [(ngModel)]="record.Error"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Hidden To User</label>
-            <input type="checkbox" [(ngModel)]="record.HiddenToUser" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Conversation</label>
-            <span >{{FormatValue('Conversation', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Conversation ID</label>
-            <span mjFieldLink [record]="record" fieldName="ConversationID" >{{FormatValue('ConversationID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">External ID</label>
-            <span >{{FormatValue('ExternalID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Role</label>
-            <span >{{FormatValue('Role', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Message</label>
-            <span >{{FormatValue('Message', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Error</label>
-            <span >{{FormatValue('Error', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Hidden To User</label>
-            <span >{{FormatValue('HiddenToUser', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Conversation</label>
-            <span >{{FormatValue('Conversation', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="ConversationID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ExternalID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Role"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Message"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Error"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="HiddenToUser"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Conversation"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

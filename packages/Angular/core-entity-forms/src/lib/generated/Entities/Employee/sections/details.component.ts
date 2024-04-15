@@ -8,139 +8,107 @@ import { EmployeeEntity } from '@memberjunction/core-entities';
     selector: 'gen-employee-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">BCMID</label>
-            <span >{{FormatValue('BCMID', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">First Name</label>
-            <kendo-textbox [(ngModel)]="record.FirstName"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Last Name</label>
-            <kendo-textbox [(ngModel)]="record.LastName"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Title</label>
-            <kendo-textbox [(ngModel)]="record.Title"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Email</label>
-            <kendo-textbox [(ngModel)]="record.Email"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Phone</label>
-            <kendo-textbox [(ngModel)]="record.Phone"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Active</label>
-            <input type="checkbox" [(ngModel)]="record.Active" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Company ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor ID</label>
-            <kendo-numerictextbox [(value)]="record.SupervisorID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">First Last</label>
-            <span >{{FormatValue('FirstLast', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor</label>
-            <span >{{FormatValue('Supervisor', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor First Name</label>
-            <span >{{FormatValue('SupervisorFirstName', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor Last Name</label>
-            <span >{{FormatValue('SupervisorLastName', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor Email</label>
-            <span >{{FormatValue('SupervisorEmail', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">BCMID</label>
-            <span >{{FormatValue('BCMID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">First Name</label>
-            <span >{{FormatValue('FirstName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Last Name</label>
-            <span >{{FormatValue('LastName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Title</label>
-            <span >{{FormatValue('Title', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Email</label>
-            <span mjEmailLink [field]="record.GetFieldByName('Email')" >{{FormatValue('Email', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Phone</label>
-            <span >{{FormatValue('Phone', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Active</label>
-            <span >{{FormatValue('Active', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Company ID</label>
-            <span mjFieldLink [record]="record" fieldName="CompanyID" >{{FormatValue('CompanyID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor ID</label>
-            <span mjFieldLink [record]="record" fieldName="SupervisorID" >{{FormatValue('SupervisorID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">First Last</label>
-            <span >{{FormatValue('FirstLast', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor</label>
-            <span >{{FormatValue('Supervisor', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor First Name</label>
-            <span >{{FormatValue('SupervisorFirstName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor Last Name</label>
-            <span >{{FormatValue('SupervisorLastName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Supervisor Email</label>
-            <span >{{FormatValue('SupervisorEmail', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="BCMID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FirstName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="LastName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Title"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Email"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Email"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Phone"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Active"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CompanyID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SupervisorID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="FirstLast"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Supervisor"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SupervisorFirstName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SupervisorLastName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SupervisorEmail"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

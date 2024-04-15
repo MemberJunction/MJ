@@ -8,91 +8,69 @@ import { QueueTaskEntity } from '@memberjunction/core-entities';
     selector: 'gen-queuetask-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Queue ID</label>
-            <kendo-numerictextbox [(value)]="record.QueueID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <kendo-dropdownlist [data]="['In Progress', 'Completed', 'Failed']" [(ngModel)]="record.Status" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Started At</label>
-            <kendo-datepicker [(value)]="record.StartedAt!" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Ended At</label>
-            <kendo-datepicker [(value)]="record.EndedAt!" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Data</label>
-            <kendo-textbox [(ngModel)]="record.Data"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Options</label>
-            <kendo-textbox [(ngModel)]="record.Options"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Output</label>
-            <kendo-textbox [(ngModel)]="record.Output"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Error Message</label>
-            <kendo-textbox [(ngModel)]="record.ErrorMessage"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <kendo-textbox [(ngModel)]="record.Comments"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Queue</label>
-            <span >{{FormatValue('Queue', 0)}}</span>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Queue ID</label>
-            <span mjFieldLink [record]="record" fieldName="QueueID" >{{FormatValue('QueueID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <span >{{FormatValue('Status', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Started At</label>
-            <span >{{FormatValue('StartedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Ended At</label>
-            <span >{{FormatValue('EndedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Data</label>
-            <span >{{FormatValue('Data', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Options</label>
-            <span >{{FormatValue('Options', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Output</label>
-            <span >{{FormatValue('Output', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Error Message</label>
-            <span >{{FormatValue('ErrorMessage', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Comments</label>
-            <span >{{FormatValue('Comments', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Queue</label>
-            <span >{{FormatValue('Queue', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="QueueID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="StartedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EndedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Data"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Options"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Output"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ErrorMessage"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Comments"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Queue"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `
