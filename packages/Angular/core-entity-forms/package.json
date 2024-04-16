@@ -24,12 +24,12 @@
     "@angular/forms": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core": "^1.0.9",
-    "@memberjunction/core-entities": "^1.0.9",
-    "@memberjunction/ng-explorer-core": "^1.0.10",
-    "@memberjunction/ng-base-forms": "^1.0.9",
-    "@memberjunction/ng-tabstrip": "^1.0.9",
-    "@memberjunction/ng-container-directives": "^1.0.9",
+    "@memberjunction/core": "~1.0.10",
+    "@memberjunction/core-entities": "~1.0.10",
+    "@memberjunction/ng-explorer-core": "~1.0.10",
+    "@memberjunction/ng-base-forms": "~1.0.10",
+    "@memberjunction/ng-tabstrip": "~1.0.10",
+    "@memberjunction/ng-container-directives": "~1.0.10",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "tslib": "^2.3.0"
