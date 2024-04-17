@@ -60,3 +60,51 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
  
+  merge-main-to-next:
+    runs-on: ubuntu-latest
+    if: ${{ (github.base_ref || github.ref_name) == 'main' }}
+    needs: build-and-publish
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        ref: 'next'
+
+    - name: Configure Git
+      run: |
+        git config user.name "GitHub Action"
+        git config user.email "action@github.com"
+
+    - name: Pull latest next branch
+      run: git pull origin next
+
+    - name: Merge main into next
+      run: |
+        git fetch origin main
+        git merge origin/main --no-commit --no-ff
+
+    - name: Check for conflicts and resolve
+      run: |
+        conflicts=$(git diff --name-only --diff-filter=U)
+        if [ -n "$conflicts" ]; then
+          cat <<-EOT >> $GITHUB_STEP_SUMMARY
+            Conflicts detected in the following files:
+            
+            \`\`\`
+            $conflicts
+            \`\`\`
+          EOT
+          echo "Conflict details:" >>
+          for file in $conflicts; do
+              echo "Conflicts in $file:" >> $GITHUB_STEP_SUMMARY
+              git diff $file >> $GITHUB_STEP_SUMMARY
+              echo >> $GITHUB_STEP_SUMMARY
+          done
+          git checkout --theirs $conflicts
+          git add $conflicts
+          echo "Conflicts resolved using 'theirs'." >> $GITHUB_STEP_SUMMARY
+        fi
+        git commit -m "Merged main into next resolving conflicts using 'theirs'"
+
+    - name: Push changes
+      run: git push
