@@ -1,6 +1,6 @@
 {
   "name": "mj_codegen",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "description": "MemberJunction Code Generator Utility",
   "main": "src/index.ts",
   "private": true,
@@ -19,7 +19,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/codegen-lib": "^1.0.8",
+    "@memberjunction/codegen-lib": "~1.0.10",
     "dotenv": "^16.3.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"

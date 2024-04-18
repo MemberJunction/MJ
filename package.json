@@ -1,6 +1,6 @@
 {
   "name": "memberjunction-workspace",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "license": "ISC",
   "workspaces": [
     "packages/*",
@@ -9,7 +9,8 @@
     "packages/AngularElements/*"
   ],
   "scripts": {
-    "build": "turbo build --filter=!mj_explorer",
+    "build": "turbo build --filter='!mj_*'",
+    "watch": "turbo watch --filter='!mj_*'",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "docs": "typedoc",
     "change": "beachball change",

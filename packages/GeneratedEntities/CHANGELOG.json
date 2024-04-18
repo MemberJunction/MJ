@@ -2,6 +2,27 @@
   "name": "mj_generatedentities",
   "entries": [
     {
+      "date": "Sun, 14 Apr 2024 15:50:05 GMT",
+      "version": "1.0.3",
+      "tag": "mj_generatedentities_v1.0.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "mj_generatedentities",
+            "comment": "Bump @memberjunction/core to v1.0.9",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "mj_generatedentities",
+            "comment": "Bump @memberjunction/global to v1.0.9",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 13 Apr 2024 02:32:44 GMT",
       "version": "1.0.2",
       "tag": "mj_generatedentities_v1.0.2",
