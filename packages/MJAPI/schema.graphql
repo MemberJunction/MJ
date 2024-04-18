@@ -2203,7 +2203,8 @@ input PotentialDuplicateRequestType {
 
 type PotentialDuplicateResponseType {
   Duplicates: [PotentialDuplicateType!]!
-  EntityID: Int!
+  EntityID: Int
+  RecordPrimaryKeys: PrimaryKeyValueBaseOutputType!
 }
 
 type PotentialDuplicateType {
@@ -2213,6 +2214,10 @@ type PotentialDuplicateType {
 
 input PrimaryKeyValueBaseInputType {
   PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+}
+
+type PrimaryKeyValueBaseOutputType {
+  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
 }
 
 input PrimaryKeyValueInputType {
@@ -2323,7 +2328,7 @@ type Query {
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
   GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
-  GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
+  GetRecordDuplicates(params: PotentialDuplicateRequestType!): [PotentialDuplicateResponseType!]!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
   Industry(ID: Int!): Industry_

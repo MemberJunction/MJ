@@ -152,7 +152,7 @@ export class Metadata {
      * 
      * @param params object containing many properties used in fetching records and determining which ones to return
      */
-    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse[]> {
         return await Metadata.Provider.GetRecordDuplicates(params, contextUser);
     }
 

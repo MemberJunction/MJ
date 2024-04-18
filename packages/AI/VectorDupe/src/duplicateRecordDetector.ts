@@ -93,9 +93,8 @@ export class DuplicateRecordDetector {
             let queryResult = await this._vectorDB.getVectorDuplicates({ vector: vector, topK: topK, includeMetadata: true, includeValues: false });
             if(queryResult.success){
                 let response: PotentialDuplicateResponse = queryResult.data as PotentialDuplicateResponse;
-                const compositeKey: string = params.RecordIDs[index].GetCompositeKey();
-                LogStatus(`Query result for ${compositeKey} returned ${response.Duplicates.length} potential duplicates`);
-                LogStatus(response);
+                //const compositeKey: string = params.RecordIDs[index].GetCompositeKey();
+                //LogStatus(`Query result for ${compositeKey} returned ${response.Duplicates.length} potential duplicates`);
                 response.EntityID = entityDocument.EntityID;
                 response.RecordPrimaryKeys = params.RecordIDs[index];
                 results.push(response);

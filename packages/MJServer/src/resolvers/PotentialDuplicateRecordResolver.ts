@@ -33,6 +33,12 @@ export class PrimaryKeyValueBaseInputType extends PrimaryKeyValueBase {
 }
 
 @ObjectType()
+export class PrimaryKeyValueBaseOutputType extends PrimaryKeyValueBase {
+  @Field(() => [PrimaryKeyValueOutputType])
+  PrimaryKeyValues: PrimaryKeyValue[];
+}
+
+@ObjectType()
 export class PotentialDuplicateType extends PotentialDuplicate {
   @Field(() => Float)
   ProbabilityScore: number;
@@ -44,18 +50,21 @@ export class PotentialDuplicateType extends PotentialDuplicate {
 @ObjectType()
 export class PotentialDuplicateResponseType extends PotentialDuplicateResponse{
 
-  @Field(() => Int)
+  @Field(() => Int, { nullable: true })
   EntityID: number;
 
   @Field(() => [PotentialDuplicateType])
   Duplicates: PotentialDuplicateType[];
+
+  @Field(() => PrimaryKeyValueBaseOutputType)
+  RecordPrimaryKeys: PrimaryKeyValueBase;
 }
 
 @Resolver(PotentialDuplicateResponseType)
 export class DuplicateRecordResolver {
 
-  @Query(() => PotentialDuplicateResponseType)
-  async GetRecordDuplicates(@Ctx() { dataSource, userPayload }: AppContext, @Arg("params")params: PotentialDuplicateRequestType): Promise<PotentialDuplicateResponseType> {
+  @Query(() => [PotentialDuplicateResponseType])
+  async GetRecordDuplicates(@Ctx() { dataSource, userPayload }: AppContext, @Arg("params")params: PotentialDuplicateRequestType): Promise<PotentialDuplicateResponseType[]> {
       const md = new Metadata();
     
       const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());

@@ -10,7 +10,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase,  
+         LogStatus} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -442,7 +443,7 @@ npm
         }
     }
 
-    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse[]>
     {
         if(!params){
             return null;
@@ -451,6 +452,12 @@ npm
         const query: string = gql`query GetRecordDuplicatesQuery ($params: PotentialDuplicateRequestType!) {
             GetRecordDuplicates(params: $params) {
                 EntityID
+                RecordPrimaryKeys {
+                    PrimaryKeyValues {
+                        FieldName
+                        Value
+                    }
+                }
                 Duplicates {
                     ProbabilityScore
                     PrimaryKeyValues {

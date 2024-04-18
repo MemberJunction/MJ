@@ -66,6 +66,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
           return pk;
         });
         let result = await md.GetRecordDuplicates({ EntityID: view.EntityID, RecordIDs: recordIDs }, md.CurrentUser);
+        console.log(result);
       }
     }
     else if (this.entityName && this.entityName.length > 0) {
