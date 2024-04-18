@@ -3,6 +3,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, PineconeRecord, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { LogStatus, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValue, PrimaryKeyValueBase } from '@memberjunction/core';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
@@ -163,6 +164,34 @@ export class PineconeDatabase extends VectorDBBase {
             index.deleteAll();
         }
         return this.wrapResponse(null);
+    }
+
+    public async getVectorDuplicates(params: QueryOptions): Promise<BaseResponse> {
+        params.includeMetadata = true;
+        const queryResponse = await this.queryIndex(params);
+        if(queryResponse.success){
+            let response: PotentialDuplicateResponse = new PotentialDuplicateResponse();
+            response.Duplicates = queryResponse.data.matches.map((record: {id: string, score: number, metadata: any}) => {
+                let duplicate: PotentialDuplicate = new PotentialDuplicate();
+                duplicate.ProbabilityScore = record.score;
+                duplicate.PrimaryKeyValues = (record.metadata.PrimaryKeys as string).split("_").map((pk: string) => {
+                    let keyValue = pk.split("=");
+                    let primaryKeyValue: PrimaryKeyValue = new PrimaryKeyValue();
+                    primaryKeyValue.FieldName = keyValue[0];
+                    primaryKeyValue.Value = keyValue[1];
+                    return primaryKeyValue;
+                });
+                return duplicate;
+            });
+
+            return this.wrapResponse(response);
+        }
+
+        return {
+            success: false,
+            message: queryResponse.message,
+            data: null
+        }
     }
 
     private wrapResponse(data: any): BaseResponse {

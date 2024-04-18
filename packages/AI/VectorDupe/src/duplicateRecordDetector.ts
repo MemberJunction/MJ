@@ -1,10 +1,10 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { RunViewResult, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, PrimaryKeyValue, Metadata, RunView, UserInfo, LogError, BaseEntity } from "@memberjunction/core";
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, PrimaryKeyValue, Metadata, RunView, UserInfo, LogError, BaseEntity } from "@memberjunction/core";
 import { EntityDocument } from "./generic/entity.types";
 import { LogStatus } from "@memberjunction/core";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
-import { AIModelEntity, AIModelEntityExtended, EntityDocumentEntity, EntityEntity, EntityFieldEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
+import { AIModelEntity, AIModelEntityExtended, EntityDocumentEntity, EntityEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { AIEngine } from "@memberjunction/aiengine";
 
 export class DuplicateRecordDetector {
@@ -14,15 +14,13 @@ export class DuplicateRecordDetector {
     _vectorDB: VectorDBBase;
     _embedding: Embeddings;
 
-    public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {        
-        const md = new Metadata();
-        if(!this._contextUser){
-            this._contextUser = contextUser || md.CurrentUser;
-        }
-
+    public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse[]> {        
+        this._contextUser = contextUser;
         if(!this._runView){
             this._runView = new RunView();
         }
+
+        params.EntityDocumentID = 12;
 
         let entityDocument: EntityDocumentEntity | null = null;
         if(params.EntityDocumentID){
@@ -38,10 +36,13 @@ export class DuplicateRecordDetector {
             }
         }
 
-        let results: PotentialDuplicateResponse = {
-            EntityID: entityDocument.EntityID,
-            Duplicates: []
-        };
+        let results: PotentialDuplicateResponse[] = params.RecordIDs.map((recordID) => {
+            let response: PotentialDuplicateResponse = new PotentialDuplicateResponse();
+            response.EntityID = entityDocument.EntityID;
+            response.Duplicates = [];
+            response.RecordPrimaryKeys = recordID;
+            return response;
+        });
 
         if(!entityDocument){
             return results;
@@ -84,48 +85,24 @@ export class DuplicateRecordDetector {
             return this.parseStringTemplate(entityDocument.Template, record);
         });
 
-        let embedTextsResult = await this._embedding.EmbedTexts({ texts: recordTemplates, model: "mistral-embed" });        
+        let embedTextsResult = await this._embedding.EmbedTexts({ texts: recordTemplates, model: null });        
 
-        let recordDict = {};
-        params.RecordIDs.forEach((recordID, index) => {
-            recordDict[recordID.GetCompositeKey()] = embedTextsResult.vectors[index];
-        });
-
-        const topK: number = 10;
-        for(let index = 0; index < embedTextsResult.vectors.length; index++){
-            const vector: number[] = embedTextsResult.vectors[index];
-            const queryResult = await this._vectorDB.queryIndex({vector: vector, topK: topK, includeMetadata: true, includeValues: true });
-            if(!queryResult.success){
-                continue;
+        const topK: number = 5;
+        results = [];
+        for (const [index, vector] of embedTextsResult.vectors.entries()){
+            let queryResult = await this._vectorDB.getVectorDuplicates({ vector: vector, topK: topK, includeMetadata: true, includeValues: false });
+            if(queryResult.success){
+                let response: PotentialDuplicateResponse = queryResult.data as PotentialDuplicateResponse;
+                const compositeKey: string = params.RecordIDs[index].GetCompositeKey();
+                LogStatus(`Query result for ${compositeKey} returned ${response.Duplicates.length} potential duplicates`);
+                LogStatus(response);
+                response.EntityID = entityDocument.EntityID;
+                response.RecordPrimaryKeys = params.RecordIDs[index];
+                results.push(response);
             }
-
-            console.log(queryResult.data.matches[0]);
-            //const duplicateRecords = this.processDuplicateRecords(queryResult.data.matches, entityDocument);
         }
 
         return results;
-
-        /*
-        //then get the entity we are looking for duplicates of
-        const entityRecord = await this.getEntityRecord(entityDocument.Type, params.RecordIDs);
-
-        if(!entityRecord){
-            LogStatus("Entity Record not found");
-            return { EntityID: entityDocument.EntityID, Duplicates: [] };
-        }
-
-        //create an embedding of the record
-        const template = this.parseStringTemplate(entityDocument.Template, entityRecord);
-        const embedding = await this._embedding.EmbedText({ text: template, model: "mistral-embed" });
-
-        const vector: number[] = embedding.data;
-
-        //using the vector, get a list of up to 10 potential duplicates
-        const topK: number = 10;
-        const queryResult = await this._vectorDB.queryIndex({vector: vector, topK: topK, includeMetadata: true, includeValues: true });
-
-        return this.processDuplicateRecords(queryResult.data.matches, entityDocument);
-        */
     }
 
     private async getEntityDocument(id: number): Promise<EntityDocumentEntity | null> {
@@ -199,7 +176,7 @@ export class DuplicateRecordDetector {
 
         const rvResult = await this._runView.RunView({
             EntityName: "Entity Fields", 
-            ExtraFilter: `EntityID = ${entityID} AND AutoIncrement = 0 AND DefaultInView = 1`
+            ExtraFilter: `EntityID = ${entityID}`
         }, this._contextUser);
 
         if(!rvResult.Success){
@@ -211,7 +188,7 @@ export class DuplicateRecordDetector {
             return null;
         }
 
-        const entityFields = rvResult.Results as EntityFieldEntity[];
+        const entityFields = rvResult.Results;
         const EDTemplate: string = entityFields.map(entityField => {
             return `${entityField.Name}: \$\{${entityField.Name}\}`;
         }).join(" ");
@@ -219,7 +196,7 @@ export class DuplicateRecordDetector {
         const md: Metadata = new Metadata();
         const entityDocument: EntityDocumentEntity = await md.GetEntityObject<EntityDocumentEntity>("Entity Documents");
         entityDocument.NewRecord();
-        entityDocument.Set("Name", `Duplicate Record Entity Document for the ${entity.Name} entity using vector database ${vectorDatabase.Name} and AI Model ${AIModel.Name}`);
+        entityDocument.Set("Name", `Default duplicate record Entity Document for the ${entity.Name} entity using vector database ${vectorDatabase.Name} and AI Model ${AIModel.Name}`);
         entityDocument.Set("EntityID", entityID);
         entityDocument.Set("TypeID", 9); //hardcoded, but we know that 9 is the ID for Record Duplicates
         entityDocument.Set("Status", "Active");
@@ -235,33 +212,6 @@ export class DuplicateRecordDetector {
             LogError(`Failed to save Entity Document for ${entityID}`);
             return null;
         }
-    }
-
-    //this is specific to pinecone, should be moved there
-    private processDuplicateRecords(queryResult: any, entityDocument: EntityDocumentEntity): PotentialDuplicateResponse {
-        let results: PotentialDuplicateResponse = {
-            EntityID: entityDocument.EntityID,
-            Duplicates: []
-        };
-
-        for(let duplicate of queryResult){
-
-            if(duplicate.score >= 1){
-                //this is likely the record we wanted duplicates of
-                continue;
-            }
-
-            let potentialDuplicate: PotentialDuplicate = new PotentialDuplicate();
-            potentialDuplicate.PrimaryKeyValues = [];
-            potentialDuplicate.PrimaryKeyValues.push({
-                FieldName: "ID",
-                Value: duplicate.id
-            });
-            potentialDuplicate.ProbabilityScore = duplicate.score;
-            results.Duplicates.push(potentialDuplicate);
-        }
-
-        return results;
     }
 
     protected parseStringTemplate(str: string, obj: any): string {

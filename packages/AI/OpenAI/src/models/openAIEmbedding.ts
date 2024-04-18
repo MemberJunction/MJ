@@ -1,4 +1,4 @@
-import { EmbedParams, EmbedResult, Embeddings, ModelUsage } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, Embeddings, ModelUsage } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
 
@@ -16,20 +16,57 @@ export class OpenAIEmbedding extends Embeddings {
         }
     }
 
-    public async EmbedText(params: EmbedParams): Promise<EmbedResult> {
+    public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.text,
-            model: params.model
+            model: params.model || "text-embedding-3-small"
         }
 
         let response = await OpenAIEmbedding._openAI.embeddings.create(body);
 
         return {
-            object: 'object',
+            object: response.object,
             model: response.model,
             ModelUsage: new ModelUsage(response.usage.prompt_tokens, 0),
-            data: response.data[0].embedding
+            vector: response.data[0].embedding
         }
+    }
+
+    public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        let body: OpenAI.Embeddings.EmbeddingCreateParams = {
+            input: params.texts,
+            model: params.model || "text-embedding-3-small"
+        }
+
+        let response = await OpenAIEmbedding._openAI.embeddings.create(body);
+
+        return {
+            object: response.object,
+            model: response.model,
+            ModelUsage: new ModelUsage(response.usage.prompt_tokens, 0),
+            vectors: response.data.map((data) => data.embedding)
+        }
+    }
+
+    //openAI doesnt have an endpoint we can call
+    public async GetEmbeddingModels(): Promise<any> {
+        return [
+            {
+                Model: 'text-embedding-3-large',
+                Description: "Most capable embedding model for both english and non-english tasks",
+                OutputDimension: 3072,
+            },
+            {
+                Model: 'text-embedding-3-small',
+                Description: "Increased performance over 2nd generation ada embedding model",
+                OutputDimension: 1536,
+            },
+            {
+                Model: 'text-embedding-ada-002',
+                Description: "Most capable 2nd generation embedding model, replacing 16 first generation models",
+                OutputDimension: 1536,
+            }
+        ]
     }
 }
 

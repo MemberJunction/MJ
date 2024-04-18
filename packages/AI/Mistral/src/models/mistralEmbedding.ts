@@ -35,6 +35,7 @@ export class MistralEmbedding extends Embeddings {
      * Mistral AI embedding endpoint outputs vectors in 1024 dimensions
      */
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        params.model = params.model || "mistral-embed";
         const response: EmbeddingResponse = await MistralEmbedding._client.embeddings(params.model, params.texts);
         return {
             object: response.object,

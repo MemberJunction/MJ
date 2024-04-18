@@ -117,6 +117,7 @@ export class PotentialDuplicateRequest {
 
 export class PotentialDuplicateResponse {
     EntityID: number;
+    RecordPrimaryKeys: PrimaryKeyValueBase;
     Duplicates: PotentialDuplicate[];
     
 }
