@@ -97,17 +97,16 @@ export class GeminiLLM extends BaseLLM {
         }
     }
     SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
-        throw new Error("Method not implemented."); 
+        throw new Error("Method not implemented.");
     }
     ClassifyText(params: any): Promise<any> {
-        throw new Error("Method not implemented.");  
+        throw new Error("Method not implemented.");   
     }
 
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
         const textPart: TextPart = {
             text: message.content
         }
-        console.log("not noticeable change");
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
             parts: [textPart]
