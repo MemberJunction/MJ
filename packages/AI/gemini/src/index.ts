@@ -97,10 +97,10 @@ export class GeminiLLM extends BaseLLM {
         }
     }
     SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
-        throw new Error("Method not implemented.");
+        throw new Error("Method not implemented."); 
     }
     ClassifyText(params: any): Promise<any> {
-        throw new Error("Method not implemented.");   
+        throw new Error("Method not implemented.");  
     }
 
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage): Content {
