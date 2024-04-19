@@ -94,15 +94,13 @@ export class GenericBrowserListComponent implements OnInit{
     const view = new RunView();
     
     const rvResult = await view.RunView({
-      EntityName: "Resource Types"
+      EntityName: "Resource Types",
+      ResultType: 'entity_object'
     }, md.CurrentUser);
 
     if(rvResult && rvResult.Success){
-      for(const resourceType of rvResult.Results){
-        let entity = await md.GetEntityObject<ResourceTypeEntity>("Resource Types");
-        entity.SetMany(resourceType);
-        this.resourceTypes.push(entity);
-      }
+      let results: ResourceTypeEntity[] = rvResult.Results;
+      this.resourceTypes = results;
     }
   }
   
