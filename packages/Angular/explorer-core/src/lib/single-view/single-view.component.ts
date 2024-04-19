@@ -57,16 +57,6 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
           this.selectedEntity = e
           this.showSearch = e.AllowUserSearchAPI
         }
-
-        //hard coded data for testing
-        let testIDs: number[] = [1, 6, 7 ,8, 13, 18];
-        const recordIDs: PrimaryKeyValueBase[] = testIDs.map((id: number) => {
-          let pk = new PrimaryKeyValueBase();
-          pk.PrimaryKeyValues = [{ FieldName: 'ID', Value: id.toString() }];
-          return pk;
-        });
-        let result = await md.GetRecordDuplicates({ EntityID: view.EntityID, RecordIDs: recordIDs }, md.CurrentUser);
-        console.log(result);
       }
     }
     else if (this.entityName && this.entityName.length > 0) {
