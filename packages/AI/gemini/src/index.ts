@@ -107,6 +107,7 @@ export class GeminiLLM extends BaseLLM {
         const textPart: TextPart = {
             text: message.content
         }
+        console.log("not noticeable change");
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
             parts: [textPart]
