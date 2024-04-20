@@ -19,6 +19,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/global": "~1.0.10"
+    "@memberjunction/global": "^1.0.10"
   }
 }

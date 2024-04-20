@@ -25,11 +25,11 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "~1.0.10",
-    "@memberjunction/global": "~1.0.10",
-    "@memberjunction/core": "~1.0.10",
-    "@memberjunction/ng-container-directives": "~1.0.10",
-    "@memberjunction/ng-shared": "~1.0.10",
+    "@memberjunction/core-entities": "^1.0.10",
+    "@memberjunction/global": "^1.0.10",
+    "@memberjunction/core": "^1.0.10",
+    "@memberjunction/ng-container-directives": "^1.0.10",
+    "@memberjunction/ng-shared": "^1.0.10",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",

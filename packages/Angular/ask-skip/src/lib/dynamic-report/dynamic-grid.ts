@@ -35,7 +35,7 @@ import { DynamicReportComponent } from './dynamic-report';
             </kendo-grid-column>
         </ng-container>
         <ng-template kendoGridToolbarTemplate>
-            <button kendoButton (click)="doExcelExport()" ><span class="fa-solid fa-file-excel"></span>Export to Excel</button>
+            <button kendoButton (click)="doExcelExport()" ><span class="fa-solid fa-file-excel"></span> Export to Excel</button>
         </ng-template>
 
         <kendo-excelexport #excelExport [data]="exportData" [fileName]="'Report_Grid_Export.xlsx'">
@@ -68,7 +68,7 @@ import { DynamicReportComponent } from './dynamic-report';
             </kendo-grid-column>
         </ng-container>
         <ng-template kendoGridToolbarTemplate>
-            <button kendoButton (click)="doExcelExport()" ><span class="fa-solid fa-file-excel"></span>Export to Excel</button>
+            <button kendoButton (click)="doExcelExport()" ><span class="fa-solid fa-file-excel"></span> Export to Excel</button>
         </ng-template>
 
         <kendo-excelexport #excelExport [data]="exportData" [fileName]="'Report_Grid_Export.xlsx'">
