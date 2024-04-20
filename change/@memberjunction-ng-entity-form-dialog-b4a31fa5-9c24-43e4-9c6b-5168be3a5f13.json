@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver",
+  "packageName": "@memberjunction/ng-entity-form-dialog",
+  "email": "97354817+AN-BC@users.noreply.github.com",
+  "dependentChangeType": "patch"
+}
