@@ -1,0 +1,10 @@
+<div>
+    <div class="messages" #messagesContainer>
+        <!-- messages go here -->
+        <span>How can I help today?</span>
+    </div>
+    <div class = "input">
+        <textarea [(ngModel)]="currentMessage" placeholder="Type a message..." (keyup.enter)="SendCurrentMessage()" ></textarea>
+        <button (click)="SendCurrentMessage()">Send</button>
+    </div>
+</div>

@@ -15,6 +15,7 @@ import { SectionLoaderComponent } from './lib/section-loader-component';
 import { FormToolbarComponent } from './lib/form-toolbar';
 import { MJFormField } from './lib/base-field-component';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { ChatModule } from '@memberjunction/ng-chat';
 
 
 @NgModule({
@@ -32,7 +33,8 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
     InputsModule,
     DateInputsModule,
     DropDownsModule,
-    LinkDirectivesModule
+    LinkDirectivesModule,
+    ChatModule
   ],
   exports: [
     SectionLoaderComponent,

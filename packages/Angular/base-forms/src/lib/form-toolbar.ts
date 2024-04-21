@@ -1,5 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { BaseFormComponent } from './base-form-component';
+import { ChatMessage } from '@memberjunction/ng-chat';
+import { SharedService } from '@memberjunction/ng-shared';
 
 
 @Component({
@@ -53,6 +55,14 @@ import { BaseFormComponent } from './base-form-component';
                     <span class="button-text">History</span>
                 </button> 
             }
+            @if (ShowSkipChatButton) {
+                <button kendoButton (click)="ShowSkipChat()" title="Discuss this record with Skip">
+                    <span class="fa-regular fa-comment-dots"></span>
+                </button> 
+            }
+            @if (SkipChatVisible) {
+                <mj-chat (MessageAdded)="NewChatMessage($event)"></mj-chat>
+            }
             @if (form.isHistoryDialogOpen) {
                 <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
             }
@@ -60,6 +70,7 @@ import { BaseFormComponent } from './base-form-component';
     `
 })
 export class FormToolbarComponent {
+    @Input() ShowSkipChatButton: boolean = true;
     @Input() form!: BaseFormComponent;
 
     public saveRecord(event: MouseEvent): void {
@@ -69,5 +80,15 @@ export class FormToolbarComponent {
       
         // Proceed to call your save record function
         this.form.SaveRecord(true);
+    }
+
+    public SkipChatVisible: boolean = false;
+    public ShowSkipChat(): void {
+        this.SkipChatVisible = !this.SkipChatVisible;
+        SharedService.Instance.InvokeManualResize();
+    }   
+
+    public NewChatMessage(message: ChatMessage): void {
+        // send messages to Skip from here
     }
 }
