@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "minor tweak to build.order.json - this doesn't affect the \"real\" build of the system going forward which uses turbo, but I wanted to maintain this script for backup use if needed for some reason.",
+  "packageName": "@memberjunction/graphql-dataprovider",
+  "email": "97354817+AN-BC@users.noreply.github.com",
+  "dependentChangeType": "patch"
+}
