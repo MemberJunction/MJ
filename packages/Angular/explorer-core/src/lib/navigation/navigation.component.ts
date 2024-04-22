@@ -148,7 +148,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       const tab = this.closedTabs[i];
       await this.removeWorkspaceItem(tab, transGroup);
     }
-    await transGroup.Submit();
+    transGroup.Submit(); // INTENTIONALLY NOT USING AWAIT here - let's let the database updates for workspace edits happen in the background, no need to wait
     await this.waitForDomUpdate(); // make sure the DOM is updated before we do anything else so that the tab control knows about the changes from our data structure changes ABOVE
 
     if (this.activeTabIndex > this.tabs.length) // DO NOT add 1 here because in this case, the array boundary is the max for the tab control
@@ -741,7 +741,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public async closeTab(tab: any, newTabIndex: number): Promise<void> {
     const tabIndex = this.tabs.indexOf(tab);
     if (tabIndex >= 0) {
-      await this.removeWorkspaceItem(this.tabs[tabIndex], null /*no transaction group*/);
+       this.removeWorkspaceItem(this.tabs[tabIndex], null /*no transaction group*/); // INTENTIONAL - do not use await here, we want to let the database updates happen in the background
 //      await this.waitForDomUpdate(); // make sure dom is up to date
 
       // now, check to see how many tabs we have left and if we have none, then we need to select the HOME tab
