@@ -27,7 +27,7 @@
     "@azure/msal-angular": "^3.0.11"
   },
   "dependencies": {
-    "@memberjunction/core": "~1.0.10",
+    "@memberjunction/core": "^1.0.10",
     "tslib": "^2.3.0"
   },
   "sideEffects": false

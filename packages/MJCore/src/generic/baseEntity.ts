@@ -74,9 +74,9 @@ export class EntityField {
             ) {
             this._Value = value;
 
+            // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
             if (this._NeverSet && 
-                //this._OldValue == null &&  ---- we used to check _OldValue == null, but actually that doesn't make any sense because we don't care about the old value here, we just care that _NeverSet === true 
-                value != null) {
+                (value !== null || this._OldValue !== null)) {
                 // initial value set
                 this._OldValue = value;
             }
@@ -413,14 +413,17 @@ export abstract class BaseEntity {
      * Utility method to create an object and return it with properties in the newly created and returned object for each field in the entity object. This is useful for scenarios where you need to be able to persist the data
      * in a format to send to a network call, save to a file or database, etc. This method will return an object with properties that match the field names of the entity object.  
      * @param oldValues When set to true, the old values of the fields will be returned instead of the current values.  
+     * @param onlyDirtyFields When set to true, only the fields that are dirty will be returned.
      * @returns 
      */
-    public GetAll(oldValues: boolean = false): {} {
+    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): {} {
         let obj = {};
         for (let field of this.Fields) {
-            obj[field.Name] = oldValues ? field.OldValue : field.Value;
-            if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
-                obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
+            if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
+                obj[field.Name] = oldValues ? field.OldValue : field.Value;
+                if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
+                    obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
+                }    
             }
         }
         return obj;
