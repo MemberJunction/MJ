@@ -1,18 +1,21 @@
-<div mjFillContainer  *ngIf="LayoutMode === 'tabs'"> 
+@if(SkipData) {
+  <div mjFillContainer  *ngIf="LayoutMode === 'tabs'"> 
     <button kendoButton *ngIf="ShowCreateReportButton && !matchingReportID" 
                         (click)="askCreateReport()" 
                         [disabled]="isCreatingReport"
                         class="create-report-button">Create Report</button>
     <div *ngIf="matchingReportID!==null" class="report-link" (click)="clickMatchingReport()">Report: {{matchingReportName}} (ID: {{matchingReportID}}) Created From This Message</div>
-    <div class="report-tab-toolbar" *ngIf="ReportEntity && ReportEntity.ID > 0" >
-      <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
-    </div>
+    @if (ReportEntity && ReportEntity.ID > 0) {
+      <div class="report-tab-toolbar">
+        <kendo-button (click)="doRefreshReport()">Refresh</kendo-button>
+      </div>  
+    }
     <mj-tabstrip class="report-tabstrip" (TabSelected)="onTabSelect($event)" mjFillContainer [bottomMargin]="25">
-      <mj-tab *ngIf="IsChart" [TabSelected]="isTabSelected(0)" >
+      <mj-tab [TabSelected]="isTabSelected(0)" *ngIf="IsChart">
         <span class="fa-solid fa-chart-line"></span>
         <span class="report-tab-title">Chart</span>
       </mj-tab>
-      <mj-tab-body>
+      <mj-tab-body *ngIf="IsChart">
         <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20" [style]="{overflowY: 'hidden', overflowX: 'hidden'}">
           <mj-dynamic-chart mjFillContainer #theChart [AutoResizeChart]="true" [SkipData]="SkipData" [AllowDrillDown]="AllowDrillDown" (DrillDownEvent)="handleChartDrillDown($event)" style="display:block;">
           </mj-dynamic-chart>  
@@ -41,13 +44,13 @@
       </mj-tab-body>
 
       <mj-tab [TabSelected]="isTabSelected(3)">
-        <i class="fa-light fa-flask"></i>
-        <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" />
+        <span class="fa-solid fa-circle-info"></span>
+        <!-- <img src="assets/Skip - Mark Only - Small.png" class="avatar" style="height:16px;width:16px;" /> -->
         <span class="report-tab-title">Analysis</span>
       </mj-tab>
       <mj-tab-body>
-        <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="20">
-          <markdown [data]="SkipData?.analysis"></markdown>
+        <div class="report-tab-contents"  mjFillContainer [bottomMargin]="20" [rightMargin]="15" style="overflow-x: hidden">
+          <markdown [data]="SkipData.analysis"></markdown>
         </div>
       </mj-tab-body>
 
@@ -57,7 +60,7 @@
       </mj-tab> 
       <mj-tab-body>
         <div class="report-tab-contents" mjFillContainer [bottomMargin]="20" [rightMargin]="20">
-          {{SkipData?.userExplanation || 'No Explanation Provided'}}
+          {{SkipData.userExplanation || 'No Explanation Provided'}}
         </div>
       </mj-tab-body>
 
@@ -71,11 +74,11 @@
           <div *ngIf="ConversationDetailID!==null"><b>Skip Conversation Detail ID:</b><span>{{ConversationDetailID}}</span></div>
           <div *ngIf="SkipData?.techExplanation">
             <span><b>Technical Explanation</b></span>
-            <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData?.techExplanation}}</textarea></span>
+            <span><textarea [disabled]="true" [style]="'height: 100px; width: 100%'">{{SkipData.techExplanation}}</textarea></span>
           </div>
           <div *ngIf="SkipData?.scriptText" mjFillContainer>
             <span><b>Script</b></span>
-            <span><textarea mjFillContainer [disabled]="true" [bottomMargin]="20">{{SkipData?.scriptText}}</textarea></span>
+            <span><textarea mjFillContainer [disabled]="true" [bottomMargin]="20">{{SkipData.scriptText}}</textarea></span>
           </div>
         </div>
       </mj-tab-body>
@@ -90,7 +93,7 @@
     <div *ngIf="SkipData?.userExplanation" class="report-tab-title">
         <h3>Explanation</h3>
         <div>
-            {{SkipData?.userExplanation || 'No Explanation Provided'}}
+            {{SkipData.userExplanation || 'No Explanation Provided'}}
         </div>
     </div>
     <kendo-expansionpanel
@@ -122,7 +125,7 @@
         [title]="'Analysis'"
         [expanded]="LinearExpandAll"
         >
-        <markdown [data]="SkipData?.analysis"></markdown>
+        <markdown [data]="SkipData.analysis"></markdown>
     </kendo-expansionpanel>                     
 </div> 
 
@@ -143,3 +146,4 @@
   </button>
 </kendo-dialog-actions>
 </kendo-dialog>
+}

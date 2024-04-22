@@ -31,6 +31,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   private _pendingRecords: BaseEntity[] = [];
   private _updatingBrowserUrl: boolean = false;
 
+
+  private __debug: boolean = false;
+
   constructor(protected elementRef: ElementRef, protected sharedService: SharedService, protected router: Router, protected route: ActivatedRoute) {
     super();
     this.setupSplitterLayoutDebounce();
@@ -43,6 +46,27 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKeys.map(pk => {return {FieldName: pk.Name, Value: pk.Value}}))
       this.FavoriteInitDone = true;
+
+      // DEBUG ONLY output to console our full record info for debugging
+      if (this.__debug) {
+        const start = new Date().getTime();
+        console.log('Full Record Info: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
+        const dataObject = await this.record.GetDataObject({
+          includeRelatedEntityData: true,
+          oldValues: false,
+          omitEmptyStrings: false,
+          omitNullValues: false,
+          excludeFields: [],
+          relatedEntityList: this.record.EntityInfo.RelatedEntities.map(x => {
+            return {
+              relatedEntityName: x.RelatedEntity
+            }
+          })
+        })
+        const end = new Date().getTime();
+        console.log(dataObject);
+        console.log('Time to get full record info: ' + (end - start) + 'ms');  
+      }
     }
   }
 
@@ -131,6 +155,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public handleHistoryDialog(): void {
     this.isHistoryDialogOpen = !this.isHistoryDialogOpen;
+  }
+
+  public ShowChanges(): void {
+    if (this.record) {
+      const changes = this.record.GetAll(false, true);
+      const oldValues = this.record.GetAll(true, true);
+      console.log('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value)
+      console.log(changes);
+      console.log('Old Values');
+      console.log(oldValues);
+      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
+    }
   }
 
   public async RemoveFavorite(): Promise<void> {

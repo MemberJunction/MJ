@@ -27,10 +27,10 @@
     "@progress/kendo-angular-indicators": "~15.1.0"
   },
   "dependencies": {
-    "@memberjunction/core": "~1.0.10",
-    "@memberjunction/global": "~1.0.10",
-    "@memberjunction/ng-compare-records": "~1.0.10",
-    "@memberjunction/ng-container-directives": "~1.0.10",
+    "@memberjunction/core": "^1.0.10",
+    "@memberjunction/global": "^1.0.10",
+    "@memberjunction/ng-compare-records": "^1.0.10",
+    "@memberjunction/ng-container-directives": "^1.0.10",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
