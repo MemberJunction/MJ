@@ -19,7 +19,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "~1.0.10",
-    "@memberjunction/data-context": "~1.0.10"
+    "@memberjunction/core-entities": "^1.0.10",
+    "@memberjunction/data-context": "^1.0.10"
   }
 }

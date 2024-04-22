@@ -19,8 +19,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "~1.0.10",
-    "@memberjunction/global": "~1.0.10",
+    "@memberjunction/ai": "^1.0.10",
+    "@memberjunction/global": "^1.0.10",
     "@google/generative-ai": "~0.3.1"
   }
 }

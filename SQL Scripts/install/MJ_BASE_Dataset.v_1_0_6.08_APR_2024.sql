@@ -1,5 +1,5 @@
 /*
-	08 APRIL 2024 ---- MJ_BASE_Dataset SQL Script - Installation of MemberJunction 1.0
+	08 APRIL 2024 ---- MJ_BASE_Dataset SQL Script - Installation of MemberJunction 1.0.6
 */
 		
 SET NUMERIC_ROUNDABORT OFF

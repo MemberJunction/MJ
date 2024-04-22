@@ -15,7 +15,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "~1.0.10",
+    "@memberjunction/global": "^1.0.10",
     "dotenv": "^16.0.3",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20"
