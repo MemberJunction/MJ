@@ -104,10 +104,10 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
             this.pageTitle = this.selectedAppEntity.Entity;
         }
 
-        const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID=${this.selectedFolderID}` : 'ParentID IS NULL';
-        const categoryFilter: string = `EntityID=${this.selectedAppEntity.EntityID} AND ` + parentFolderIDFilter;
-        
         const md = new Metadata();
+        const parentFolderIDFilter: string = this.selectedFolderID ? `ParentID=${this.selectedFolderID}` : 'ParentID IS NULL';
+        const categoryFilter: string = `UserID=${md.CurrentUser.ID} AND EntityID=${this.selectedAppEntity.EntityID} AND ` + parentFolderIDFilter;
+        
         const categoryIDFilter: string = this.selectedFolderID ? `CategoryID=${this.selectedFolderID}` : 'CategoryID IS NULL';
         const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${appEntityButton.Data.EntityID} AND ` + categoryIDFilter;
 
