@@ -67,24 +67,23 @@ export class BaseBrowserComponent {
         }
 
         this.items = [];
-        
         if(!params?.skipLoadCategoryData){
             const categories: Folder[] = await this.RunView(this.categoryEntityName, categoryItemFilter);
-            const folders: Item[] = this.createItemsFromFolders(categories);
+            let folderItems: Item[] = this.createItemsFromFolders(categories);
             if(params?.sortItemsAfterLoad){
-                this.sortItems(folders);
-            } 
-            this.items.push(...folders);
+                folderItems = this.sortItems(folderItems);
+            }
+            this.items.push(...folderItems);
             this.folders = categories;
         }
 
         if(!params?.skiploadEntityData){
             const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
-            const entityItems: Item[] = this.createItemsFromEntityData(entityData);
+            let resourceItems: Item[] = this.createItemsFromEntityData(entityData);
             if(params?.sortItemsAfterLoad){
-                this.sortItems(entityItems);
-            }  
-            this.items.push(...entityItems);
+                resourceItems = this.sortItems(resourceItems);
+            }
+            this.items.push(...resourceItems);
             this.entityData = entityData;
         }
 
@@ -92,14 +91,16 @@ export class BaseBrowserComponent {
     }
 
     //maybe pass in a sort function for custom sorting?
-    protected sortItems(items: Item[]): void {
+    protected sortItems(items: Item[]): Item[] {
         items.sort(function(a, b){
-            let aName = a.Name.toLocaleLowerCase();
-            let bName = b.Name.toLocaleLowerCase();
+            const aName: string = a.Name.toLowerCase();
+            const bName: string = b.Name.toLowerCase();
             if(aName < bName) { return -1; }
             if(aName > bName) { return 1; }
             return 0;
         });
+
+        return items;
     }
 
     protected async RunView(entityName: string, extraFilter: string | undefined): Promise<any[]> {
