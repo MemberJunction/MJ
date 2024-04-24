@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "* Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). * Updated CodeGenLib to emit this new style of Angular Code * Ran Code Gen",
-  "packageName": "@memberjunction/codegen-lib",
-  "email": "97354817+AN-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}

@@ -2,6 +2,33 @@
   "name": "@memberjunction/ai-gemini",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:42 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/ai-gemini_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-gemini",
+            "commit": "a904e09d601dec714bcfc433f244c9008cf4de8e",
+            "comment": "* bug fix in explorer-core to show new tab faster when a tab is being removed * Added functionality in base-forms to enhance the toolbar and also enable showing changes since last saved when in Edit Mode in the base form * BaseEntity bug - when a field had a default value other than null (e.g. any default value) and the value of the field was actually null in an existing record, that record would always be seen as dirty and would get wiped out. Fixed the logic"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/ai to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/ai-gemini_v1.0.9",

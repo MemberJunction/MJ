@@ -2,6 +2,75 @@
   "name": "@memberjunction/ng-ask-skip",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:41 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/ng-ask-skip_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-ask-skip",
+            "commit": "2481444c87082b2e50b3e6c0a2cca3e66534af28",
+            "comment": "* Completed removed Kendo SVG Icons and standardized on Font Awesome. Done for consistency, simplicity and also because Kendo SVG Icons seem to be having a major impact on rendering performance/resizing/etc * In several areas while removing KendoSVG and replacing with Font Awesome, implemented the new Angular 17 style control flow (@if instead of *ngIf as an example)"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-ask-skip",
+            "commit": "aa9ed36f39bde861a2d857f7f0f448978583d38b",
+            "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/core to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/skip-types to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-shared to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-data-context to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/ng-ask-skip_v1.0.9",

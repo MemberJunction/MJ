@@ -2,6 +2,33 @@
   "name": "@memberjunction/data-context-server",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:41 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/data-context-server_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/data-context-server",
+            "commit": "aa9ed36f39bde861a2d857f7f0f448978583d38b",
+            "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/data-context to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context-server",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/data-context-server_v1.0.9",

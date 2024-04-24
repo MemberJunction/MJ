@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/aiengine
 
-This log was last generated on Sun, 14 Apr 2024 15:50:05 GMT and should not be manually modified.
+This log was last generated on Wed, 24 Apr 2024 20:57:42 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.0.11
+
+Wed, 24 Apr 2024 20:57:42 GMT
+
+### Patches
+
+- * bug fixes in Skip UI * added exception handling to ReportResolver (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/core to v1.0.11
+- Bump @memberjunction/global to v1.0.11
+- Bump @memberjunction/core-entities to v1.0.11
+- Bump @memberjunction/ai to v1.0.11
 
 ## 1.0.9
 

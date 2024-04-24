@@ -2,6 +2,39 @@
   "name": "@memberjunction/core-entities",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:41 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/core-entities_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "aa9ed36f39bde861a2d857f7f0f448978583d38b",
+            "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "e7e9a6050613b900377d79d6137f18415dee99b8",
+            "comment": "* Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). * Updated CodeGenLib to emit this new style of Angular Code * Ran Code Gen"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/core-entities_v1.0.9",

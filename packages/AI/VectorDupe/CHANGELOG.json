@@ -2,6 +2,69 @@
   "name": "@memberjunction/ai-vector-dupe",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:42 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/ai-vector-dupe_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-vector-dupe",
+            "commit": "aa9ed36f39bde861a2d857f7f0f448978583d38b",
+            "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectordb to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectors to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/aiengine to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/core to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vector-dupe",
+            "comment": "Bump @memberjunction/core-entities to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/ai-vector-dupe_v1.0.9",

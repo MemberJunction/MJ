@@ -2,6 +2,75 @@
   "name": "@memberjunction/ng-base-forms",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:41 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/ng-base-forms_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "08b3a6bfa69eda4d21bee6256d0c7110617a9638",
+            "comment": "* Added support for BaseFieldComponent to show or not show its label * Added more JSDoc documentation to classes within MJCore and MJGlobal"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "aa9ed36f39bde861a2d857f7f0f448978583d38b",
+            "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "e7e9a6050613b900377d79d6137f18415dee99b8",
+            "comment": "* Created mj-form-field component in the ng-base-forms package which is a higher order way of binding to a given field on an entity and it dynamically selects the needed control. Provides several advantages including the ability to easily upgrade functionality on forms and to conditionally render fields in their entirety only when needed (e.g. not show them at all when read only field and new record). * Updated CodeGenLib to emit this new style of Angular Code * Ran Code Gen"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "2481444c87082b2e50b3e6c0a2cca3e66534af28",
+            "comment": "* Completed removed Kendo SVG Icons and standardized on Font Awesome. Done for consistency, simplicity and also because Kendo SVG Icons seem to be having a major impact on rendering performance/resizing/etc * In several areas while removing KendoSVG and replacing with Font Awesome, implemented the new Angular 17 style control flow (@if instead of *ngIf as an example)"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "2de38c913f13692b1738643507c90f2766661868",
+            "comment": "Added documentation (JSDoc) for the new BaseFieldComponent (mj-form-field selector)"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/core to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-record-changes to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-link-directives to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/ng-base-forms_v1.0.9",

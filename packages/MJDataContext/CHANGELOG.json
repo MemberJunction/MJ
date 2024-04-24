@@ -2,6 +2,39 @@
   "name": "@memberjunction/data-context",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:41 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/data-context_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/data-context",
+            "commit": "aa9ed36f39bde861a2d857f7f0f448978583d38b",
+            "comment": "* bug fixes in Skip UI * added exception handling to ReportResolver"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/data-context",
+            "commit": "08b3a6bfa69eda4d21bee6256d0c7110617a9638",
+            "comment": "* Added support for BaseFieldComponent to show or not show its label * Added more JSDoc documentation to classes within MJCore and MJGlobal"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context",
+            "comment": "Bump @memberjunction/global to v1.0.11",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/data-context",
+            "comment": "Bump @memberjunction/core-entities to v1.0.11",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sun, 14 Apr 2024 15:50:05 GMT",
       "version": "1.0.9",
       "tag": "@memberjunction/data-context_v1.0.9",

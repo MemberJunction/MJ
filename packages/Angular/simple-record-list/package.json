@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-simple-record-list",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "MemberJunction: Very simple and reusable Angular component for displaying, editing, creating and deleting records in any entity",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "^1.0.10",
-    "@memberjunction/global": "^1.0.10",
-    "@memberjunction/core": "^1.0.10",
-    "@memberjunction/ng-container-directives": "^1.0.10",
-    "@memberjunction/ng-shared": "^1.0.10",
-    "@memberjunction/ng-entity-form-dialog": "^1.0.10",
+    "@memberjunction/core-entities": "^1.0.11",
+    "@memberjunction/global": "^1.0.11",
+    "@memberjunction/core": "^1.0.11",
+    "@memberjunction/ng-container-directives": "^1.0.11",
+    "@memberjunction/ng-shared": "^1.0.11",
+    "@memberjunction/ng-entity-form-dialog": "^1.0.11",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-dialog": "~15.1.0",
     "@progress/kendo-angular-layout": "~15.1.0",
