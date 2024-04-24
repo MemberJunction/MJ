@@ -16,8 +16,8 @@
   "license": "ISC",
   "dependencies": {
     "@langchain/mistralai": "^0.0.7",
-    "@memberjunction/core": "^1.0.11",
-    "@memberjunction/global": "^1.0.11",
+    "@memberjunction/core": "~1.0.11",
+    "@memberjunction/global": "~1.0.11",
     "dotenv": "^16.0.3",
     "openai": "^3.2.1"
   },

@@ -29,8 +29,8 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core": "^1.0.11",
-    "@memberjunction/global": "^1.0.11",
+    "@memberjunction/core": "~1.0.11",
+    "@memberjunction/global": "~1.0.11",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
