@@ -19,8 +19,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "^1.0.11",
-    "@memberjunction/global": "^1.0.11",
+    "@memberjunction/ai": "~1.0.11",
+    "@memberjunction/global": "~1.0.11",
     "groq-sdk": "^0.3.2"
   }
 }

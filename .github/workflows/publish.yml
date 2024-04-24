@@ -87,13 +87,8 @@ jobs:
       run: |
         conflicts=$(git diff --name-only --diff-filter=U)
         if [ -n "$conflicts" ]; then
-          cat <<-EOT >> $GITHUB_STEP_SUMMARY
-            Conflicts detected in the following files:
-            
-            \`\`\`
-            $conflicts
-            \`\`\`
-          EOT
+          echo "Conflicts detected in the following files: $conflicts \n" >> $GITHUB_STEP_SUMMARY
+  
           echo "Conflict details:" >>
           for file in $conflicts; do
               echo "Conflicts in $file:" >> $GITHUB_STEP_SUMMARY

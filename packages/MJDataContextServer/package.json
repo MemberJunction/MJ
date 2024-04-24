@@ -19,8 +19,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/data-context": "^1.0.11",
-    "@memberjunction/global": "^1.0.11",
+    "@memberjunction/data-context": "~1.0.11",
+    "@memberjunction/global": "~1.0.11",
     "typeorm": "^0.3.20"
   }
 }

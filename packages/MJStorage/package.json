@@ -25,9 +25,9 @@
     "@azure/identity": "^4.0.1",
     "@azure/storage-blob": "^12.17.0",
     "@google-cloud/storage": "^7.9.0",
-    "@memberjunction/core": "^1.0.11",
-    "@memberjunction/core-entities": "^1.0.11",
-    "@memberjunction/global": "^1.0.11",
+    "@memberjunction/core": "~1.0.11",
+    "@memberjunction/core-entities": "~1.0.11",
+    "@memberjunction/global": "~1.0.11",
     "env-var": "^7.3.0",
     "mime-types": "^2.1.35"
   }
