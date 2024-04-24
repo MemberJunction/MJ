@@ -8,59 +8,44 @@ import { EntityEntity } from '@memberjunction/core-entities';
     selector: 'gen-entity-form-top-area',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textarea [(ngModel)]="record.Name" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <kendo-textbox [(ngModel)]="record.Description"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Base Table</label>
-            <span >{{FormatValue('BaseTable', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Base View</label>
-            <kendo-textarea [(ngModel)]="record.BaseView" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Schema Name</label>
-            <span >{{FormatValue('SchemaName', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Track Record Changes</label>
-            <input type="checkbox" [(ngModel)]="record.TrackRecordChanges" kendoCheckBox />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <span >{{FormatValue('Description', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Base Table</label>
-            <span >{{FormatValue('BaseTable', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Base View</label>
-            <span >{{FormatValue('BaseView', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Schema Name</label>
-            <span >{{FormatValue('SchemaName', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Track Record Changes</label>
-            <span >{{FormatValue('TrackRecordChanges', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="BaseTable"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="BaseView"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SchemaName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="TrackRecordChanges"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

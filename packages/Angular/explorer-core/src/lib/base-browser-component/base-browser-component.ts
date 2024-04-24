@@ -67,32 +67,40 @@ export class BaseBrowserComponent {
         }
 
         this.items = [];
-        if(!params?.skiploadEntityData){
-            const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
-            this.items.push(...this.createItemsFromEntityData(entityData));
-            this.entityData = entityData;
-        }
-
         if(!params?.skipLoadCategoryData){
             const categories: Folder[] = await this.RunView(this.categoryEntityName, categoryItemFilter);
-            this.items.push(...this.createItemsFromFolders(categories));
+            let folderItems: Item[] = this.createItemsFromFolders(categories);
+            if(params?.sortItemsAfterLoad){
+                folderItems = this.sortItems(folderItems);
+            }
+            this.items.push(...folderItems);
             this.folders = categories;
         }
-        
-        if(params?.sortItemsAfterLoad){
-            this.sortItems();
+
+        if(!params?.skiploadEntityData){
+            const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
+            let resourceItems: Item[] = this.createItemsFromEntityData(entityData);
+            if(params?.sortItemsAfterLoad){
+                resourceItems = this.sortItems(resourceItems);
+            }
+            this.items.push(...resourceItems);
+            this.entityData = entityData;
         }
 
         this.showLoader = false;
     }
 
     //maybe pass in a sort function for custom sorting?
-    protected sortItems(): void {
-        this.items.sort(function(a, b){
-            if(a.Name < b.Name) { return -1; }
-            if(a.Name > b.Name) { return 1; }
+    protected sortItems(items: Item[]): Item[] {
+        items.sort(function(a, b){
+            const aName: string = a.Name.toLowerCase();
+            const bName: string = b.Name.toLowerCase();
+            if(aName < bName) { return -1; }
+            if(aName > bName) { return 1; }
             return 0;
         });
+
+        return items;
     }
 
     protected async RunView(entityName: string, extraFilter: string | undefined): Promise<any[]> {

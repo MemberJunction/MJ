@@ -16,15 +16,21 @@
         <tbody>
             <tr *ngFor="let permission of permissions" [ngClass]="IsPermissionReallyDirty(permission) ? 'dirty-row' : ''">
                 <td class="permission-left-col" (click)="flipRow(permission)">
-                    <span *ngIf="this.Mode==='Entity'">
-                        {{ permission.RoleName }}
-                    </span>
-                    <span *ngIf="this.Mode==='Role'">
-                        {{ permission.Entity }}
-                    </span>
-                    <kendo-svgicon  *ngIf="IsPermissionReallyDirty(permission)" 
-                                    [icon]="kendoSVGIcon('arrowRotateCcwSmallIcon')" 
-                                    (click)="revertRow($event, permission)"></kendo-svgicon></td>
+                    @if(this.Mode === 'Entity') {
+                        <span>
+                            {{ permission.RoleName }}
+                        </span>    
+                    }
+                    @else if(this.Mode === 'Role') {
+                        <span>
+                            {{ permission.Entity }}
+                        </span>
+                    }
+
+                    @if(IsPermissionReallyDirty(permission)) {
+                        <span class="fa-solid fa-arrow-rotate-left" (click)="revertRow($event, permission)"></span>
+                    }
+                </td>
                 <td (click)="flipPermission($event, permission, 'Read', true)">
                     <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
                 </td>

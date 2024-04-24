@@ -2,8 +2,8 @@ import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from
 import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DecimalPipe, DatePipe } from '@angular/common';
 import { GridDataResult, PageChangeEvent } from '@progress/kendo-angular-grid';
-import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
+import { LogError } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared'
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DrillDownInfo } from './dynamic-drill-down';
 import { DynamicReportComponent } from './dynamic-report';
@@ -35,7 +35,7 @@ import { DynamicReportComponent } from './dynamic-report';
             </kendo-grid-column>
         </ng-container>
         <ng-template kendoGridToolbarTemplate>
-            <button kendoButton (click)="doExcelExport()" ><kendo-svgicon [icon]="kendoSVGIcon('fileExcel')" ></kendo-svgicon>Export to Excel</button>
+            <button kendoButton (click)="doExcelExport()" ><span class="fa-solid fa-file-excel"></span> Export to Excel</button>
         </ng-template>
 
         <kendo-excelexport #excelExport [data]="exportData" [fileName]="'Report_Grid_Export.xlsx'">
@@ -68,7 +68,7 @@ import { DynamicReportComponent } from './dynamic-report';
             </kendo-grid-column>
         </ng-container>
         <ng-template kendoGridToolbarTemplate>
-            <button kendoButton (click)="doExcelExport()" ><kendo-svgicon [icon]="kendoSVGIcon('fileExcel')" ></kendo-svgicon>Export to Excel</button>
+            <button kendoButton (click)="doExcelExport()" ><span class="fa-solid fa-file-excel"></span> Export to Excel</button>
         </ng-template>
 
         <kendo-excelexport #excelExport [data]="exportData" [fileName]="'Report_Grid_Export.xlsx'">
@@ -214,10 +214,6 @@ export class DynamicGridComponent implements AfterViewInit {
       console.warn('Error handling grid row click', e)
     }
   }
-
-  // convenience for the HTML template
-  public kendoSVGIcon = kendoSVGIcon;
-
 
   // Export Functionality
   public exportData: any[] = [];

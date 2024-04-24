@@ -6,6 +6,7 @@ import { BaseEntity, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/
 import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
 import { Subscription, Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
+import { ResourceTypeEntity } from '@memberjunction/core-entities';
 
 @Component({
   selector: 'app-generic-browser-list',
@@ -72,6 +73,7 @@ export class GenericBrowserListComponent implements OnInit{
   public copyFromDialogOpened: boolean = false;
   public createFolderDialogOpened: boolean = false;
   private newFolderText: string = "Sample Folder";
+  private resourceTypes: ResourceTypeEntity[] = [];
 
   data = [
     { text: "Folder" },
@@ -83,9 +85,22 @@ export class GenericBrowserListComponent implements OnInit{
         .subscribe(() => this.filterItems(this.filter));
   }
 
-  public ngOnInit(): void {
+  public async ngOnInit(): Promise<void> {
     if(!this.disableAddButton){
       this.data.unshift({ text: this.resourceName });
+    }
+
+    const md: Metadata = new Metadata();
+    const view = new RunView();
+    
+    const rvResult = await view.RunView({
+      EntityName: "Resource Types",
+      ResultType: 'entity_object'
+    }, md.CurrentUser);
+
+    if(rvResult && rvResult.Success){
+      let results: ResourceTypeEntity[] = rvResult.Results;
+      this.resourceTypes = results;
     }
   }
   
@@ -442,5 +457,23 @@ export class GenericBrowserListComponent implements OnInit{
     else{
       this.createFolderDialogOpened = !this.createFolderDialogOpened;
     }
+  }
+
+  public getIconForResourceType(item: Item): string {
+    if(!item){
+      return "";
+    }
+
+    const LargeClass: string = "fa-3x ";
+    if(item.Type === ItemType.Folder){  
+      return LargeClass + "fa-regular fa-folder";
+    }
+
+    const resourceType = this.resourceTypes.find(rt => rt.Entity === this.ItemEntityName);
+    if(resourceType){
+      return LargeClass + resourceType.Icon;
+    }
+
+    return "";
   }
 }

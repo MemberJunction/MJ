@@ -8,67 +8,52 @@ import { CompanyEntity } from '@memberjunction/core-entities';
     selector: 'gen-company-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textbox [(ngModel)]="record.Name"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <kendo-textarea [(ngModel)]="record.Description" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Website</label>
-            <kendo-textbox [(ngModel)]="record.Website"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Logo URL</label>
-            <kendo-textarea [(ngModel)]="record.LogoURL" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Domain</label>
-            <kendo-textarea [(ngModel)]="record.Domain" ></kendo-textarea>   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <span >{{FormatValue('Description', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Website</label>
-            <span mjWebLink [field]="record.GetFieldByName('Website')" >{{FormatValue('Website', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Logo URL</label>
-            <span mjWebLink [field]="record.GetFieldByName('LogoURL')" >{{FormatValue('LogoURL', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Updated At</label>
-            <span >{{FormatValue('UpdatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Domain</label>
-            <span >{{FormatValue('Domain', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Website"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="LogoURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Domain"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

@@ -23,7 +23,6 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { LabelModule } from '@progress/kendo-angular-label';
 import { InputsModule } from '@progress/kendo-angular-inputs';
-import { IconsModule, IconModule } from '@progress/kendo-angular-icons';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { GridModule } from '@progress/kendo-angular-grid';
@@ -82,8 +81,6 @@ import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-dr
     DialogsModule,
     InputsModule,
     LabelModule,
-    IconModule,
-    IconsModule,
     ContainerDirectivesModule,
     ListViewModule,
     DropDownsModule,

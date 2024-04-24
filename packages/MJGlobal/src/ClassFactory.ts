@@ -16,9 +16,20 @@ export class ClassRegistration {
 }
 
 
+/**
+ * ClassFactory is used to register and create instances of classes. It is a singleton class that can be used to register a sub-class for a given base class and key. Do NOT directly attempt to instantiate this class, 
+ * instead use the static Instance property of the MJGlobal class to get the instance of the ClassFactory for your application.
+ */
 export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
 
+    /**
+     * Use this method or the @RegisterClass decorator to register a sub-class for a given base class.
+     * @param baseClass A reference to the base class you are registering a sub-class for
+     * @param subClass A reference to the sub-class you are registering
+     * @param key A key can be used to differentiate registrations for the same base class/sub-class combination. For example, in the case of BaseEntity and Entity object subclasses we'll have a LOT of entries and we want to get the highest priority registered sub-class for a specific key. In that case, the key is the entity name, but the key can be any value you want to use to differentiate registrations.
+     * @param priority Higher priority registrations will be used over lower priority registrations. If there are multiple registrations for a given base class/sub-class/key combination, the one with the highest priority will be used. If there are multiple registrations with the same priority, the last one registered will be used.
+     */
     public Register(baseClass: any, subClass: any, key: string = null, priority: number = 0) {
         if (baseClass && subClass) {
             // get all of hte existing registrations for this baseClass and key
@@ -39,6 +50,9 @@ export class ClassFactory {
         }
     }
 
+    /**
+     * Creates an instance of the class registered for the given base class and key. If no registration is found, will return an instance of the base class.
+     */
     public CreateInstance<T>(baseClass: any, key: string = null, ...params: any[]): T | null {
         if (baseClass) {
             let reg = this.GetRegistration(baseClass, key);
@@ -60,6 +74,12 @@ export class ClassFactory {
         return null;
     }
 
+    /**
+     * Returns all registrations for a given base class and key. If key is not provided, will return all registrations for the base class.
+     * @param baseClass 
+     * @param key 
+     * @returns 
+     */
     public GetAllRegistrations(baseClass: any, key: string = undefined): ClassRegistration[] {
         if (baseClass) {
             return this._registrations.filter(r => {
@@ -71,6 +91,9 @@ export class ClassFactory {
             return null;
     }
 
+    /**
+     * Returns the registration with the highest priority for a given base class and key. If key is not provided, will return the registration with the highest priority for the base class.
+     */
     public GetRegistration(baseClass: any, key: string = undefined): ClassRegistration {
         let matches = this.GetAllRegistrations(baseClass, key)
         if (matches && matches.length > 0) {

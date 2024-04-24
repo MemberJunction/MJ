@@ -1,28 +1,43 @@
 <div mjFillContainer class="wrapper">
-    <button kendoButton (click)="createNewRecord()">New Record</button>
-    <div *ngIf="isLoading"><kendo-loader></kendo-loader></div>
-    <table *ngIf="!isLoading" class="grid">
-        <thead>
-            <tr>
-                <th *ngFor="let c of Columns">
-                    {{ c }}
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr *ngFor="let r of records" (click)="selectRecord(undefined, r)">
-                <td *ngFor="let c of Columns; let i = index">
-                    <span>{{ r.Get(c) }}</span>
-                    <span *ngIf="i === 0 && (this.AllowDelete || this.AllowEdit)">
-                        <kendo-svgicon *ngIf="this.AllowEdit" class='icon' [icon]="kendoSVGIcon('pencil')" (click)="editRecord($event, r)"></kendo-svgicon> 
-                        <kendo-svgicon *ngIf="this.AllowEdit" class='icon' [icon]="kendoSVGIcon('trash')" (click)="deleteRecord($event, r)"></kendo-svgicon>
-                    </span>
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    @if(AllowNew) {
+        <button kendoButton (click)="createNewRecord()"><span class="fa-solid fa-plus"></span> New</button>
+    }
+    @if(isLoading) {
+        <div>
+            <kendo-loader></kendo-loader>
+        </div>
+    }
+    @else {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th *ngFor="let c of Columns">
+                        {{ c }}
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr *ngFor="let r of records" (click)="selectRecord(undefined, r)">
+                    <td *ngFor="let c of Columns; let i = index">
+                        <span>{{ r.Get(c) }}</span>
+                        @if(i === 0 && (AllowDelete || AllowEdit)) {
+                            <span>
+                                @if (AllowEdit) {
+                                    <span class="fa-solid fa-pen-to-square icon" (click)="editRecord($event, r)"></span>
+                                }
+                                @if (AllowDelete) {
+                                    <span class="fa-solid fa-trash-can icon" (click)="deleteRecord($event, r)"></span>
+                                }
+                            </span>    
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>    
+    }
 </div>
  
+@if(AllowNew || AllowEdit) {
 <mj-entity-form-dialog #entityForm 
     [Record]="editOrNewRecord" 
     [SectionName]="EditSectionName"
@@ -34,13 +49,14 @@
     [Height]="450"
     (close)="onEditOrNewRecordFormClosed($event)">
 </mj-entity-form-dialog>
+}
 
+@if(deleteRecordDialogVisible && AllowDelete) {
 <kendo-dialog
-        *ngIf="deleteRecordDialogVisible && deleteRecord" 
-        [title]="'Delete ' + EntityName + '?'" 
-        [width]="450"
-        [height]="200"
-        (close)="closeDeleteDialog('No')" >
+    [title]="'Delete ' + EntityName + '?'" 
+    [width]="450"
+    [height]="200"
+    (close)="closeDeleteDialog('No')" >
     <div>
         Are you sure you want to delete '{{getRecordName(deleteRecordItem!)}}'?
     </div>
@@ -49,3 +65,4 @@
         <button kendoButton (click)="closeDeleteDialog('No')">No</button>
     </kendo-dialog-actions>
 </kendo-dialog>
+}

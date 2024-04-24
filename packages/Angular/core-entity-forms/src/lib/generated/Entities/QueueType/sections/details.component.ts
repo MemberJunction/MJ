@@ -8,51 +8,38 @@ import { QueueTypeEntity } from '@memberjunction/core-entities';
     selector: 'gen-queuetype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <kendo-textbox [(ngModel)]="record.Name"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <kendo-textbox [(ngModel)]="record.Description"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Driver Class</label>
-            <kendo-textbox [(ngModel)]="record.DriverClass"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Driver Import Path</label>
-            <kendo-textarea [(ngModel)]="record.DriverImportPath" ></kendo-textarea>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Is Active</label>
-            <input type="checkbox" [(ngModel)]="record.IsActive" kendoCheckBox />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Name</label>
-            <span >{{FormatValue('Name', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Description</label>
-            <span >{{FormatValue('Description', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Driver Class</label>
-            <span >{{FormatValue('DriverClass', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Driver Import Path</label>
-            <span >{{FormatValue('DriverImportPath', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Is Active</label>
-            <span >{{FormatValue('IsActive', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="DriverClass"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="DriverImportPath"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="IsActive"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

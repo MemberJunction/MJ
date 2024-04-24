@@ -10,16 +10,21 @@ import { DynamicReportComponent } from './dynamic-report';
 @Component({
   selector: 'mj-dynamic-chart',
   template: `
-    <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">Save as Image</button>
+    <button kendoButton *ngIf="ShowSaveAsImage" (click)="SaveChartAsImage()">
+      <span class="fa-regular fa-image"></span>
+      Save 
+    </button>
     <div #plotContainer mjFillContainer>
       <plotly-plot #plotlyPlot 
                    [data]="plotData" 
                    [layout]="plotLayout" 
                    mjFillContainer 
                    [useResizeHandler]="true"
-                   (plotlyClick)="handleChartClick($event)"></plotly-plot>
+                   (plotlyClick)="handleChartClick($event)">
+      </plotly-plot>
     </div>
-  ` 
+  `,
+  styles: [`button { margin-top: 5px; margin-bottom: 5px;}`] 
 })
 export class DynamicChartComponent implements OnInit, OnDestroy {
     @Input() plotData: any;
@@ -106,8 +111,7 @@ export class DynamicChartComponent implements OnInit, OnDestroy {
             this.resizeObserver = new ResizeObserver(entries => {
                 for (let entry of entries) {
                     const { height, width } = entry.contentRect;
-//                    this.updateChartHeight(height);
-                    this.updateChartSize(height, width);
+                    this.updateChartSize(height - 15, width); // some pixels of margin to make sure it all fits
                 }
             });
             this.resizeObserver.observe(this.el.nativeElement);

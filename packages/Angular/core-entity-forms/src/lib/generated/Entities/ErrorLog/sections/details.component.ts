@@ -8,83 +8,64 @@ import { ErrorLogEntity } from '@memberjunction/core-entities';
     selector: 'gen-errorlog-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">CompanyIntegrationRun ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">CompanyIntegrationRunDetail ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunDetailID!" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Code</label>
-            <kendo-textbox [(ngModel)]="record.Code"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Message</label>
-            <kendo-textbox [(ngModel)]="record.Message"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Created By</label>
-            <kendo-textbox [(ngModel)]="record.CreatedBy"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <kendo-textbox [(ngModel)]="record.Status"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Category</label>
-            <kendo-textbox [(ngModel)]="record.Category"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Details</label>
-            <kendo-textbox [(ngModel)]="record.Details"  />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">CompanyIntegrationRun ID</label>
-            <span mjFieldLink [record]="record" fieldName="CompanyIntegrationRunID" >{{FormatValue('CompanyIntegrationRunID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">CompanyIntegrationRunDetail ID</label>
-            <span mjFieldLink [record]="record" fieldName="CompanyIntegrationRunDetailID" >{{FormatValue('CompanyIntegrationRunDetailID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Code</label>
-            <span >{{FormatValue('Code', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Message</label>
-            <span >{{FormatValue('Message', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created At</label>
-            <span >{{FormatValue('CreatedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Created By</label>
-            <span >{{FormatValue('CreatedBy', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Status</label>
-            <span >{{FormatValue('Status', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Category</label>
-            <span >{{FormatValue('Category', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Details</label>
-            <span >{{FormatValue('Details', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="CompanyIntegrationRunID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CompanyIntegrationRunDetailID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Code"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Message"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="CreatedBy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Status"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Category"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Details"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

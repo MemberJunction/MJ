@@ -5,7 +5,10 @@
             <tbody>
                 <tr>
                     <th scope="row">User</th>
-                    <td>{{UserRecord.Name}}<kendo-svgicon class='edit-icon' [icon]="kendoSVGIcon('pencil')" (click)="EditRecord()"></kendo-svgicon></td>
+                    <td>
+                        {{UserRecord.Name}}
+                        <span class="fa-solid fa-pen-to-square" (click)="EditRecord()"></span>
+                    </td>
                 </tr>
                 <tr>
                     <th scope="row">First Name</th>

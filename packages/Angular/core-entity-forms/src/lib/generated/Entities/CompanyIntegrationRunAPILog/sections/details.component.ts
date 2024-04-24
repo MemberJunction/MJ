@@ -8,59 +8,45 @@ import { CompanyIntegrationRunAPILogEntity } from '@memberjunction/core-entities
     selector: 'gen-companyintegrationrunapilog-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
-    <div *ngIf="this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Company Integration Run ID</label>
-            <kendo-numerictextbox [(value)]="record.CompanyIntegrationRunID" ></kendo-numerictextbox>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Executed At</label>
-            <kendo-datepicker [(value)]="record.ExecutedAt" ></kendo-datepicker>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Is Success</label>
-            <input type="checkbox" [(ngModel)]="record.IsSuccess" kendoCheckBox />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Request Method</label>
-            <kendo-dropdownlist [data]="['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']" [(ngModel)]="record.RequestMethod!" ></kendo-dropdownlist>   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">URL</label>
-            <kendo-textbox [(ngModel)]="record.URL"  />   
-        </div>               
-        <div class="record-form-row">
-            <label class="fieldLabel">Parameters</label>
-            <kendo-textbox [(ngModel)]="record.Parameters"  />   
-        </div> 
-    </div>
-    <div *ngIf="!this.EditMode" class="record-form">
-                  
-        <div class="record-form-row">
-            <label class="fieldLabel">Company Integration Run ID</label>
-            <span mjFieldLink [record]="record" fieldName="CompanyIntegrationRunID" >{{FormatValue('CompanyIntegrationRunID', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Executed At</label>
-            <span >{{FormatValue('ExecutedAt', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Is Success</label>
-            <span >{{FormatValue('IsSuccess', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Request Method</label>
-            <span >{{FormatValue('RequestMethod', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">URL</label>
-            <span >{{FormatValue('URL', 0)}}</span>
-        </div>              
-        <div class="record-form-row">
-            <label class="fieldLabel">Parameters</label>
-            <span >{{FormatValue('Parameters', 0)}}</span>
-        </div>
+    <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="CompanyIntegrationRunID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ExecutedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="IsSuccess"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RequestMethod"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="URL"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Parameters"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+
     </div>
 </div>
     `

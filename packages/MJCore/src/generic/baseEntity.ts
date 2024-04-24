@@ -7,6 +7,10 @@ import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogError } from './logging';
 
+/**
+ * Represents a field in an entity. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
+ * used properties from the entity field metadata.
+ */
 export class EntityField {
     private _entityFieldInfo: EntityFieldInfo;
     private _OldValue: any;
@@ -44,6 +48,9 @@ export class EntityField {
         return this._entityFieldInfo.IsUnique;
     }
 
+    /**
+     * Returns the current value of the field.
+     */
     get Value(): any {
         return this._Value;
     }
@@ -56,6 +63,9 @@ export class EntityField {
         return this._entityFieldInfo;
     }
 
+    /**
+     * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
+     */
     set Value(value: any) {
         if (
               !this.ReadOnly || 
@@ -64,9 +74,9 @@ export class EntityField {
             ) {
             this._Value = value;
 
+            // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
             if (this._NeverSet && 
-                //this._OldValue == null &&  ---- we used to check _OldValue == null, but actually that doesn't make any sense because we don't care about the old value here, we just care that _NeverSet === true 
-                value != null) {
+                (value !== null || this._OldValue !== null)) {
                 // initial value set
                 this._OldValue = value;
             }
@@ -75,6 +85,9 @@ export class EntityField {
         }
     }
 
+    /**
+     * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
+     */
     get Dirty(): boolean {
         if (this.ReadOnly)
             return false
@@ -101,10 +114,21 @@ export class EntityField {
         }
     }
 
+    /**
+     * Convenience method to format the value of the field. This method calls the static method on EntityFieldInfo to do the actual formatting.
+     * @param decimals 
+     * @param currency 
+     * @returns 
+     */
     public FormatValue(decimals: number = 2, currency: string = 'USD') {
         return this.EntityFieldInfo.FormatValue(this.Value, decimals, currency);
     }
 
+    /**
+     * Validates the current value of the field. If the field is read only, or if the field is marked to skip validation, nothing happens. 
+     * If the field is not read only, and the field is not marked to skip validation, the value is checked against the validation rules defined in the metadata for the field.
+     * @returns 
+     */
     public Validate(): ValidationResult {
         const ef = this._entityFieldInfo;
         const result = new ValidationResult();
@@ -201,10 +225,16 @@ export class EntityField {
         }
     }
 
+    /**
+     * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
+     */
     public ResetOldValue() {
         this._OldValue = this.Value;
     }
 
+    /**
+     * Returns the old value of the field. This is the value that was set when the field was last loaded from the database.
+     */
     public get OldValue(): any {
         return this._OldValue;
     }
@@ -232,6 +262,9 @@ export class BaseEntityAIActionParams {
     result: any
 }
 
+/**
+ * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
+ */
 export abstract class BaseEntity {
     private _EntityInfo: EntityInfo;
     private _Fields: EntityField[] = [];
@@ -252,6 +285,10 @@ export abstract class BaseEntity {
         return v !== null && v !== undefined; // if the primary key (or first primary key) value is null/undefined, we haven't saved yet
     }
 
+    /**
+     * Transaction Groups are used to group multiple transactions into a single ATOMic transaction in a database. They are also useful even in situations with ATOMicity is less important but you want
+     * to submit a group of changes to the API server in a single network call.
+     */
     get TransactionGroup(): TransactionGroupBase {
         return this._transactionGroup;
     }
@@ -260,6 +297,9 @@ export abstract class BaseEntity {
         this._transactionGroup = group;
     }
 
+    /**
+     * Access to the underlying metadata for the entity object.
+     */
     get EntityInfo(): EntityInfo {
         return this._EntityInfo;
     }
@@ -268,6 +308,11 @@ export abstract class BaseEntity {
         return this._Fields;
     }
 
+    /**
+     * Convenience method to access a field by name. This method is case-insensitive and will return null if the field is not found. You can do the same thing with more fine tune controlled by accessing the Fields property directly.
+     * @param fieldName 
+     * @returns 
+     */
     public GetFieldByName(fieldName: string): EntityField {
         return this.Fields.find(f => f.Name.trim().toLowerCase() == fieldName.trim().toLowerCase());
     }
@@ -276,6 +321,9 @@ export abstract class BaseEntity {
         return !this.IsSaved || this.Fields.some(f => f.Dirty);
     }
 
+    /**
+     * Returns the primary key field for the entity. If the entity has a composite primary key, this method will return the first primary key field.  
+     */
     get PrimaryKey(): EntityField {
         const fieldInfo = this.EntityInfo.PrimaryKey;
         if (fieldInfo) {
@@ -285,10 +333,17 @@ export abstract class BaseEntity {
             return null;
     }
 
+    /**
+     * Returns an array of all primary key fields for the entity. If the entity has a composite primary key, this method will return an array of all primary key fields. 
+     * If the entity has a single primary key, this method will return an array with a single field in it.
+     */
     get PrimaryKeys(): EntityField[] {
         return this.EntityInfo.PrimaryKeys.map(pk => this.GetFieldByName(pk.Name));
     }
 
+    /**
+     * Returns true if the record has been loaded from the database, false otherwise. This is useful to check to see if the record is in a "New Record" state or not.
+     */
     get RecordLoaded(): boolean {
         return this._recordLoaded;
     }
@@ -354,12 +409,21 @@ export abstract class BaseEntity {
         }
     }
 
-    public GetAll(oldValues: boolean = false): {} {
+    /**
+     * Utility method to create an object and return it with properties in the newly created and returned object for each field in the entity object. This is useful for scenarios where you need to be able to persist the data
+     * in a format to send to a network call, save to a file or database, etc. This method will return an object with properties that match the field names of the entity object.  
+     * @param oldValues When set to true, the old values of the fields will be returned instead of the current values.  
+     * @param onlyDirtyFields When set to true, only the fields that are dirty will be returned.
+     * @returns 
+     */
+    public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): {} {
         let obj = {};
         for (let field of this.Fields) {
-            obj[field.Name] = oldValues ? field.OldValue : field.Value;
-            if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
-                obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
+            if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
+                obj[field.Name] = oldValues ? field.OldValue : field.Value;
+                if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
+                    obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
+                }    
             }
         }
         return obj;
@@ -463,6 +527,11 @@ export abstract class BaseEntity {
     }
 
 
+    /**
+     * The ContextCurrentUser is a property used to manually set the "current" user for scenarios, primarily on the server side, where the user changes per request. For situations where there is no global CurrentUser in the Metadata.Provider, 
+     * you MUST set this property to the user you want to use for the current operation. If you used Metadata.GetEntityObject() to get the entity object, this property will be set automatically for you as that method has a parameter that can
+     * be provided for the ContextCurrentUser.
+     */
     public set ContextCurrentUser(user: UserInfo) {
         this._contextCurrentUser = user;
     }
@@ -514,7 +583,9 @@ export abstract class BaseEntity {
             return true; // nothing to save since we're not dirty
     }
 
-
+    /**
+     * Internal helper method for the class and sub-classes - used to easily get the Active User which is either the ContextCurrentUser, if defined, or the Metadata.Provider.CurrentUser if not.
+     */
     protected get ActiveUser(): UserInfo {
         return this.ContextCurrentUser || Metadata.Provider.CurrentUser; // use the context user ahead of the Provider.Current User - this is for SERVER side ops where the user changes per request
     }
@@ -727,11 +798,11 @@ export abstract class BaseEntity {
     }
 
     /**
-     * Returns a list of changes made to this record, over time. Keep in mind this is only going to return valid data if you have the TrackRecordChanges bit set to 1 on the entity you're working with.
+     * Returns a list of changes made to this record, over time. Only works if TrackRecordChanges bit set to 1 on the entity you're working with.
      */
     public get RecordChanges(): Promise<RecordChange[]> {
         if (this.IsSaved) 
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey.Value)
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKeys.map(pk => { return { FieldName: pk.Name, Value: pk.Value }; }))
         else
             throw new Error('Cannot get record changes for a record that has not been saved yet');
     }
@@ -742,12 +813,12 @@ export abstract class BaseEntity {
      * @param PrimaryKeyValue 
      * @returns 
      */
-    public static async GetRecordChanges(entityName: string, PrimaryKeyValue: any): Promise<RecordChange[]> {
+    public static async GetRecordChanges(entityName: string, PrimaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]> {
         if (BaseEntity.Provider === null) {    
             throw new Error('No provider set');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, PrimaryKeyValue);
+            const results = await BaseEntity.Provider.GetRecordChanges(entityName, PrimaryKeyValues);
             if (results) {
                 const changes: RecordChange[] = [];
                 for (let result of results) 

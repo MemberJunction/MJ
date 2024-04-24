@@ -34,6 +34,13 @@ export class TabContextMenuEvent extends TabEvent {
 export class MJTabStripComponent implements AfterContentInit, AfterContentChecked, AfterViewInit {
   protected _selectedTabIndex: number = 0; // default to negative 1 so any valid value of 0+ will invoke a state change internally later
 
+  public static OutputDebugInfo: boolean = false;
+  protected static OutputDebugMessage(message: string): void {
+    if (MJTabStripComponent.OutputDebugInfo) {
+      console.log(message);
+    }
+  }
+
   constructor(private cdr: ChangeDetectorRef) { }
   @Input() FillWidth: boolean = true;
   @Input() FillHeight: boolean = true;
@@ -46,6 +53,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
   set SelectedTabIndex(index: number) {
     // check to make sure that the new index is different from the current index and only do the work here if it is different
+    MJTabStripComponent.OutputDebugMessage(`MJTabStripComponent.SelectedTabIndex(${index})`);
     if (index !== this._selectedTabIndex) {
       const props = { 
         index: index!, 
@@ -74,6 +82,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   }
   protected innerRefreshTabVisibility(index: number) {
     Promise.resolve().then(() => {
+      MJTabStripComponent.OutputDebugMessage(`MJTabStripComponent.innerRefreshTabVisibility(${index})`);
       // do this within a Promise.resolve() to ensure that the change detection has a chance to catch up before we start changing things
 
       // now, we have to tell each of our tabs they have been selected or not, and also to tell the bodies if they are visible or not
@@ -163,6 +172,7 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
    * Method will close the specified tab number. It is automatically called by a tab that has TabCloseable set to true, if the user clicks the close button, and can be called programatically as well.
    */
   public async CloseTab(tabIndex: number) {
+    MJTabStripComponent.OutputDebugMessage(`MJTabStripComponent.CloseTab(${tabIndex})`);
     if (tabIndex >= 0 && tabIndex < this.tabs.length) {
       // figure out what the new tab index will be so we can share with our container component
       let newTabIndex;

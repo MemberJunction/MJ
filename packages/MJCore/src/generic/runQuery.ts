@@ -6,6 +6,9 @@ export type RunQueryParams = {
     QueryID: number
 }
 
+/**
+ * Class used to run a query and return the results.
+ */
 export class RunQuery  {
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         return RunQuery.Provider.RunQuery(params, contextUser);

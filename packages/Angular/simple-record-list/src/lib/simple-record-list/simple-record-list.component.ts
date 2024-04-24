@@ -1,7 +1,7 @@
 import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
+import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
  
  
@@ -11,11 +11,29 @@ import { Router } from '@angular/router';
   styleUrls: ['./simple-record-list.component.css']
 })
 export class SimpleRecordListComponent implements OnInit {
+  /**
+   * Name of the entity to display records for.
+   */
   @Input() EntityName: string = '';
+  /**
+   * List of columns to display in the grid. If empty and the entity has > 10 columns, those columns marked as DefaultInView=1 will be used, otherwise the first 10 columns will be used.
+   */
   @Input() Columns: string[] = [];
+  /**
+   * Name of the column to sort by. If empty, no sorting is done.
+   */
   @Input() SortBy: string = '';
+  /**
+   * If true, the delete button will be shown for each record.
+   */
   @Input() AllowDelete: boolean = true;
+  /**
+   * If true, the new button will be shown.
+   */
   @Input() AllowNew: boolean = true;
+  /**
+   * If true, the edit button will be shown for each record.
+   */
   @Input() AllowEdit: boolean = true;
   /**
    * If AllowEdit or AllowNew is true, this is the section name to display for editing a new or existing record.
@@ -28,9 +46,6 @@ export class SimpleRecordListComponent implements OnInit {
 
   public isLoading: boolean = false;
   public records: BaseEntity[] = [];
-
-
-  public kendoSVGIcon = kendoSVGIcon
 
   constructor(private router: Router) { 
   } 
@@ -129,7 +144,11 @@ export class SimpleRecordListComponent implements OnInit {
   }
 
   public async onEditOrNewRecordFormClosed(result: 'Save' | 'Cancel') {
+    if (!this.editOrNewRecord)
+      return; // this can happen if the user closes the form before the record is loaded
+
     this.showEditOrNewRecordForm = false;
+   
     if (result === 'Save') {
       // the dialog already saved the record, just check to make sure it was saved and if so, navigate
       if (this.editOrNewRecord.IsSaved) {

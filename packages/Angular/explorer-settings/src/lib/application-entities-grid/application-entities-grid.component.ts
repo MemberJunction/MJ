@@ -1,7 +1,7 @@
 import { Component, OnInit, Input, SimpleChanges, OnChanges } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { SharedService, kendoSVGIcon } from '@memberjunction/ng-shared'
+import { SharedService } from '@memberjunction/ng-shared'
 import { ApplicationEntity, ApplicationEntityEntity, EntityEntity, RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
  
 import { Router } from '@angular/router';
@@ -63,8 +63,6 @@ export class ApplicationEntitiesGridComponent implements OnInit, OnChanges {
    * The user record we are working with, required if Mode is 'Entities'
    */
   @Input() EntityRecord: EntityEntity | null = null;
-
-  public kendoSVGIcon = kendoSVGIcon
 
   constructor(private router: Router) { 
   } 
