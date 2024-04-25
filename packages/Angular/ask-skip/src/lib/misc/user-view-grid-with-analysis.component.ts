@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from "@angular/core";
-import { RunViewParams } from "@memberjunction/core";
+import { PrimaryKeyValue, RunViewParams } from "@memberjunction/core";
 import { GridRowClickedEvent, GridRowEditedEvent, UserViewGridComponent } from "@memberjunction/ng-user-view-grid";
 import { SharedService } from "@memberjunction/ng-shared";
 import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
@@ -18,7 +18,7 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
         <mj-tab> Analysis </mj-tab>
         <mj-tab-body>
             <mj-skip-chat mjFillContainer [AllowNewConversations]="false" [ShowConversationList]="false" [UpdateAppRoute]="false" 
-                                          [LinkedEntity]="'User Views'" [LinkedEntityRecordID]="ViewID">
+                                          [LinkedEntity]="'User Views'" [LinkedEntityPrimaryKeys]="ViewIDAsPrimaryKeyArray">
             </mj-skip-chat>
         </mj-tab-body>
     </mj-tabstrip>
@@ -44,6 +44,12 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
         else
             return 0;
     }    
+    /**
+     * Returns the ViewID as an array of PrimaryKeyValue
+     */
+    public get ViewIDAsPrimaryKeyArray(): PrimaryKeyValue[] {
+        return [{FieldName: "ID", Value: this.ViewID}];
+    }
     public selectTabHandler() {
         SharedService.Instance.InvokeManualResize(100); // resize when the tab is clicked
     }    

@@ -15,7 +15,7 @@ import { SectionLoaderComponent } from './lib/section-loader-component';
 import { FormToolbarComponent } from './lib/form-toolbar';
 import { MJFormField } from './lib/base-field-component';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { ChatModule } from '@memberjunction/ng-chat';
+import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 
 @NgModule({
@@ -34,7 +34,7 @@ import { ChatModule } from '@memberjunction/ng-chat';
     DateInputsModule,
     DropDownsModule,
     LinkDirectivesModule,
-    ChatModule
+    AskSkipModule
   ],
   exports: [
     SectionLoaderComponent,

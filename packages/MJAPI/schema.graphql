@@ -38,7 +38,7 @@ type AIModelType_ {
   Name: String!
 }
 
-"""Catalog of all AI Models configured in the system."""
+"""Catalog of all AI Models configured in the system"""
 type AIModel_ {
   AIActionsArray: [AIAction_!]!
   AIModelActionsArray: [AIModelAction_!]!
@@ -430,7 +430,7 @@ type Conversation_ {
   IsArchived: Boolean!
   LinkedEntity: String
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   ReportsArray: [Report_!]!
   Type: String!
@@ -593,7 +593,7 @@ input CreateConversationInput {
   ExternalID: String
   IsArchived: Boolean!
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   Type: String!
   UserID: Int!
@@ -4540,7 +4540,7 @@ input UpdateConversationInput {
   ID: Int!
   IsArchived: Boolean!
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   Type: String!
   UserID: Int!

@@ -33,6 +33,7 @@
     "@memberjunction/ng-data-context": "^1.0.10",
     "@memberjunction/ng-user-view-grid": "^1.0.10",
     "@memberjunction/ng-tabstrip": "^1.0.10",
+    "@memberjunction/ng-chat": "^1.0.10",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-listview": "~15.1.0",
     "@progress/kendo-angular-notification": "~15.1.0",

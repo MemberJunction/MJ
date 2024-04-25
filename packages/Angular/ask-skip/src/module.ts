@@ -36,6 +36,7 @@ import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { DataContextModule } from '@memberjunction/ng-data-context';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+import { ChatModule } from '@memberjunction/ng-chat';
 
 /*********************************************/
 // Local Components 
@@ -49,12 +50,14 @@ import { SkipWindowComponent } from './lib/skip-window/skip-window.component';
 import { SkipSingleMessageComponent } from './lib/skip-single-message/skip-single-message.component';
 import { UserViewGridWithAnalysisComponent } from './public-api';
 import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-drill-down';
+import { SkipChatWithRecordComponent } from './lib/skip-chat-with-record/skip-chat-with-record.component';
 
 
 @NgModule({
   declarations: [ 
     SkipDynamicReportComponent,
     SkipChatComponent,
+    SkipChatWithRecordComponent,
     SkipButtonComponent,
     SkipWindowComponent,
     DynamicReportComponent,
@@ -91,11 +94,13 @@ import { DynamicReportDrillDownComponent } from './lib/dynamic-report/dynamic-dr
     OverlayModule,
     ExcelExportModule,
     UserViewGridModule,
+    ChatModule,
     MarkdownModule.forRoot(),
   ],
   exports: [
     SkipDynamicReportComponent,
     SkipChatComponent,
+    SkipChatWithRecordComponent,
     SkipButtonComponent,
     SkipWindowComponent,
     DynamicChartComponent,

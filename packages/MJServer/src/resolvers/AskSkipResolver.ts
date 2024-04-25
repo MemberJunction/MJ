@@ -103,8 +103,7 @@ export class AskSkipResolver {
 
       // also, in the situation for a new convo, we need to update the Conversation ID to have a LinkedEntity and LinkedRecord
       convoEntity.LinkedEntityID = dci.EntityID;
-      // temp hack, need to fix to make LinkedRecordID a string in the database and object model and not an int
-      convoEntity.LinkedRecordID = parseInt(PrimaryKeys[0].Value);// PrimaryKeys.map((pk) => pk.Value).join(',');
+      convoEntity.LinkedRecordID = PrimaryKeys.map((pk) => pk.Value).join(',');
       await convoEntity.Save();
     } 
 

@@ -65,12 +65,14 @@ import { SkipAPIChatWithRecordResponse } from '@memberjunction/skip-types';
                 </button> 
             }
             <!-- doing this via hidden so the component isn't destroyed and recreated -->
-            <mj-chat 
-                (MessageAdded)="HandleChatMessageAdded($event)" 
-                (ClearChatRequested)="HandleClearChat()"
-                #mjChat
-                [hidden]="!SkipChatVisible" 
-            ></mj-chat>
+            @if (form.EntityInfo) {
+                <mj-skip-chat-with-record 
+                    [LinkedEntityID]="form.EntityInfo.ID"
+                    [LinkedPrimaryKeys]="LinkedEntityPrimaryKeys"            
+                    #mjChat
+                    [hidden]="!SkipChatVisible" 
+                ></mj-skip-chat-with-record>
+            }
             @if (form.isHistoryDialogOpen) {
                 <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
             }
@@ -90,6 +92,10 @@ export class FormToolbarComponent {
       
         // Proceed to call your save record function
         this.form.SaveRecord(true);
+    }
+
+    public get LinkedEntityPrimaryKeys(): PrimaryKeyValue[] {
+        return this.form.record.PrimaryKeys.map(pk => <PrimaryKeyValue>{FieldName: pk.Name, Value: pk.Value})
     }
 
     public SkipChatVisible: boolean = false;

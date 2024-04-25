@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/14/2024, 7:43:22 PM
+* GENERATED: 4/25/2024, 7:44:21 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -9269,7 +9269,7 @@ export class EntityFieldValueResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Models
 //****************************************************************************
-@ObjectType({ description: 'Catalog of all AI Models configured in the system.' })
+@ObjectType({ description: 'Catalog of all AI Models configured in the system' })
 export class AIModel_ {  
     @Field(() => Int) 
     ID: number;
@@ -13053,8 +13053,9 @@ export class Conversation_ {
     @Field(() => Int, {nullable: true}) 
     LinkedEntityID?: number;
           
-    @Field(() => Int, {nullable: true}) 
-    LinkedRecordID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    LinkedRecordID?: string;
           
     @Field(() => Int, {nullable: true}) 
     DataContextID?: number;
@@ -13109,8 +13110,8 @@ export class CreateConversationInput {
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
     
-    @Field(() => Int, { nullable: true })
-    LinkedRecordID: number;
+    @Field({ nullable: true })
+    LinkedRecordID: string;
     
     @Field(() => Int, { nullable: true })
     DataContextID: number;
@@ -13146,8 +13147,8 @@ export class UpdateConversationInput {
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
     
-    @Field(() => Int, { nullable: true })
-    LinkedRecordID: number;
+    @Field({ nullable: true })
+    LinkedRecordID: string;
     
     @Field(() => Int, { nullable: true })
     DataContextID: number;

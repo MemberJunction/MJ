@@ -6991,7 +6991,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: AIModel
      * * Base View: vwAIModels
-     * * @description Catalog of all AI Models configured in the system.
+     * * @description Catalog of all AI Models configured in the system
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -10281,12 +10281,12 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: LinkedRecordID
         * * Display Name: Linked Record ID
-        * * SQL Data Type: int
+        * * SQL Data Type: nvarchar(500)
         */
-        get LinkedRecordID(): number | null {  
+        get LinkedRecordID(): string | null {  
             return this.Get('LinkedRecordID');
         }
-        set LinkedRecordID(value: number | null) {
+        set LinkedRecordID(value: string | null) {
             this.Set('LinkedRecordID', value);
         }
         /**
