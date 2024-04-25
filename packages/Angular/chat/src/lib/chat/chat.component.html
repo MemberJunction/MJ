@@ -3,8 +3,14 @@
         <!-- messages go here -->
         <span>How can I help today?</span>
     </div>
+    @if (ShowWaitingIndicator) {
+        <kendo-loader type="converging-spinner"></kendo-loader>
+    }
     <div class = "input">
         <textarea [(ngModel)]="currentMessage" placeholder="Type a message..." (keyup.enter)="SendCurrentMessage()" ></textarea>
         <button (click)="SendCurrentMessage()">Send</button>
+        @if (Messages.length > 0) {
+            <button (click)="HandleClearChat()">Clear</button>
+        }
     </div>
 </div>

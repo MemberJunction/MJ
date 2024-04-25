@@ -13,7 +13,7 @@
                     [itemClass]="{ 'item-border': true }" 
                     mjFillContainer 
                     [fillWidth]="false"
-                    [bottomMargin]="40"
+                    [bottomMargin]="20"
                     #conversationList
                     >
                     <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
@@ -35,7 +35,8 @@
                         </div>
                     </ng-template>
                 </kendo-listview>
-                <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div>
+                <!-- COMMENTED OUT as we don't want to support embedded conversations in the UI for now
+                     <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
             </div>
         </kendo-splitter-pane>
         <kendo-splitter-pane>

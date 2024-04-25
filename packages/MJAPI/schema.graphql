@@ -2308,6 +2308,7 @@ type Query {
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRecordChat(ConversationId: Int!, EntityName: String!, PrimaryKeys: [PrimaryKeyValueInputType!]!, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   File(ID: Int!): File_
   FileCategory(ID: Int!): FileCategory_

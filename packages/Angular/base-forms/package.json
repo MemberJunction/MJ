@@ -27,6 +27,8 @@
   "dependencies": {
     "@memberjunction/global": "^1.0.10",
     "@memberjunction/core": "^1.0.10",
+    "@memberjunction/graphql-dataprovider": "1.0.9",
+    "@memberjunction/skip-types": "1.0.11",
     "@memberjunction/ng-record-changes": "^1.0.10",
     "@memberjunction/ng-tabstrip": "^1.0.10",
     "@memberjunction/ng-link-directives": "^1.0.10",

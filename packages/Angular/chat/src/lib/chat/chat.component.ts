@@ -3,24 +3,28 @@ import { MarkdownService } from 'ngx-markdown';
 
 export class ChatMessage {
   public message!: string;
-  public sender!: string;
+  public senderName!: string;
   public senderType: 'user' | 'ai' = 'user';
+  public id?: any;
 
-  constructor(message: string, sender: string, senderType: 'user' | 'ai') {
+  constructor(message: string, senderName: string, senderType: 'user' | 'ai', id: any = null) {
     this.message = message;
-    this.sender = sender;
+    this.senderName = senderName;
     this.senderType = senderType;
+    this.id = id;
   }
 }
 
 @Component({
   selector: 'mj-chat',
   templateUrl: './chat.component.html',
-  styleUrls: ['./chat.component.css']
+  styleUrl: './chat.component.css'
 })
 export class ChatComponent  {
   @Input() Messages: ChatMessage[] = [];
+  @Input() ShowWaitingIndicator: boolean = false;
   @Output() MessageAdded = new EventEmitter<ChatMessage>();
+  @Output() ClearChatRequested = new EventEmitter<void>();
 
   @ViewChild('messagesContainer', { static: true }) private messagesContainer!: ElementRef;
 
@@ -30,26 +34,43 @@ export class ChatComponent  {
 
   public SendCurrentMessage(): void {
     if (this.currentMessage.trim() !== '') {
-      this.SendMessage(this.currentMessage);
+      this.SendMessage(this.currentMessage, 'User', 'user', null);
+      this.currentMessage = ''; // Clear the input field
     }
   }
 
-  public SendMessage(message: string): void {
-    const newMessage = new ChatMessage(message, 'User', 'user');
-    this.AppendMessage(newMessage);  
-    this.currentMessage = ''; // Clear the input field
+  public SendMessage(message: string, senderName: string, senderType: 'user' | 'ai', id: any, fireEvent: boolean = true): void {
+    const newMessage = new ChatMessage(message, senderName, senderType, id);
+    this.AppendMessage(newMessage, fireEvent);  
   }
 
-  protected async AppendMessage(message: ChatMessage) {
+  public HandleClearChat() {
+    this.ClearChatRequested.emit();
+  }
+
+  public ClearAllMessages() {
+    this.Messages = [];
+    this.messagesContainer.nativeElement.innerHTML = '';
+  }
+
+  protected async AppendMessage(message: ChatMessage, fireEvent: boolean = true) {
     const messageElement = document.createElement('div');
     messageElement.innerHTML = await this.markdownService.parse(message.message);
     messageElement.className = "message";  
+    if (message.senderType === 'ai') {
+      messageElement.classList.add('message-ai');
+      messageElement.style.backgroundColor = 'beige'; //temp hack as styles are not applying
+    }
+    else
+      messageElement.style.backgroundColor = 'lightblue'; //temp hack as styles are not applying
+
     this.Messages.push(message);
     if (this.Messages.length === 1) {
       // clear out the default message
       this.messagesContainer.nativeElement.innerHTML = '';
     }
     this.messagesContainer.nativeElement.appendChild(messageElement);       
-    this.MessageAdded.emit(message); 
+    if (fireEvent)
+      this.MessageAdded.emit(message); 
   }
 }

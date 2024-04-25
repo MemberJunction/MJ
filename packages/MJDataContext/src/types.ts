@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, LogError, Metadata, PrimaryKeyValue, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, PrimaryKeyValue, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
 import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
@@ -222,10 +222,11 @@ export class DataContextItem {
      * A helper method, Load() at the DataContext level can be called to load the metadata and then all of the data for all items in the data context at once.
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only. For client side use of this method, you can leave this as undefined and the Load will work so long as the Data Context Items you are loading are NOT of type 'sql'
      * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
+     * @param loadRelatedDataOnSingleRecords - (defaults to false) if true, related entity data will be loaded for single record items, if false, related entity data will not be loaded for single record items
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      * @returns 
      */
-    public async LoadData(dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+    public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, contextUser?: UserInfo): Promise<boolean> {
         try {
             if (this.Data && this.Data.length > 0 && !forceRefresh) // if we already have data and we aren't forcing a refresh, then we are done
                 return true;
@@ -236,7 +237,7 @@ export class DataContextItem {
                     case 'view':
                         return this.LoadFromView(contextUser);
                     case 'single_record':
-                        return this.LoadFromSingleRecord(contextUser);
+                        return this.LoadFromSingleRecord(contextUser, loadRelatedDataOnSingleRecords);
                     case 'query':
                         return this.LoadFromQuery(contextUser);
                     case 'sql':
@@ -313,7 +314,7 @@ export class DataContextItem {
      * @param contextUser 
      * @returns 
      */
-    protected async LoadFromSingleRecord(contextUser: UserInfo): Promise<boolean> {
+    protected async LoadFromSingleRecord(contextUser: UserInfo, includeRelatedEntityData: boolean): Promise<boolean> {
         try {
             const md = new Metadata();
             const record = await md.GetEntityObject(this.EntityName, contextUser);
@@ -326,14 +327,16 @@ export class DataContextItem {
                 pkeyVals.push({FieldName: pk.Name, Value: v});
             }
             if (await record.InnerLoad(pkeyVals)) {
-                this.Data = await record.GetDataObject({
-                    includeRelatedEntityData: false,
+                const dataObject = await record.GetDataObject({
+                    includeRelatedEntityData: includeRelatedEntityData,
                     oldValues: false,
                     omitEmptyStrings: false,
                     omitNullValues: false,
-                    relatedEntityList: [],
+                    relatedEntityList: includeRelatedEntityData ? this.buildRelatedEntityArray() : [],
                     excludeFields: []
                 });             
+
+                this.Data = [dataObject]; // we always return an array of one object for single record loads
 
                 return true;                    
             }
@@ -348,6 +351,12 @@ export class DataContextItem {
             LogError(this.DataLoadingError);
             return false;
         }
+    }
+
+    protected buildRelatedEntityArray(): DataObjectRelatedEntityParam[] {
+        return this.Entity.RelatedEntities.map(re => {
+            return {relatedEntityName: re.RelatedEntity}
+        })
     }
 
 
@@ -670,16 +679,17 @@ export class DataContext {
      * This method will load the data for the data context items associated with the data context. This method must be called ONLY after LoadMetadata(). This method will return a promise that will resolve to true if the data was loaded successfully, and false if it was not.
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
      * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
+     * @param loadRelatedDataOnSingleRecords - (defaults to false) if true, related entity data will be loaded for single record items, if false, related entity data will not be loaded for single record items
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      */
-    public async LoadData(dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+    public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, contextUser?: UserInfo): Promise<boolean> {
         try {
             if (!this.ID || this.ID <= 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
             let bSuccess: boolean = true;
             for (const item of this.Items) {
-                if (!await item.LoadData(dataSource, forceRefresh, contextUser))
+                if (!await item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, contextUser))
                     bSuccess = false;
             }
             return bSuccess;
@@ -695,12 +705,13 @@ export class DataContext {
      * @param DataContextID - the ID of the data context to load
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
      * @param forceRefresh - (defaults to false) for the LoadData() portion of this routine --- if this param is set to true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
+     * @param loadRelatedDataOnSingleRecords - (defaults to false) for the LoadData() portion of this routine --- if this param is set to true, related entity data will be loaded for single record items, if false, related entity data will not be loaded for single record items
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      * @returns 
      */
-    public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+    public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, contextUser?: UserInfo): Promise<boolean> {
         // load the metadata and THEN the data afterwards
-        return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, contextUser);
+        return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, contextUser);
     }
 
     /**

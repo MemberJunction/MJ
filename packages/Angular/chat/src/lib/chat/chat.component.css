@@ -22,6 +22,11 @@
     word-wrap: break-word;
 }
 
+.message-ai {
+    background-color: #b2ecd1;
+    font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+}
+
 .input {
     padding: 10px;
     background: #fff;
@@ -30,7 +35,7 @@
 }
 
 textarea {
-    width: calc(100% - 110px); /* Adjust width taking button width into account */
+    width: calc(100% - 225px); /* Adjust width taking button width into account */
     padding: 8px;
     font-size: 16px;
     border: 1px solid #ccc;

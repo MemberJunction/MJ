@@ -1,12 +1,12 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, PrimaryKeyValue, RunView, UserInfo } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context'
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
 LoadDataContextItemsServer(); // prevent tree shaking since the DataContextItemServer class is not directly referenced in this file or otherwise statically instantiated, so it could be removed by the build process
 
-import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo, SkipAPIRunScriptRequest, SkipAPIRequestAPIKey } from '@memberjunction/skip-types';
+import { SkipAPIRequest, SkipAPIResponse, SkipMessage, SkipAPIAnalysisCompleteResponse, SkipAPIDataRequestResponse, SkipAPIClarifyingQuestionResponse, SkipEntityInfo, SkipQueryInfo, SkipAPIRunScriptRequest, SkipAPIRequestAPIKey, SkipRequestPhase } from '@memberjunction/skip-types';
 
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity, UserNotificationEntity } from '@memberjunction/core-entities';
@@ -18,6 +18,7 @@ import { registerEnumType } from "type-graphql";
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util';
 import { GetAIAPIKey } from '@memberjunction/ai';
+import { PrimaryKeyValueInputType } from './MergeRecordsResolver';
 
 
 enum SkipResponsePhase {
@@ -55,12 +56,133 @@ export class AskSkipResultType {
   @Field(() => Int)
   AIMessageConversationDetailId: number;
 }
-
+ 
 
 @Resolver(AskSkipResultType)
 export class AskSkipResolver {
   private static _defaultNewChatName = 'New Chat';
   private static _maxHistoricalMessages = 20;
+
+  /**
+   * Handles a simple chat request from a user to Skip, using a particular data record
+   * @param UserQuestion the user's question
+   * @param EntityName the name of the entity for the record the user is discussing
+   * @param PrimaryKeys the primary keys of the record the user is discussing
+   */
+  @Query(() => AskSkipResultType)
+  async ExecuteAskSkipRecordChat(@Arg('UserQuestion', () => String) UserQuestion: string,
+                                 @Arg('ConversationId', () => Int) ConversationId: number,
+                                 @Arg('EntityName', () => String) EntityName: string,
+                                 @Arg('PrimaryKeys', () => [PrimaryKeyValueInputType]) PrimaryKeys: PrimaryKeyValueInputType[],
+                                 @Ctx() { dataSource, userPayload }: AppContext,
+                                 @PubSub() pubSub: PubSubEngine) {
+    // In this function we're simply going to call the Skip API and pass along the message from the user
+
+    // first, get the user from the cache
+    const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
+    if (!user)
+      throw new Error(`User ${userPayload.email} not found in UserCache`);
+
+    // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
+    const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(dataSource, ConversationId, AskSkipResolver._maxHistoricalMessages);
+    
+    const md = new Metadata();
+    const {convoEntity, dataContextEntity, convoDetailEntity, dataContext} = 
+          await this.HandleSkipInitialObjectLoading(dataSource, ConversationId, UserQuestion, user, userPayload, md, null);
+
+    // if we have a new conversation, update the data context to have an item for this record
+    if (!ConversationId || ConversationId <= 0) {
+      const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items', user);
+      dci.DataContextID = dataContext.ID;
+      dci.Type = 'single_record';
+      dci.EntityID = md.Entities.find((e) => e.Name === EntityName)?.ID;
+      dci.RecordID = PrimaryKeys.map((pk) => pk.Value).join(',');
+      await dci.Save();
+  
+      await dataContext.Load(dataContext.ID, dataSource, false, true, user); // load again because we added a new data context item  
+
+      // also, in the situation for a new convo, we need to update the Conversation ID to have a LinkedEntity and LinkedRecord
+      convoEntity.LinkedEntityID = dci.EntityID;
+      // temp hack, need to fix to make LinkedRecordID a string in the database and object model and not an int
+      convoEntity.LinkedRecordID = parseInt(PrimaryKeys[0].Value);// PrimaryKeys.map((pk) => pk.Value).join(',');
+      await convoEntity.Save();
+    } 
+
+    const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false);
+    messages.push({
+      content: UserQuestion,
+      role: 'user'
+    });
+
+    return this.handleSimpleSkipPostRequest(input, convoEntity.ID, convoDetailEntity.ID, true, user);
+  }
+
+  protected async handleSimpleSkipPostRequest(input: SkipAPIRequest, conversationID: number = 0, UserMessageConversationDetailId: number = 0, createAIMessageConversationDetail: boolean = false, user: UserInfo = null): Promise<AskSkipResultType> {
+    LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
+
+    const response = await sendPostRequest(___skipAPIurl, input, true, null);
+
+    if (response && response.length > 0) {
+      // the last object in the response array is the final response from the Skip API
+      const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
+      const AIMessageConversationDetailID = createAIMessageConversationDetail ? await this.CreateAIMessageConversationDetail(apiResponse, conversationID, user) : 0;
+//      const apiResponse = <SkipAPIResponse>response.data;
+      LogStatus(`  Skip API response: ${apiResponse.responsePhase}`)
+      return {
+        Success: true,
+        Status: 'OK',
+        ResponsePhase: SkipResponsePhase.AnalysisComplete,
+        ConversationId: conversationID,
+        UserMessageConversationDetailId: UserMessageConversationDetailId,
+        AIMessageConversationDetailId: AIMessageConversationDetailID,
+        Result: JSON.stringify(apiResponse)
+      };
+    }
+    else {
+      return {
+        Success: false,
+        Status: 'Error',
+        Result: `Request failed`,
+        ResponsePhase: SkipResponsePhase.AnalysisComplete,
+        ConversationId: conversationID,
+        UserMessageConversationDetailId: UserMessageConversationDetailId,
+        AIMessageConversationDetailId: 0,
+      };
+    }
+  }
+
+  protected async CreateAIMessageConversationDetail(apiResponse: SkipAPIResponse, conversationID: number, user: UserInfo): Promise<number> {
+    const md = new Metadata();
+    const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
+    convoDetailEntityAI.NewRecord();
+    convoDetailEntityAI.ConversationID = conversationID; 
+    const systemMessages = apiResponse.messages.filter((m) => m.role === 'system');
+    const lastSystemMessage = systemMessages[systemMessages.length - 1];
+    convoDetailEntityAI.Message = lastSystemMessage?.content;
+    convoDetailEntityAI.Role = 'AI';
+    if (await convoDetailEntityAI.Save()) {
+      return convoDetailEntityAI.ID;
+    }
+    else
+      return 0;
+  }
+
+  protected buildSkipAPIRequest(messages: SkipMessage[], conversationId: number, dataContext: DataContext, requestPhase: SkipRequestPhase, includeEntities: boolean, includeQueries: boolean): SkipAPIRequest {
+    const entities = includeEntities ? this.BuildSkipEntities() : [];
+    const queries = includeQueries ? this.BuildSkipQueries() : [];
+    const input: SkipAPIRequest = { 
+      apiKeys: this.buildSkipAPIKeys(),
+      organizationInfo: configInfo?.askSkip?.organizationInfo,
+      messages: messages, 
+      conversationID: conversationId.toString(), 
+      dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
+      organizationID: !isNaN(parseInt(___skipAPIOrgId)) ? parseInt(___skipAPIOrgId) : 0,
+      requestPhase: requestPhase,
+      entities: entities,
+      queries: queries
+    };
+    return input;
+  }
 
   /**
    * Executes a script in the context of a data context and returns the results
@@ -73,53 +195,12 @@ export class AskSkipResolver {
                                 @PubSub() pubSub: PubSubEngine,
                                 @Arg('DataContextId', () => Int) DataContextId: number,
                                 @Arg('ScriptText', () => String) ScriptText: string) {
-    const md = new Metadata();
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
                                   const dataContext: DataContext = new DataContext();
-    await dataContext.Load(DataContextId, dataSource, true, user);
-    const input: SkipAPIRunScriptRequest = { 
-      apiKeys: this.buildSkipAPIKeys(),
-      scriptText: ScriptText,
-      messages: [], // not needed for this request
-      conversationID: '', // not needed for this request
-      dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
-      organizationID: !isNaN(parseInt(___skipAPIOrgId)) ? parseInt(___skipAPIOrgId) : 0,
-      requestPhase: 'run_existing_script',
-      entities: [], // not needed for this request
-      queries: [], // not needed for this request
-    };
-
-    LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
-
-    const response = await sendPostRequest(___skipAPIurl, input, true, null);
-
-    if (response && response.length > 0) {
-      // the last object in the response array is the final response from the Skip API
-      const apiResponse = <SkipAPIResponse>response[response.length - 1];
-//      const apiResponse = <SkipAPIResponse>response.data;
-      LogStatus(`  Skip API response: ${apiResponse.responsePhase}`)
-      return {
-        Success: true,
-        Status: 'OK',
-        ResponsePhase: SkipResponsePhase.AnalysisComplete,
-        ConversationId: 0,
-        UserMessageConversationDetailId: 0,
-        AIMessageConversationDetailId: 0,
-        Result: JSON.stringify(apiResponse)
-      };
-    }
-    else {
-      return {
-        Success: false,
-        Status: 'Error',
-        Result: `Report Refresh failed`,
-        ResponsePhase: SkipResponsePhase.AnalysisComplete,
-        ConversationId: 0,
-        UserMessageConversationDetailId: 0,
-        AIMessageConversationDetailId: 0,
-      };
-    }
+    await dataContext.Load(DataContextId, dataSource, true, true, user);
+    const input = this.buildSkipAPIRequest([], 0, dataContext, 'run_existing_script', false, false);
+    return this.handleSimpleSkipPostRequest(input);
   }
 
   protected buildSkipAPIKeys(): SkipAPIRequestAPIKey[] {
@@ -160,17 +241,7 @@ export class AskSkipResolver {
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     const messages: SkipMessage[] = await this.LoadConversationDetailsIntoSkipMessages(dataSource, convoEntity.ID, AskSkipResolver._maxHistoricalMessages);
 
-    const input: SkipAPIRequest = { 
-                    apiKeys: this.buildSkipAPIKeys(),
-                    organizationInfo: configInfo?.askSkip?.organizationInfo,
-                    messages: messages, 
-                    conversationID: ConversationId.toString(), 
-                    dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
-                    organizationID: !isNaN(parseInt(___skipAPIOrgId)) ? parseInt(___skipAPIOrgId) : 0,
-                    requestPhase: 'initial_request',
-                    entities: this.BuildSkipEntities(),
-                    queries: this.BuildSkipQueries(),
-                  };
+    const input = this.buildSkipAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true);
 
     return this.HandleSkipRequest(input, UserQuestion, user, dataSource, ConversationId, userPayload, pubSub, md, convoEntity, convoDetailEntity, dataContext, dataContextEntity);
   }
@@ -356,7 +427,7 @@ export class AskSkipResolver {
     await convoDetailEntity.Save();
 
     const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext); // await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
-    await dataContext.Load(dataContextEntity.ID, dataSource, false, user);
+    await dataContext.Load(dataContextEntity.ID, dataSource, false, true, user);
     return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
   }
 
@@ -393,8 +464,16 @@ export class AskSkipResolver {
           const skipRole = this.MapDBRoleToSkipRole(r.Role);
           let outputMessage; // will be populated below for system messages
           if (skipRole === 'system') {
-            const detail = <SkipAPIResponse>JSON.parse(r.Message);
-            if (detail.responsePhase === SkipResponsePhase.AnalysisComplete) {
+            let detail: SkipAPIResponse;
+            try {
+              detail = <SkipAPIResponse>JSON.parse(r.Message);
+            }
+            catch (e) {
+              // ignore, sometimes we dont have a JSON message, just use the raw message
+              detail = null;
+              outputMessage = r.Message;
+            }
+            if (detail?.responsePhase === SkipResponsePhase.AnalysisComplete) {
               const analysisDetail = <SkipAPIAnalysisCompleteResponse>detail;
               outputMessage = JSON.stringify({
                 responsePhase: SkipResponsePhase.AnalysisComplete,
@@ -404,18 +483,18 @@ export class AskSkipResolver {
                 tableDataColumns: analysisDetail.tableDataColumns
               });
             }
-            else if (detail.responsePhase === SkipResponsePhase.ClarifyingQuestion) {
+            else if (detail?.responsePhase === SkipResponsePhase.ClarifyingQuestion) {
               const clarifyingQuestionDetail = <SkipAPIClarifyingQuestionResponse>detail;
               outputMessage = JSON.stringify({
                 responsePhase: SkipResponsePhase.ClarifyingQuestion,
                 clarifyingQuestion: clarifyingQuestionDetail.clarifyingQuestion
               });
             }
-            else {
+            else if (detail) {
               // we should never get here, AI responses only fit the above
               // don't throw an exception, but log an error
               LogError(`Unknown response phase: ${detail.responsePhase}`);
-            }
+            }  
           }
           const m: SkipMessage = {
             content: skipRole === 'system' ? outputMessage : r.Message,
@@ -635,7 +714,7 @@ export class AskSkipResolver {
               item.Type = 'sql';
               item.SQL = dr.text;
               item.AdditionalDescription = dr.description;
-              if (!await item.LoadData(dataSource, false, user))
+              if (!await item.LoadData(dataSource, false, true, user))
                 throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               break;
             case "stored_query":
@@ -646,7 +725,7 @@ export class AskSkipResolver {
                 item.QueryID = query.ID;
                 item.RecordName = query.Name;
                 item.AdditionalDescription = dr.description;
-                if (!await item.LoadData(dataSource, false, user))
+                if (!await item.LoadData(dataSource, false, true, user))
                   throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               }
               else

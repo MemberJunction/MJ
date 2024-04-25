@@ -8,6 +8,7 @@ import { MarkdownModule } from 'ngx-markdown';
 // LOCAL
 import { ChatComponent } from './chat/chat.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 @NgModule({
   declarations: [
@@ -17,6 +18,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     CommonModule,
     FormsModule,
     ContainerDirectivesModule,
+    IndicatorsModule,
     MarkdownModule.forRoot()
   ],
   exports: [
