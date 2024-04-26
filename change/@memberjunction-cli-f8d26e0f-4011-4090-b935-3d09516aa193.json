@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Add more validation in install script",
+  "packageName": "@memberjunction/cli",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
