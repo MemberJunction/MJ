@@ -1,0 +1,7 @@
+{
+  "type": "patch",
+  "comment": "Check node version in install (closes #161)",
+  "packageName": "@memberjunction/cli",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
