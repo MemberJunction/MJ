@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/ai": "~1.2.2",
-    "@memberjunction/global": "~1.2.2"
+    "@memberjunction/global": "~1.2.2",
+    "axios-retry": "^4.3.0"
   }
 }

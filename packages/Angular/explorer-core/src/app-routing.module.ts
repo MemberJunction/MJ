@@ -12,7 +12,10 @@ import {
   AuthGuardService as AuthGuard,
   FilesComponent,
   QueryBrowserComponent,
+  ListComponent,
+  ListDetailComponent
 } from './public-api';
+
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
@@ -135,6 +138,8 @@ const routes: Routes = [
   { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },
   { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
+  { path: 'lists', component: ListComponent, canActivate: [AuthGuard] }, 
+  { path: 'list-detail/:entityId', component: ListDetailComponent, canActivate: [AuthGuard] }, 
   {
     path: 'settings',
     component: SettingsComponent,

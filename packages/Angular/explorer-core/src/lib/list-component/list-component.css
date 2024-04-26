@@ -1,0 +1,172 @@
+  .list-header {
+        display: flex; 
+        justify-content: space-between;
+  }  
+
+  .text-bold {
+    font-weight: 600;
+  }
+
+  ::ng-deep .k-grouping-header {
+    display: none !important;
+  }
+
+  .mt-20 {
+    margin-top: 20px;
+  }
+
+  .ml-20 {
+    margin-left: 20px;
+  }
+
+  .create-btn {
+    background-color:var(--border-blue);
+    color: white; 
+    margin-top: 20px; 
+    margin-right: 16px; 
+    background: var(--border-blue);
+    color: var(--white-color);
+    font-size: 16px;
+    border: none;
+    padding: 8px 25px;
+    border-radius: 10px;
+  }
+
+  .mt-10 {
+    margin-top: 10px;
+  }
+
+  .mx-20 {
+    margin-left: 20px; 
+    margin-right: 20px;
+  }
+
+  .view-properties-button {
+    margin-left: 0px;
+  }
+  .view-prop-tab-contents {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Set to the height you want */
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  
+  .form-group-description {
+    flex-grow: 1;
+  }
+  
+  .k-form-label {
+    width: 150px; /* Adjust as needed */
+    margin-right: 10px;
+  }
+  
+  .view-description {
+    flex-grow: 1;
+    height: 100%;
+    padding: 5px;
+    resize: none;
+  }
+  
+  
+  
+  .item-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .popup-content {
+    height: calc(100% - 46px);
+  }
+  
+  .popup-actions {
+    padding: 16px 0 0;
+  }
+  
+  .view-prop-tab-contents {
+    overflow: hidden;
+  }
+  
+  .sort-column {
+    width: 300px;
+  }
+  
+  .sort-direction {
+    width: 125px;
+  }
+  
+  .sort-header > button {
+    margin-left: 5px;
+    margin-bottom: 5px;
+    width: 75px;
+  }
+  
+  .smart-filter-label {
+    margin-right: 10px;
+  }
+  
+  .smart-filter-prompt {
+    margin-top: 15px;
+  }
+  
+  .advanced-tab-details
+  {
+    margin-bottom: 10px;
+  }
+  ::ng-deep .customBtn button {
+    flex: 1;
+    border-radius: 10px;
+    line-height: 34px;
+  }
+  ::ng-deep .popup-content .k-tabstrip-items-wrapper {
+    background: var(--white-color) !important;
+    padding-left: 0 !important;
+  }
+  ::ng-deep .popup-content .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item.k-active {
+    border-bottom: 3px solid var(--border-blue) !important;
+  }
+    ::ng-deep .popup-content .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item {
+    background: var(--white-color) !important;
+    border-right: 0 !important;
+  }
+
+.k-checkbox:checked {
+  background-color: var(--border-blue);
+  border-color: var(--border-blue);
+  color: white;
+}
+
+.k-switch-on .k-switch-track {
+  background-color: var(--border-blue);
+  border-color: var(--border-blue);
+  color: white;
+}
+
+::ng-deep .main-fav-wrapper .main-area .card-list .card-wrapper .k-card-body .list-item-icon:hover, .list-btn:hover {
+    border: 1px solid var(--border-active);
+}
+
+::ng-deep .main-fav-wrapper .main-area .card-list .card-wrapper .list-item-icon .common-btn, .list-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border: 1px solid var(--gray-color);
+    border-radius: 8px; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: transparent;
+    cursor: pointer;
+}
+
+.grid-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

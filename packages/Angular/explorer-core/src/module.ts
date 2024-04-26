@@ -73,6 +73,8 @@ import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansi
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
+import { ListComponent } from './lib/list-component/list-component';
+import { ListDetailComponent } from './lib/list-detail-component/list-detail-component';
 
 @NgModule({
   declarations: [
@@ -85,6 +87,8 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
     GenericBrowseListComponent,
     GenericBrowserListComponent,
     HomeComponent,
+    ListComponent,
+    ListDetailComponent,
     NavigationComponent,
     ReportBrowserComponent,
     QueryBrowserComponent,
@@ -167,6 +171,8 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
     GenericBrowseListComponent,
     GenericBrowserListComponent,
     HomeComponent,
+    ListComponent,
+    ListDetailComponent,
     NavigationComponent,
     ReportBrowserComponent,
     DashboardResource,
