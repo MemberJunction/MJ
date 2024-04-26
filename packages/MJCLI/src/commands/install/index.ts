@@ -63,6 +63,7 @@ export default class Install extends Command {
     const parsed = await this.parse(Install);
     this.flags = parsed.flags;
 
+    this.checkNodeVersion();
     this.checkAvailableDiskSpace(2);
     this.verifyDirs(CODEGEN_DIR, GENERATED_ENTITIES_DIR, SQL_SCRIPTS_DIR, MJAPI_DIR, MJEXPLORER_DIR);
 
@@ -124,9 +125,6 @@ CONFIG_FILE='config.json'
 `;
     fs.writeFileSync(path.join(CODEGEN_DIR, '.env'), codeGenENV);
 
-    this.log('   Running npm install...');
-    execSync('npm install', { stdio: 'inherit', cwd: CODEGEN_DIR });
-
     this.log('   Running npm link for GeneratedEntities...');
     execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
 
@@ -134,8 +132,8 @@ CONFIG_FILE='config.json'
     // Process MJAPI
     //*******************************************************************
     this.log('\n\nBootstrapping MJAPI...');
-    this.log('   Running npm install...');
-    execSync('npm install', { stdio: 'inherit', cwd: MJAPI_DIR });
+    this.log('   Running npm link for GeneratedEntities...');
+    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJAPI_DIR });
     this.log('   Setting up MJAPI .env file...');
     const mjAPIENV = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
@@ -178,15 +176,13 @@ ASK_SKIP_ORGANIZATION_ID = 1
 CONFIG_FILE='config.json'
 `;
     fs.writeFileSync(path.join(MJAPI_DIR, '.env'), mjAPIENV);
-    this.log('   Running npm link for GeneratedEntities...');
-    execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJAPI_DIR });
 
     this.log('Running CodeGen...');
     this.renameFolderToMJ_BASE(this.userConfig.dbDatabase);
 
     // next, run CodeGen
     // We do not manually run the compilation for GeneratedEntities because CodeGen handles that, but notice above that we did npm install for GeneratedEntities otherwise when CodeGen attempts to compile it, it will fail.
-    execSync('npx tsx src/index.ts', { stdio: 'inherit', cwd: CODEGEN_DIR });
+    execSync('npx ts-node src/index.ts', { stdio: 'inherit', cwd: CODEGEN_DIR });
 
     // Process MJExplorer
     this.log('\nProcessing MJExplorer...');
@@ -202,8 +198,6 @@ CONFIG_FILE='config.json'
     await this.updateEnvironmentFiles(MJEXPLORER_DIR, config);
 
     // keep on going with MJ Explorer - do the rest of the stuff
-    this.log('   Running npm install...');
-    execSync('npm install', { stdio: 'inherit', cwd: MJEXPLORER_DIR });
     this.log('   Running npm link for GeneratedEntities...');
     execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJEXPLORER_DIR });
 
@@ -339,6 +333,13 @@ CONFIG_FILE='config.json'
     });
   }
 
+  checkNodeVersion() {
+    const validNodeVersion = Number(process.version.replace(/^v(\d+).*/, '$1')) >= 20;
+    if (!validNodeVersion) {
+      this.error('MemberJunction requires Node.js version 20 or higher.', { exit: 1 });
+    }
+  }
+
   /**
    * Checks if there is at least `numGB` GB of free disk space.
    * @param {number} numGB - The number of GB to check for.
@@ -419,6 +420,11 @@ CONFIG_FILE='config.json'
     // rename the MJ_BASE set of SQL Scripts to our new dbname
     const oldFolderPath = path.join(SQL_SCRIPTS_DIR, GENERATED_DIR, MJ_BASE_DIR);
     const newFolderPath = path.join(SQL_SCRIPTS_DIR, GENERATED_DIR, dbDatabase); // Assuming dbDatabase holds the new name
+    if (!fs.existsSync(oldFolderPath)) {
+      this.warn(`SQL scripts not found at '${oldFolderPath}', skipping rename`);
+      return;
+    }
+
     try {
       fs.moveSync(oldFolderPath, newFolderPath);
       this.log(`Renamed ${oldFolderPath} to ${newFolderPath} successfully.`);

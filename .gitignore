@@ -84,3 +84,5 @@ SQL Scripts/internal_only/Trim 990 Raw Data.sql
 packages/GraphQLDataProvider/dist-browser/
 packages/MJExplorer/kendo-ui-license.txt
 build.log.json
+
+Distributions/
