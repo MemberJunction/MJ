@@ -33,6 +33,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     this.LoadConversation();
   }
+
   protected _loaded: boolean = false;
   protected async LoadConversation() {
       if (!this._loaded) {
@@ -113,6 +114,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
   
   public async HandleClearChat() {
       if (this._conversationId > 0) {
+          this.mjChat.ShowWaitingIndicator = true;
           // first get rid of all conversation details, but don't kill the conversation itself, no need
           const md = new Metadata();
           const rv = new RunView();
@@ -132,6 +134,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
               await tg.Submit();
               this.mjChat.ClearAllMessages();
           }
+          this.mjChat.ShowWaitingIndicator = false;
       }
   }
 }

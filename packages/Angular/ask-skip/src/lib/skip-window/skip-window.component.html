@@ -1,4 +1,4 @@
-<div *ngIf="WindowOpened">
+@if(WindowOpened) {
   <kendo-window
     [title]="Title"
     (close)="CloseWindow()"
@@ -21,4 +21,4 @@
       [UpdateAppRoute]="false"
     ></mj-skip-chat>
   </kendo-window>
-</div>
+}

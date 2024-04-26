@@ -1,16 +1,22 @@
-<div>
-    <div class="messages" #messagesContainer>
+<div mjFillContainer>
+    <div class="messages" #messagesContainer mjFillContainer [bottomMargin]="70"  (scroll)="handleCheckScroll()">
         <!-- messages go here -->
-        <span>How can I help today?</span>
+        <span>{{InitialMessage}}</span>
     </div>
-    @if (ShowWaitingIndicator) {
-        <kendo-loader type="converging-spinner"></kendo-loader>
+    @if (ShowScrollToBottomButton) {
+        <span class="scroll-to-bottom fa-solid fa-arrow-down" (click)="ScrollMessagesToBottom()"></span>
     }
+
     <div class = "input">
-        <textarea [(ngModel)]="currentMessage" placeholder="Type a message..." (keyup.enter)="SendCurrentMessage()" ></textarea>
-        <button (click)="SendCurrentMessage()">Send</button>
-        @if (Messages.length > 0) {
-            <button (click)="HandleClearChat()">Clear</button>
+        @if (ShowWaitingIndicator) {
+            <kendo-loader type="converging-spinner"></kendo-loader>
         }
+        @else {
+            <textarea [(ngModel)]="currentMessage" placeholder="Type a message..." (keyup.enter)="SendCurrentMessage()" ></textarea>
+            <button (click)="SendCurrentMessage()" class="input-button">Send</button>
+            @if (Messages.length > 0) {
+                <button (click)="HandleClearChat()" class="input-button">Clear</button>
+            }    
+        }        
     </div>
 </div>

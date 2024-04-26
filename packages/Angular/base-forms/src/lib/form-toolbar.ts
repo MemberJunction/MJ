@@ -64,14 +64,15 @@ import { SkipAPIChatWithRecordResponse } from '@memberjunction/skip-types';
                     <span class="fa-regular fa-comment-dots"></span>
                 </button> 
             }
-            <!-- doing this via hidden so the component isn't destroyed and recreated -->
             @if (form.EntityInfo) {
-                <mj-skip-chat-with-record 
+                <mj-skip-chat-with-record-window
                     [LinkedEntityID]="form.EntityInfo.ID"
-                    [LinkedPrimaryKeys]="LinkedEntityPrimaryKeys"            
+                    [LinkedEntityPrimaryKeys]="LinkedEntityPrimaryKeys"            
                     #mjChat
-                    [hidden]="!SkipChatVisible" 
-                ></mj-skip-chat-with-record>
+                    [WindowOpened]="SkipChatVisible" 
+                    (WindowClosed)="ShowSkipChat()"
+                >
+                </mj-skip-chat-with-record-window>
             }
             @if (form.isHistoryDialogOpen) {
                 <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
