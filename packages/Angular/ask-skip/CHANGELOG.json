@@ -2,6 +2,63 @@
   "name": "@memberjunction/ng-ask-skip",
   "entries": [
     {
+      "date": "Fri, 26 Apr 2024 17:57:09 GMT",
+      "version": "1.1.1",
+      "tag": "@memberjunction/ng-ask-skip_v1.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/global to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/core to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/skip-types to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-shared to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-data-context to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-ask-skip",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.1.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 26 Apr 2024 15:23:26 GMT",
       "version": "1.1.0",
       "tag": "@memberjunction/ng-ask-skip_v1.1.0",

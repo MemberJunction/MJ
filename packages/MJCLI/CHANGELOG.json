@@ -2,6 +2,21 @@
   "name": "@memberjunction/cli",
   "entries": [
     {
+      "date": "Fri, 26 Apr 2024 17:57:09 GMT",
+      "version": "1.1.1",
+      "tag": "@memberjunction/cli_v1.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "5ea210ee2b56d94cf48c1f3eeca5fcacea3ba17f",
+            "comment": "Check node version in install (closes #161)"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 26 Apr 2024 15:23:26 GMT",
       "version": "1.1.0",
       "tag": "@memberjunction/cli_v1.1.0",

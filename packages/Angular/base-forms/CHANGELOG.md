@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/ng-base-forms
 
-This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 17:57:09 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.1
+
+Fri, 26 Apr 2024 17:57:09 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v1.1.1
+- Bump @memberjunction/core to v1.1.1
+- Bump @memberjunction/ng-record-changes to v1.1.1
+- Bump @memberjunction/ng-tabstrip to v1.1.1
+- Bump @memberjunction/ng-link-directives to v1.1.1
 
 ## 1.1.0
 

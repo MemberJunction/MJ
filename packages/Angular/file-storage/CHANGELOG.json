@@ -2,6 +2,45 @@
   "name": "@memberjunction/ng-file-storage",
   "entries": [
     {
+      "date": "Fri, 26 Apr 2024 17:57:09 GMT",
+      "version": "1.1.1",
+      "tag": "@memberjunction/ng-file-storage_v1.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/core to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/core-entities to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/global to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.1.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-file-storage",
+            "comment": "Bump @memberjunction/ng-shared to v1.1.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 26 Apr 2024 15:23:26 GMT",
       "version": "1.1.0",
       "tag": "@memberjunction/ng-file-storage_v1.1.0",

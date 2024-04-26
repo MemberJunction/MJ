@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/skip-types
 
-This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 17:57:09 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.1
+
+Fri, 26 Apr 2024 17:57:09 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v1.1.1
+- Bump @memberjunction/data-context to v1.1.1
 
 ## 1.1.0
 
