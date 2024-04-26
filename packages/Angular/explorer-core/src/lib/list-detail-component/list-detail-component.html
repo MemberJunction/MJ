@@ -1,0 +1,56 @@
+<div>
+    <h2 class="mt-20 ml-20">List Detail</h2>
+    <kendo-loader
+    *ngIf="loader"
+    type="converging-spinner"
+    style="display: flex; justify-content: center; align-items: center;"
+    >
+    </kendo-loader>
+    <kendo-grid
+    *ngIf="!loader"
+    [kendoGridBinding]="[listDetail]"
+    [pageSize]="20"
+    [pageable]="true"
+    [sortable]="true"
+    [groupable]="true"
+    [reorderable]="true"
+    [resizable]="true"
+    [height]="500"
+    [columnMenu]="{ filter: true }"
+    class="mt-10 mx-20"
+    >
+        <kendo-grid-column field="ID" title="ID"></kendo-grid-column>
+        <kendo-grid-column field="Name" title="Name"></kendo-grid-column>
+        <kendo-grid-column field="Description" title="Description"></kendo-grid-column>
+        <kendo-grid-column field="Entity" title="Base Table"></kendo-grid-column>
+         <kendo-grid-column field="BaseView" title="Base View"></kendo-grid-column>
+        <kendo-grid-column field="SchemaName" title="Schema Name"></kendo-grid-column>
+        <kendo-grid-column field="IncludeInAPI" title="Include In API">
+            <ng-template kendoGridCellTemplate let-dataItem>
+                {{ dataItem ? '✓' : '' }}
+            </ng-template>
+        </kendo-grid-column>
+        <kendo-grid-column field="AllowAllRowsAPI" title="Allow All Rows API">
+            <ng-template kendoGridCellTemplate let-dataItem>
+                {{ dataItem ? '✓' : '' }}
+            </ng-template>
+        </kendo-grid-column>
+        <kendo-grid-column field="AllowUpdateAPI" title="Allow Update API">
+            <ng-template kendoGridCellTemplate let-dataItem>
+                {{ dataItem ? '✓' : '' }}
+            </ng-template>
+        </kendo-grid-column>
+        <kendo-grid-column field="AllowCreateAPI" title="Allow Create API">
+            <ng-template kendoGridCellTemplate let-dataItem>
+                {{ dataItem ? '✓' : '' }}
+            </ng-template>
+        </kendo-grid-column>
+        <kendo-grid-column field="AllowDeleteAPI" title="Allow Delete API">
+            <ng-template kendoGridCellTemplate let-dataItem>
+                {{ dataItem ? '✓' : '' }}
+            </ng-template>
+        </kendo-grid-column>
+        
+    </kendo-grid>
+
+</div>

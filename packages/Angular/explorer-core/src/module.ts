@@ -72,6 +72,8 @@ import { UserProfileComponent } from './lib/user-profile/user-profile.component'
 import {ExpansionPanelComponent} from './lib/expansion-panel-component/expansion-panel-component';
 import {ApplicationViewComponent} from './lib/app-view/application-view.component';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
+import { ListComponent } from './lib/list-component/list-component';
+import { ListDetailComponent } from './lib/list-detail-component/list-detail-component';
 
 @NgModule({
   declarations: [
@@ -84,6 +86,8 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     GenericBrowseListComponent,
     GenericBrowserListComponent,
     HomeComponent,
+    ListComponent,
+    ListDetailComponent,
     NavigationComponent,
     ReportBrowserComponent,
     QueryBrowserComponent,
@@ -165,6 +169,8 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     GenericBrowseListComponent,
     GenericBrowserListComponent,
     HomeComponent,
+    ListComponent,
+    ListDetailComponent,
     NavigationComponent,
     ReportBrowserComponent,
     DashboardResource,

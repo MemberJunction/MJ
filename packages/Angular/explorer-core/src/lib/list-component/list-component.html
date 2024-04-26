@@ -1,0 +1,142 @@
+<div>
+    <div class="list-header">
+        <h2 class="mt-20 ml-20">Lists</h2>
+        <button 
+            kendoButton 
+            *ngIf="!opened" 
+            class="create-btn" 
+            (click)="toggle(true)"> 
+            <span class="fa-solid fa-plus"></span>
+            Create New
+        </button>
+    </div>
+    <kendo-dialog
+        [title]="title"
+        *ngIf="opened"
+        (close)="toggle(false)"
+        [minWidth]="250"
+        [width]="650"
+        [height]="550"
+    >
+        <div class="col-xs-12 col-sm-6 example-col">
+            <kendo-label text="Name">
+                <kendo-textbox  
+                    class="mt-10"
+                    placeholder="Enter Name" 
+                    [(ngModel)]="listName">
+                </kendo-textbox>
+            </kendo-label>
+            <div class="mt-10">
+                <kendo-label text="Description">
+                    <kendo-textarea
+                        class="mt-10"
+                        placeholder="Enter Description"
+                        [rows]="3"
+                        resizable="vertical"
+                        [(ngModel)]="listDescription"
+                    ></kendo-textarea>
+                  </kendo-label>
+            </div>
+            <div class="mt-10">
+                <kendo-formfield showHints="always" >
+                    <kendo-label text="Entities">
+                    <kendo-multiselect
+                        class="mt-10"
+                        textField="name"
+                        valueField="id"
+                        [data]="getEntities"
+                        [(ngModel)]="selectedEntities"
+                    ></kendo-multiselect>
+                    </kendo-label>
+                </kendo-formfield>
+            </div>
+        </div>
+        <kendo-dialog-actions>
+            <div class="k-actions k-actions-end customBtn popup-actions">
+                <button kendoButton [disabled]="btnLoader || !listName || !selectedEntities.length" (click)="saveList()" themeColor="info">
+                    <span *ngIf="!btnLoader">
+                        <span class="fa-solid fa-circle-check"></span>
+                        Save 
+                    </span>
+                    <kendo-loader
+                    *ngIf="btnLoader"
+                    type="pulsing"
+                    >
+                    </kendo-loader>
+                </button>
+                <button fillMode="outline" themeColor="info" kendoButton (click)="toggle(false)">Cancel</button>
+            </div>
+        </kendo-dialog-actions>
+    </kendo-dialog> 
+
+    <kendo-dialog 
+    [minWidth]="450"
+    [width]="650"
+    class="dialog-wrapper" 
+    title="Confirm" 
+    *ngIf="deleteDialogOpened" 
+    (close)="onConfirmDeleteItem(false)">
+      <p class="k-m-7.5 k-text-center">
+        Are you sure you want to delete this list?
+      </p>
+      <kendo-dialog-actions>
+        <div class="k-actions k-actions-end customBtn popup-actions">
+            <button class="cancel-btn" [disabled]="btnLoader" (click)="deleteEntity()" kendoButton themeColor="info">
+                <span *ngIf="!btnLoader">
+                    Yes, Delete
+                </span>
+                <kendo-loader
+                *ngIf="btnLoader"
+                type="pulsing"
+                >
+                </kendo-loader>
+            </button>
+            <button class="yes-btn" (click)="onConfirmDeleteItem(false)" kendoButton fillMode="outline" themeColor="info">
+                No, Cancel
+            </button>
+        </div>
+      </kendo-dialog-actions>
+    </kendo-dialog>
+
+    <kendo-loader
+    *ngIf="loader"
+    type="converging-spinner"
+    style="display: flex; justify-content: center; align-items: center;"
+    >
+    </kendo-loader>
+
+    <kendo-grid
+        *ngIf="!loader"
+        [kendoGridBinding]="getList"
+        [pageSize]="20"
+        [pageable]="true"
+        [sortable]="true"
+        [groupable]="true"
+        [reorderable]="true"
+        [resizable]="true"
+        [height]="500"
+        [columnMenu]="{ filter: true }"
+        class="mt-10 mx-20"
+        >
+            <kendo-grid-column field="ID" title="ID"></kendo-grid-column>
+            <kendo-grid-column field="Name" title="Name"></kendo-grid-column>
+            <kendo-grid-column field="Description" title="Description"></kendo-grid-column>
+            <kendo-grid-column field="Entity" title="Entity Name"></kendo-grid-column>
+            <kendo-grid-column field="User" title="User"></kendo-grid-column>
+            <kendo-grid-column title="Actions">
+                <ng-template kendoGridCellTemplate let-dataItem>
+                  <div class="grid-wrapper">
+                    <button class="list-btn" (click)="viewItemClick(dataItem)">
+                        <i class="fa-solid fa-circle-info"></i>
+                    </button>
+                    <button class="list-btn" (click)="openEditDialog(dataItem)">
+                        <i class="fa-regular fa-pen-to-square"></i>
+                    </button>
+                    <button class="list-btn" (click)="openDeleteDialog(dataItem)">
+                        <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                  </div>
+                </ng-template>
+              </kendo-grid-column>
+    </kendo-grid>
+</div>

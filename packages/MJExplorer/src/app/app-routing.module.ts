@@ -17,6 +17,8 @@ import {
   DashboardBrowserComponent,
   AuthGuardService as AuthGuard,
   FilesComponent,
+  ListComponent,
+  ListDetailComponent
 } from '@memberjunction/ng-explorer-core';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
 import { LogError} from "@memberjunction/core";
@@ -149,7 +151,9 @@ const routes: Routes = [
   { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
   { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },  
+  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
+  { path: 'lists', component: ListComponent, canActivate: [AuthGuard] }, 
+  { path: 'list-detail/:entityId', component: ListDetailComponent, canActivate: [AuthGuard] },  
   { path: 'settings', 
     component: SettingsComponent, 
     canActivate: [AuthGuard],  
