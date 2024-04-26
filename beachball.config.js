@@ -6,6 +6,7 @@
 module.exports = {
   generateChangelog: process.env.BRANCH === 'main',
   bumpDeps: true,
+  gitTags: false,
   groups: [
     {
       name: 'MJ',
