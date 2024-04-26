@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ZodError, z } from 'zod';
 
+// Directories are relative to execution cwd
 const GENERATED_ENTITIES_DIR = 'GeneratedEntities';
 const CODEGEN_DIR = 'CodeGen';
 const SQL_SCRIPTS_DIR = 'SQL Scripts';
