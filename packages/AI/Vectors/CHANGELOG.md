@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ai-vectors
 
-This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 21:11:21 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.2
+
+Fri, 26 Apr 2024 21:11:21 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v1.1.2
+- Bump @memberjunction/global to v1.1.2
+
+## 1.1.1
+
+Fri, 26 Apr 2024 17:57:09 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v1.1.1
+- Bump @memberjunction/global to v1.1.1
 
 ## 1.1.0
 

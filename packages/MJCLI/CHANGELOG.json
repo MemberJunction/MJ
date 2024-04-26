@@ -2,6 +2,42 @@
   "name": "@memberjunction/cli",
   "entries": [
     {
+      "date": "Fri, 26 Apr 2024 21:11:21 GMT",
+      "version": "1.1.2",
+      "tag": "@memberjunction/cli_v1.1.2",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "20d7e7aa913cdedc6fcbc26501cc36a43f3f1a57",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "025ee9d0d59c04028dd72ab837479c7f9a2e7559",
+            "comment": "Add more validation in install script"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 26 Apr 2024 17:57:09 GMT",
+      "version": "1.1.1",
+      "tag": "@memberjunction/cli_v1.1.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "5ea210ee2b56d94cf48c1f3eeca5fcacea3ba17f",
+            "comment": "Check node version in install (closes #161)"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 26 Apr 2024 15:23:26 GMT",
       "version": "1.1.0",
       "tag": "@memberjunction/cli_v1.1.0",
