@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/ng-link-directives
 
-This log was last generated on Wed, 24 Apr 2024 20:57:41 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.0
+
+Fri, 26 Apr 2024 15:23:26 GMT
+
+### Minor changes
+
+- Bump @memberjunction/core to v1.1.0
 
 ## 1.0.11
 

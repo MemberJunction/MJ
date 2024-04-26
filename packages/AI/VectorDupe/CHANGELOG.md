@@ -1,8 +1,23 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
-This log was last generated on Wed, 24 Apr 2024 20:57:42 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.0
+
+Fri, 26 Apr 2024 15:23:26 GMT
+
+### Minor changes
+
+- Bump @memberjunction/ai to v1.1.0
+- Bump @memberjunction/ai-vectordb to v1.1.0
+- Bump @memberjunction/ai-vectors to v1.1.0
+- Bump @memberjunction/ai-vectors-pinecone to v1.1.0
+- Bump @memberjunction/aiengine to v1.1.0
+- Bump @memberjunction/core to v1.1.0
+- Bump @memberjunction/global to v1.1.0
+- Bump @memberjunction/core-entities to v1.1.0
 
 ## 1.0.11
 
