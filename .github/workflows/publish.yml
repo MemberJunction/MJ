@@ -60,7 +60,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
  
-  sync-next-versions:
+  merge-main-to-next:
     runs-on: ubuntu-latest
     if: ${{ (github.base_ref || github.ref_name) == 'main' }}
     needs: build-and-publish
@@ -72,17 +72,34 @@ jobs:
 
     - name: Configure Git
       run: |
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "GitHub Actions"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "GitHub Actions"
 
-    - name: Sync latest version
-      run: npx beachball sync
-
-    - name: Commit and push
+    - name: Merge main into next
       run: |
-        git add .
-        git commit -m "Updating package versions [skip ci]"
-        git push
+        git fetch origin main
+        git merge origin/main --no-commit --no-ff
+
+    - name: Check for conflicts and resolve
+      run: |
+        conflicts=$(git diff --name-only --diff-filter=U)
+        if [ -n "$conflicts" ]; then
+          echo "Conflicts detected in the following files: $conflicts \n" >> $GITHUB_STEP_SUMMARY
+  
+          echo "Conflict details:" >> $GITHUB_STEP_SUMMARY
+          for file in $conflicts; do
+              echo "Conflicts in $file:" >> $GITHUB_STEP_SUMMARY
+              git diff $file >> $GITHUB_STEP_SUMMARY
+              echo >> $GITHUB_STEP_SUMMARY
+          done
+          git checkout --theirs $conflicts
+          git add $conflicts
+          echo "Conflicts resolved using 'theirs'." >> $GITHUB_STEP_SUMMARY
+        fi
+        git commit -m "Updating package versions [skip ci]""
+
+    - name: Push changes
+      run: git push
  
   create-distribution:
     runs-on: ubuntu-latest
