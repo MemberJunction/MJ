@@ -1,8 +1,27 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 26 Apr 2024 21:11:21 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 23:48:54 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.3
+
+Fri, 26 Apr 2024 23:48:54 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.1.3
+- Bump @memberjunction/ai-openai to v1.1.3
+- Bump @memberjunction/aiengine to v1.1.3
+- Bump @memberjunction/core to v1.1.3
+- Bump @memberjunction/core-entities to v1.1.3
+- Bump @memberjunction/data-context to v1.1.3
+- Bump @memberjunction/data-context-server to v1.1.3
+- Bump @memberjunction/global to v1.1.3
+- Bump @memberjunction/storage to v1.1.3
+- Bump @memberjunction/queue to v1.1.3
+- Bump @memberjunction/sqlserver-dataprovider to v1.1.3
+- Bump @memberjunction/skip-types to v1.1.3
 
 ## 1.1.2
 

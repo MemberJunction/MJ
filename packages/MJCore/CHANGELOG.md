@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/core
 
-This log was last generated on Fri, 26 Apr 2024 21:11:21 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 23:48:54 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.3
+
+Fri, 26 Apr 2024 23:48:54 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v1.1.3
 
 ## 1.1.2
 
