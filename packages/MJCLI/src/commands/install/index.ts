@@ -18,10 +18,10 @@ const MJEXPLORER_DIR = 'MJExplorer';
 
 type Config = z.infer<typeof configSchema>;
 const configSchema = z.object({
-  dbUrl: z.string().url(),
+  dbUrl: z.string().min(1),
   dbInstance: z.string(),
   dbTrustServerCertificate: z.enum(['Y', 'N']),
-  dbDatabase: z.string(),
+  dbDatabase: z.string().min(1),
   dbPort: z.number({ coerce: true }).int().positive(),
   codeGenLogin: z.string(),
   codeGenPwD: z.string(),
@@ -228,7 +228,10 @@ CONFIG_FILE='config.json'
       this.log(
         '\n>>> Please answer the following questions to setup the .env files for CodeGen. After this process you can manually edit the .env file in CodeGen as desired.'
       );
-      const dbUrl = await input({ message: 'Enter the database server URL:' });
+      const dbUrl = await input({
+        message: 'Enter the database server hostname:',
+        validate: (v) => configSchema.shape.dbDatabase.safeParse(v).success,
+      });
       const dbInstance = await input({
         message: 'If you are using a named instance on that server, if so, enter the name here, if not leave blank:',
       });
@@ -237,7 +240,10 @@ CONFIG_FILE='config.json'
       }))
         ? 'Y'
         : 'N';
-      const dbDatabase = await input({ message: 'Enter the database name on that server:' });
+      const dbDatabase = await input({
+        message: 'Enter the database name on that server:',
+        validate: (v) => configSchema.shape.dbDatabase.safeParse(v).success,
+      });
       const dbPort = await input({
         message: 'Enter the port the database server listens on',
         validate: (v) => configSchema.shape.dbPort.safeParse(v).success,

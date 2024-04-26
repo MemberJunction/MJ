@@ -89,7 +89,7 @@ jobs:
         if [ -n "$conflicts" ]; then
           echo "Conflicts detected in the following files: $conflicts \n" >> $GITHUB_STEP_SUMMARY
   
-          echo "Conflict details:" >>
+          echo "Conflict details:" >> $GITHUB_STEP_SUMMARY
           for file in $conflicts; do
               echo "Conflicts in $file:" >> $GITHUB_STEP_SUMMARY
               git diff $file >> $GITHUB_STEP_SUMMARY

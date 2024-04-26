@@ -182,12 +182,15 @@ async function createMJDistribution() {
         await handleMJExplorerDirectory(dir, normalizedDir, archive);
       }
 
+      const gitignore = fs.readFileSync('.gitignore').toString();
+
       // General Approach Here
       archive.glob(
         `**/*`,
         {
           cwd: dir,
           ignore: [
+            ...gitignore.split('\n').filter(l => !l.trimStart().startsWith('#')),
             'node_modules/**',
             'dist/**',
             '.vscode/**',
