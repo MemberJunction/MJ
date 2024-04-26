@@ -1,8 +1,30 @@
 # Change Log - @memberjunction/ng-explorer-core
 
-This log was last generated on Wed, 24 Apr 2024 20:57:41 GMT and should not be manually modified.
+This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.1.0
+
+Fri, 26 Apr 2024 15:23:26 GMT
+
+### Minor changes
+
+- Bump @memberjunction/global to v1.1.0
+- Bump @memberjunction/core to v1.1.0
+- Bump @memberjunction/ng-compare-records to v1.1.0
+- Bump @memberjunction/ng-file-storage to v1.1.0
+- Bump @memberjunction/ng-record-changes to v1.1.0
+- Bump @memberjunction/ng-container-directives to v1.1.0
+- Bump @memberjunction/ng-user-view-grid to v1.1.0
+- Bump @memberjunction/ng-query-grid to v1.1.0
+- Bump @memberjunction/ng-user-view-properties to v1.1.0
+- Bump @memberjunction/ng-shared to v1.1.0
+- Bump @memberjunction/ng-tabstrip to v1.1.0
+- Bump @memberjunction/ng-ask-skip to v1.1.0
+- Bump @memberjunction/ng-auth-services to v1.1.0
+- Bump @memberjunction/ng-explorer-settings to v1.1.0
+- Bump @memberjunction/ng-base-forms to v1.1.0
 
 ## 1.0.11
 

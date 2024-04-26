@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-file-storage",
-  "version": "1.0.11",
+  "version": "1.1.0",
   "description": "MemberJunction: Angular components for managing files, and related components.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -26,11 +26,11 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core": "~1.0.11",
-    "@memberjunction/core-entities": "~1.0.11",
-    "@memberjunction/global": "~1.0.11",
-    "@memberjunction/ng-container-directives": "~1.0.11",
-    "@memberjunction/ng-shared": "~1.0.11",
+    "@memberjunction/core": "~1.1.0",
+    "@memberjunction/core-entities": "~1.1.0",
+    "@memberjunction/global": "~1.1.0",
+    "@memberjunction/ng-container-directives": "~1.1.0",
+    "@memberjunction/ng-shared": "~1.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-dialog": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",

@@ -1,0 +1,20 @@
+{
+  "name": "@memberjunction/cli",
+  "entries": [
+    {
+      "date": "Fri, 26 Apr 2024 15:23:26 GMT",
+      "version": "1.1.0",
+      "tag": "@memberjunction/cli_v1.1.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/cli",
+            "commit": "36c5eef50ef1728b3d8f047a9349b8f8b414b440",
+            "comment": "Add CLI package"
+          }
+        ]
+      }
+    }
+  ]
+}

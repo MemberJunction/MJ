@@ -2,6 +2,57 @@
   "name": "@memberjunction/sqlserver-dataprovider",
   "entries": [
     {
+      "date": "Fri, 26 Apr 2024 15:23:26 GMT",
+      "version": "1.1.0",
+      "tag": "@memberjunction/sqlserver-dataprovider_v1.1.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai to v1.1.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/aiengine to v1.1.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.1.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.1.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.1.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/queue to v1.1.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai-vector-dupe to v1.1.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 24 Apr 2024 20:57:42 GMT",
       "version": "1.0.11",
       "tag": "@memberjunction/sqlserver-dataprovider_v1.0.11",

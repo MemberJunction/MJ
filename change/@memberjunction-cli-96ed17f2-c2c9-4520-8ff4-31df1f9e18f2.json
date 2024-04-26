@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Add CLI package",
-  "packageName": "@memberjunction/cli",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}
