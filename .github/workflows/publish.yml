@@ -60,7 +60,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
  
-  merge-main-to-next:
+  sync-next-versions:
     runs-on: ubuntu-latest
     if: ${{ (github.base_ref || github.ref_name) == 'main' }}
     needs: build-and-publish
@@ -72,34 +72,49 @@ jobs:
 
     - name: Configure Git
       run: |
-        git config user.name "GitHub Action"
-        git config user.email "action@github.com"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
 
-    - name: Pull latest next branch
-      run: git pull origin next
+    - name: Sync latest version
+      run: npx beachball sync
 
-    - name: Merge main into next
+    - name: Commit and push
       run: |
-        git fetch origin main
-        git merge origin/main --no-commit --no-ff
+        git add .
+        git commit -m "Updating package versions [skip ci]"
+        git push
+ 
+  create-distribution:
+    runs-on: ubuntu-latest
+    if: ${{ (github.base_ref || github.ref_name) == 'main' }}
+    needs: build-and-publish
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-    - name: Check for conflicts and resolve
+    - name: Set up node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: 'package-lock.json'
+
+    - name: Get version string
+      id: version
       run: |
-        conflicts=$(git diff --name-only --diff-filter=U)
-        if [ -n "$conflicts" ]; then
-          echo "Conflicts detected in the following files: $conflicts \n" >> $GITHUB_STEP_SUMMARY
-  
-          echo "Conflict details:" >> $GITHUB_STEP_SUMMARY
-          for file in $conflicts; do
-              echo "Conflicts in $file:" >> $GITHUB_STEP_SUMMARY
-              git diff $file >> $GITHUB_STEP_SUMMARY
-              echo >> $GITHUB_STEP_SUMMARY
-          done
-          git checkout --theirs $conflicts
-          git add $conflicts
-          echo "Conflicts resolved using 'theirs'." >> $GITHUB_STEP_SUMMARY
-        fi
-        git commit -m "Merged main into next resolving conflicts using 'theirs'"
+        VERSION="v"$(jq -r .version packages/MJGlobal/package.json)
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-    - name: Push changes
-      run: git push
+    - name: Create distribution artifact
+      id: zip
+      run: |
+        node CreateMJDistribution.js
+        ARTIFACT=$(cat CreateMJDistribution.log)
+        echo "ARTIFACT=$ARTIFACT" >> $GITHUB_OUTPUT
+
+    - name: Create release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: ${{ steps.version.outputs.VERSION }}
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        files: ${{ steps.zip.outputs.ARTIFACT }}

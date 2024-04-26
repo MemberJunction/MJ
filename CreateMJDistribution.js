@@ -159,7 +159,8 @@ async function createMJDistribution() {
 
   // Define directories and output
   const directories = ['SQL Scripts', 'packages/CodeGen', 'packages/MJAPI', 'packages/MJExplorer', 'packages/GeneratedEntities'];
-  const output = fs.createWriteStream(`Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`);
+  const filename = `Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`;
+  const output = fs.createWriteStream(filename);
   const archive = archiver('zip');
 
   console.log('Creating zip file...');
@@ -190,7 +191,7 @@ async function createMJDistribution() {
         {
           cwd: dir,
           ignore: [
-            ...gitignore.split('\n').filter(l => !l.trimStart().startsWith('#')),
+            ...gitignore.split('\n').filter((l) => !l.trimStart().startsWith('#')),
             'node_modules/**',
             'dist/**',
             '.vscode/**',
@@ -228,6 +229,8 @@ async function createMJDistribution() {
   console.log('Finalizing creation of zip file...');
   await archive.finalize();
   console.log('Zip file created successfully.');
+  console.log(`File name: ${filename}`);
+  fs.writeFileSync('CreateMJDistribution.log', filename);
 }
 
 // Execute the function
