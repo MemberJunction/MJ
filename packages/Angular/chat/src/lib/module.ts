@@ -9,6 +9,8 @@ import { MarkdownModule } from 'ngx-markdown';
 import { ChatComponent } from './chat/chat.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { DialogModule } from '@progress/kendo-angular-dialog';
 
 @NgModule({
   declarations: [
@@ -19,6 +21,8 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
     FormsModule,
     ContainerDirectivesModule,
     IndicatorsModule,
+    ButtonsModule,
+    DialogModule,
     MarkdownModule.forRoot()
   ],
   exports: [

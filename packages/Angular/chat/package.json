@@ -24,8 +24,11 @@
     "@angular/forms": "~17.2.2"
   },
   "dependencies": {
+    "@memberjunction/codegen-lib": "1.1.3",
     "@memberjunction/ng-container-directives": "1.0.9",
     "@progress/kendo-angular-indicators": "~15.1.0",
+    "@progress/kendo-angular-buttons": "~15.1.0",
+    "@progress/kendo-angular-dialog": "~15.1.0",
     "tslib": "^2.3.0",
     "ngx-markdown": "^17.1.1"
   },

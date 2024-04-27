@@ -88,10 +88,17 @@
                             type="text" 
                             placeholder="Ask Skip a question"></textarea>
                     </div>
-                    <button kendoButton >
-                        <span *ngIf="ShowDataContextButton" class="fa-solid fa-gear" (click)="showDataContext()"></span>
+                    @if (ShowDataContextButton) {
+                        <button kendoButton >
+                            <span class="fa-solid fa-gear" 
+                                  (click)="showDataContext()"></span>
+                        </button>    
+                    }
+                    <button kendoButton 
+                            [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" 
+                            (click)="sendSkipMessage()">
+                            <span class="fas fa-solid fa-arrow-up"></span>
                     </button>
-                    <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()"><i class="fas fa-solid fa-arrow-up"></i></button>
                 </div>
             </div>
         </kendo-splitter-pane>

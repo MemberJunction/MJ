@@ -2,7 +2,8 @@ import { AfterViewInit, Component, Input, ViewChild } from "@angular/core";
 import { LogError, Metadata, PrimaryKeyValue, RunView } from "@memberjunction/core";
 import { ConversationDetailEntity } from "@memberjunction/core-entities";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
-import { ChatComponent, ChatMessage } from "@memberjunction/ng-chat";
+import { ChatComponent, ChatMessage, ChatWelcomeQuestion } from "@memberjunction/ng-chat";
+import { SharedService } from "@memberjunction/ng-shared";
 import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
 
 @Component({
@@ -16,6 +17,31 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
   
   @ViewChild('mjChat') mjChat!: ChatComponent;
 
+  /**
+   * Default welcome questions for Skip are pre-populated, you can override these if you want.
+   */
+  @Input() public WelcomeQuestions: ChatWelcomeQuestion[] = [
+    {
+        topLine: "Summarize",
+        bottomLine: "Summarize the record, providing a quick snapshot of the information within",
+        prompt: "Can you summarize this record for me?"
+    },
+    {
+        topLine: "Patterns",
+        bottomLine: "Identify patterns or trends in the data looking for unique insights",
+        prompt: "What patterns do you see in this record's data that might be useful to know?"        
+    },
+    {
+        topLine: "Predictions",
+        bottomLine: "Make predictions based on the data, including relationships to other records",
+        prompt: "What predictions can you make based on this record's data including any available relationships?"
+    },
+    {
+        topLine: "Explain",
+        bottomLine: "Explain the record in plain language so that it is simple to understand",
+        prompt: "Can you explain this record in plain language so that it is simple to understand?"
+    }
+  ]
 
   private _entityName: string | undefined = undefined;
   public get LinkedEntityName(): string {
@@ -106,7 +132,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
           }
           catch (err) {
               this.mjChat.ShowWaitingIndicator = false;
-              alert ("Error communicating with Skip: " + err);
+              SharedService.Instance.CreateSimpleNotification("Error communicating with Skip: " + err, "error");
               console.error(err);          
           }                        
       }

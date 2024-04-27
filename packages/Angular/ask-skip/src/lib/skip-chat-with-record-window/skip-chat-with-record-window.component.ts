@@ -9,8 +9,8 @@ import { SharedService } from '@memberjunction/ng-shared';
   styleUrls: ['./skip-chat-with-record-window.component.css']
 })
 export class SkipChatWithRecordWindowComponent  {  
-  @Input() public Width: number = 750;
-  @Input() public Height: number = 1000;
+  @Input() public Width: number = 850;
+  @Input() public Height: number = 800;
 
   // Pass through properties to the chat component
   @Input() AllowSend: boolean = true;
