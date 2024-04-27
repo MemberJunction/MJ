@@ -38,7 +38,7 @@ type AIModelType_ {
   Name: String!
 }
 
-"""Catalog of all AI Models configured in the system."""
+"""Catalog of all AI Models configured in the system"""
 type AIModel_ {
   AIActionsArray: [AIAction_!]!
   AIModelActionsArray: [AIModelAction_!]!
@@ -430,7 +430,7 @@ type Conversation_ {
   IsArchived: Boolean!
   LinkedEntity: String
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   ReportsArray: [Report_!]!
   Type: String!
@@ -593,7 +593,7 @@ input CreateConversationInput {
   ExternalID: String
   IsArchived: Boolean!
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   Type: String!
   UserID: Int!
@@ -2308,6 +2308,7 @@ type Query {
   EntityRelationship(ID: Int!): EntityRelationship_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRecordChat(ConversationId: Int!, EntityName: String!, PrimaryKeys: [PrimaryKeyValueInputType!]!, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   File(ID: Int!): File_
   FileCategory(ID: Int!): FileCategory_
@@ -4539,7 +4540,7 @@ input UpdateConversationInput {
   ID: Int!
   IsArchived: Boolean!
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   Type: String!
   UserID: Int!
