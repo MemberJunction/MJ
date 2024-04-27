@@ -83,7 +83,30 @@ async function handleMJExplorerDirectory(dir, normalizedDir, archive) {
 
 async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, fileName, isDevelopment) {
   const filePath = path.join(dir, subDir, fileName);
-  let fileContent = fs.readFileSync(filePath, 'utf8');
+  let fileContent = '';
+  try {
+    fileContent = fs.readFileSync(filePath, 'utf8');
+  } catch (_) {
+    fileContent = JSON.stringify({
+      GRAPHQL_URI: isDevelopment ? 'http://localhost:4000/' : '',
+      GRAPHQL_WS_URI: isDevelopment ? 'ws://localhost:4000/' : '',
+      REDIRECT_URI: isDevelopment ? 'http://localhost:4200/' : '',
+      CLIENT_ID: '',
+      TENANT_ID: '',
+      CLIENT_AUTHORITY: '',
+      AUTH_TYPE: 'MSAL',
+      NODE_ENV: isDevelopment ? 'development' : 'production',
+      AUTOSAVE_DEBOUNCE_MS: 1200,
+      SEARCH_DEBOUNCE_MS: 800,
+      MIN_SEARCH_LENGTH: 3,
+      MJ_CORE_SCHEMA_NAME: '__mj',
+      production: !isDevelopment && !fileName.includes('staging'),
+      APPLICATION_NAME: 'CDP',
+      APPLICATION_INSTANCE: isDevelopment ? 'DEV' : fileName.includes('staging') ? 'STAGE' : 'PROD',
+      AUTH0_DOMAIN: '',
+      AUTH0_CLIENTID: '',
+    });
+  }
 
   // Clear values for sensitive keys in the environment configuration
   fileContent = clearSensitiveAngularEnvironmentValues(fileContent, isDevelopment);

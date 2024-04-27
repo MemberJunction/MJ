@@ -525,7 +525,7 @@ SET IDENTITY_INSERT [__mj].[VectorDatabase] OFF
 
 PRINT(N'Add row to [__mj].[VersionInstallation]')
 SET IDENTITY_INSERT [__mj].[VersionInstallation] ON
-INSERT INTO [__mj].[VersionInstallation] ([ID], [MajorVersion], [MinorVersion], [PatchVersion], [Type], [InstalledAt], [Status], [InstallLog], [Comments], [CreatedAt], [UpdatedAt]) VALUES (7, 1, 0, 15, N'New', '2024-04-20 15:54:14.800', N'Pending', NULL, NULL, '2024-04-20 15:54:14.800', '2024-04-20 15:54:14.800')
+INSERT INTO [__mj].[VersionInstallation] ([ID], [MajorVersion], [MinorVersion], [PatchVersion], [Type], [InstalledAt], [Status], [InstallLog], [Comments], [CreatedAt], [UpdatedAt]) VALUES (7, 1, 1, 3, N'New', '2024-04-26 23:53:14.800', N'Pending', NULL, NULL, '2024-04-26 23:53:14.800', '2024-04-26 23:53:14.800')
 SET IDENTITY_INSERT [__mj].[VersionInstallation] OFF
 
 PRINT(N'Add rows to [__mj].[AIModel]')
