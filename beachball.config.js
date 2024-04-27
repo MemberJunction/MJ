@@ -6,6 +6,8 @@
 module.exports = {
   generateChangelog: process.env.BRANCH === 'main',
   bumpDeps: true,
+  gitTags: false,
+  message: 'Applying package updates [skip ci]',
   groups: [
     {
       name: 'MJ',

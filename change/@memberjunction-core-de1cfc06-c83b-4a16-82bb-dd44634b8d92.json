@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "* Added support for BaseFieldComponent to show or not show its label * Added more JSDoc documentation to classes within MJCore and MJGlobal",
-  "packageName": "@memberjunction/core",
-  "email": "97354817+AN-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}

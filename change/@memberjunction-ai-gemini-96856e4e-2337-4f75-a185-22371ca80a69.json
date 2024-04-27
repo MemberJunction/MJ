@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "* bug fix in explorer-core to show new tab faster when a tab is being removed * Added functionality in base-forms to enhance the toolbar and also enable showing changes since last saved when in Edit Mode in the base form * BaseEntity bug - when a field had a default value other than null (e.g. any default value) and the value of the field was actually null in an existing record, that record would always be seen as dirty and would get wiped out. Fixed the logic",
-  "packageName": "@memberjunction/ai-gemini",
-  "email": "97354817+AN-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}
