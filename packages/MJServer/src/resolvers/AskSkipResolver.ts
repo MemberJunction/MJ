@@ -99,11 +99,13 @@ export class AskSkipResolver {
       dci.RecordID = PrimaryKeys.map((pk) => pk.Value).join(',');
       await dci.Save();
   
-      await dataContext.Load(dataContext.ID, dataSource, false, true, user); // load again because we added a new data context item  
+      await dataContext.Load(dataContext.ID, dataSource, false, true, 10, user); // load again because we added a new data context item  
+      await dataContext.SaveItems(); // persist
 
       // also, in the situation for a new convo, we need to update the Conversation ID to have a LinkedEntity and LinkedRecord
       convoEntity.LinkedEntityID = dci.EntityID;
       convoEntity.LinkedRecordID = PrimaryKeys.map((pk) => pk.Value).join(',');
+      convoEntity.DataContextID = dataContext.ID;
       await convoEntity.Save();
     } 
 
@@ -197,7 +199,7 @@ export class AskSkipResolver {
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
                                   const dataContext: DataContext = new DataContext();
-    await dataContext.Load(DataContextId, dataSource, true, true, user);
+    await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
     const input = this.buildSkipAPIRequest([], 0, dataContext, 'run_existing_script', false, false);
     return this.handleSimpleSkipPostRequest(input);
   }
@@ -426,7 +428,7 @@ export class AskSkipResolver {
     await convoDetailEntity.Save();
 
     const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext); // await this.LoadDataContext(md, dataSource, dataContextEntity, user, false);
-    await dataContext.Load(dataContextEntity.ID, dataSource, false, true, user);
+    await dataContext.Load(dataContextEntity.ID, dataSource, false, false, 0, user);
     return {dataContext, convoEntity, dataContextEntity, convoDetailEntity};
   }
 
@@ -713,7 +715,7 @@ export class AskSkipResolver {
               item.Type = 'sql';
               item.SQL = dr.text;
               item.AdditionalDescription = dr.description;
-              if (!await item.LoadData(dataSource, false, true, user))
+              if (!await item.LoadData(dataSource, false, false, 0, user))
                 throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               break;
             case "stored_query":
@@ -724,7 +726,7 @@ export class AskSkipResolver {
                 item.QueryID = query.ID;
                 item.RecordName = query.Name;
                 item.AdditionalDescription = dr.description;
-                if (!await item.LoadData(dataSource, false, true, user))
+                if (!await item.LoadData(dataSource, false, false, 0, user))
                   throw new Error(`SQL data request failed: ${item.DataLoadingError}`);
               }
               else

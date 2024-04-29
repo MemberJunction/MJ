@@ -223,10 +223,11 @@ export class DataContextItem {
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only. For client side use of this method, you can leave this as undefined and the Load will work so long as the Data Context Items you are loading are NOT of type 'sql'
      * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
      * @param loadRelatedDataOnSingleRecords - (defaults to false) if true, related entity data will be loaded for single record items, if false, related entity data will not be loaded for single record items
+     * @param maxRecordsPerRelationship - (defaults to 0) for the LoadData() portion of this routine --- if this param is set to a value greater than 0, the maximum number of records to load for each relationship will be limited to this value. Applies to single_record items only.
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      * @returns 
      */
-    public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+    public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
         try {
             if (this.Data && this.Data.length > 0 && !forceRefresh) // if we already have data and we aren't forcing a refresh, then we are done
                 return true;
@@ -237,7 +238,7 @@ export class DataContextItem {
                     case 'view':
                         return this.LoadFromView(contextUser);
                     case 'single_record':
-                        return this.LoadFromSingleRecord(contextUser, loadRelatedDataOnSingleRecords);
+                        return this.LoadFromSingleRecord(contextUser, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship);
                     case 'query':
                         return this.LoadFromQuery(contextUser);
                     case 'sql':
@@ -314,7 +315,7 @@ export class DataContextItem {
      * @param contextUser 
      * @returns 
      */
-    protected async LoadFromSingleRecord(contextUser: UserInfo, includeRelatedEntityData: boolean): Promise<boolean> {
+    protected async LoadFromSingleRecord(contextUser: UserInfo, includeRelatedEntityData: boolean, maxRecordsPerRelationship: number): Promise<boolean> {
         try {
             const md = new Metadata();
             const record = await md.GetEntityObject(this.EntityName, contextUser);
@@ -332,7 +333,7 @@ export class DataContextItem {
                     oldValues: false,
                     omitEmptyStrings: false,
                     omitNullValues: false,
-                    relatedEntityList: includeRelatedEntityData ? this.buildRelatedEntityArray() : [],
+                    relatedEntityList: includeRelatedEntityData ? this.buildRelatedEntityArray(maxRecordsPerRelationship) : [],
                     excludeFields: []
                 });             
 
@@ -353,9 +354,12 @@ export class DataContextItem {
         }
     }
 
-    protected buildRelatedEntityArray(): DataObjectRelatedEntityParam[] {
+    protected buildRelatedEntityArray(maxRecords: number): DataObjectRelatedEntityParam[] {
         return this.Entity.RelatedEntities.map(re => {
-            return {relatedEntityName: re.RelatedEntity}
+            return { 
+                relatedEntityName: re.RelatedEntity,
+                maxRecords: maxRecords
+            }
         })
     }
 
@@ -680,16 +684,17 @@ export class DataContext {
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
      * @param forceRefresh - (defaults to false) if true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
      * @param loadRelatedDataOnSingleRecords - (defaults to false) if true, related entity data will be loaded for single record items, if false, related entity data will not be loaded for single record items
+     * @param maxRecordsPerRelationship - (defaults to 0) for the LoadData() portion of this routine --- if this param is set to a value greater than 0, the maximum number of records to load for each relationship will be limited to this value. Applies to single_record items only.
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      */
-    public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+    public async LoadData(dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
         try {
             if (!this.ID || this.ID <= 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
             let bSuccess: boolean = true;
             for (const item of this.Items) {
-                if (!await item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, contextUser))
+                if (!await item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser))
                     bSuccess = false;
             }
             return bSuccess;
@@ -706,12 +711,13 @@ export class DataContext {
      * @param dataSource - the data source to use to execute the SQL statement - specified as an any type to allow for any type of data source to be used, but the actual implementation will be specific to the server side only
      * @param forceRefresh - (defaults to false) for the LoadData() portion of this routine --- if this param is set to true, the data will be reloaded from the data source even if it is already loaded, if false, the data will only be loaded if it hasn't already been loaded
      * @param loadRelatedDataOnSingleRecords - (defaults to false) for the LoadData() portion of this routine --- if this param is set to true, related entity data will be loaded for single record items, if false, related entity data will not be loaded for single record items
+     * @param maxRecordsPerRelationship - (defaults to 0) for the LoadData() portion of this routine --- if this param is set to a value greater than 0, the maximum number of records to load for each relationship will be limited to this value. Applies to single_record items only.
      * @param contextUser - the user that is requesting the data context (only required on server side operations, or if you want a different user's permissions to be used for the data context load)
      * @returns 
      */
-    public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, contextUser?: UserInfo): Promise<boolean> {
+    public async Load(DataContextID: number, dataSource: any, forceRefresh: boolean = false, loadRelatedDataOnSingleRecords: boolean = false, maxRecordsPerRelationship: number = 0, contextUser?: UserInfo): Promise<boolean> {
         // load the metadata and THEN the data afterwards
-        return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, contextUser);
+        return await this.LoadMetadata(DataContextID, contextUser) && await this.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
     }
 
     /**
