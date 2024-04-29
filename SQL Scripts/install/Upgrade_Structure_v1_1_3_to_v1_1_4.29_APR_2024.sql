@@ -3,7 +3,7 @@
    MemberJunction Upgrade Script
    TYPE: STRUCTURE
    FROM: 1.1.3
-   TO:   1.1.X (replace this with patch version # when the patch version # is known)
+   TO:   1.1.4
 */
 SET NUMERIC_ROUNDABORT OFF
 GO
