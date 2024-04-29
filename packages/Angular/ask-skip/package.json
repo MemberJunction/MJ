@@ -29,6 +29,7 @@
     "@memberjunction/core": "~1.2.0",
     "@memberjunction/skip-types": "~1.2.0",
     "@memberjunction/ng-container-directives": "~1.2.0",
+    "@memberjunction/ng-chat": "~1.2.0",
     "@memberjunction/ng-shared": "~1.2.0",
     "@memberjunction/ng-data-context": "~1.2.0",
     "@memberjunction/ng-user-view-grid": "~1.2.0",
