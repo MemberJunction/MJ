@@ -2,6 +2,57 @@
   "name": "@memberjunction/ng-base-forms",
   "entries": [
     {
+      "date": "Mon, 29 Apr 2024 18:51:58 GMT",
+      "version": "1.2.0",
+      "tag": "@memberjunction/ng-base-forms_v1.2.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-base-forms",
+            "commit": "8e1808ace05f49cd827bfccbb89cc98998470fe6",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/global to v1.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/core to v1.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-ask-skip to v1.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-record-changes to v1.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.2.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-base-forms",
+            "comment": "Bump @memberjunction/ng-link-directives to v1.2.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 26 Apr 2024 23:48:54 GMT",
       "version": "1.1.3",
       "tag": "@memberjunction/ng-base-forms_v1.1.3",
