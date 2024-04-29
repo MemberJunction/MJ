@@ -1,4 +1,4 @@
-<div *ngIf="WindowOpened">
+@if(WindowOpened) {
   <kendo-window
     [title]="Title"
     (close)="CloseWindow()"
@@ -16,9 +16,9 @@
       [Title]="Title"
       [DataContextID]="DataContextID"
       [LinkedEntity]="LinkedEntity"
-      [LinkedEntityRecordID]="LinkedEntityRecordID"
+      [LinkedEntityPrimaryKeys]="LinkedEntityPrimaryKeys"
       [ShowDataContextButton]="ShowDataContextButton"
       [UpdateAppRoute]="false"
     ></mj-skip-chat>
   </kendo-window>
-</div>
+}
