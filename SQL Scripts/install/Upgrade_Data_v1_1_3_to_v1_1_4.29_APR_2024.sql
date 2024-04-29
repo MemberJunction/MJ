@@ -3,7 +3,7 @@
    MemberJunction Upgrade Script
    TYPE: DATA
    FROM: 1.1.3
-   TO:   1.1.X (update the patch version number when we know it)
+   TO:   1.1.4
 */
 		
 SET NUMERIC_ROUNDABORT OFF
