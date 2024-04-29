@@ -1,5 +1,5 @@
 /*
-	MemberJunction v1.0.15 Installation Script
+	MemberJunction v1.1.4 STRUCTURE Installation Script
 */
 SET NUMERIC_ROUNDABORT OFF
 GO
@@ -212,7 +212,7 @@ CREATE TABLE [__mj].[Conversation]
 [Type] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Conversation_Type] DEFAULT (N'Skip'),
 [IsArchived] [bit] NOT NULL CONSTRAINT [DF_Conversation_IsArchived] DEFAULT ((0)),
 [LinkedEntityID] [int] NULL,
-[LinkedRecordID] [int] NULL,
+[LinkedRecordID] [nvarchar] (500) NULL,
 [DataContextID] [int] NULL,
 [CreatedAt] [datetime] NOT NULL CONSTRAINT [DF_Conversation_DateCreated] DEFAULT (getdate()),
 [UpdatedAt] [datetime] NOT NULL CONSTRAINT [DF_Conversation_UpdatedAt] DEFAULT (getdate())
@@ -2887,7 +2887,7 @@ CREATE PROCEDURE [__mj].[spCreateConversation]
     @Type nvarchar(50),
     @IsArchived bit,
     @LinkedEntityID int,
-    @LinkedRecordID int,
+    @LinkedRecordID nvarchar(500),
     @DataContextID int
 AS
 BEGIN
@@ -3169,7 +3169,7 @@ CREATE PROCEDURE [__mj].[spUpdateConversation]
     @Type nvarchar(50),
     @IsArchived bit,
     @LinkedEntityID int,
-    @LinkedRecordID int,
+    @LinkedRecordID nvarchar(500),
     @DataContextID int
 AS
 BEGIN
@@ -11968,6 +11968,12 @@ GO
 GRANT EXECUTE ON  [__mj].[spCreateConversationDetail] TO [cdp_Integration]
 GO
 GRANT EXECUTE ON  [__mj].[spCreateConversationDetail] TO [cdp_UI]
+GO
+GRANT EXECUTE ON  [__mj].[spDeleteConversationDetail] TO [cdp_Developer]
+GO
+GRANT EXECUTE ON  [__mj].[spDeleteConversationDetail] TO [cdp_Integration]
+GO
+GRANT EXECUTE ON  [__mj].[spDeleteConversationDetail] TO [cdp_UI]
 GO
 IF @@ERROR <> 0 SET NOEXEC ON
 GO
