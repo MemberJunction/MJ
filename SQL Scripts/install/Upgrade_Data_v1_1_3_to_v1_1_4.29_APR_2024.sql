@@ -29,6 +29,13 @@ PRINT(N'Delete and re-insert rows in [__mj].[EntityField] due to identity row mo
 UPDATE [__mj].[EntityField] SET [Type]=N'nvarchar', [Length]=1000, [Precision]=0, [UpdatedAt]='2024-04-25 12:43:55.460' WHERE [EntityID] = 173 AND [Name] = N'LinkedRecordID'
 PRINT(N'Operation applied to 1 rows out of 965')
 
+
+PRINT(N'Add row to [__mj].[VersionInstallation]')
+SET IDENTITY_INSERT [__mj].[VersionInstallation] ON
+INSERT INTO [__mj].[VersionInstallation] ([ID], [MajorVersion], [MinorVersion], [PatchVersion], [Type], [InstalledAt], [Status], [InstallLog], [Comments], [CreatedAt], [UpdatedAt]) VALUES (8, 1, 1, 4, N'New', '2024-04-29 23:53:14.800', N'Pending', NULL, NULL, '2024-04-29 23:53:14.800', '2024-04-29 23:53:14.800')
+SET IDENTITY_INSERT [__mj].[VersionInstallation] OFF
+
+
 PRINT(N'Add constraints to [__mj].[EntityField]')
 ALTER TABLE [__mj].[EntityField] WITH CHECK CHECK CONSTRAINT [FK_EntityField_Entity]
 ALTER TABLE [__mj].[EntityField] WITH CHECK CHECK CONSTRAINT [FK_EntityField_RelatedEntity]
