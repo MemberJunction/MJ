@@ -1,5 +1,5 @@
 /*
-   MemberJunction 1.1.4 - DATA Installation Script - Run AFTER THE Structure Installation Script
+   MemberJunction 1.2.0 - DATA Installation Script - Run AFTER THE Structure Installation Script
 */
 		
 SET NUMERIC_ROUNDABORT OFF
@@ -525,7 +525,7 @@ SET IDENTITY_INSERT [__mj].[VectorDatabase] OFF
 
 PRINT(N'Add row to [__mj].[VersionInstallation]')
 SET IDENTITY_INSERT [__mj].[VersionInstallation] ON
-INSERT INTO [__mj].[VersionInstallation] ([ID], [MajorVersion], [MinorVersion], [PatchVersion], [Type], [InstalledAt], [Status], [InstallLog], [Comments], [CreatedAt], [UpdatedAt]) VALUES (8, 1, 1, 4, N'New', '2024-04-29 23:53:14.800', N'Pending', NULL, NULL, '2024-04-29 23:53:14.800', '2024-04-29 23:53:14.800')
+INSERT INTO [__mj].[VersionInstallation] ([ID], [MajorVersion], [MinorVersion], [PatchVersion], [Type], [InstalledAt], [Status], [InstallLog], [Comments], [CreatedAt], [UpdatedAt]) VALUES (8, 1, 2, 0, N'New', '2024-04-29 23:53:14.800', N'Pending', NULL, NULL, '2024-04-29 23:53:14.800', '2024-04-29 23:53:14.800')
 SET IDENTITY_INSERT [__mj].[VersionInstallation] OFF
 
 PRINT(N'Add rows to [__mj].[AIModel]')
