@@ -1,17 +1,18 @@
 <div class="single-view-wrap" mjFillContainer [bottomMargin]="20">
-  <div class="card-container" class="searchBox">
-    <kendo-textbox
-      id="txtSearch"
-      *ngIf="showSearch"
-      placeholder="Search here..."
-      kendoTextBox
-      (valueChange)="onSearch($event)"
-      [clearButton]="true"
-      [(ngModel)]="searchText"
-    ></kendo-textbox>
-
-    <mj-user-view-properties-dialog *ngIf="selectedView" [ViewID]="selectedView.ID" (dialogClosed)="this.viewPropertiesDialogClosed($event)" ></mj-user-view-properties-dialog>
-  </div>
-
+    <div class="flex-direction-row">
+      <h4>{{headerTitle}}</h4>
+      <div class="flex-direction-row gap-small">
+        <button class="list-btn">
+          <span title="Favorite this view" class="fa-regular fa-star fa-xl"></span>
+        </button>
+        <button class="list-btn">
+          <span title="Copy" class="fa-regular fa-copy fa-xl"></span>
+        </button>
+        <mj-user-view-properties-dialog #propertiesDialog *ngIf="selectedView" [ViewID]="selectedView.ID" (dialogClosed)="this.viewPropertiesDialogClosed($event)"/>
+        <button title="Share View" kendoButton class="k-button-solid-base-filled">
+          <span class="fa-solid fa-user-group fa-lg"></span> Share View
+        </button>
+      </div>
+    </div>
   <mj-user-view-grid-with-analysis class="analysis-wrapper" (rowClicked)="handleRowClick($event)" [AutoNavigate]="false" mjFillContainer></mj-user-view-grid-with-analysis>
 </div>
