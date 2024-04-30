@@ -84,7 +84,7 @@ export type RunViewParams = {
     IgnoreMaxRows?: boolean
 
     /**
-     * optional - if provided, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no MaxRows setting, all rows will be returned that match any filter, if provided.
+     * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
      */
     MaxRows?: number
     /**
