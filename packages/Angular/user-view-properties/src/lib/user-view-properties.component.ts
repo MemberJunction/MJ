@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, View
 import { ActivatedRoute, Router } from "@angular/router";
 import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
-import { UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
+import { UserViewCategoryEntity, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { ResourceData } from '@memberjunction/ng-shared';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
@@ -28,6 +28,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   public isDialogOpened: boolean = false;
   public showloader: boolean = true;
+  public headerTitle: string = '';
 
   // public  localViewColumns: ViewColumnInfo[] = [];
   public localGridState: any = {}
@@ -89,7 +90,13 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
     if (this.ViewID) {
       // load the view
-      await this.record.Load(this.ViewID);
+      const loadSuccess = await this.record.Load(this.ViewID);
+      if(loadSuccess){
+        await this.setHeaderTitle();
+      }
+      else{
+        this.sharedService.CreateSimpleNotification('View not found. Please contact your administrator.', 'error', 5000);
+      }
     }
     else if (this.EntityName) {
       // We don't have a View ID, we are creating a NEW view, so do NewRecord()
@@ -109,6 +116,22 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     setTimeout(() => {
       this.ResizeTab();
     }, 200);
+  }
+
+  public async setHeaderTitle(): Promise<void> {
+    if(!this.record || !this.record.CategoryID){
+      return;
+    }
+
+    const md = new Metadata();
+    const categoryEntity: UserViewCategoryEntity = <UserViewCategoryEntity> await md.GetEntityObject('User View Categories');
+    const loadSuccess = await categoryEntity.Load(this.record.CategoryID);
+    if(loadSuccess){
+      this.headerTitle = `${categoryEntity.Name} > ${this.record.Name}`;
+    }
+    else{
+      this.headerTitle = this.record.Name;
+    }
   }
 
   public closePropertiesDialog() {

@@ -55,7 +55,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
         const e = md.Entities.find(e => e.ID === view?.EntityID)
         if (e) {
           this.selectedEntity = e
-          this.showSearch = e.AllowUserSearchAPI
+          this.showSearch = e.AllowUserSearchAPI || true;
         }
       }
     }
