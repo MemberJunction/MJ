@@ -1,70 +1,55 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { EntityDocumentEntity } from '@memberjunction/core-entities';
+import { DuplicateRunDetailEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Entity Documents.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Duplicate Run Details.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-entitydocument-form-details',
+    selector: 'gen-duplicaterundetail-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field
             [record]="record"
-            FieldName="Name"
+            FieldName="DuplicateRunID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="RecordID"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="EntityID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="TypeID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Status"
+            FieldName="MatchStatus"
             Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Template"
+            FieldName="SkippedReason"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="VectorDatabaseID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="AIModelID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="PotentialMatchThreshold"
-            Type="numerictextbox"
+            FieldName="MatchErrorMessage"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="AbsoluteMatchThreshold"
-            Type="numerictextbox"
+            FieldName="MergeStatus"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="MergeErrorMessage"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
@@ -79,29 +64,17 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Entity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Type"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class EntityDocumentDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: EntityDocumentEntity;
+export class DuplicateRunDetailDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: DuplicateRunDetailEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadEntityDocumentDetailsComponent() {
+export function LoadDuplicateRunDetailDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

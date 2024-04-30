@@ -1,20 +1,14 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { EntityDocumentEntity } from '@memberjunction/core-entities';
+import { DuplicateRunEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Entity Documents.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Duplicate Runs.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-entitydocument-form-details',
+    selector: 'gen-duplicaterun-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
-            [record]="record"
-            FieldName="Name"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
         <mj-form-field
             [record]="record"
             FieldName="EntityID"
@@ -24,48 +18,60 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="TypeID"
+            FieldName="StartedByUserID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Status"
+            FieldName="StartedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="EndedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ApprovalStatus"
             Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Template"
+            FieldName="ApprovalComments"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="VectorDatabaseID"
+            FieldName="ApprovedByUserID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="AIModelID"
+            FieldName="ProcessingStatus"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ProcessingErrorMessage"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SourceListID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="PotentialMatchThreshold"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="AbsoluteMatchThreshold"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
@@ -87,7 +93,19 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Type"
+            FieldName="StartedByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ApprovedByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="SourceList"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -96,12 +114,12 @@ import { EntityDocumentEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class EntityDocumentDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: EntityDocumentEntity;
+export class DuplicateRunDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: DuplicateRunEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadEntityDocumentDetailsComponent() {
+export function LoadDuplicateRunDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
