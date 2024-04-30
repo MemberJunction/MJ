@@ -111,24 +111,6 @@
   color: white;
 }
 
-::ng-deep .property-btn {
-  width: 40px;
-  height: 40px;
-  background: #000;
-  min-width: 38px;
-  border: 1px solid var(--gray-color);
-  border-radius: 8px; 
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: transparent;
-  cursor: pointer;
-}
-
-::ng-deep .property-btn:hover {
-  border: 1px solid var(--border-active);
-}
-
 ::ng-deep .property-button-solid-base {
   border: 1px solid var(--border-blue) !important;
   color: var(--border-blue) !important;

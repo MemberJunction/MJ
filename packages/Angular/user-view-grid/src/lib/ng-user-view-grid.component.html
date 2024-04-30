@@ -30,28 +30,28 @@
             </div>
         </div>
         <div class="flex-direction-row gap-small">
-            <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" class="k-button-solid-base-black list-btn">
+            <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" class="k-button-solid-base-black list-button">
                 <span Title="Export to Excel" class="fa-solid fa-file-excel fa-lg"></span> Export to Excel
             </button>
-            <button kendoButton class="k-button-solid-base-black list-btn">
+            <button kendoButton class="k-button-solid-base-black list-button">
                 Analysis
             </button>
-            <button kendoButton class="k-button-solid-base-black list-btn">
+            <button kendoButton class="k-button-solid-base-black list-button">
                 Search For Duplicates
             </button>
                 
                 <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
-                <button kendoButton (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button-solid-base-black list-btn">Compare</button>
-                <button kendoButton (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button-solid-base-black list-btn">Compare</button>
-                <button kendoButton (click)="enableMergeOrCompare(true, 'compare')" *ngIf="compareMode" class="k-button-solid-base-black list-btn">Cancel</button>
+                <button kendoButton (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button-solid-base-black list-button">Compare</button>
+                <button kendoButton (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button-solid-base-black list-button">Compare</button>
+                <button kendoButton (click)="enableMergeOrCompare(true, 'compare')" *ngIf="compareMode" class="k-button-solid-base-black list-button">Cancel</button>
     
                 <!-- 3 buttons for merge. First one only shows when merge is getting goin in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending merge.  -->
-                <button kendoButton (click)="enableMergeOrCompare(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button-solid-base-black list-btn">Merge</button>
-                <button kendoButton (click)="enableMergeOrCompare(false, 'merge')" *ngIf="!mergeMode && !compareMode" class="k-button-solid-base-black list-btn">Merge</button>
-                <button kendoButton (click)="enableMergeOrCompare(true, 'merge')" *ngIf="mergeMode" class="k-button-solid-base-black list-btn">Cancel</button>
+                <button kendoButton (click)="enableMergeOrCompare(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button-solid-base-black list-button">Merge</button>
+                <button kendoButton (click)="enableMergeOrCompare(false, 'merge')" *ngIf="!mergeMode && !compareMode" class="k-button-solid-base-black list-button">Merge</button>
+                <button kendoButton (click)="enableMergeOrCompare(true, 'merge')" *ngIf="mergeMode" class="k-button-solid-base-black list-button">Cancel</button>
                 <button
                     kendoButton
-                    class="list-btn"
+                    class="list-button"
                     *ngIf="showRefreshButton && !compareMode && !mergeMode"
                     (click)="RefreshFromSavedParams()">
                     <span class="fa-solid fa-arrows-rotate"></span>

@@ -2,10 +2,10 @@
     <div class="flex-direction-row">
       <h4>{{headerTitle}}</h4>
       <div class="flex-direction-row gap-small">
-        <button class="list-btn">
+        <button class="header-icon-button">
           <span title="Favorite this view" class="fa-regular fa-star fa-xl"></span>
         </button>
-        <button class="list-btn">
+        <button class="header-icon-button">
           <span title="Copy" class="fa-regular fa-copy fa-xl"></span>
         </button>
         <mj-user-view-properties-dialog #propertiesDialog *ngIf="selectedView" [ViewID]="selectedView.ID" (dialogClosed)="this.viewPropertiesDialogClosed($event)"/>

@@ -27,7 +27,7 @@
   gap: 8px; 
 }
 
-::ng-deep .list-btn {
+::ng-deep .header-icon-button {
   width: 40px;
   height: 40px;
   background: #000;
@@ -41,7 +41,7 @@
   cursor: pointer;
 }
 
-::ng-deep .list-btn:hover {
+::ng-deep .header-icon-button:hover {
   border: 1px solid var(--border-active);
 }
 

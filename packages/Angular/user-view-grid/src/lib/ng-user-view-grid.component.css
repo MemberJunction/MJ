@@ -137,6 +137,7 @@
 
 ::ng-deep .list-btn {
     min-width: 120px;
+    width: auto;
 }
   
   ::ng-deep .k-button-solid-base {
