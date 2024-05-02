@@ -38,7 +38,6 @@
     "@memberjunction/ng-tabstrip": "~1.2.1",
     "@memberjunction/ng-user-view-grid": "~1.2.1",
     "@progress/kendo-angular-notification": "~15.1.0",
-    "@progress/kendo-licensing": "^1.3.5",
     "@progress/kendo-theme-default": "~7.2.0",
     "hammerjs": "^2.0.0",
     "mj_generatedentities": "1.0.0",
