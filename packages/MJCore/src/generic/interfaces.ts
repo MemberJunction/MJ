@@ -73,6 +73,12 @@ export class PrimaryKeyValueBase {
         }).join(", ");
     }
 
+    GetCompositeKeyAsSQLString(): string {
+        return this.PrimaryKeyValues.map((keyValue, index) => {
+            return `${keyValue.FieldName} = ${keyValue.Value}`;
+        }).join(" AND ");
+    }
+
     /**
      * Returns a copy of the PrimaryKeyValues array but with the Value properties as string
      */
@@ -115,11 +121,18 @@ export class PotentialDuplicateRequest {
     Options?: any;
 }
 
-export class PotentialDuplicateResponse {
+export class PotentialDuplicateResult {
     EntityID: number;
     RecordPrimaryKeys: PrimaryKeyValueBase;
     Duplicates: PotentialDuplicate[];
     
+}
+
+//Wrapper for the PotentialDuplicateResponse class that includes  additional properties
+export class PotentialDuplicateResponse {
+    Status: 'Inprogress' | 'Success' | 'Error';
+    ErrorMessage?: string;
+    PotentialDuplicateResult: PotentialDuplicateResult[];
 }
 
 export interface IEntityDataProvider {
@@ -207,7 +220,7 @@ export interface IMetadataProvider {
      * 
      * @param params Object containing many properties used in fetching records and determining which ones to return
      */
-    GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse[]>
+    GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

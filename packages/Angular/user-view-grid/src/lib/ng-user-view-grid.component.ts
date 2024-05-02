@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys, PrimaryKeyValueBase, PotentialDuplicateRequest } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -83,9 +83,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   private editModeEnded = new Subject<void>();
 
   public recordsToCompare: any[] = [];
-  public compareMode: boolean = false;
 
+  public compareMode: boolean = false;
   public mergeMode: boolean = false;
+  public duplicateMode: boolean = false;
 
   public selectableSettings: SelectableSettings = {
     enabled: false
@@ -725,6 +726,34 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
+  enableCheckbox(cancel: boolean = false, type: 'merge' | 'compare' | 'duplicate' | ''){
+    if(!cancel && this.recordsToCompare.length >= 2){
+      // this scenario occurs when we've already started the merge/compare/duplicate and the user has selected records, then clicked the merge/compare button again
+      this.isCompareDialogOpened = true;
+      this.moveDialogToBody();
+    }
+    else if (cancel) {
+      // the user clicked cancel in our toolbar
+      this.mergeMode = false;
+      this.compareMode = false;
+      this.duplicateMode = false;
+      this.selectedKeys = [];
+      this.recordsToCompare = [];
+    }
+    else {
+      // just turning on the checkbox from the merge/compare/duplicate button, so just turn it on and let the user select records
+      if(type === 'merge'){
+        this.mergeMode = true;
+      }
+      else if(type === 'compare'){
+        this.compareMode = true;
+      }
+      else if(type === 'duplicate'){
+        this.duplicateMode = true;
+      }
+    }
+  }
+
   async closeConfirmMergeDialog(event: 'cancel' | 'yes' | 'no') {
     if (event === 'yes') {
       if (this._entityInfo && this.recordCompareComponent) {
@@ -781,8 +810,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  async closeCompareDialog(event: 'close' | 'cancel' | 'merge'){
-    console.log(event)
+  async closeCompareDialog(event: 'close' | 'cancel' | 'merge' | 'duplicate') {
+    console.log(event);
     switch (event) {
       case 'merge':
         // user has requested to merge the records and retain the selected record from the compare records component, so run the merge
@@ -794,10 +823,40 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         this.recordsToCompare = [];
         this.mergeMode = false;
         this.compareMode = false;
-
+        this.duplicateMode = false;
         this.isCompareDialogOpened = false;
         break;
     }
+  }
+
+  public async findDuplicateRecords(): Promise<void> 
+  {
+    if(!this._entityInfo){
+      console.error("Entity Info is not available");
+      this.closeCompareDialog('duplicate');
+      return;
+    }
+
+    let params: PotentialDuplicateRequest = new PotentialDuplicateRequest();
+    params.EntityID = this._entityInfo?.ID;
+    params.RecordIDs = [];
+
+    for(const index of this.selectedKeys){
+      const viewData = this.viewData[index];
+      const idField: number = viewData.ID;
+      let pkv: PrimaryKeyValueBase = new PrimaryKeyValueBase();
+      pkv.PrimaryKeyValues = [];
+      pkv.PrimaryKeyValues.push({FieldName: "ID", Value: idField});
+      params.RecordIDs.push(pkv);
+    }
+
+    this.closeCompareDialog('duplicate');
+    this.CreateSimpleNotification("Working on finding duplicates, will notify you when it is complete...", 'info', 2000);
+
+    const md: Metadata = new Metadata();
+    console.log(md.CurrentUser.ID);
+    let response = await md.GetRecordDuplicates(params, md.CurrentUser);
+    console.log(response);
   }
 
 
@@ -809,7 +868,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       throw new Error("kendoExcelExport is null, cannot export data");
 
     try {
-      this.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000)
+      this.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000);
       const data = await this.getExportData();
       // we have the data.
       const cols =  this.viewColumns.filter((vc: ViewColumnInfo) => vc.hidden === false) 
@@ -824,7 +883,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     catch (e) {
       this.CreateSimpleNotification("Error exporting data", 'error', 5000)
-      LogError(e)
+      LogError(e);
     }
   } 
 

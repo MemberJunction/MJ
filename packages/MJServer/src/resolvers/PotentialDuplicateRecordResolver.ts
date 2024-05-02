@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from "type-graphql";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError, PrimaryKeyValueBase } from '@memberjunction/core';
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError, PrimaryKeyValueBase, PotentialDuplicateResult } from '@memberjunction/core';
 import {PrimaryKeyValueInputType, PrimaryKeyValueOutputType} from './MergeRecordsResolver'
 import { AppContext } from "../types";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -48,8 +48,7 @@ export class PotentialDuplicateType extends PotentialDuplicate {
 }
 
 @ObjectType()
-export class PotentialDuplicateResponseType extends PotentialDuplicateResponse{
-
+export class PotentialDuplicateResultType extends PotentialDuplicateResult {
   @Field(() => Int, { nullable: true })
   EntityID: number;
 
@@ -60,11 +59,24 @@ export class PotentialDuplicateResponseType extends PotentialDuplicateResponse{
   RecordPrimaryKeys: PrimaryKeyValueBase;
 }
 
+@ObjectType()
+export class PotentialDuplicateResponseType extends PotentialDuplicateResponse{
+
+  @Field(() => String)
+  Status: 'Inprogress' | 'Success' | 'Error';
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+
+  @Field(() => [PotentialDuplicateResultType])
+  PotentialDuplicateResult: PotentialDuplicateResult[]
+}
+
 @Resolver(PotentialDuplicateResponseType)
 export class DuplicateRecordResolver {
 
-  @Query(() => [PotentialDuplicateResponseType])
-  async GetRecordDuplicates(@Ctx() { dataSource, userPayload }: AppContext, @Arg("params")params: PotentialDuplicateRequestType): Promise<PotentialDuplicateResponseType[]> {
+  @Query(() => PotentialDuplicateResponseType)
+  async GetRecordDuplicates(@Ctx() { dataSource, userPayload }: AppContext, @Arg("params")params: PotentialDuplicateRequestType): Promise<PotentialDuplicateResponseType> {
       const md = new Metadata();
     
       const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());

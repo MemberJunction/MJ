@@ -1,9 +1,9 @@
 import { pineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
-import { FetchResponse, Index, Pinecone, PineconeRecord, QueryOptions } from '@pinecone-database/pinecone';
+import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { LogStatus, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValue, PrimaryKeyValueBase } from '@memberjunction/core';
+import { PotentialDuplicate, PotentialDuplicateResult, PrimaryKeyValue } from '@memberjunction/core';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
@@ -170,7 +170,7 @@ export class PineconeDatabase extends VectorDBBase {
         params.includeMetadata = true;
         const queryResponse = await this.queryIndex(params);
         if(queryResponse.success){
-            let response: PotentialDuplicateResponse = new PotentialDuplicateResponse();
+            let response: PotentialDuplicateResult = new PotentialDuplicateResult();
             response.Duplicates = queryResponse.data.matches.map((record: {id: string, score: number, metadata: any}) => {
                 let duplicate: PotentialDuplicate = new PotentialDuplicate();
                 duplicate.ProbabilityScore = record.score;

@@ -301,7 +301,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * 
      * @param params object containing many properties used in fetching records and determining which ones to return
      */
-    public abstract GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse[]>
+    public abstract GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
 
     /**
      * Returns a list of entity dependencies, basically metadata that tells you the links to this entity from all other entities.

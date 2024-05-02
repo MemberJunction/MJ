@@ -444,7 +444,7 @@ npm
         }
     }
 
-    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse[]>
+    public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
     {
         if(!params){
             return null;
@@ -452,18 +452,22 @@ npm
 
         const query: string = gql`query GetRecordDuplicatesQuery ($params: PotentialDuplicateRequestType!) {
             GetRecordDuplicates(params: $params) {
-                EntityID
-                RecordPrimaryKeys {
-                    PrimaryKeyValues {
-                        FieldName
-                        Value
+                Status
+                ErrorMessage
+                PotentialDuplicateResult {
+                    EntityID
+                    RecordPrimaryKeys {
+                        PrimaryKeyValues {
+                            FieldName
+                            Value
                     }
                 }
-                Duplicates {
-                    ProbabilityScore
-                    PrimaryKeyValues {
-                        FieldName
-                        Value
+                    Duplicates {
+                        ProbabilityScore
+                        PrimaryKeyValues {
+                            FieldName
+                            Value
+                        }
                     }
                 }
             }
