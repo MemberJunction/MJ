@@ -1,4 +1,5 @@
 <div>
+    <!--
     <button *ngIf="ShowPropertiesButton"
       kendoButton
       themeColor="info"
@@ -7,6 +8,10 @@
     >
         <span class="fa-solid fa-gear"></span>
         Properties
+    </button>
+    -->
+    <button title="Properties" kendoButton class="property-button-solid-base" (click)="this.Open()">
+        <span class="fa-solid fa-gear fa-lg"></span> Properties
     </button>
     <div  #outerDialogContainer>
         <div class="k-overlay" *ngIf="isDialogOpened"></div>

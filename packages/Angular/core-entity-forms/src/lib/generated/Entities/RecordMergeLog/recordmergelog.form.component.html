@@ -23,6 +23,17 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Duplicate Run Detail Matches')">
+                        Duplicate Run Detail Matches
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Duplicate Run Detail Matches')"  
+                            [AllowLoad]="this.IsCurrentTab('Duplicate Run Detail Matches')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
