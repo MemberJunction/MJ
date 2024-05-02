@@ -19,6 +19,8 @@ jobs:
     name: Build and publish new versions of NPM packages
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
     env:
       BRANCH: ${{ github.base_ref || github.ref_name }}
     steps:
@@ -62,6 +64,14 @@ jobs:
         run: npm run release -- --no-push --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
+
+      - name: Get version string
+        if: ${{ env.BRANCH == 'main' }}
+        id: version
+        run: |
+          VERSION="v"$(jq -r .version packages/MJGlobal/package.json)
+          echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT          
  
   merge-main-to-next:
     runs-on: ubuntu-latest
@@ -103,7 +113,9 @@ jobs:
         git commit -m "Updating package versions [skip ci]"
 
     - name: Push changes
-      run: git push
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
  
   create-distribution:
     runs-on: ubuntu-latest
@@ -123,12 +135,6 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Get version string
-      id: version
-      run: |
-        VERSION="v"$(jq -r .version packages/MJGlobal/package.json)
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
     - name: Create distribution artifact
       id: zip
       run: |
@@ -139,6 +145,6 @@ jobs:
     - name: Create release
       uses: softprops/action-gh-release@v2
       with:
-        name: ${{ steps.version.outputs.VERSION }}
-        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: ${{ needs.build-and-publish.outputs.version }}
+        tag_name: ${{ needs.build-and-publish.outputs.version }}
         files: ${{ steps.zip.outputs.ARTIFACT }}
