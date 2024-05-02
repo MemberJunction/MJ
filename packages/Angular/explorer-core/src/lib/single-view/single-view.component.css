@@ -1,14 +1,67 @@
 .single-view-wrap {
   padding: 10px;
 }
+
 ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper {
     background: var(--white-color) !important;
     padding-left: 0 !important;
-  }
-  ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item.k-active {
-    border-bottom: 3px solid var(--border-blue) !important;
-  }
-    ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item {
-    background: var(--white-color) !important;
-    border-right: 0 !important;
-  }
+}
+
+::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item.k-active {
+  border-bottom: 3px solid var(--border-blue) !important;
+}
+
+::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item {
+  background: var(--white-color) !important;
+  border-right: 0 !important;
+}
+
+.flex-direction-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gap-small{
+  gap: 8px; 
+}
+
+::ng-deep .header-icon-button {
+  width: 40px;
+  height: 40px;
+  background: #000;
+  min-width: 38px;
+  border: 1px solid var(--gray-color);
+  border-radius: 8px; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+  cursor: pointer;
+}
+
+::ng-deep .header-icon-button:hover {
+  border: 1px solid var(--border-active);
+}
+
+::ng-deep .k-button-solid-base {
+  border: 1px solid var(--border-blue) !important;
+  color: var(--border-blue) !important;
+  border-radius: 10px;
+  line-height: 34px;
+  background: var(--white-color);
+}
+
+::ng-deep .k-button-solid-base-filled {
+  border: 1px solid var(--border-blue) !important;
+  color: var(--white-color) !important;
+  border-radius: 10px;
+  line-height: 34px;
+  background: var(--border-blue);
+}
+
+::ng-deep .k-button-solid-base-filled:hover {
+  background: var(--border-blue);
+  filter: brightness(85%);
+}
