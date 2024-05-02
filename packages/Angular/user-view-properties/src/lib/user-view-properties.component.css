@@ -110,11 +110,3 @@
   border-color: var(--border-blue);
   color: white;
 }
-
-::ng-deep .property-button-solid-base {
-  border: 1px solid var(--border-blue) !important;
-  color: var(--border-blue) !important;
-  border-radius: 10px;
-  line-height: 34px;
-  background: var(--white-color);
-}

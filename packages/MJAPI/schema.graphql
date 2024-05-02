@@ -3596,11 +3596,6 @@ input RunDynamicViewInput {
   IgnoreMaxRows: Boolean
 
   """
-  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
-  """
-  MaxRows: Int
-
-  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4327,11 +4322,6 @@ input RunViewByIDInput {
   IgnoreMaxRows: Boolean
 
   """
-  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
-  """
-  MaxRows: Int
-
-  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4384,11 +4374,6 @@ input RunViewByNameInput {
   if set to true, if there IS any UserViewMaxRows property set for the entity in question, it will be IGNORED. This is useful in scenarios where you want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
   """
   IgnoreMaxRows: Boolean
-
-  """
-  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
-  """
-  MaxRows: Int
 
   """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
