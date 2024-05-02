@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, Input, ViewChild } from "@angular/core";
 import { LogError, Metadata, PrimaryKeyValue, RunView } from "@memberjunction/core";
-import { ConversationDetailEntity } from "@memberjunction/core-entities";
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity } from "@memberjunction/core-entities";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { ChatComponent, ChatMessage, ChatWelcomeQuestion } from "@memberjunction/ng-chat";
 import { SharedService } from "@memberjunction/ng-shared";
@@ -151,14 +151,27 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
               ResultType: 'entity_object'
           });
           if (result && result.Success && result.Results.length > 0) {
-              const tg = await md.CreateTransactionGroup();
-              for (const cd of result.Results) {
-                  const cdE = <ConversationDetailEntity>cd;
-                  cdE.TransactionGroup = tg;
-                  cdE.Delete();  // dont await because inside a TG
-              }
-              await tg.Submit();
-              this.mjChat.ClearAllMessages();
+            const tg = await md.CreateTransactionGroup();
+            for (const cd of result.Results) {
+                const cdE = <ConversationDetailEntity>cd;
+                cdE.TransactionGroup = tg;
+                cdE.Delete();  // dont await because inside a TG
+            }
+            const convoEntity = await md.GetEntityObject<ConversationEntity>("Conversations");
+            await convoEntity.Load(this._conversationId);
+            if (convoEntity.DataContextID) {
+                const dcEntity = await md.GetEntityObject<DataContextEntity>("Data Contexts");
+                await dcEntity.Load(convoEntity.DataContextID);
+                dcEntity.TransactionGroup = tg;
+                dcEntity.Delete(); // dont await because inside a TG    
+            }
+
+            // now delete the conversation itself
+            convoEntity.TransactionGroup = tg;
+            convoEntity.Delete(); // dont await because inside a TG
+            
+            await tg.Submit();
+            this.mjChat.ClearAllMessages();
           }
           this.mjChat.ShowWaitingIndicator = false;
       }
