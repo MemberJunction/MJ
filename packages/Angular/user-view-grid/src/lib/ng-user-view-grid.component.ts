@@ -848,8 +848,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       params.PrimaryKeyValues.push({FieldName: "ID", Value: idField});
     }
 
-    const md: Metadata = new Metadata();
-    await md.GetRecordDuplicates(params);
+    //const md: Metadata = new Metadata();
+    //await md.GetRecordDuplicates(params);
     this.CreateSimpleNotification("Working on finding duplicates, will notify you when it is complete...", 'info', 2000);
   }
 
