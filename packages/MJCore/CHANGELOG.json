@@ -2,6 +2,33 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Thu, 02 May 2024 16:46:11 GMT",
+      "version": "1.2.1",
+      "tag": "@memberjunction/core_v1.2.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core",
+            "commit": "ca34b27efe55e9b4bf82842d9049fa96bcb694d0",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core",
+            "commit": "b9547378a0c61cc83677c5b54186d7d889fc7f64",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v1.2.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Mon, 29 Apr 2024 18:51:58 GMT",
       "version": "1.2.0",
       "tag": "@memberjunction/core_v1.2.0",

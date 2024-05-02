@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/ng-user-view-properties
 
-This log was last generated on Mon, 29 Apr 2024 18:51:58 GMT and should not be manually modified.
+This log was last generated on Thu, 02 May 2024 16:46:11 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.2.1
+
+Thu, 02 May 2024 16:46:11 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (155523863+JS-BC@users.noreply.github.com)
+
+### Patches
+
+- Bump @memberjunction/global to v1.2.1
+- Bump @memberjunction/core to v1.2.1
+- Bump @memberjunction/core-entities to v1.2.1
+- Bump @memberjunction/ng-base-forms to v1.2.1
+- Bump @memberjunction/ng-shared to v1.2.1
 
 ## 1.2.0
 
