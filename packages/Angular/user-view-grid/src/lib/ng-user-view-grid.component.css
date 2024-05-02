@@ -135,7 +135,7 @@
     left: 12px;
 }
 
-::ng-deep .list-btn {
+::ng-deep .list-button {
     min-width: 120px;
     width: auto;
 }
