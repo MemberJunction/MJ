@@ -100,7 +100,7 @@ export class AskSkipResolver {
       await dci.Save();
   
       await dataContext.Load(dataContext.ID, dataSource, false, true, 10, user); // load again because we added a new data context item  
-      await dataContext.SaveItems(); // persist
+      await dataContext.SaveItems(user, true); // persist the data becuase the deep loading above with related data is expensive
 
       // also, in the situation for a new convo, we need to update the Conversation ID to have a LinkedEntity and LinkedRecord
       convoEntity.LinkedEntityID = dci.EntityID;
