@@ -5,8 +5,9 @@ import { Metadata, EntityInfo, LogError, PrimaryKeyValueBase } from '@memberjunc
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
-import { UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
+import { UserViewCategoryEntity, UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
 
 @Component({
   selector: 'mj-single-view',
@@ -15,6 +16,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 })
 export class SingleViewComponent implements AfterViewInit, OnInit  {
   @ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
+  @ViewChild('propertiesDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent | null;
 
   @Input() public viewId: number | null = null;
   @Input() public viewName: string| null = null;
@@ -27,6 +29,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   public selectedEntity: EntityInfo | null = null;
   public showSearch: boolean = false;
   public searchText: string = '';
+  public headerTitle: string = "";
   private searchDebounce$: Subject<string> = new Subject();
   private _deferLoadCount: number = 0;
 
@@ -45,17 +48,20 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
     const md = new Metadata();
     if (this.viewId || this.viewName) {
       let view: UserViewEntity | null = null;
-      if (this.viewId)
+      if (this.viewId){
         view = <UserViewEntity>await ViewInfo.GetViewEntity(this.viewId);
-      else if (this.viewName)
-        view = <UserViewEntity>await ViewInfo.GetViewEntityByName(this.viewName)
+      }
+      else if (this.viewName){
+        view = <UserViewEntity>await ViewInfo.GetViewEntityByName(this.viewName);
+      }
 
-      if (view)  {
+      if (view) {
+        await this.setHeaderTitle(view);
         await this.LoadView(view);
         const e = md.Entities.find(e => e.ID === view?.EntityID)
         if (e) {
           this.selectedEntity = e
-          this.showSearch = e.AllowUserSearchAPI
+          this.showSearch = e.AllowUserSearchAPI || true;
         }
       }
     }
@@ -72,6 +78,23 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
         LogError(`Invalid entity name: ${this.entityName}`)
         this.sharedService.CreateSimpleNotification(`The entity name ${this.entityName} is not valid. Please check the URL and try again.`,"error",5000);
       }
+    }
+  }
+
+  private async setHeaderTitle(view: UserViewEntity): Promise<void> {
+    if(view.CategoryID){
+      const md: Metadata = new Metadata();
+      const categoryEntity: UserViewCategoryEntity = await md.GetEntityObject<UserViewCategoryEntity>("User View Categories");
+      const loadSuccess = await categoryEntity.Load(view.CategoryID);
+      if (loadSuccess) {
+        this.headerTitle = categoryEntity.Name + " > " + view.Name;
+      }
+      else{
+        this.headerTitle = view.Name;
+      }
+    }
+    else{
+      this.headerTitle = view.Name;
     }
   }
 
@@ -132,6 +155,15 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
     if (args && args.Saved && args.ViewEntity) {
       this.selectedView = args.ViewEntity
       this.Refresh();
+    }
+  }
+
+  public openPropertiesDialog(): void {
+    if(this.viewId && this.viewPropertiesDialog){
+      this.viewPropertiesDialog.Open(this.viewId);
+    }
+    else{
+      LogError("no view id or dialog");
     }
   }
 

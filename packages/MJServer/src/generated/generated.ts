@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/15/2024, 11:31:04 AM
+* GENERATED: 4/30/2024, 12:16:26 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2976,6 +2976,12 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.UserViewCategory_])
     UserViewCategoriesArray: mj_core_schema_server_object_types.UserViewCategory_[]; // Link to UserViewCategories
     
+    @Field(() => [mj_core_schema_server_object_types.EntitySetting_])
+    EntitySettingsArray: mj_core_schema_server_object_types.EntitySetting_[]; // Link to EntitySettings
+    
+    @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
+    DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
+    
 }
         
 //****************************************************************************
@@ -3496,6 +3502,22 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('User View Categories', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntitySetting_])
+    async EntitySettingsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Settings', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Settings', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
+    async DuplicateRunsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => Entity_)
     async CreateEntity(
@@ -3731,6 +3753,9 @@ export class User_ {
     
     @Field(() => [mj_core_schema_server_object_types.QueryCategory_])
     QueryCategoriesArray: mj_core_schema_server_object_types.QueryCategory_[]; // Link to QueryCategories
+    
+    @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
+    DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
     
 }
         
@@ -4049,6 +4074,14 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Query Categories', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwQueryCategories] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Query Categories', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Query Categories', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
+    async DuplicateRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
         
@@ -6892,6 +6925,9 @@ export class List_ {
     @Field(() => [mj_core_schema_server_object_types.ListDetail_])
     ListDetailsArray: mj_core_schema_server_object_types.ListDetail_[]; // Link to ListDetails
     
+    @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
+    DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
+    
 }
         
 //****************************************************************************
@@ -7003,6 +7039,14 @@ export class ListResolver extends ResolverBase {
         this.CheckUserReadPermissions('List Details', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwListDetails] WHERE [ListID]=${list_.ID} ` + this.getRowLevelSecurityWhereClause('List Details', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('List Details', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRun_])
+    async DuplicateRunsArray(@Root() list_: List_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [SourceListID]=${list_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
         return result;
     }
         
@@ -9269,7 +9313,7 @@ export class EntityFieldValueResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for AI Models
 //****************************************************************************
-@ObjectType({ description: 'Catalog of all AI Models configured in the system.' })
+@ObjectType({ description: 'Catalog of all AI Models configured in the system' })
 export class AIModel_ {  
     @Field(() => Int) 
     ID: number;
@@ -9329,6 +9373,9 @@ export class AIModel_ {
     
     @Field(() => [mj_core_schema_server_object_types.VectorIndex_])
     VectorIndexesArray: mj_core_schema_server_object_types.VectorIndex_[]; // Link to VectorIndexes
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityDocument_])
+    EntityDocumentsArray: mj_core_schema_server_object_types.EntityDocument_[]; // Link to EntityDocuments
     
 }
         
@@ -9457,6 +9504,14 @@ export class AIModelResolver extends ResolverBase {
         this.CheckUserReadPermissions('Vector Indexes', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwVectorIndexes] WHERE [EmbeddingModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Vector Indexes', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Vector Indexes', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocument_])
+    async EntityDocumentsArray(@Root() aimodel_: AIModel_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Documents', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocuments] WHERE [AIModelID]=${aimodel_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Documents', await dataSource.query(sSQL));
         return result;
     }
         
@@ -13053,8 +13108,9 @@ export class Conversation_ {
     @Field(() => Int, {nullable: true}) 
     LinkedEntityID?: number;
           
-    @Field(() => Int, {nullable: true}) 
-    LinkedRecordID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(1000)
+    LinkedRecordID?: string;
           
     @Field(() => Int, {nullable: true}) 
     DataContextID?: number;
@@ -13109,8 +13165,8 @@ export class CreateConversationInput {
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
     
-    @Field(() => Int, { nullable: true })
-    LinkedRecordID: number;
+    @Field({ nullable: true })
+    LinkedRecordID: string;
     
     @Field(() => Int, { nullable: true })
     DataContextID: number;
@@ -13146,8 +13202,8 @@ export class UpdateConversationInput {
     @Field(() => Int, { nullable: true })
     LinkedEntityID: number;
     
-    @Field(() => Int, { nullable: true })
-    LinkedRecordID: number;
+    @Field({ nullable: true })
+    LinkedRecordID: string;
     
     @Field(() => Int, { nullable: true })
     DataContextID: number;
@@ -14002,6 +14058,9 @@ export class RecordMergeLog_ {
     @Field(() => [mj_core_schema_server_object_types.RecordMergeDeletionLog_])
     RecordMergeDeletionLogsArray: mj_core_schema_server_object_types.RecordMergeDeletionLog_[]; // Link to RecordMergeDeletionLogs
     
+    @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
+    DuplicateRunDetailMatchesArray: mj_core_schema_server_object_types.DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
+    
 }
         
 //****************************************************************************
@@ -14137,6 +14196,14 @@ export class RecordMergeLogResolver extends ResolverBase {
         this.CheckUserReadPermissions('Record Merge Deletion Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordMergeDeletionLogs] WHERE [RecordMergeLogID]=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Record Merge Deletion Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Record Merge Deletion Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
+    async DuplicateRunDetailMatchesArray(@Root() recordmergelog_: RecordMergeLog_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [RecordMergeLogID]=${recordmergelog_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL));
         return result;
     }
         
@@ -16353,6 +16420,18 @@ export class EntityDocument_ {
     @Field({nullable: true}) 
     Template?: string;
           
+    @Field(() => Int) 
+    VectorDatabaseID: number;
+          
+    @Field(() => Int) 
+    AIModelID: number;
+          
+    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
+    PotentialMatchThreshold: number;
+          
+    @Field(() => Float, {description: 'Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.'}) 
+    AbsoluteMatchThreshold: number;
+          
     @Field() 
     @MaxLength(8)
     CreatedAt: Date;
@@ -16360,12 +16439,6 @@ export class EntityDocument_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
-          
-    @Field(() => Int) 
-    VectorDatabaseID: number;
-          
-    @Field(() => Int) 
-    AIModelID: number;
           
     @Field() 
     @MaxLength(510)
@@ -16377,6 +16450,9 @@ export class EntityDocument_ {
         
     @Field(() => [mj_core_schema_server_object_types.EntityDocumentRun_])
     EntityDocumentRunsArray: mj_core_schema_server_object_types.EntityDocumentRun_[]; // Link to EntityDocumentRuns
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityDocumentSetting_])
+    EntityDocumentSettingsArray: mj_core_schema_server_object_types.EntityDocumentSetting_[]; // Link to EntityDocumentSettings
     
 }
         
@@ -16405,6 +16481,12 @@ export class CreateEntityDocumentInput {
     
     @Field(() => Int)
     AIModelID: number;
+    
+    @Field(() => Float)
+    PotentialMatchThreshold: number;
+    
+    @Field(() => Float)
+    AbsoluteMatchThreshold: number;
     }
     
         
@@ -16436,6 +16518,12 @@ export class UpdateEntityDocumentInput {
     
     @Field(() => Int)
     AIModelID: number;
+    
+    @Field(() => Float)
+    PotentialMatchThreshold: number;
+    
+    @Field(() => Float)
+    AbsoluteMatchThreshold: number;
     }
     
 //****************************************************************************
@@ -16495,6 +16583,14 @@ export class EntityDocumentResolver extends ResolverBase {
         this.CheckUserReadPermissions('Entity Document Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentRuns] WHERE [EntityDocumentID]=${entitydocument_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Runs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityDocumentSetting_])
+    async EntityDocumentSettingsArray(@Root() entitydocument_: EntityDocument_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Document Settings', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [EntityDocumentID]=${entitydocument_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Document Settings', await dataSource.query(sSQL));
         return result;
     }
         
@@ -18873,6 +18969,1118 @@ export class VersionInstallationResolver extends ResolverBase {
         return true;
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Duplicate Run Detail Matches
+//****************************************************************************
+@ObjectType()
+export class DuplicateRunDetailMatch_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    DuplicateRunDetailID: number;
+          
+    @Field() 
+    @MaxLength(1000)
+    MatchRecordID: string;
+          
+    @Field(() => Float, {description: 'Value between 0 and 1 designating the computed probability of a match'}) 
+    MatchProbability: number;
+          
+    @Field() 
+    @MaxLength(8)
+    MatchedAt: Date;
+          
+    @Field() 
+    @MaxLength(40)
+    Action: string;
+          
+    @Field() 
+    @MaxLength(40)
+    ApprovalStatus: string;
+          
+    @Field() 
+    @MaxLength(40)
+    MergeStatus: string;
+          
+    @Field() 
+    @MaxLength(8)
+    MergedAt: Date;
+          
+    @Field(() => Int, {nullable: true}) 
+    RecordMergeLogID?: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Duplicate Run Detail Matches   
+//****************************************************************************
+@InputType()
+export class CreateDuplicateRunDetailMatchInput {
+    @Field(() => Int)
+    DuplicateRunDetailID: number;
+    
+    @Field()
+    MatchRecordID: string;
+    
+    @Field(() => Float)
+    MatchProbability: number;
+    
+    @Field()
+    MatchedAt: Date;
+    
+    @Field()
+    Action: string;
+    
+    @Field()
+    ApprovalStatus: string;
+    
+    @Field()
+    MergeStatus: string;
+    
+    @Field()
+    MergedAt: Date;
+    
+    @Field(() => Int, { nullable: true })
+    RecordMergeLogID: number;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Duplicate Run Detail Matches   
+//****************************************************************************
+@InputType()
+export class UpdateDuplicateRunDetailMatchInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    DuplicateRunDetailID: number;
+    
+    @Field()
+    MatchRecordID: string;
+    
+    @Field(() => Float)
+    MatchProbability: number;
+    
+    @Field()
+    MatchedAt: Date;
+    
+    @Field()
+    Action: string;
+    
+    @Field()
+    ApprovalStatus: string;
+    
+    @Field()
+    MergeStatus: string;
+    
+    @Field()
+    MergedAt: Date;
+    
+    @Field(() => Int, { nullable: true })
+    RecordMergeLogID: number;
+    }
+    
+//****************************************************************************
+// RESOLVER for Duplicate Run Detail Matches
+//****************************************************************************
+@ObjectType()
+export class RunDuplicateRunDetailMatchViewResult {
+    @Field(() => [DuplicateRunDetailMatch_])
+    Results: DuplicateRunDetailMatch_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DuplicateRunDetailMatch_)
+export class DuplicateRunDetailMatchResolver extends ResolverBase {
+    @Query(() => RunDuplicateRunDetailMatchViewResult)
+    async RunDuplicateRunDetailMatchViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDuplicateRunDetailMatchViewResult)
+    async RunDuplicateRunDetailMatchViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDuplicateRunDetailMatchViewResult)
+    async RunDuplicateRunDetailMatchDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Duplicate Run Detail Matches';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DuplicateRunDetailMatch_, { nullable: true })
+    async DuplicateRunDetailMatch(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRunDetailMatch_ | null> {
+        this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => DuplicateRunDetailMatch_)
+    async CreateDuplicateRunDetailMatch(
+        @Arg('input', () => CreateDuplicateRunDetailMatchInput) input: CreateDuplicateRunDetailMatchInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DuplicateRunDetailMatchEntity>await new Metadata().GetEntityObject('Duplicate Run Detail Matches', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunDetailMatchInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunDetailMatchInput) {
+    }
+        
+    @Mutation(() => DuplicateRunDetailMatch_)
+    async UpdateDuplicateRunDetailMatch(
+        @Arg('input', () => UpdateDuplicateRunDetailMatchInput) input: UpdateDuplicateRunDetailMatchInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DuplicateRunDetailMatchEntity>await new Metadata().GetEntityObject('Duplicate Run Detail Matches', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Run Detail Matches
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailMatchInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailMatchInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Document Settings
+//****************************************************************************
+@ObjectType()
+export class EntityDocumentSetting_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityDocumentID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+          
+    @Field() 
+    Value: string;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(500)
+    EntityDocument: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Document Settings   
+//****************************************************************************
+@InputType()
+export class CreateEntityDocumentSettingInput {
+    @Field(() => Int)
+    EntityDocumentID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field()
+    Value: string;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Document Settings   
+//****************************************************************************
+@InputType()
+export class UpdateEntityDocumentSettingInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityDocumentID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field()
+    Value: string;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Document Settings
+//****************************************************************************
+@ObjectType()
+export class RunEntityDocumentSettingViewResult {
+    @Field(() => [EntityDocumentSetting_])
+    Results: EntityDocumentSetting_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityDocumentSetting_)
+export class EntityDocumentSettingResolver extends ResolverBase {
+    @Query(() => RunEntityDocumentSettingViewResult)
+    async RunEntityDocumentSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentSettingViewResult)
+    async RunEntityDocumentSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityDocumentSettingViewResult)
+    async RunEntityDocumentSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Document Settings';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityDocumentSetting_, { nullable: true })
+    async EntityDocumentSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityDocumentSetting_ | null> {
+        this.CheckUserReadPermissions('Entity Document Settings', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityDocumentSettings] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Document Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Document Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityDocumentSetting_)
+    async CreateEntityDocumentSetting(
+        @Arg('input', () => CreateEntityDocumentSettingInput) input: CreateEntityDocumentSettingInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentSettingEntity>await new Metadata().GetEntityObject('Entity Document Settings', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentSettingInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentSettingInput) {
+    }
+        
+    @Mutation(() => EntityDocumentSetting_)
+    async UpdateEntityDocumentSetting(
+        @Arg('input', () => UpdateEntityDocumentSettingInput) input: UpdateEntityDocumentSettingInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityDocumentSettingEntity>await new Metadata().GetEntityObject('Entity Document Settings', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Settings
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentSettingInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentSettingInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Settings
+//****************************************************************************
+@ObjectType()
+export class EntitySetting_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+          
+    @Field() 
+    Value: string;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Settings   
+//****************************************************************************
+@InputType()
+export class CreateEntitySettingInput {
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field()
+    Value: string;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Settings   
+//****************************************************************************
+@InputType()
+export class UpdateEntitySettingInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field()
+    Value: string;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Settings
+//****************************************************************************
+@ObjectType()
+export class RunEntitySettingViewResult {
+    @Field(() => [EntitySetting_])
+    Results: EntitySetting_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntitySetting_)
+export class EntitySettingResolver extends ResolverBase {
+    @Query(() => RunEntitySettingViewResult)
+    async RunEntitySettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntitySettingViewResult)
+    async RunEntitySettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntitySettingViewResult)
+    async RunEntitySettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Settings';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntitySetting_, { nullable: true })
+    async EntitySetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntitySetting_ | null> {
+        this.CheckUserReadPermissions('Entity Settings', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntitySettings] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntitySetting_)
+    async CreateEntitySetting(
+        @Arg('input', () => CreateEntitySettingInput) input: CreateEntitySettingInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntitySettingEntity>await new Metadata().GetEntityObject('Entity Settings', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntitySettingInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntitySettingInput) {
+    }
+        
+    @Mutation(() => EntitySetting_)
+    async UpdateEntitySetting(
+        @Arg('input', () => UpdateEntitySettingInput) input: UpdateEntitySettingInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntitySettingEntity>await new Metadata().GetEntityObject('Entity Settings', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Settings
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntitySettingInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntitySettingInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Duplicate Runs
+//****************************************************************************
+@ObjectType()
+export class DuplicateRun_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityID: number;
+          
+    @Field(() => Int) 
+    StartedByUserID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    StartedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+          
+    @Field() 
+    @MaxLength(40)
+    ApprovalStatus: string;
+          
+    @Field({nullable: true}) 
+    ApprovalComments?: string;
+          
+    @Field(() => Int, {nullable: true}) 
+    ApprovedByUserID?: number;
+          
+    @Field() 
+    @MaxLength(40)
+    ProcessingStatus: string;
+          
+    @Field({nullable: true}) 
+    ProcessingErrorMessage?: string;
+          
+    @Field(() => Int) 
+    SourceListID: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+          
+    @Field() 
+    @MaxLength(200)
+    StartedByUser: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ApprovedByUser?: string;
+          
+    @Field() 
+    @MaxLength(200)
+    SourceList: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetail_])
+    DuplicateRunDetailsArray: mj_core_schema_server_object_types.DuplicateRunDetail_[]; // Link to DuplicateRunDetails
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Duplicate Runs   
+//****************************************************************************
+@InputType()
+export class CreateDuplicateRunInput {
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field(() => Int)
+    StartedByUserID: number;
+    
+    @Field()
+    StartedAt: Date;
+    
+    @Field({ nullable: true })
+    EndedAt: Date;
+    
+    @Field()
+    ApprovalStatus: string;
+    
+    @Field({ nullable: true })
+    ApprovalComments: string;
+    
+    @Field(() => Int, { nullable: true })
+    ApprovedByUserID: number;
+    
+    @Field()
+    ProcessingStatus: string;
+    
+    @Field({ nullable: true })
+    ProcessingErrorMessage: string;
+    
+    @Field(() => Int)
+    SourceListID: number;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Duplicate Runs   
+//****************************************************************************
+@InputType()
+export class UpdateDuplicateRunInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field(() => Int)
+    StartedByUserID: number;
+    
+    @Field()
+    StartedAt: Date;
+    
+    @Field({ nullable: true })
+    EndedAt: Date;
+    
+    @Field()
+    ApprovalStatus: string;
+    
+    @Field({ nullable: true })
+    ApprovalComments: string;
+    
+    @Field(() => Int, { nullable: true })
+    ApprovedByUserID: number;
+    
+    @Field()
+    ProcessingStatus: string;
+    
+    @Field({ nullable: true })
+    ProcessingErrorMessage: string;
+    
+    @Field(() => Int)
+    SourceListID: number;
+    }
+    
+//****************************************************************************
+// RESOLVER for Duplicate Runs
+//****************************************************************************
+@ObjectType()
+export class RunDuplicateRunViewResult {
+    @Field(() => [DuplicateRun_])
+    Results: DuplicateRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DuplicateRun_)
+export class DuplicateRunResolver extends ResolverBase {
+    @Query(() => RunDuplicateRunViewResult)
+    async RunDuplicateRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDuplicateRunViewResult)
+    async RunDuplicateRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDuplicateRunViewResult)
+    async RunDuplicateRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Duplicate Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DuplicateRun_, { nullable: true })
+    async DuplicateRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRun_ | null> {
+        this.CheckUserReadPermissions('Duplicate Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRunDetail_])
+    async DuplicateRunDetailsArray(@Root() duplicaterun_: DuplicateRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [DuplicateRunID]=${duplicaterun_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Details', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => DuplicateRun_)
+    async CreateDuplicateRun(
+        @Arg('input', () => CreateDuplicateRunInput) input: CreateDuplicateRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DuplicateRunEntity>await new Metadata().GetEntityObject('Duplicate Runs', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunInput) {
+    }
+        
+    @Mutation(() => DuplicateRun_)
+    async UpdateDuplicateRun(
+        @Arg('input', () => UpdateDuplicateRunInput) input: UpdateDuplicateRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DuplicateRunEntity>await new Metadata().GetEntityObject('Duplicate Runs', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Runs
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Duplicate Run Details
+//****************************************************************************
+@ObjectType()
+export class DuplicateRunDetail_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    DuplicateRunID: number;
+          
+    @Field() 
+    @MaxLength(1000)
+    RecordID: string;
+          
+    @Field() 
+    @MaxLength(40)
+    MatchStatus: string;
+          
+    @Field({nullable: true, description: 'If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped'}) 
+    SkippedReason?: string;
+          
+    @Field({nullable: true, description: 'If MatchStatus=\'Error\' this field can be used to track the error from that phase of the process for logging/diagnostics.'}) 
+    MatchErrorMessage?: string;
+          
+    @Field() 
+    @MaxLength(40)
+    MergeStatus: string;
+          
+    @Field({nullable: true}) 
+    MergeErrorMessage?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
+    DuplicateRunDetailMatchesArray: mj_core_schema_server_object_types.DuplicateRunDetailMatch_[]; // Link to DuplicateRunDetailMatches
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Duplicate Run Details   
+//****************************************************************************
+@InputType()
+export class CreateDuplicateRunDetailInput {
+    @Field(() => Int)
+    DuplicateRunID: number;
+    
+    @Field()
+    RecordID: string;
+    
+    @Field()
+    MatchStatus: string;
+    
+    @Field({ nullable: true })
+    SkippedReason: string;
+    
+    @Field({ nullable: true })
+    MatchErrorMessage: string;
+    
+    @Field()
+    MergeStatus: string;
+    
+    @Field({ nullable: true })
+    MergeErrorMessage: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Duplicate Run Details   
+//****************************************************************************
+@InputType()
+export class UpdateDuplicateRunDetailInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    DuplicateRunID: number;
+    
+    @Field()
+    RecordID: string;
+    
+    @Field()
+    MatchStatus: string;
+    
+    @Field({ nullable: true })
+    SkippedReason: string;
+    
+    @Field({ nullable: true })
+    MatchErrorMessage: string;
+    
+    @Field()
+    MergeStatus: string;
+    
+    @Field({ nullable: true })
+    MergeErrorMessage: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Duplicate Run Details
+//****************************************************************************
+@ObjectType()
+export class RunDuplicateRunDetailViewResult {
+    @Field(() => [DuplicateRunDetail_])
+    Results: DuplicateRunDetail_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(DuplicateRunDetail_)
+export class DuplicateRunDetailResolver extends ResolverBase {
+    @Query(() => RunDuplicateRunDetailViewResult)
+    async RunDuplicateRunDetailViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDuplicateRunDetailViewResult)
+    async RunDuplicateRunDetailViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunDuplicateRunDetailViewResult)
+    async RunDuplicateRunDetailDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Duplicate Run Details';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => DuplicateRunDetail_, { nullable: true })
+    async DuplicateRunDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<DuplicateRunDetail_ | null> {
+        this.CheckUserReadPermissions('Duplicate Run Details', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetails] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Run Details', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Duplicate Run Details', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.DuplicateRunDetailMatch_])
+    async DuplicateRunDetailMatchesArray(@Root() duplicaterundetail_: DuplicateRunDetail_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Duplicate Run Detail Matches', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRunDetailMatches] WHERE [DuplicateRunDetailID]=${duplicaterundetail_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Run Detail Matches', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => DuplicateRunDetail_)
+    async CreateDuplicateRunDetail(
+        @Arg('input', () => CreateDuplicateRunDetailInput) input: CreateDuplicateRunDetailInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DuplicateRunDetailEntity>await new Metadata().GetEntityObject('Duplicate Run Details', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunDetailInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunDetailInput) {
+    }
+        
+    @Mutation(() => DuplicateRunDetail_)
+    async UpdateDuplicateRunDetail(
+        @Arg('input', () => UpdateDuplicateRunDetailInput) input: UpdateDuplicateRunDetailInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DuplicateRunDetailEntity>await new Metadata().GetEntityObject('Duplicate Run Details', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Run Details
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput) {
         const i = input, d = dataSource; // prevent error
     }
     

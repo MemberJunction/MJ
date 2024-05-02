@@ -1,0 +1,87 @@
+<div mjFillContainer class="chat-wrapper">
+    @if(Messages.length === 0 && !ShowWaitingIndicator) {
+        <div class="welcome-wrapper">
+            <div class='welcome-message'>
+                @if(AILargeImageURL) {
+                    <img [src]="AILargeImageURL"/>
+                }
+                <div class="welcome-header-text">What can I help with today?</div>
+            </div>
+            <div class='welcome-suggested-questions'>
+                <div class="welcome-suggested-questions-col">
+                    @if (WelcomeQuestions.length > 0) {
+                        <div class="welcome-question" (click)="SendUserMessage(WelcomeQuestions[0].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[0].topLine}}</span>
+                            <span>{{WelcomeQuestions[0].bottomLine}}</span>
+                        </div>
+                    }
+                    @if (WelcomeQuestions.length > 1) {
+                        <div class="welcome-question" (click)="SendUserMessage(WelcomeQuestions[1].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[1].topLine}}</span>
+                            <span>{{WelcomeQuestions[1].bottomLine}}</span>
+                        </div>        
+                    }
+                </div>
+                <div class="welcome-suggested-questions-col">
+                    @if (WelcomeQuestions.length > 2) {
+                        <div class="welcome-question" (click)="SendUserMessage(WelcomeQuestions[2].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[2].topLine}}</span>
+                            <span>{{WelcomeQuestions[2].bottomLine}}</span>
+                        </div>    
+                    }
+                    @if (WelcomeQuestions.length > 3) {
+                        <div class="welcome-question" (click)="SendUserMessage(WelcomeQuestions[3].prompt)">
+                            <span class="welcome-question-header">{{WelcomeQuestions[3].topLine}}</span>
+                            <span>{{WelcomeQuestions[3].bottomLine}}</span>
+                        </div>        
+                    }
+                </div>
+            </div>
+        </div>        
+    }
+
+    <div class="chat-messages" 
+         #messagesContainer 
+         (scroll)="handleCheckScroll()">
+        <!-- messages go here -->
+        <span>{{InitialMessage}}</span>
+    </div>
+    @if (ShowScrollToBottomButton) {
+        <span class="scroll-to-bottom fas fa-arrow-down" (click)="ScrollMessagesToBottom()"></span>
+    }
+
+    <div class = "chat-input-area">
+        @if (ShowWaitingIndicator) {
+            <kendo-loader type="converging-spinner" class="loader"></kendo-loader>
+        }
+        <div class="text-area-wrapper">
+            <textarea #theInput 
+                        [(ngModel)]="currentMessage" 
+                        [disabled]="ShowWaitingIndicator" 
+                        [placeholder]="Placeholder" 
+                        (input)="handleInputChange($event)"
+                        (keyup.enter)="SendCurrentMessage()" >
+            </textarea>
+        </div>
+        <button kendoButton 
+                [disabled]="Messages.length === 0 || ShowWaitingIndicator"
+                (click)="showingClearAllDialog = true">
+            <span class="fa-solid fa-trash-can" title="Clear Chat">
+            </span>
+        </button>
+        <button kendoButton
+                [disabled]="!InternalAllowSend || currentMessage.length === 0 || ShowWaitingIndicator" 
+                (click)="SendCurrentMessage()">
+                <span class="fas fa-solid fa-arrow-up" title="Send Message"></span>
+        </button>
+    </div>
+</div>
+@if (showingClearAllDialog) {
+    <kendo-dialog>
+        <p>{{ClearAllMessagesPrompt}}</p>
+          <kendo-dialog-actions>
+            <button kendoButton (click)="HandleClearChat()" themeColor="primary">Yes</button>
+            <button kendoButton (click)="showingClearAllDialog = false">No</button>
+          </kendo-dialog-actions>
+    </kendo-dialog>
+}

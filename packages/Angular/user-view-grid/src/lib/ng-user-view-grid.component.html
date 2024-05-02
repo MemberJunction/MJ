@@ -1,117 +1,172 @@
 <div class="user-view-grid-wrap" mjFillContainer>
+    <div class="flex-direction-row">
+        <div class="flex-direction-row gap-large">
+            <div class="flex-direction-column">
+                <b>Showing {{this.viewData.length}} of {{this.totalRowCount}} rows</b>
+                <br/>
+                <span style="font-size: smaller; font-weight: normal;">
+                    {{viewExecutionTime}} seconds
+                </span> 
+                <!--
+                {{this.viewData.length | number}}{{this.totalRowCount > this.viewData.length ? ' of ' + (this.totalRowCount | number) : ' rows'}}<br/><span style="font-size: smaller; font-weight: normal;">{{viewExecutionTime | number:'1.2-2'}} seconds</span>
+                -->
+            </div>
+            <div class="title-wrapper">
+                <div class="search">
+                  <kendo-textbox 
+                  type="text" 
+                  #searchInput 
+                  placeholder="Search in view..." 
+                  [clearButton]="true"
+                  size="large"
+                  rounded="large"
+                  fillMode="solid"
+                  >
+                    <ng-template kendoTextBoxPrefixTemplate [showSeparator]="true">
+                      <span class="fa-solid fa-magnifying-glass margin-left-small"></span>
+                    </ng-template>
+                  </kendo-textbox>
+                </div>
+            </div>
+        </div>
+        <div class="flex-direction-row gap-small">
+            @if(!compareMode && !mergeMode && !duplicateMode){
+                <button kendoButton (click)="doExcelExport()" class="k-button-solid-base list-button">
+                    <span Title="Export to Excel" class="fa-solid fa-file-excel fa-lg"></span> Export to Excel
+                </button>
+                <!--
+                    <button kendoButton class="k-button-solid-base list-button">
+                        Analysis
+                    </button>
+                -->
+            }
+            
+            <!-- 3 buttons for duplicate. First one only shows when duplication is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending duple.  -->
+            <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="(!compareMode && !mergeMode && !duplicateMode)" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                Search For Duplicates
+            </button>
+            <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="duplicateMode" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                Search For Duplicates
+            </button>
+            <!--
+            <button (click)="enableCheckbox(true, 'duplicate')" *ngIf="duplicateMode" kendoButton class="k-button-solid-base list-button">
+                Cancel
+            </button>
+            -->
+
+            <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
+            <button kendoButton (click)="enableCheckbox(false, 'compare')" *ngIf="(!compareMode && !mergeMode && !duplicateMode)" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button-solid-base list-button">Compare</button>
+            <button kendoButton (click)="enableCheckbox(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button-solid-base list-button">Compare</button>
+            <!--
+            <button kendoButton (click)="enableCheckbox(true, 'compare')" *ngIf="compareMode" class="k-button-solid-base list-button">Cancel</button>
+            -->
+            
+            <!-- 3 buttons for merge. First one only shows when merge is getting goin in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending merge.  -->
+            <button kendoButton (click)="enableCheckbox(false, 'merge')" *ngIf="(!mergeMode && !compareMode && !duplicateMode)" [disabled]="mergeMode && recordsToCompare.length < 2"  class="k-button-solid-base list-button">Merge</button>
+            <button kendoButton (click)="enableCheckbox(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2"  class="k-button-solid-base list-button">Merge</button>
+            <!--
+            <button kendoButton (click)="enableCheckbox(true, 'merge')" *ngIf="mergeMode" class="k-button-solid-base list-button">Cancel</button>
+            -->
+            @if(compareMode || mergeMode || duplicateMode){
+                <button (click)="enableCheckbox(true, '')" kendoButton class="k-button-solid-base list-button">
+                    Cancel
+                </button>
+            }
+            @if(showRefreshButton && !compareMode && !mergeMode && !duplicateMode){
+                <button
+                kendoButton
+                class="list-button"
+                (click)="RefreshFromSavedParams()">
+                <span class="fa-solid fa-arrows-rotate"></span>
+                    Refresh
+                </button>
+            }
+        </div>
+    </div>
     <kendo-grid #kendoGrid
-          mjFillContainer
-          [resizable]="true"
-          [data]="gridView" 
-          [skip]="skip"
-          [pageSize]="pageSize"
-          scrollable="virtual"
-          [rowHeight]="36"
-          (pageChange)="pageChange($event)"
-          [loading]="isLoading"
-          [height]="gridHeight"
-          [sortable]="true"
-          [sort]="sortSettings" 
-          [resizable]="true"
-          [reorderable]="true"
-          [selectable]="true"
-          kendoGridSelectBy
-          [(selectedKeys)]="selectedKeys"
-          (cellClick)="cellClickHandler($event)"
-          (cellClose)="cellCloseHandler($event)"
-          (columnReorder)="columnReorder($event)"
-          (columnResize)="columnResize($event)"
-          (selectionChange)="selectionChange($event)"
-          (sortChange)="sortChanged($event)"
-          >
-          <ng-template kendoGridToolbarTemplate>
-             
-              <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" >
-                <span class="fa-regular fa-file-excel"></span>
-                  Export to Excel
-              </button>
-              <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
-              <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
-              <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
-              <button (click)="enableMergeOrCompare(true, 'compare')" *ngIf="compareMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
-  
-              <!-- 3 buttons for merge. First one only shows when merge is getting goin in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending merge.  -->
-              <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
-              <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="!mergeMode && !compareMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
-              <button (click)="enableMergeOrCompare(true, 'merge')" *ngIf="mergeMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
-              <button
-                  kendoButton themeColor="info"
-                  *ngIf="showRefreshButton && !compareMode && !mergeMode"
-                  (click)="RefreshFromSavedParams()">
-                  <span class="fa-solid fa-arrow-rotate-right"></span>
-                  Refresh
-              </button>
-          </ng-template>
-          
-          <kendo-grid-checkbox-column 
-              *ngIf="compareMode || mergeMode" 
-              [width]="50" 
-              [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }" 
-              [style]="{'text-align': 'center', 'vertical-align': 'center'}">
-          </kendo-grid-checkbox-column>
-          
-          <kendo-grid-column 
-              *ngFor="let item of visibleColumns" 
-              [field]="item.Name" 
-              [title]="GetColumnTitle(item)"
-              [width]="item.width ? item.width : 100"
-              [editable]="item.EntityField.AllowUpdateAPI"
-              [editor]="getEditor(item.EntityField)"
-              [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }"
-              [style]="this.GetColumnCellStyle(item)"
-              >
-              <ng-template *ngIf="item===visibleColumns[0]" kendoGridFooterTemplate >
-                  {{this.viewData.length | number}}{{this.totalRowCount > this.viewData.length ? ' of ' + (this.totalRowCount | number) : ' rows'}}<br/><span style="font-size: smaller; font-weight: normal;">{{viewExecutionTime | number:'1.2-2'}} seconds</span>
-              </ng-template>
-          </kendo-grid-column>
-  
-          <kendo-excelexport #excelExport [data]="exportData" [fileName]="(_viewEntity ? _viewEntity.Get('Name') : _entityInfo?.Name) + '.xlsx'">
-              <kendo-excelexport-column *ngFor="let exportCol of exportColumns" [field]="exportCol.Name" [title]="exportCol.Name">
-              </kendo-excelexport-column>
-          </kendo-excelexport>
-      </kendo-grid>
+    mjFillContainer
+    [resizable]="true"
+    [data]="gridView" 
+    [skip]="skip"
+    [pageSize]="pageSize"
+    scrollable="virtual"
+    [rowHeight]="36"
+    (pageChange)="pageChange($event)"
+    [loading]="isLoading"
+    [height]="gridHeight"
+    [sortable]="true"
+    [sort]="sortSettings" 
+    [resizable]="true"
+    [reorderable]="true"
+    [selectable]="true"
+    kendoGridSelectBy
+    [(selectedKeys)]="selectedKeys"
+    (cellClick)="cellClickHandler($event)"
+    (cellClose)="cellCloseHandler($event)"
+    (columnReorder)="columnReorder($event)"
+    (columnResize)="columnResize($event)"
+    (selectionChange)="selectionChange($event)"
+    (sortChange)="sortChanged($event)"
+    > 
+        <kendo-grid-checkbox-column 
+        *ngIf="compareMode || mergeMode || duplicateMode" 
+        [width]="50" 
+        [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }" 
+        [style]="{'text-align': 'center', 'vertical-align': 'center'}">
+        </kendo-grid-checkbox-column> 
+        <kendo-grid-column 
+        *ngFor="let item of visibleColumns" 
+        [field]="item.Name" 
+        [title]="GetColumnTitle(item)"
+        [width]="item.width ? item.width : 100"
+        [editable]="item.EntityField.AllowUpdateAPI"
+        [editor]="getEditor(item.EntityField)"
+        [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }"
+        [style]="this.GetColumnCellStyle(item)"
+        />
+        <kendo-excelexport #excelExport [data]="exportData" [fileName]="(_viewEntity ? _viewEntity.Get('Name') : _entityInfo?.Name) + '.xlsx'">
+            <kendo-excelexport-column *ngFor="let exportCol of exportColumns" [field]="exportCol.Name" [title]="exportCol.Name">
+            </kendo-excelexport-column>
+        </kendo-excelexport>
+    </kendo-grid>
       
-      <div  #compareDialogContainer>
-          <div *ngIf="isCompareDialogOpened">
-              <div class="k-overlay"></div>
-              <kendo-window
-                  [minHeight]="300"
-                  [minWidth]="800"
-                  [top]="100"
-                  [left]="100"
-                  [width]="1200"
-                  [height]="675"
-                  [resizable]="true"
-                  (close)="closeCompareDialog($event)"
-                  title="Compare Records"
-                  *ngIf="isCompareDialogOpened"
-              >
-                  <div mjFillContainer [fillHeight]="true" [bottomMargin]="100">
-                      <mj-compare-records
-                          #recordCompareRef
-                          [entityName]="_entityInfo ? _entityInfo.Name : ''"
-                          [recordsToCompare]="recordsToCompare" 
-                          [visibleColumns]="visibleColumns" 
-                          [selectionMode]="mergeMode ? true : false"
-                      >
-                      </mj-compare-records>
-                  </div>
-                  <div class="k-actions k-actions-end">
-                      <button *ngIf="compareMode" kendoButton type="button" (click)="closeCompareDialog('close')">Close</button>
-                      <button *ngIf="mergeMode"kendoButton type="button" (click)="closeCompareDialog('cancel')">Cancel</button>
-                      <button *ngIf="mergeMode"
-                      kendoButton
-                      themeColor="primary"
-                      type="button"
-                      (click)="closeCompareDialog('merge')"
-                      >
-                      Merge Records
-                      </button>
+    <div #compareDialogContainer>
+        <div *ngIf="isCompareDialogOpened">
+            <div class="k-overlay"></div>
+            <kendo-window
+                [minHeight]="300"
+                [minWidth]="800"
+                [top]="100"
+                [left]="100"
+                [width]="1200"
+                [height]="675"
+                [resizable]="true"
+                (close)="closeCompareDialog($event)"
+                title="Compare Records"
+                *ngIf="isCompareDialogOpened"
+            >
+                <div mjFillContainer [fillHeight]="true" [bottomMargin]="100">
+                    <mj-compare-records
+                        #recordCompareRef
+                        [entityName]="_entityInfo ? _entityInfo.Name : ''"
+                        [recordsToCompare]="recordsToCompare" 
+                        [visibleColumns]="visibleColumns" 
+                        [selectionMode]="mergeMode ? true : false"
+                    />
+                </div>
+                <div class="k-actions k-actions-end">
+                    <button kendoButton *ngIf="mergeMode" (click)="closeCompareDialog('merge')" class="k-button-solid-base-filled">
+                        Merge Records 
+                    </button>
+                    <button kendoButton *ngIf="duplicateMode" (click)="fimdDuplicateRecords()" class="k-button-solid-base-filled">
+                        Search for Duplicates
+                    </button>
+                    <button kendoButton *ngIf="compareMode" (click)="closeCompareDialog('close')">
+                        Close
+                    </button>
+                    <button kendoButton *ngIf="mergeMode || duplicateMode" (click)="closeCompareDialog('cancel')">
+                        Cancel
+                    </button>
                   </div>      
                   <kendo-dialog
                       title="Confirm Choice"

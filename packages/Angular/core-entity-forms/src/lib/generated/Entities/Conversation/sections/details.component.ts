@@ -56,7 +56,7 @@ import { ConversationEntity } from '@memberjunction/core-entities';
         <mj-form-field
             [record]="record"
             FieldName="LinkedRecordID"
-            Type="numerictextbox"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field

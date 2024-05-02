@@ -246,6 +246,7 @@ npm
                 innerParams.UserSearchString = params.UserSearchString ? params.UserSearchString : '';
                 innerParams.Fields = params.Fields; // pass it straight through, either null or array of strings
                 innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
+                innerParams.MaxRows = params.MaxRows ? params.MaxRows : 0;
                 innerParams.ForceAuditLog = params.ForceAuditLog ? params.ForceAuditLog : false;
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;

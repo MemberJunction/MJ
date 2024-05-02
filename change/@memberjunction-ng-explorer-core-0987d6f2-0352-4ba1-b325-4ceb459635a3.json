@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Update base-browser-component.ts",
-  "packageName": "@memberjunction/ng-explorer-core",
-  "email": "155523863+JS-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}

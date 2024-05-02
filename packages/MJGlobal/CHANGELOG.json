@@ -2,6 +2,21 @@
   "name": "@memberjunction/global",
   "entries": [
     {
+      "date": "Wed, 24 Apr 2024 20:57:41 GMT",
+      "version": "1.0.11",
+      "tag": "@memberjunction/global_v1.0.11",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/global",
+            "commit": "08b3a6bfa69eda4d21bee6256d0c7110617a9638",
+            "comment": "* Added support for BaseFieldComponent to show or not show its label * Added more JSDoc documentation to classes within MJCore and MJGlobal"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 13 Apr 2024 02:32:44 GMT",
       "version": "1.0.8",
       "tag": "@memberjunction/global_v1.0.8",

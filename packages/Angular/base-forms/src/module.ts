@@ -15,6 +15,7 @@ import { SectionLoaderComponent } from './lib/section-loader-component';
 import { FormToolbarComponent } from './lib/form-toolbar';
 import { MJFormField } from './lib/base-field-component';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 
 @NgModule({
@@ -32,7 +33,8 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
     InputsModule,
     DateInputsModule,
     DropDownsModule,
-    LinkDirectivesModule
+    LinkDirectivesModule,
+    AskSkipModule
   ],
   exports: [
     SectionLoaderComponent,

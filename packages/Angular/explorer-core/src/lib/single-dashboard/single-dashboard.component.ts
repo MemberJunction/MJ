@@ -169,11 +169,11 @@ export class SingleDashboardComponent implements OnInit {
     this.toggleEditDashboard(false);
     let result = await this.SaveDashboard();
     if(result){
-      this.sharedService.CreateSimpleNotification("Dashboard changes have been saved.", "success");
+      this.sharedService.CreateSimpleNotification("Dashboard changes have been saved.", "success", 1000);
       await this.ngOnInit();
     }
     else{
-      this.sharedService.CreateSimpleNotification("An error occured saving the dashboard changes", "error");
+      this.sharedService.CreateSimpleNotification("An error occured saving the dashboard changes", "error", 1000);
     }
   }
 
@@ -236,7 +236,7 @@ export class SingleDashboardComponent implements OnInit {
       this.SaveDashboard();
     }
     else {
-      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning');
+      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning', 1000);
     }
   }
 
@@ -258,10 +258,10 @@ export class SingleDashboardComponent implements OnInit {
     this.items = this.items.filter(i => i.uniqueId != item.uniqueId);
     let result = await this.SaveDashboard();
     if(result){
-      this.sharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, "success");
+      this.sharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, "success", 1000);
     }
     else{
-      this.sharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, "error");
+      this.sharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, "error", 1000);
     }
     this.selectedDashboardItem = null;
     this.isDeletingDashboardItem = false;
