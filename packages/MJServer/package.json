@@ -24,6 +24,8 @@
     "@memberjunction/ai": "~1.2.0",
     "@memberjunction/ai-openai": "~1.2.0",
     "@memberjunction/aiengine": "~1.2.0",
+    "@memberjunction/ai-mistral": "~1.2.0",
+    "@memberjunction/ai-vectors-pinecone": "~1.2.0",
     "@memberjunction/core": "~1.2.0",
     "@memberjunction/core-entities": "~1.2.0",
     "@memberjunction/data-context": "~1.2.0",
