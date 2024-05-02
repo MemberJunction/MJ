@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
-This log was last generated on Thu, 02 May 2024 16:46:11 GMT and should not be manually modified.
+This log was last generated on Thu, 02 May 2024 19:46:38 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.2.2
+
+Thu, 02 May 2024 19:46:38 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v1.2.2
+- Bump @memberjunction/core-entities to v1.2.2
+- Bump @memberjunction/ng-explorer-core to v1.2.2
+- Bump @memberjunction/ng-base-forms to v1.2.2
+- Bump @memberjunction/ng-tabstrip to v1.2.2
+- Bump @memberjunction/ng-container-directives to v1.2.2
 
 ## 1.2.1
 
