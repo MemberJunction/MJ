@@ -1,8 +1,28 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Thu, 02 May 2024 16:46:11 GMT and should not be manually modified.
+This log was last generated on Thu, 02 May 2024 19:46:38 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.2.2
+
+Thu, 02 May 2024 19:46:38 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v1.2.2
+- Bump @memberjunction/ai-openai to v1.2.2
+- Bump @memberjunction/aiengine to v1.2.2
+- Bump @memberjunction/core to v1.2.2
+- Bump @memberjunction/core-entities to v1.2.2
+- Bump @memberjunction/data-context to v1.2.2
+- Bump @memberjunction/data-context-server to v1.2.2
+- Bump @memberjunction/global to v1.2.2
+- Bump @memberjunction/storage to v1.2.2
+- Bump @memberjunction/queue to v1.2.2
+- Bump @memberjunction/sqlserver-dataprovider to v1.2.2
+- Bump @memberjunction/skip-types to v1.2.2
 
 ## 1.2.1
 
