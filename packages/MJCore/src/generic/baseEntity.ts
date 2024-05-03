@@ -1,6 +1,6 @@
 import { MJGlobal } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo, PrimaryKeyValue } from './entityInfo';
-import { EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import { CompositeKey, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -342,6 +342,17 @@ export abstract class BaseEntity {
     }
 
     /**
+     * Retuns a Composite Key for the entity. If the entity has a single primary key, this method will return a CompositeKey with a single primary key field in it.
+     */
+    get CompositeKey(): CompositeKey {
+        let key: CompositeKey = new CompositeKey();
+        key.PrimaryKeyValues = this.PrimaryKeys.map((pk) => {
+            return { FieldName: pk.Name, Value: pk.Value }
+        });
+        return key;
+    }
+
+    /**
      * Returns true if the record has been loaded from the database, false otherwise. This is useful to check to see if the record is in a "New Record" state or not.
      */
     get RecordLoaded(): boolean {
@@ -653,20 +664,20 @@ export abstract class BaseEntity {
      * @param EntityRelationshipsToLoad Optional, you can specify the names of the relationships to load up. This is an expensive operation as it loads up an array of the related entity objects for the main record, so use it sparingly.
      * @returns true if success, false otherwise
      */
-    public async InnerLoad(PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async InnerLoad(compositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
         }
         else{
             const start = new Date().getTime();
-            this.ValidatePrimaryKeyArray(PrimaryKeyValues);
+            this.ValidateCompositeKey(compositeKey);
 
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
             if (!this.IsSaved) 
                 this.init(); // wipe out current data if we're loading on top of existing record
 
-            const data = await BaseEntity.Provider.Load(this, PrimaryKeyValues, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await BaseEntity.Provider.Load(this, compositeKey, EntityRelationshipsToLoad, this.ActiveUser);
             this.SetMany(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
@@ -686,7 +697,8 @@ export abstract class BaseEntity {
         }
     }
 
-    protected ValidatePrimaryKeyArray(PrimaryKeyValues: PrimaryKeyValue[]) {
+    protected ValidateCompositeKey(compositeKey: CompositeKey) {
+        const PrimaryKeyValues = compositeKey.PrimaryKeyValues;
         // make sure that PrimaryKeyValues is an array of 1+ objects, and that each object has a FieldName and Value property and that the FieldName is a valid field on the entity that has IsPrimaryKey set to true
         if (!PrimaryKeyValues || PrimaryKeyValues.length === 0)
             throw new Error('PrimaryKeyValues cannot be null or empty');
@@ -764,7 +776,6 @@ export abstract class BaseEntity {
         }
     }
 
-
     /**
      * Called before an Action is executed by the AI Engine
      * This is intended to be overriden by subclass as needed, these methods called at the right time by the execution context
@@ -802,7 +813,7 @@ export abstract class BaseEntity {
      */
     public get RecordChanges(): Promise<RecordChange[]> {
         if (this.IsSaved) 
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKeys.map(pk => { return { FieldName: pk.Name, Value: pk.Value }; }))
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.CompositeKey);
         else
             throw new Error('Cannot get record changes for a record that has not been saved yet');
     }
@@ -813,12 +824,12 @@ export abstract class BaseEntity {
      * @param PrimaryKeyValue 
      * @returns 
      */
-    public static async GetRecordChanges(entityName: string, PrimaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]> {
+    public static async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
         if (BaseEntity.Provider === null) {    
             throw new Error('No provider set');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, PrimaryKeyValues);
+            const results = await BaseEntity.Provider.GetRecordChanges(entityName, compositeKey);
             if (results) {
                 const changes: RecordChange[] = [];
                 for (let result of results) 

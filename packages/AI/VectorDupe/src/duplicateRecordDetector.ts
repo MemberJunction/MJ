@@ -1,5 +1,5 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { RunViewResult, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, PrimaryKeyValue, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import { RunViewResult, PotentialDuplicate, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValue, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
 import { EntityDocument } from "./generic/entity.types";
 import { LogStatus } from "@memberjunction/core";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";

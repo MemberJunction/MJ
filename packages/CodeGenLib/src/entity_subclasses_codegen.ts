@@ -23,7 +23,7 @@ export class EntitySubClassGeneratorBase {
     }
     
     public generateEntitySubClassFileHeader(): string {
-        return `import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
+        return `import { BaseEntity, PrimaryKeyValue, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
     `
     }
@@ -97,7 +97,9 @@ import { RegisterClass } from "@memberjunction/global";
         public async Load(${loadFieldString}, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
             const pkeyValues: PrimaryKeyValue[] = [];
             ${entity.PrimaryKeys.map(f => `pkeyValues.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            let compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.PrimaryKeyValues = pkeyValues;
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         `    
             const deleteFunction: string = entity.AllowDeleteAPI ? '' : `    

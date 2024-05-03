@@ -48,15 +48,13 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
-export class PrimaryKeyValueBase {
+export class CompositeKey {
     /*
     * The primary key values of the record 
     */
     PrimaryKeyValues: PrimaryKeyValue[];
 
-    //MJ Server's DuplicateRecordResolve has a copy of this property
-    //changes here should be applied there as well
-    GetCompositeKey(): string {
+    GetCompositeKey(separator?: string): string {
         
         if(!this.PrimaryKeyValues){
             return "";
@@ -68,15 +66,52 @@ export class PrimaryKeyValueBase {
 
         return this.PrimaryKeyValues.map((keyValue, index) => {
             return keyValue.Value.toString();
-        }).join(", ");
+        }).join(separator || ", ");
+    }
+
+    /**
+    * Utility function to compare the primary key values of this object to the primary key 
+    * values of another CompositeKey object
+    * @param compositeKey the CompositeKey to compare against
+    * @returns true if the primary key values are the same, false if they are different
+    */
+    Equals(compositeKey: CompositeKey): boolean {
+        if (this.PrimaryKeyValues.length !== compositeKey.PrimaryKeyValues.length)
+        return false;
+
+        const pkeyValues: PrimaryKeyValue[] = compositeKey.PrimaryKeyValues;
+        for (let i = 0; i < this.PrimaryKeyValues.length; i++) {
+        if (this.PrimaryKeyValues[i].Value !== pkeyValues[i].Value)
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+    * Utility function to compare the primary key values of this object to another set of primary key 
+    * values
+    * @param pkeyValues the Primary Key Values to compare against
+    * @returns true if the primary key values are the same, false if they are different
+    */
+    EqualsPrimaryKey(pkeyValues: PrimaryKeyValue[]): boolean {
+        if (this.PrimaryKeyValues.length !== pkeyValues.length)
+        return false;
+
+        for (let i = 0; i < this.PrimaryKeyValues.length; i++) {
+        if (this.PrimaryKeyValues[i].Value !== pkeyValues[i].Value)
+            return false;
+        }
+
+        return true;
     }
 }
 
-export class PotentialDuplicate extends PrimaryKeyValueBase {
+export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number
 }
 
-export class PotentialDuplicateRequest extends PrimaryKeyValueBase {
+export class PotentialDuplicateRequest extends CompositeKey {
     /**
     * The ID of the entity document to use
     **/
@@ -107,13 +142,13 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, compositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 
     Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
 
-    GetRecordChanges(entityName: string, PrimaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]>
+    GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]>
 }
 
 export class EntitySaveOptions {
@@ -123,13 +158,13 @@ export class EntitySaveOptions {
 
 export class EntityRecordNameInput  {
     EntityName: string;
-    PrimaryKeyValues: PrimaryKeyValue[];
+    CompositeKey: CompositeKey;
 }
 
 export class EntityRecordNameResult  {
-    Success: boolean
-    Status: string
-    PrimaryKeyValues: PrimaryKeyValue[];
+    Success: boolean;
+    Status: string;
+    CompositeKey: CompositeKey;
     EntityName: string;
     RecordName?: string;
  }
@@ -180,9 +215,9 @@ export interface IMetadataProvider {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValues the primary key(s) for the record to check
+     * @param compositeKey the primary key(s) for the record to check
      */
-    GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
@@ -219,10 +254,10 @@ export interface IMetadataProvider {
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param primaryKeyValues 
+     * @param compositeKey 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
@@ -231,9 +266,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean>
+    GetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 

@@ -10,7 +10,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse,  
+         CompositeKey} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -377,11 +378,11 @@ npm
         return ProviderType.Network;
     }
 
-    public async GetRecordChanges(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = '${primaryKeyValues.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${compositeKey.PrimaryKeyValues.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -407,9 +408,9 @@ npm
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValues the primaryKeyValues of the record to check
+     * @param compositeKey the compositeKey of the record to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
             const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $primaryKeyValues: [PrimaryKeyValueInputType!]!) {

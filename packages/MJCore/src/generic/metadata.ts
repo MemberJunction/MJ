@@ -1,5 +1,5 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
-import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
+import { CompositeKey, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
@@ -113,26 +113,26 @@ export class Metadata {
     }
 
     /**
-     * Returns true if the combination of userId/entityName/primaryKeyValues has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
+     * Returns true if the combination of userId/entityName/compositeKey has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
      * @param userId 
      * @param entityName 
-     * @param primaryKeyValues 
+     * @param compositeKey
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKeyValues);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, compositeKey);
     }
 
     /**
-     * Sets the favorite status for a given user for a specific entityName/primaryKeyValues
+     * Sets the favorite status for a given user for a specific entityName/compositeKey
      * @param userId 
      * @param entityName 
-     * @param primaryKeyValues
+     * @param compositeKey
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKeyValues, isFavorite, contextUser);
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, compositeKey, isFavorite, contextUser);
     }
 
     /**
@@ -143,8 +143,8 @@ export class Metadata {
      * @param entityName the name of the entity to check
      * @param primaryKeyValue the primary key value to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKeyValues);
+    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> { 
+        return await Metadata.Provider.GetRecordDependencies(entityName, compositeKey);
     }
 
     /**
@@ -196,22 +196,23 @@ export class Metadata {
     }
 
     /**
-     * Returns the Name of the specific primaryKeyValues for a given entityName. This is done by 
+     * Returns the Name of the specific compositeKey for a given entityName. This is done by 
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param primaryKeyValues
+     * @param compositeKey
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
         // check each primary key value to make sure it's not null
+        const primaryKeyValues = compositeKey.PrimaryKeyValues;
         for (let j = 0; j < primaryKeyValues.length; j++) {
             if (!primaryKeyValues[j] || !primaryKeyValues[j].Value) {
                 throw new Error('GetEntityRecordName: primaryKeyValues cannot contain null values. FieldName: ' + primaryKeyValues[j]?.FieldName);
             }
         }
         
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKeyValues);
+        return await Metadata.Provider.GetEntityRecordName(entityName, compositeKey);
     }
 
     /**
@@ -222,14 +223,15 @@ export class Metadata {
     public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         // valiate to make sure we don't have any null primary keys being sent in
         for (let i = 0; i < info.length; i++) {
-            if (!info[i].PrimaryKeyValues || info[i].PrimaryKeyValues.length == 0) {
+            const primaryKeys = info[i].CompositeKey.PrimaryKeyValues;
+            if (!primaryKeys || primaryKeys.length == 0) {
                 throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot be null or empty. It is for item ' + i.toString() + ' in the input array.');
             }
             else {
                 // check each primary key value to make sure it's not null
-                for (let j = 0; j < info[i].PrimaryKeyValues.length; j++) {
-                    if (!info[i].PrimaryKeyValues[j] || !info[i].PrimaryKeyValues[j].Value) {
-                        throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot contain null values. FieldName: ' + info[i].PrimaryKeyValues[j]?.FieldName);
+                for (let j = 0; j < primaryKeys.length; j++) {
+                    if (!primaryKeys[j] || !primaryKeys[j].Value) {
+                        throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot contain null values. FieldName: ' + primaryKeys[j]?.FieldName);
                     }
                 }
             }
