@@ -183,6 +183,8 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
             convoEntity.Delete(); // dont await because inside a TG
             
             await tg.Submit();
+
+            this._conversationId = 0;
             this.mjChat.ClearAllMessages();
           }
           this.mjChat.ShowWaitingIndicator = false;

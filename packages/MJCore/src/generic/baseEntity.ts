@@ -692,6 +692,11 @@ export abstract class BaseEntity {
                 this.init(); // wipe out current data if we're loading on top of existing record
 
             const data = await BaseEntity.Provider.Load(this, PrimaryKeyValues, EntityRelationshipsToLoad, this.ActiveUser);
+            if (!data) {
+                LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${PrimaryKeyValues.map(pk => pk.Value).join(',')}`);                
+                return false; // no data loaded, return false
+            }
+
             this.SetMany(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
