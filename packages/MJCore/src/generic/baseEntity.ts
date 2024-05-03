@@ -474,9 +474,22 @@ export abstract class BaseEntity {
                     // pre now has the param that matches the related entity (re) that we are looking at
                     // we are now here because either the caller didn't provide a list of entities to include 
                     // (which means to include all of 'em), or they did and this entity is in the list
-                    const reData = await this.GetRelatedEntityData(re, pre.filter, pre.maxRecords);
-                    if (reData)
-                        obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object
+                    const reData = await this.GetRelatedEntityDataExt(re, pre.filter, pre.maxRecords);
+                    if (reData) {
+                        obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object                        
+                        if (pre.maxRecords > 0) {
+                            // add a note to the object to let the caller know that only the first X records are returned so
+                            // that a caller can know that there could be more records available if they want them
+                            let msg: string;
+                            if (pre.maxRecords < reData.TotalRowCount)
+                                msg = `Only the first ${pre.maxRecords} records are included in this response. There are ${reData.TotalRowCount} total records available.`;
+                            else  
+                                msg = `All ${reData.TotalRowCount} records are included in this response.`;
+
+                            obj[re.RelatedEntity].Note = msg; // add the message to the object as "Note"
+                            obj[re.RelatedEntity].MaxRecordsFilter = pre.maxRecords; // add the max records to the object as "MaxRecords"
+                        }
+                    }
                 }
             }
         }
@@ -485,12 +498,23 @@ export abstract class BaseEntity {
     }
 
     public async GetRelatedEntityData(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<any[]> {
+        const ret = await this.GetRelatedEntityDataExt(re, filter, maxRecords);
+        return ret?.Data;
+    }
+
+    public async GetRelatedEntityDataExt(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<{Data: any[], TotalRowCount: number}> {
         // we need to query the database to get related entity info
         const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
         const rv = new RunView();
         const result = await rv.RunView(params, this._contextCurrentUser)
-        if (result && result.Success)
-            return result.Results
+        if (result && result.Success) {
+            return {
+                Data: result.Results, 
+                TotalRowCount: result.TotalRowCount
+            };
+        }
+        else    
+            return null;
     }
 
     private init() {
@@ -668,6 +692,11 @@ export abstract class BaseEntity {
                 this.init(); // wipe out current data if we're loading on top of existing record
 
             const data = await BaseEntity.Provider.Load(this, PrimaryKeyValues, EntityRelationshipsToLoad, this.ActiveUser);
+            if (!data) {
+                LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${PrimaryKeyValues.map(pk => pk.Value).join(',')}`);                
+                return false; // no data loaded, return false
+            }
+
             this.SetMany(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
