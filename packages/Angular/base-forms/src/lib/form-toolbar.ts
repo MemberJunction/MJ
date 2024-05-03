@@ -1,5 +1,11 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ViewChild } from '@angular/core';
 import { BaseFormComponent } from './base-form-component';
+import { ChatComponent, ChatMessage } from '@memberjunction/ng-chat';
+import { SharedService } from '@memberjunction/ng-shared';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { Metadata, PrimaryKeyValue, RunView, TransactionGroupBase } from '@memberjunction/core';
+import { ConversationDetailEntity } from '@memberjunction/core-entities';
+import { SkipAPIChatWithRecordResponse } from '@memberjunction/skip-types';
 
 
 @Component({
@@ -53,6 +59,21 @@ import { BaseFormComponent } from './base-form-component';
                     <span class="button-text">History</span>
                 </button> 
             }
+            @if (ShowSkipChatButton) {
+                <button kendoButton (click)="ShowSkipChat()" title="Discuss this record with Skip">
+                    <span class="fa-regular fa-comment-dots"></span>
+                </button> 
+            }
+            @if (form.EntityInfo) {
+                <mj-skip-chat-with-record-window
+                    [LinkedEntityID]="form.EntityInfo.ID"
+                    [LinkedEntityPrimaryKeys]="LinkedEntityPrimaryKeys"            
+                    #mjChat
+                    [WindowOpened]="SkipChatVisible" 
+                    (WindowClosed)="ShowSkipChat()"
+                >
+                </mj-skip-chat-with-record-window>
+            }
             @if (form.isHistoryDialogOpen) {
                 <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
             }
@@ -60,6 +81,7 @@ import { BaseFormComponent } from './base-form-component';
     `
 })
 export class FormToolbarComponent {
+    @Input() ShowSkipChatButton: boolean = true;
     @Input() form!: BaseFormComponent;
 
     public saveRecord(event: MouseEvent): void {
@@ -70,4 +92,14 @@ export class FormToolbarComponent {
         // Proceed to call your save record function
         this.form.SaveRecord(true);
     }
+
+    public get LinkedEntityPrimaryKeys(): PrimaryKeyValue[] {
+        return this.form.record.PrimaryKeys.map(pk => <PrimaryKeyValue>{FieldName: pk.Name, Value: pk.Value})
+    }
+
+    public SkipChatVisible: boolean = false;
+    public ShowSkipChat(): void {
+        this.SkipChatVisible = !this.SkipChatVisible;
+        SharedService.Instance.InvokeManualResize();
+    }   
 }

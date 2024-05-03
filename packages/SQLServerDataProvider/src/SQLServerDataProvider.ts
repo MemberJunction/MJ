@@ -186,6 +186,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 if (params.IgnoreMaxRows === true) {
                     // do nothing, leave it blank, this structure is here to make the code easier to read
                 }
+                else if (params.MaxRows && params.MaxRows > 0) {
+                    // user provided a max rows, so we use that
+                    topSQL = 'TOP ' + params.MaxRows;
+                }
                 else if (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0) {
                     topSQL = 'TOP ' + entityInfo.UserViewMaxRows;
                 }

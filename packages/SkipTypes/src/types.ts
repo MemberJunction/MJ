@@ -105,13 +105,15 @@ export class SkipColumnInfo {
  * * data_gathering_response: Sometimes the Skip API server responds back to your request with a responsePhase of 'data_request' - in this situation, the MJAPI server needs to process the data request, gather whatever additional data the Skip API has asked for, and then return it in the dataContext property of the SkipAPIRequest object. When you are finished gathering data and returning it to the Skip API server, use this requestPhase
  * * data_gathering_failure: When you send an API request to the Skip API server saying there was a data_gathering_failure that means that you attempted to retrieve data Skip requested but there was (typically) an error in the SQL statement that Skip generated and it needs to be regenerated. The MJAPI server code handles this scenario automatically.
  * * run_existing_script: Use this to run an existing script that was already processed. When this option is used, the script provided is run and the results are provided in the response.
+ * * chat_with_a_record: This is used for the simple record chatting feature that is separate from other Skip API features. This is used for having a chat conversation with Skip about a specific record in the database that the user is typically looking at in a UI.
  */
 export const SkipRequestPhase = {
     initial_request: 'initial_request',
     clarify_question_response: 'clarify_question_response',
     data_gathering_response: 'data_gathering_response',
     data_gathering_failure: 'data_gathering_failure',
-    run_existing_script: 'run_existing_script'
+    run_existing_script: 'run_existing_script',
+    chat_with_a_record: 'chat_with_a_record'
 } as const;
 export type SkipRequestPhase = typeof SkipRequestPhase[keyof typeof SkipRequestPhase];
 
@@ -291,12 +293,14 @@ export class SkipAPIRunScriptRequest extends SkipAPIRequest {
  * * clarifying_question: The Skip API server is asking for a clarifying question to be asked to the user - typecast the response to SkipAPIClarifyingQuestionResponse for all of the additional properties that are available in this response phase
  * * data_request: The Skip API server is asking for additional data to be gathered - typecast the response to SkipAPIDataRequestResponse for all of the additional properties that are available in this response phase
  * * analysis_complete: The Skip API server has completed the analysis and is providing the results - typecast the response to SkipAPIAnalysisCompleteResponse for all of the additional properties that are available in this response phase
+ * * chat_with_a_record_complete: The Skip API server has completed the chat with a record and is providing the results - typecast the response to SkipAPIChatWithRecordResponse for all of the additional properties that are available in this response phase
  */
 export const SkipResponsePhase = {
     status_update: "status_update",
     clarifying_question: "clarifying_question",
     data_request: "data_request",
-    analysis_complete: "analysis_complete"
+    analysis_complete: "analysis_complete",
+    chat_with_a_record_complete: "chat_with_a_record_complete"
 } as const;
 export type SkipResponsePhase = typeof SkipResponsePhase[keyof typeof SkipResponsePhase];
 
@@ -350,6 +354,17 @@ export class SkipAPIAnalysisDrillDown {
      * One or more filters that are used to filter the data in the view to the specific row or rows that the user clicked on
      */
     filters: SkipAPIAnalysisDrillDownFilter[];
+}
+
+
+/**
+ * Defines the shape of the data that is returned by the Skip API Server when the responsePhase is 'chat_with_a_record_complete'
+ */
+export class SkipAPIChatWithRecordResponse extends SkipAPIResponse {
+    /**
+     * The response from the AI model regarding the user request
+     */
+    response: string
 }
 
 /**

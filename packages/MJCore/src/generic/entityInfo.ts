@@ -749,7 +749,7 @@ export class EntityInfo extends BaseInfo {
      * @param filter 
      * @returns 
      */
-    public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string): RunViewParams {
+    public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string, maxRecords?: number): RunViewParams {
         const params: RunViewParams = {}
         let quotes: string = '';
         let keyValue: string = '';
@@ -781,6 +781,9 @@ export class EntityInfo extends BaseInfo {
             // no view specified, so specify the entity instead
             params.EntityName = relationship.RelatedEntity;
         }
+
+        if (maxRecords && maxRecords > 0)   
+            params.MaxRows = maxRecords;
 
         return params;
     }

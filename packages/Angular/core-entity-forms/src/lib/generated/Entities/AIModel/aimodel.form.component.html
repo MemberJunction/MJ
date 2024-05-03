@@ -1,5 +1,6 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
                 <div #topArea class="record-form-group">
                     
                 </div>
@@ -51,6 +52,17 @@
                     <mj-tab-body>
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Vector Indexes')"  
                             [AllowLoad]="this.IsCurrentTab('Vector Indexes')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Entity Documents')">
+                        Entity Documents
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Documents')"  
+                            [AllowLoad]="this.IsCurrentTab('Entity Documents')"  
                             [EditMode]="this.GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>

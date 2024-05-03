@@ -1,8 +1,127 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 26 Apr 2024 15:23:26 GMT and should not be manually modified.
+This log was last generated on Thu, 02 May 2024 19:46:38 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.2.2
+
+Thu, 02 May 2024 19:46:38 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v1.2.2
+- Bump @memberjunction/ai-openai to v1.2.2
+- Bump @memberjunction/aiengine to v1.2.2
+- Bump @memberjunction/core to v1.2.2
+- Bump @memberjunction/core-entities to v1.2.2
+- Bump @memberjunction/data-context to v1.2.2
+- Bump @memberjunction/data-context-server to v1.2.2
+- Bump @memberjunction/global to v1.2.2
+- Bump @memberjunction/storage to v1.2.2
+- Bump @memberjunction/queue to v1.2.2
+- Bump @memberjunction/sqlserver-dataprovider to v1.2.2
+- Bump @memberjunction/skip-types to v1.2.2
+
+## 1.2.1
+
+Thu, 02 May 2024 16:46:11 GMT
+
+### Patches
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v1.2.1
+- Bump @memberjunction/ai-openai to v1.2.1
+- Bump @memberjunction/aiengine to v1.2.1
+- Bump @memberjunction/core to v1.2.1
+- Bump @memberjunction/core-entities to v1.2.1
+- Bump @memberjunction/data-context to v1.2.1
+- Bump @memberjunction/data-context-server to v1.2.1
+- Bump @memberjunction/global to v1.2.1
+- Bump @memberjunction/storage to v1.2.1
+- Bump @memberjunction/queue to v1.2.1
+- Bump @memberjunction/sqlserver-dataprovider to v1.2.1
+- Bump @memberjunction/skip-types to v1.2.1
+
+## 1.2.0
+
+Mon, 29 Apr 2024 18:51:58 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v1.2.0
+- Bump @memberjunction/ai-openai to v1.2.0
+- Bump @memberjunction/aiengine to v1.2.0
+- Bump @memberjunction/core to v1.2.0
+- Bump @memberjunction/core-entities to v1.2.0
+- Bump @memberjunction/data-context to v1.2.0
+- Bump @memberjunction/data-context-server to v1.2.0
+- Bump @memberjunction/global to v1.2.0
+- Bump @memberjunction/storage to v1.2.0
+- Bump @memberjunction/queue to v1.2.0
+- Bump @memberjunction/sqlserver-dataprovider to v1.2.0
+- Bump @memberjunction/skip-types to v1.2.0
+
+## 1.1.3
+
+Fri, 26 Apr 2024 23:48:54 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.1.3
+- Bump @memberjunction/ai-openai to v1.1.3
+- Bump @memberjunction/aiengine to v1.1.3
+- Bump @memberjunction/core to v1.1.3
+- Bump @memberjunction/core-entities to v1.1.3
+- Bump @memberjunction/data-context to v1.1.3
+- Bump @memberjunction/data-context-server to v1.1.3
+- Bump @memberjunction/global to v1.1.3
+- Bump @memberjunction/storage to v1.1.3
+- Bump @memberjunction/queue to v1.1.3
+- Bump @memberjunction/sqlserver-dataprovider to v1.1.3
+- Bump @memberjunction/skip-types to v1.1.3
+
+## 1.1.2
+
+Fri, 26 Apr 2024 21:11:21 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.1.2
+- Bump @memberjunction/ai-openai to v1.1.2
+- Bump @memberjunction/aiengine to v1.1.2
+- Bump @memberjunction/core to v1.1.2
+- Bump @memberjunction/core-entities to v1.1.2
+- Bump @memberjunction/data-context to v1.1.2
+- Bump @memberjunction/data-context-server to v1.1.2
+- Bump @memberjunction/global to v1.1.2
+- Bump @memberjunction/storage to v1.1.2
+- Bump @memberjunction/queue to v1.1.2
+- Bump @memberjunction/sqlserver-dataprovider to v1.1.2
+- Bump @memberjunction/skip-types to v1.1.2
+
+## 1.1.1
+
+Fri, 26 Apr 2024 17:57:09 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.1.1
+- Bump @memberjunction/ai-openai to v1.1.1
+- Bump @memberjunction/aiengine to v1.1.1
+- Bump @memberjunction/core to v1.1.1
+- Bump @memberjunction/core-entities to v1.1.1
+- Bump @memberjunction/data-context to v1.1.1
+- Bump @memberjunction/data-context-server to v1.1.1
+- Bump @memberjunction/global to v1.1.1
+- Bump @memberjunction/storage to v1.1.1
+- Bump @memberjunction/queue to v1.1.1
+- Bump @memberjunction/sqlserver-dataprovider to v1.1.1
+- Bump @memberjunction/skip-types to v1.1.1
 
 ## 1.1.0
 

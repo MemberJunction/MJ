@@ -72,6 +72,13 @@ export class RunViewByIDInput {
   })
   IgnoreMaxRows?: boolean;
 
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
+
   @Field(() => Boolean, {
     nullable: true,
     description:
@@ -147,6 +154,13 @@ export class RunViewByNameInput {
   })
   IgnoreMaxRows?: boolean;
 
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
+
   @Field(() => Boolean, {
     nullable: true,
     description:
@@ -206,6 +220,13 @@ export class RunDynamicViewInput {
       'if set to true, if there IS any UserViewMaxRows property set for the entity in question, it will be IGNORED. This is useful in scenarios where you want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.',
   })
   IgnoreMaxRows?: boolean;
+
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
 
   @Field(() => Boolean, {
     nullable: true,

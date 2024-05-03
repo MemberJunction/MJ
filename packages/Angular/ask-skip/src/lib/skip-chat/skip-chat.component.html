@@ -13,7 +13,7 @@
                     [itemClass]="{ 'item-border': true }" 
                     mjFillContainer 
                     [fillWidth]="false"
-                    [bottomMargin]="40"
+                    [bottomMargin]="20"
                     #conversationList
                     >
                     <ng-template kendoListViewItemTemplate let-dataItem="dataItem">
@@ -35,7 +35,8 @@
                         </div>
                     </ng-template>
                 </kendo-listview>
-                <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div>
+                <!-- COMMENTED OUT as we don't want to support embedded conversations in the UI for now
+                     <div class="embedded-conversations"><input kendoCheckBox type="checkbox" [(ngModel)]="IncludeLinkedConversationsInList" (ngModelChange)="loadConversations()"/> <span (click)="FlipEmbeddedConversationState()">Show Linked Conversations</span></div> -->
             </div>
         </kendo-splitter-pane>
         <kendo-splitter-pane>
@@ -87,10 +88,17 @@
                             type="text" 
                             placeholder="Ask Skip a question"></textarea>
                     </div>
-                    <button kendoButton >
-                        <span *ngIf="ShowDataContextButton" class="fa-solid fa-gear" (click)="showDataContext()"></span>
+                    @if (ShowDataContextButton) {
+                        <button kendoButton >
+                            <span class="fa-solid fa-gear" 
+                                  (click)="showDataContext()"></span>
+                        </button>    
+                    }
+                    <button kendoButton 
+                            [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" 
+                            (click)="sendSkipMessage()">
+                            <span class="fas fa-solid fa-arrow-up"></span>
                     </button>
-                    <button kendoButton [disabled]="SelectedConversation !== undefined && IsSkipProcessing(SelectedConversation)" (click)="sendSkipMessage()"><i class="fas fa-solid fa-arrow-up"></i></button>
                 </div>
             </div>
         </kendo-splitter-pane>

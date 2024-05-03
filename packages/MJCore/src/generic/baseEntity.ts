@@ -243,6 +243,7 @@ export class EntityField {
 export class DataObjectRelatedEntityParam {
     relatedEntityName: string
     filter?: string
+    maxRecords?: number
 }
 export class DataObjectParams {
     oldValues: boolean = false
@@ -484,7 +485,7 @@ export abstract class BaseEntity {
                     // pre now has the param that matches the related entity (re) that we are looking at
                     // we are now here because either the caller didn't provide a list of entities to include 
                     // (which means to include all of 'em), or they did and this entity is in the list
-                    const reData = await this.GetRelatedEntityData(re, pre.filter);
+                    const reData = await this.GetRelatedEntityData(re, pre.filter, pre.maxRecords);
                     if (reData)
                         obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object
                 }
@@ -494,9 +495,9 @@ export abstract class BaseEntity {
         return obj;
     }
 
-    public async GetRelatedEntityData(re: EntityRelationshipInfo, filter: string = null): Promise<any[]> {
+    public async GetRelatedEntityData(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<any[]> {
         // we need to query the database to get related entity info
-        const params = EntityInfo.BuildRelationshipViewParams(this, re, filter)
+        const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
         const rv = new RunView();
         const result = await rv.RunView(params, this._contextCurrentUser)
         if (result && result.Success)

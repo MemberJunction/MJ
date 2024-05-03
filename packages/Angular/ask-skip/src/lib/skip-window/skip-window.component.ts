@@ -1,4 +1,5 @@
 import { Component, Input } from '@angular/core';
+import { PrimaryKeyValue } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
  
 
@@ -19,7 +20,7 @@ export class SkipWindowComponent  {
   @Input() public Title: string = "Ask Skip"
   @Input() public DataContextID: number = 0;
   @Input() public LinkedEntity: string = '';
-  @Input() public LinkedEntityRecordID: number = 0;
+  @Input() public LinkedEntityPrimaryKeys: PrimaryKeyValue[] = [];
   @Input() public ShowDataContextButton: boolean = true;
 
   public WindowOpened: boolean = true;
