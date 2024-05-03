@@ -235,7 +235,8 @@ export class VectorBase {
     }
 
     /**
-     * Entity saves in the vector related packages need the CurrentUser to be set on the entity
+     * Saving an Entity in any vector related package needs the CurrentUser property to be set on the entity
+     * So this is a simple wrapper to set it before saving
      **/
     protected async SaveEntity(entity: BaseEntity): Promise<boolean> {
         entity.ContextCurrentUser = this.CurrentUser;

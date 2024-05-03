@@ -54,10 +54,10 @@ export class PrimaryKeyValueBase {
     */
     PrimaryKeyValues: PrimaryKeyValue[];
 
-    /**
-     * MJ Server's DuplicateRecordResolve has a copy of this property
-     * changes here should be applied there as well
-     */
+    constructor() {
+        this.PrimaryKeyValues = [];
+    }
+
     GetCompositeKey(): string {
         
         if(!this.PrimaryKeyValues){
@@ -89,6 +89,19 @@ export class PrimaryKeyValueBase {
                 Value: keyValue.Value.toString()
             }
         });
+    }
+
+    /**
+     * Returns the PrimaryKeyValues as a list of strings in the format "FieldName=Value"
+     */
+    ToList(): string[] {
+        return this.PrimaryKeyValues.map((pk) => {
+            return `${pk.FieldName}=${pk.Value}`;
+        });
+    }
+
+    ToString(): string {
+        return this.ToList().join(", ");
     }
 }
 
@@ -125,7 +138,7 @@ export class PotentialDuplicateResult {
     EntityID: number;
     RecordPrimaryKeys: PrimaryKeyValueBase;
     Duplicates: PotentialDuplicate[];
-    
+    DuplicateRunDetailMatchRecordIDs: number[];
 }
 
 //Wrapper for the PotentialDuplicateResponse class that includes  additional properties

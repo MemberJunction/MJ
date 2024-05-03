@@ -18,6 +18,7 @@
     "@memberjunction/ai": "~1.2.1",
     "@memberjunction/ai-vectordb": "~1.2.1",
     "@memberjunction/ai-vectors": "~1.2.1",
+    "@memberjunction/ai-vector-sync": "~1.2.1",
     "@memberjunction/aiengine": "~1.2.1",
     "@memberjunction/core": "~1.2.1",
     "@memberjunction/global": "~1.2.1",

@@ -1,5 +1,5 @@
 import { EntitySyncConfig } from '../generic/entitySyncConfig.types';
-import { BaseEntity, LogError, LogStatus, RunViewParams, RunViewResult, UserInfo,  } from "@memberjunction/core";
+import { BaseEntity, EntityField, LogError, LogStatus, PrimaryKeyValue, RunViewParams, RunViewResult, UserInfo,  } from "@memberjunction/core";
 import { IProcedureResult, Request } from 'mssql';
 import { EmbedTextsParams, EmbedTextsResult, Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
@@ -43,7 +43,7 @@ export class EntityVectorSyncer extends VectorBase {
                     values: vector,
                     metadata: {
                         EntityID: entityDocument.EntityID,
-                        PrimaryKeys: recordID,
+                        PrimaryKeys: this.convertPrimaryKeysToList(batch[index].PrimaryKeys),
                         Template: templates[index]
                     }
                 };
@@ -123,5 +123,11 @@ export class EntityVectorSyncer extends VectorBase {
             result.push(arrayCopy.splice(0, chunkSize));
         }
         return result;
+    }
+
+    private convertPrimaryKeysToList(primaryKeys: EntityField[]): any {
+        return primaryKeys.map((pk) => {
+            return `${pk.Name}=${pk.Value}`;
+        });
     }
 }

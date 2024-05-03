@@ -2377,7 +2377,7 @@ type PotentialDuplicateType {
 }
 
 input PrimaryKeyValueBaseInputType {
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]! = []
 }
 
 type PrimaryKeyValueBaseOutputType {

@@ -171,18 +171,30 @@ export class PineconeDatabase extends VectorDBBase {
         const queryResponse = await this.queryIndex(params);
         if(queryResponse.success){
             let response: PotentialDuplicateResult = new PotentialDuplicateResult();
-            response.Duplicates = queryResponse.data.matches.map((record: {id: string, score: number, metadata: any}) => {
+            response.Duplicates = [];
+            for(const match of queryResponse.data.matches){
+                const record: {id: string, score: number, metadata: any} = match;
+                if(!record.metadata || !record.metadata.PrimaryKeys){
+                    continue;
+                }
+
+                const metadata: {PrimaryKeys: string[]} = record.metadata;
+                if(!metadata.PrimaryKeys){
+                    continue;
+                }
+
                 let duplicate: PotentialDuplicate = new PotentialDuplicate();
                 duplicate.ProbabilityScore = record.score;
-                duplicate.PrimaryKeyValues = (record.metadata.PrimaryKeys as string).split("_").map((pk: string) => {
+                duplicate.PrimaryKeyValues = metadata.PrimaryKeys.map((pk: string) => {
                     let keyValue = pk.split("=");
                     let primaryKeyValue: PrimaryKeyValue = new PrimaryKeyValue();
                     primaryKeyValue.FieldName = keyValue[0];
                     primaryKeyValue.Value = keyValue[1];
                     return primaryKeyValue;
                 });
-                return duplicate;
-            });
+                
+                response.Duplicates.push(duplicate);
+            }
 
             return this.wrapResponse(response);
         }
