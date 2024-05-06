@@ -115,6 +115,10 @@ export class PotentialDuplicateRequest {
     **/
     EntityID: number;
     /**
+    * The ID of the List entity to use
+    **/
+    ListID: number
+    /**
      * The Primary Key values of each record
      * we're checking for duplicates
      */

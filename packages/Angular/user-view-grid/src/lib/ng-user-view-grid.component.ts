@@ -3,7 +3,7 @@ import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
 import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys, PrimaryKeyValueBase, PotentialDuplicateRequest } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -837,24 +837,38 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       return;
     }
 
+    const md: Metadata = new Metadata();
+    const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists');
+    list.NewRecord();
+    list.Name = `Potential Duplicate Run`;
+    list.Description = `Potential Duplicate Run for ${this._entityInfo.Name} Entity`;
+    list.EntityID = this._entityInfo.ID;
+    list.UserID = md.CurrentUser.ID;
+
+    const saveResult = await list.Save();
+    if(!saveResult){
+        console.error(`Failed to save list for Potential Duplicate Run`);
+        return;
+    }
+
     let params: PotentialDuplicateRequest = new PotentialDuplicateRequest();
     params.EntityID = this._entityInfo?.ID;
+    params.ListID = list.ID;
     params.RecordIDs = [];
 
     for(const index of this.selectedKeys){
       const viewData = this.viewData[index];
       const idField: number = viewData.ID;
-      let pkv: PrimaryKeyValueBase = new PrimaryKeyValueBase();
-      pkv.PrimaryKeyValues = [];
-      pkv.PrimaryKeyValues.push({FieldName: "ID", Value: idField});
-      params.RecordIDs.push(pkv);
+      const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
+      listDetail.NewRecord();
+      listDetail.ListID = list.ID;
+      listDetail.RecordID = idField.toString();
+      await listDetail.Save();
     }
 
     this.closeCompareDialog('duplicate');
     this.CreateSimpleNotification("Working on finding duplicates, will notify you when it is complete...", 'info', 2000);
 
-    const md: Metadata = new Metadata();
-    console.log(md.CurrentUser.ID);
     let response = await md.GetRecordDuplicates(params, md.CurrentUser);
     console.log(response);
   }

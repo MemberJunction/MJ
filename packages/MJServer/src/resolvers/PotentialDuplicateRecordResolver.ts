@@ -24,6 +24,8 @@ export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => Int, { nullable: true })
   ProbabilityScore: number;
   
+  @Field(() => Int)
+  ListID: number;
 }
 
 @InputType()
@@ -57,6 +59,9 @@ export class PotentialDuplicateResultType extends PotentialDuplicateResult {
 
   @Field(() => PrimaryKeyValueBaseOutputType)
   RecordPrimaryKeys: PrimaryKeyValueBase;
+
+  @Field(() => [Int])
+  DuplicateRunDetailMatchRecordIDs: number[];
 }
 
 @ObjectType()

@@ -11,7 +11,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus} from "@memberjunction/core";
 
-import { AuditLogEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { AuditLogEntity, DuplicateRunEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
 import { QueueManager } from '@memberjunction/queue'
 
@@ -746,11 +746,34 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             throw new Error("User context is required to get record duplicates.");
         }
 
-        if(!this._recordDupeDetector){
-            this._recordDupeDetector = new DuplicateRecordDetector();
+        const listEntity: ListEntity = await this.GetEntityObject<ListEntity>('Lists');
+        listEntity.ContextCurrentUser = contextUser;
+        let success = await listEntity.Load(params.ListID);
+        if(!success){
+            throw new Error(`List with ID ${params.ListID} not found.`);
         }
 
-        return await this._recordDupeDetector.getDuplicateRecords(params, contextUser);
+        let duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+        duplicateRun.NewRecord();
+        duplicateRun.EntityID = params.EntityID;
+        duplicateRun.StartedByUserID = contextUser.ID;
+        duplicateRun.StartedAt = new Date();
+        duplicateRun.ProcessingStatus = 'In Progress';
+        duplicateRun.ApprovalStatus = 'Pending';
+        duplicateRun.SourceListID = listEntity.ID;
+        duplicateRun.ContextCurrentUser = contextUser;
+        
+        const saveResult = await duplicateRun.Save();
+        if(!saveResult){
+            throw new Error(`Failed to save Duplicate Run Entity`);
+        }
+
+        let response: PotentialDuplicateResponse = {
+            Status: 'Inprogress',
+            PotentialDuplicateResult: []
+        };
+
+        return response;
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {

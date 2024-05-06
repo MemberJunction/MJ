@@ -2355,6 +2355,7 @@ type PaymentTermsType_ {
 input PotentialDuplicateRequestType {
   EntityDocumentID: Int
   EntityID: Int!
+  ListID: Int!
   ProbabilityScore: Int
   RecordIDs: [PrimaryKeyValueBaseInputType!]!
 }
@@ -2366,6 +2367,7 @@ type PotentialDuplicateResponseType {
 }
 
 type PotentialDuplicateResultType {
+  DuplicateRunDetailMatchRecordIDs: [Int!]!
   Duplicates: [PotentialDuplicateType!]!
   EntityID: Int
   RecordPrimaryKeys: PrimaryKeyValueBaseOutputType!

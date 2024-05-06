@@ -456,6 +456,7 @@ npm
                 ErrorMessage
                 PotentialDuplicateResult {
                     EntityID
+                    DuplicateRunDetailMatchRecordIDs
                     RecordPrimaryKeys {
                         PrimaryKeyValues {
                             FieldName
@@ -476,6 +477,7 @@ npm
         let request = {
             EntityID: params.EntityID,
             EntityDocumentID: params.EntityDocumentID,
+            ListID: params.ListID,
             ProbabilityScore: params.ProbabilityScore,
             Options: params.Options,
             RecordIDs: params.RecordIDs.map(recordID => {
