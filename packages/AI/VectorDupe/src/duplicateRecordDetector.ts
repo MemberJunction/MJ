@@ -1,10 +1,11 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, EntityField } from "@memberjunction/core";
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, EntityField, RecordMergeRequest } from "@memberjunction/core";
 import { LogStatus } from "@memberjunction/core";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntity, DuplicateRunDetailEntity, DuplicateRunDetailMatchEntity, DuplicateRunEntity, EntityDocumentEntity, EntityEntity, ListDetailEntity, ListEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
+import { EntityVectorSyncer, vectorSyncRequest } from "@memberjunction/ai-vector-sync";
 
 export class DuplicateRecordDetector extends VectorBase {
 
@@ -18,7 +19,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
     public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {        
         super.CurrentUser = contextUser;
-        params.EntityDocumentID = 12;
+        //params.EntityID = 25050001;
 
         let entityDocument: EntityDocumentEntity | null = null;
         if(params.EntityDocumentID){
@@ -42,6 +43,18 @@ export class DuplicateRecordDetector extends VectorBase {
             response.Status = 'Error';
             return response;
         }
+
+        /*
+        let vectorizer = new EntityVectorSyncer();
+        const request: vectorSyncRequest = {
+            entityID: entityDocument.EntityID,
+            entityDocumentID: entityDocument.ID,
+            batchCount: 20,
+            options: {}
+        }
+
+        await vectorizer.vectorizeEntity(request, super.CurrentUser);
+        */
 
         const list: ListEntity = await this.getListEntity(params.ListID);
         let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);
@@ -127,8 +140,14 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`Failed to update Duplicate Run record ${duplicateRun.ID}`);
         }
 
+        await this.mergeRecords(response, entityDocument);
+
         response.PotentialDuplicateResult = results;
         response.Status = 'Success';
+
+        LogStatus("Dupe Run complete. Response:");
+        LogStatus(JSON.stringify(response, null, "\t"));
+
         return response;
     }
 
@@ -232,7 +251,7 @@ export class DuplicateRecordDetector extends VectorBase {
             let runDetail: DuplicateRunDetailEntity = await md.GetEntityObject<DuplicateRunDetailEntity>('Duplicate Run Details');
             runDetail.NewRecord();
             runDetail.DuplicateRunID = duplicateRunID;
-            runDetail.RecordID = this.convertPrimaryKeysIntoCompositeKey(listDetail.PrimaryKeys).GetCompositeKeyAsSQLString();
+            runDetail.RecordID = `ID = ${listDetail.RecordID}`;
             runDetail.MatchStatus = 'Pending';
             runDetail.MergeStatus = 'Pending';
             const success = await super.SaveEntity(runDetail);
@@ -336,5 +355,45 @@ export class DuplicateRecordDetector extends VectorBase {
             return { FieldName: pk.Name, Value: pk.Value };
         });
         return pk;
+    }
+
+    private async mergeRecords(dupeResponse: PotentialDuplicateResponse, entityDocument: EntityDocumentEntity): Promise<void> {
+        const md: Metadata = new Metadata();
+        for(const dupeResult of dupeResponse.PotentialDuplicateResult){
+            for(const [index, dupe] of dupeResult.Duplicates.entries()){
+                if(dupe.ToString() === dupeResult.RecordPrimaryKeys.ToString()){
+                    continue;
+                }
+
+                if(dupe.ProbabilityScore >= entityDocument.AbsoluteMatchThreshold){
+                    //merge
+                    let mergeParams: RecordMergeRequest = new RecordMergeRequest();
+                    mergeParams.EntityName = entityDocument.Entity;
+                    mergeParams.SurvivingRecordPrimaryKeyValues = dupeResult.RecordPrimaryKeys.PrimaryKeyValues;
+                    mergeParams.RecordsToMerge = [dupe.PrimaryKeyValues];
+                    let result = await md.MergeRecords(mergeParams, super.CurrentUser);
+                    if(result.Success){
+                        let dupeRunMatchRecord: DuplicateRunDetailMatchEntity = await md.GetEntityObject<DuplicateRunDetailMatchEntity>('Duplicate Run Detail Matches', super.CurrentUser);
+                        let loadResult = await dupeRunMatchRecord.Load(dupeResult.DuplicateRunDetailMatchRecordIDs[index]);
+                        if(!loadResult){
+                            LogError(`Failed to load Duplicate Run Match record ${dupeResult.DuplicateRunDetailMatchRecordIDs[index]}`);
+                            continue;
+                        }
+
+                        dupeRunMatchRecord.MergeStatus = 'Complete';
+                        dupeRunMatchRecord.Action = 'Merged';
+                        dupeRunMatchRecord.MergedAt = new Date();
+
+                        let saveResult = await dupeRunMatchRecord.Save();
+                        if(!saveResult){
+                            LogError(`Failed to update Duplicate Run Match record ${dupeRunMatchRecord.ID}`);
+                        }
+                    }
+                    else{
+                        LogError(`Failed to merge records ${dupeResult.RecordPrimaryKeys.ToString()} and ${dupe.ToString()}`);
+                    }
+                }
+            }
+        }
     }
 }

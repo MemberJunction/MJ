@@ -29,6 +29,7 @@ export class EntityVectorSyncer extends VectorBase {
         const chunks: BaseEntity[][] = this.chunkArray(allrecords, batchSize);
         LogStatus(`Processing ${allrecords.length} records in ${chunks.length} chunks of ${batchSize} records each`);
 
+        let count = 0;
         for (const batch of chunks){
             let templates: string[] = [];
             for(const record of batch){
@@ -64,8 +65,7 @@ export class EntityVectorSyncer extends VectorBase {
                         erdEntity.VectorIndexID = vectorIndexEntity.ID;
                         erdEntity.EntityRecordUpdatedAt = new Date();
                         erdEntity.EntityDocumentID = entityDocument.ID;
-                        erdEntity.ContextCurrentUser = contextUser;
-                        let erdEntitySaveResult: boolean = await erdEntity.Save();
+                        let erdEntitySaveResult: boolean = await super.SaveEntity(erdEntity);
                         if(!erdEntitySaveResult){
                             LogError("Error saving Entity Record Document Entity");
                         }
@@ -79,6 +79,11 @@ export class EntityVectorSyncer extends VectorBase {
             else{
                 LogError(response.message);
             }
+
+            //add a delay to avoid rate limiting
+            let delayRes = await this.delay(1000);
+            count++;
+            LogStatus(`Chunk ${count} of out ${chunks.length} processed`);
         }
 
         return null;
@@ -99,8 +104,7 @@ export class EntityVectorSyncer extends VectorBase {
             vectorIndexEntity.Set("EntityDocumentID", entityDocument.ID);
             //not a very descriptive description, but the view has the name of the vectorDB and embedding model used
             vectorIndexEntity.Description = `Vector Index that uses the Vector database ${entityDocument.VectorDatabaseID} and ${entityDocument.AIModelID} as the embedding model`;
-            vectorIndexEntity.ContextCurrentUser = super.CurrentUser;
-            const saveResult = await vectorIndexEntity.Save();
+            const saveResult = await super.SaveEntity(vectorIndexEntity);
             if(saveResult){
                 LogStatus(`Successfully created new Vector Index Entity`);
                 return vectorIndexEntity;
@@ -130,4 +134,8 @@ export class EntityVectorSyncer extends VectorBase {
             return `${pk.Name}=${pk.Value}`;
         });
     }
+
+    private delay = (delayInms) => {
+        return new Promise(resolve => setTimeout(resolve, delayInms));
+    };
 }

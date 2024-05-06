@@ -163,8 +163,7 @@ export class VectorBase {
         entityDocument.Set("Template", EDTemplate);
         entityDocument.Set("VectorDatabaseID", vectorDatabase.ID);
         entityDocument.Set("AIModelID", AIModel.ID);
-        entityDocument.ContextCurrentUser = this._metadata.CurrentUser;
-        let saveResult = await entityDocument.Save();
+        let saveResult = await this.SaveEntity(entityDocument);
         if(saveResult){
             return entityDocument;
         }
