@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, Input, ViewChild } from "@angular/core";
 import { LogError, Metadata, PrimaryKeyValue, RunView } from "@memberjunction/core";
-import { ConversationDetailEntity, ConversationEntity, DataContextEntity } from "@memberjunction/core-entities";
+import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from "@memberjunction/core-entities";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { ChatComponent, ChatMessage, ChatWelcomeQuestion } from "@memberjunction/ng-chat";
 import { SharedService } from "@memberjunction/ng-shared";
@@ -147,10 +147,9 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
           const result = await rv.RunView({
               EntityName: "Conversation Details",
               ExtraFilter: "ConversationID=" + this._conversationId,
-              OrderBy: "CreatedAt ASC",
               ResultType: 'entity_object'
           });
-          if (result && result.Success && result.Results.length > 0) {
+          if (result && result.Success) {
             const tg = await md.CreateTransactionGroup();
             for (const cd of result.Results) {
                 const cdE = <ConversationDetailEntity>cd;
@@ -160,6 +159,19 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
             const convoEntity = await md.GetEntityObject<ConversationEntity>("Conversations");
             await convoEntity.Load(this._conversationId);
             if (convoEntity.DataContextID) {
+                // we have a data context for the conversation, so let's delete it, starting with the items
+                const resultDCI = await rv.RunView({
+                    EntityName: "Data Context Items",
+                    ExtraFilter: "DataContextID=" + this._conversationId,
+                    ResultType: 'entity_object'
+                });
+                for (const dciEntity of resultDCI.Results) {
+                    const dci = <DataContextItemEntity>dciEntity;
+                    dci.TransactionGroup = tg;
+                    dci.Delete(); // dont await because inside a TG
+                }
+      
+                // now delete the data context itself
                 const dcEntity = await md.GetEntityObject<DataContextEntity>("Data Contexts");
                 await dcEntity.Load(convoEntity.DataContextID);
                 dcEntity.TransactionGroup = tg;
@@ -171,6 +183,8 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
             convoEntity.Delete(); // dont await because inside a TG
             
             await tg.Submit();
+
+            this._conversationId = 0;
             this.mjChat.ClearAllMessages();
           }
           this.mjChat.ShowWaitingIndicator = false;
