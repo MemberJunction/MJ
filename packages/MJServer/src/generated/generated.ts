@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 4/30/2024, 12:16:26 PM
+* GENERATED: 5/7/2024, 4:26:58 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -2846,8 +2846,12 @@ export class Entity_ {
     @Field(() => Boolean) 
     spDeleteGenerated: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0'}) 
     CascadeDeletes: boolean;
+          
+    @Field({nullable: true, description: 'When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.'}) 
+    @MaxLength(510)
+    spMatch?: string;
           
     @Field(() => Boolean) 
     UserFormGenerated: boolean;
@@ -3091,6 +3095,9 @@ export class CreateEntityInput {
     @Field(() => Boolean)
     CascadeDeletes: boolean;
     
+    @Field({ nullable: true })
+    spMatch: string;
+    
     @Field(() => Boolean)
     UserFormGenerated: boolean;
     
@@ -3208,6 +3215,9 @@ export class UpdateEntityInput {
     
     @Field(() => Boolean)
     CascadeDeletes: boolean;
+    
+    @Field({ nullable: true })
+    spMatch: string;
     
     @Field(() => Boolean)
     UserFormGenerated: boolean;
@@ -16904,6 +16914,32 @@ export class DataContextItemResolver extends ResolverBase {
         const i = input, d = dataSource; // prevent error
     }
     
+    @Mutation(() => DataContextItem_)
+    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
+    }
+    
 }
 
 //****************************************************************************
@@ -17115,6 +17151,32 @@ export class DataContextResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextInput) {
         const i = input, d = dataSource; // prevent error
+    }
+    
+    @Mutation(() => DataContext_)
+    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
     
 }
@@ -18985,6 +19047,10 @@ export class DuplicateRunDetailMatch_ {
     @Field(() => Int) 
     DuplicateRunDetailID: number;
           
+    @Field({description: 'Either Vector or SP'}) 
+    @MaxLength(40)
+    MatchSource: string;
+          
     @Field() 
     @MaxLength(1000)
     MatchRecordID: string;
@@ -19034,6 +19100,9 @@ export class CreateDuplicateRunDetailMatchInput {
     DuplicateRunDetailID: number;
     
     @Field()
+    MatchSource: string;
+    
+    @Field()
     MatchRecordID: string;
     
     @Field(() => Float)
@@ -19069,6 +19138,9 @@ export class UpdateDuplicateRunDetailMatchInput {
     
     @Field(() => Int)
     DuplicateRunDetailID: number;
+    
+    @Field()
+    MatchSource: string;
     
     @Field()
     MatchRecordID: string;
