@@ -694,6 +694,7 @@ input CreateDuplicateRunDetailMatchInput {
   DuplicateRunDetailID: Int!
   MatchProbability: Float!
   MatchRecordID: String!
+  MatchSource: String!
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
@@ -817,6 +818,7 @@ input CreateEntityInput {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -1447,6 +1449,9 @@ type DuplicateRunDetailMatch_ {
   """Value between 0 and 1 designating the computed probability of a match"""
   MatchProbability: Float!
   MatchRecordID: String!
+
+  """Either Vector or SP"""
+  MatchSource: String!
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
@@ -1860,6 +1865,10 @@ type Entity_ {
 
   """When set to 0, CodeGen no longer generates a base view for the entity."""
   BaseViewGenerated: Boolean!
+
+  """
+  When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
+  """
   CascadeDeletes: Boolean!
   ClassName: String
   CodeName: String
@@ -1931,6 +1940,11 @@ type Entity_ {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+
+  """
+  When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
+  """
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -2196,6 +2210,8 @@ type Mutation {
   DeleteConversationDetail(ID: Int!): ConversationDetail_!
   DeleteDashboard(ID: Int!): Dashboard_!
   DeleteDashboardCategory(ID: Int!): DashboardCategory_!
+  DeleteDataContext(ID: Int!): DataContext_!
+  DeleteDataContextItem(ID: Int!): DataContextItem_!
   DeleteDealForecastCategory(ID: Int!): DealForecastCategory_!
   DeleteEmployee(ID: Int!): Employee_!
   DeleteEntity(ID: Int!): Entity_!
@@ -3588,6 +3604,11 @@ input RunDynamicViewInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4314,6 +4335,11 @@ input RunViewByIDInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4366,6 +4392,11 @@ input RunViewByNameInput {
   if set to true, if there IS any UserViewMaxRows property set for the entity in question, it will be IGNORED. This is useful in scenarios where you want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
   """
   IgnoreMaxRows: Boolean
+
+  """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
 
   """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
@@ -4879,6 +4910,7 @@ input UpdateDuplicateRunDetailMatchInput {
   ID: Int!
   MatchProbability: Float!
   MatchRecordID: String!
+  MatchSource: String!
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
@@ -5045,6 +5077,7 @@ input UpdateEntityInput {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
