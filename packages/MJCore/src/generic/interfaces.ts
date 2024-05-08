@@ -94,6 +94,17 @@ export class CompositeKey {
     }
 
     /**
+     * @returns the value of each key value pair in the format "Value1, Value2, Value3"
+     * @param delimiter  
+     * @example "1, John"
+     */
+    Values(delimiter?: string): string {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair, index: number) => {
+            return keyValue.Value;
+        }).join(delimiter || ", ");
+    }
+
+    /**
     * Utility function to compare the key primary key of this object to another sets to see if they are the same or not
     * @param kvPairs the primary key values to compare against
     * @returns true if the primary key values are the same, false if they are different
@@ -190,13 +201,13 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, KeyValuePairs: KeyValuePair[], EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 
     Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
 
-    GetRecordChanges(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordChange[]>
+    GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
 }
 
 export class EntitySaveOptions {
@@ -206,13 +217,13 @@ export class EntitySaveOptions {
 
 export class EntityRecordNameInput  {
     EntityName: string;
-    KeyValuePairs: KeyValuePair[];
+    CompositeKey: CompositeKey;
 }
 
 export class EntityRecordNameResult  {
-    Success: boolean
-    Status: string
-    KeyValuePairs: KeyValuePair[];
+    Success: boolean;
+    Status: string;
+    CompositeKey: CompositeKey
     EntityName: string;
     RecordName?: string;
  }
@@ -263,9 +274,9 @@ export interface IMetadataProvider {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param KeyValuePairs the primary key(s) for the record to check
+     * @param CompositeKey the compositeKey for the record to check
      */
-    GetRecordDependencies(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
@@ -302,10 +313,10 @@ export interface IMetadataProvider {
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param KeyValuePairs 
+     * @param CompositeKey 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<string>
+    GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
@@ -314,9 +325,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[]): Promise<boolean>
+    GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[], isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 

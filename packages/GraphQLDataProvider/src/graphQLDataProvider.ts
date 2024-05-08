@@ -380,11 +380,11 @@ npm
         return ProviderType.Network;
     }
 
-    public async GetRecordChanges(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = '${KeyValuePairs.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${CompositeKey.KeyValuePairs.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -412,11 +412,11 @@ npm
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $KeyValuePairs: [KeyValuePairInputType!]!) {
-                GetRecordDependencies(entityName: $entityName, KeyValuePairs: $KeyValuePairs) {
+            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: [CompositeKeyInputType!]!) {
+                GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey) {
                     EntityName
                     RelatedEntityName
                     FieldName
@@ -427,13 +427,7 @@ npm
             // now we have our query built, execute it
             const vars = {
                 entityName: entityName,
-                KeyValuePairs: KeyValuePairs.map(pkv => {
-                    return {
-                        FieldName: pkv.FieldName,
-                        Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
-                    }
-                
-                })
+                CompositeKey: CompositeKey
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -645,15 +639,15 @@ npm
             return null;
         }
     }
-    public async Load(entity: BaseEntity, KeyValuePairs: KeyValuePair[], EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+    public async Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
             const vars = {};
             let pkeyInnerParamString: string = '';
             let pkeyOuterParamString: string = '';
 
-            for (let i = 0; i < KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
-                const val = KeyValuePairs[i].Value;
+            for (let i = 0; i < CompositeKey.KeyValuePairs.length; i++) {
+                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === CompositeKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const val = CompositeKey.KeyValuePairs[i].Value;
                 const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
 
                 // build up the param string for the outer query definition
@@ -668,7 +662,7 @@ npm
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
-                    if (isNaN(KeyValuePairs[i].Value))
+                    if (isNaN(CompositeKey.KeyValuePairs[i].Value))
                         throw new Error(`Primary Key value ${val} (${field.Name}) is not a valid number`);
                     vars[field.CodeName] =  parseInt(val); // converting to number here for graphql type to work properly
                 }
@@ -877,7 +871,7 @@ npm
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[]): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -891,12 +885,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            KeyValuePairs: KeyValuePairs.map(pkv => { 
-                                                                                                                            return { 
-                                                                                                                                FieldName: pkv.FieldName,
-                                                                                                                                Value: pkv.Value.toString()
-                                                                                                                            }
-                                                                                                                          })
+                                                                            CompositeKey: CompositeKey
                                                                             } 
                                                                   }
                                                          );
@@ -904,7 +893,7 @@ npm
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[], isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -917,12 +906,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId, 
                                                                                 EntityID: e.ID, 
-                                                                                KeyValuePairs: KeyValuePairs.map(pkv => { 
-                                                                                        return { 
-                                                                                            FieldName: pkv.FieldName,
-                                                                                            Value: pkv.Value.toString()
-                                                                                        }
-                                                                                    }), 
+                                                                                CompositeKey: CompositeKey,
                                                                                 IsFavorite: isFavorite} 
                                                                  }
                                                          );
@@ -930,12 +914,13 @@ npm
             return data.SetRecordFavoriteStatus.Success;        
     }
 
-    public async GetEntityRecordName(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<string> {
-        if (!entityName || !KeyValuePairs)
+    public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {
+        if (!entityName || !CompositeKey || CompositeKey.KeyValuePairs?.length === 0){
             return null;
+        }
 
-        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $KeyValuePairs: [KeyValuePairInputType!]!) {
-            GetEntityRecordName(EntityName: $EntityName, KeyValuePairs: $KeyValuePairs) {
+        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $CompositeKey: [CompositeKeyInputType!]!) {
+            GetEntityRecordName(EntityName: $EntityName, CompositeKey: $CompositeKey) {
                 Success
                 Status
                 RecordName
@@ -943,13 +928,7 @@ npm
         }` 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    KeyValuePairs: KeyValuePairs.map(pkv => {
-                                                                            // map each pkv so that its Value is a string
-                                                                            return { 
-                                                                                        FieldName: pkv.FieldName, 
-                                                                                        Value: pkv.Value.toString()
-                                                                                   }
-                                                                            })
+                                                                    CompositeKey: CompositeKey
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -976,11 +955,7 @@ npm
             // map each info item so that each of its KeyValuePairs.Value is a string
             return { 
                      EntityName: i.EntityName, 
-                     KeyValuePairs: i.KeyValuePairs.map(pkv => { 
-                        return { FieldName: pkv.FieldName, 
-                                 Value: pkv.Value.toString() 
-                               } 
-                            })
+                     CompositeKey: i.CompositeKey
                     } 
                 })});
         if (data && data.GetEntityRecordNames)

@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, OnInit, Output, input } from '@angular/
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
-import { BaseEntity, Metadata, KeyValuePair, RunView } from '@memberjunction/core';
+import { BaseEntity, Metadata, KeyValuePair, RunView, CompositeKey } from '@memberjunction/core';
 import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
 import { Subscription, Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
@@ -278,9 +278,11 @@ export class GenericBrowserListComponent implements OnInit{
     let pkv: KeyValuePair = new KeyValuePair();
     pkv.FieldName = "ID";
     pkv.Value = folder.ID;
+    let compositeKey: CompositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = [pkv];
     //create view browser component - this will be used to display views
     //then create a new component for applications that wraps around the view browser component 
-    let loadResult = await folderEntity.InnerLoad([pkv]);
+    let loadResult = await folderEntity.InnerLoad(compositeKey);
     if(!loadResult){
       this.sharedService.CreateSimpleNotification(`unable to fetch folder ${folder.Name}`, "error");
       this.showLoader = false;
@@ -318,7 +320,9 @@ export class GenericBrowserListComponent implements OnInit{
       let pkv: KeyValuePair = new KeyValuePair();
       pkv.FieldName = "ID";
       pkv.Value = entityID;
-      let loadResult = await entityObject.InnerLoad([pkv]);
+      let compositeKey: CompositeKey = new CompositeKey();
+      compositeKey.KeyValuePairs = [pkv];
+      let loadResult = await entityObject.InnerLoad(compositeKey);
 
       if(loadResult){
         let deleteResult = await entityObject.Delete();
@@ -403,7 +407,9 @@ export class GenericBrowserListComponent implements OnInit{
     const md: Metadata = new Metadata();
     let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
     let pkv: KeyValuePair[] = [{FieldName: "ID", Value: item.Data.ID}];
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, pkv, item.Favorite);
+    let compositeKey: CompositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = pkv;
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, compositeKey, item.Favorite);
   }
 
   public editItem(item: Item): void {

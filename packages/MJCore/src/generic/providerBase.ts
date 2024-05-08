@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo, KeyValuePair, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, CompositeKey, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -50,12 +50,12 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public abstract get ProviderType(): ProviderType;
 
-    public abstract GetEntityRecordName(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<string>;
+    public abstract GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
-    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[]): Promise<boolean>;
+    public abstract GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;
 
-    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[], isFavorite: boolean, contextUser: UserInfo): Promise<void>;
+    public abstract SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>;
     /******** END - ABSTRACT SECTION ****************************************************************** */
 
 
@@ -294,7 +294,7 @@ export abstract class ProviderBase implements IMetadataProvider {
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the values of the primary key of the record to check
      */
-    public abstract GetRecordDependencies(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordDependency[]> 
+    public abstract GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> 
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 

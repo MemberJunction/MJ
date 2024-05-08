@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, KeyValuePair } from '@memberjunction/core';
+import { Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 
 export function LoadRecordResource() {
@@ -31,9 +31,10 @@ export class EntityRecordResource extends BaseResourceComponent {
             return ''
         else {
             const md = new Metadata();
-            const pKeys = EntityRecordResource.GetKeyValuePairs(data);  
-            const name = await md.GetEntityRecordName(data.Configuration.Entity, pKeys);
-            const displayId = pKeys.length > 1 ? pKeys.map(p => p.Value).join(', ') : pKeys[0].Value;         
+            let compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs = EntityRecordResource.GetKeyValuePairs(data);
+            const name = await md.GetEntityRecordName(data.Configuration.Entity, compositeKey);
+            const displayId = compositeKey.KeyValuePairs.length > 1 ? compositeKey.Values() : compositeKey.KeyValuePairs[0].Value;         
             return (name ? name : data.Configuration.Entity) + ` (${displayId})`;
         }
     }

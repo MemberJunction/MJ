@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
-import { Metadata, PotentialDuplicateRequest, KeyValuePair } from '@memberjunction/core';
+import { Metadata, PotentialDuplicateRequest, KeyValuePair, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -30,14 +30,16 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    this.LoadForm(this.KeyValuePairs, <string>this.entityName)
+    let compositeKey: CompositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = this.KeyValuePairs;
+    this.LoadForm(compositeKey, <string>this.entityName)
   }
 
-  async LoadForm(KeyValuePairs: KeyValuePair[], entityName: string) {
+  async LoadForm(compositeKey: CompositeKey, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (KeyValuePairs && entityName) {
+    if (compositeKey.KeyValuePairs && entityName) {
       this.entityName = entityName
-      this.KeyValuePairs = KeyValuePairs
+      this.KeyValuePairs = compositeKey.KeyValuePairs;
 
       const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
       const md = new Metadata();
@@ -49,7 +51,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       if (formReg) {
         const record = await md.GetEntityObject(entityName);
         if (record) {
-          await record.InnerLoad(KeyValuePairs);
+          await record.InnerLoad(compositeKey);
 
           const viewContainerRef = this.formContainer.viewContainerRef;
           viewContainerRef.clear();
@@ -62,7 +64,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
           this.loadComplete.emit();
         }
         else
-          throw new Error(`Unable to load entity ${entityName} with primary key values: ${KeyValuePairs.map(p => p.FieldName + ': ' + p.Value).join(', ')}`)
+          throw new Error(`Unable to load entity ${entityName} with primary key values: ${compositeKey.ToString()}`);
       }
 
       this.loading = false;

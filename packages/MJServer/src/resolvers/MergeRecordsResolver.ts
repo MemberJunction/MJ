@@ -1,6 +1,7 @@
-import { LogError, Metadata, KeyValuePair } from '@memberjunction/core';
+import { LogError, Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
+import { CompositeKeyInputType } from './PotentialDuplicateRecordResolver';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -77,13 +78,13 @@ export class RecordDependencyResolver {
     @Query(() => [RecordDependencyResult])
     async GetRecordDependencies(
       @Arg('entityName', () => String) entityName: string,
-      @Arg('KeyValuePairs', () => [KeyValuePairInputType]) KeyValuePairs: KeyValuePair[],
+      @Arg('CompositeKey', () => [CompositeKeyInputType]) CompositeKey: CompositeKey,
       @Ctx() { dataSource, userPayload }: AppContext,
       @PubSub() pubSub: PubSubEngine
     ) {
         try {
             const md = new Metadata();
-            const result = await md.GetRecordDependencies(entityName, KeyValuePairs)    
+            const result = await md.GetRecordDependencies(entityName, CompositeKey)    
             return result;
         }
         catch (e) {

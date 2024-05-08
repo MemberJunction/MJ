@@ -1,4 +1,4 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey } from "@memberjunction/core";
 import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
@@ -327,7 +327,9 @@ export class DataContextItem {
                 const v = rawVals[i];
                 pkeyVals.push({FieldName: pk.Name, Value: v});
             }
-            if (await record.InnerLoad(pkeyVals)) {
+            let compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs = pkeyVals;
+            if (await record.InnerLoad(compositeKey)) {
                 const dataObject = await record.GetDataObject({
                     includeRelatedEntityData: includeRelatedEntityData,
                     oldValues: false,

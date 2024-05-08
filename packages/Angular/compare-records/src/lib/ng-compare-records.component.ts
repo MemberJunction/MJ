@@ -250,7 +250,7 @@ export class CompareRecordsComponent {
         this._recordDependencies = [];
         for (const record of this.recordsToCompare) {
           const KeyValuePairs = this.getPKeyValues(record);
-          const dependencies = await md.GetRecordDependencies(this.entityName, KeyValuePairs)
+          const dependencies = await md.GetRecordDependencies(this.entityName, record.CompositeKey)
           this._recordDependencies.push({pkeyValues: KeyValuePairs, dependencies: dependencies});
         }
       }

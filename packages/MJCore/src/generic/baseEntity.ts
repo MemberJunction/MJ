@@ -697,7 +697,7 @@ export abstract class BaseEntity {
             if (!this.IsSaved) 
                 this.init(); // wipe out current data if we're loading on top of existing record
 
-            const data = await BaseEntity.Provider.Load(this, CompositeKey.KeyValuePairs, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await BaseEntity.Provider.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
             if (!data) {
                 LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${CompositeKey.ToString()}`);                
                 return false; // no data loaded, return false
@@ -837,10 +837,12 @@ export abstract class BaseEntity {
      * Returns a list of changes made to this record, over time. Only works if TrackRecordChanges bit set to 1 on the entity you're working with.
      */
     public get RecordChanges(): Promise<RecordChange[]> {
-        if (this.IsSaved) 
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKeys.map(pk => { return { FieldName: pk.Name, Value: pk.Value }; }))
-        else
+        if (this.IsSaved){
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.CompositeKey);
+        }
+        else{
             throw new Error('Cannot get record changes for a record that has not been saved yet');
+        }
     }
 
     /**
@@ -849,12 +851,12 @@ export abstract class BaseEntity {
      * @param KeyValuePair 
      * @returns 
      */
-    public static async GetRecordChanges(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordChange[]> {
+    public static async GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]> {
         if (BaseEntity.Provider === null) {    
             throw new Error('No provider set');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, KeyValuePairs);
+            const results = await BaseEntity.Provider.GetRecordChanges(entityName, CompositeKey);
             if (results) {
                 const changes: RecordChange[] = [];
                 for (let result of results) 

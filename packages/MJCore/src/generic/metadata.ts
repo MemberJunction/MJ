@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, CompositeKey, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
 import { EntityDependency, EntityInfo, KeyValuePair, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -119,8 +119,8 @@ export class Metadata {
      * @param KeyValuePairs 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[]): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, KeyValuePairs);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, CompositeKey);
     }
 
     /**
@@ -131,8 +131,8 @@ export class Metadata {
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[], isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, KeyValuePairs, isFavorite, contextUser);
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, CompositeKey, isFavorite, contextUser);
     }
 
     /**
@@ -143,8 +143,8 @@ export class Metadata {
      * @param entityName the name of the entity to check
      * @param KeyValuePair the primary key value to check
      */
-    public async GetRecordDependencies(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, KeyValuePairs);
+    public async GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> { 
+        return await Metadata.Provider.GetRecordDependencies(entityName, CompositeKey);
     }
 
     /**
@@ -203,15 +203,15 @@ export class Metadata {
      * @param KeyValuePairs
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<string> {
+    public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {
         // check each primary key value to make sure it's not null
-        for (let j = 0; j < KeyValuePairs.length; j++) {
-            if (!KeyValuePairs[j] || !KeyValuePairs[j].Value) {
-                throw new Error('GetEntityRecordName: KeyValuePairs cannot contain null values. FieldName: ' + KeyValuePairs[j]?.FieldName);
+        for (let j = 0; j < CompositeKey.KeyValuePairs.length; j++) {
+            if (!CompositeKey.KeyValuePairs[j] || !CompositeKey.KeyValuePairs[j].Value) {
+                throw new Error('GetEntityRecordName: KeyValuePairs cannot contain null values. FieldName: ' + CompositeKey.KeyValuePairs[j]?.FieldName);
             }
         }
         
-        return await Metadata.Provider.GetEntityRecordName(entityName, KeyValuePairs);
+        return await Metadata.Provider.GetEntityRecordName(entityName, CompositeKey);
     }
 
     /**
@@ -222,14 +222,14 @@ export class Metadata {
     public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         // valiate to make sure we don't have any null primary keys being sent in
         for (let i = 0; i < info.length; i++) {
-            if (!info[i].KeyValuePairs || info[i].KeyValuePairs.length == 0) {
+            if (!info[i].CompositeKey.KeyValuePairs || info[i].CompositeKey.KeyValuePairs.length == 0) {
                 throw new Error('GetEntityRecordNames: KeyValuePairs cannot be null or empty. It is for item ' + i.toString() + ' in the input array.');
             }
             else {
                 // check each primary key value to make sure it's not null
-                for (let j = 0; j < info[i].KeyValuePairs.length; j++) {
-                    if (!info[i].KeyValuePairs[j] || !info[i].KeyValuePairs[j].Value) {
-                        throw new Error('GetEntityRecordNames: KeyValuePairs cannot contain null values. FieldName: ' + info[i].KeyValuePairs[j]?.FieldName);
+                for (let j = 0; j < info[i].CompositeKey.KeyValuePairs.length; j++) {
+                    if (!info[i].CompositeKey.KeyValuePairs[j] || !info[i].CompositeKey.KeyValuePairs[j].Value) {
+                        throw new Error('GetEntityRecordNames: KeyValuePairs cannot contain null values. FieldName: ' + info[i].CompositeKey.KeyValuePairs[j]?.FieldName);
                     }
                 }
             }
