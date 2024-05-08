@@ -308,13 +308,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
 
-                // now we can run the viewSQL
-                const retData = await this._dataSource.query(viewSQL);
+                // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
+                const retData = params.ResultType === 'count_only' ? [] : await this._dataSource.query(viewSQL);
 
-                // finally, if we have a countSQL, we need to run that first to get the row count
+                // finally, if we have a countSQL, we need to run that to get the row count
                 // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
+                // OR do that if we are doing a count_only
                 let rowCount = null;
-                if (countSQL && retData.length === entityInfo.UserViewMaxRows) {
+                if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
                     const countResult = await this._dataSource.query(countSQL);
                     if (countResult && countResult.length > 0) {
                         rowCount = countResult[0].TotalRowCount;
@@ -338,7 +339,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 }
 
                 return { 
-                        RowCount: retData.length,
+                        RowCount: params.ResultType === 'count_only' ? rowCount : retData.length, /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */
                         TotalRowCount: rowCount ? rowCount : retData.length,
                         Results: retData, 
                         UserViewRunID: userViewRunID,

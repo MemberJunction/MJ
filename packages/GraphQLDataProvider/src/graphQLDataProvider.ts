@@ -247,6 +247,7 @@ npm
                 innerParams.IgnoreMaxRows = params.IgnoreMaxRows ? params.IgnoreMaxRows : false;
                 innerParams.MaxRows = params.MaxRows ? params.MaxRows : 0;
                 innerParams.ForceAuditLog = params.ForceAuditLog ? params.ForceAuditLog : false;
+                innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;
                 
