@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, ComparePrimaryKeys, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -777,9 +777,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             if (!this.recordCompareComponent)
               return false;
             else
-              return !ComparePrimaryKeys(pkeyVals, this.recordCompareComponent.selectedRecordPKeyVal)
+              return this.recordCompareComponent.selectedRecordPKeyVal.EqualsKey(pkeyVals);
           }),
-          SurvivingRecordKeyValuePairs: this.recordCompareComponent.selectedRecordPKeyVal,
+          SurvivingRecordKeyValuePairs: this.recordCompareComponent.selectedRecordPKeyVal.KeyValuePairs,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,
