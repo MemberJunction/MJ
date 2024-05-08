@@ -54,8 +54,10 @@ export class PrimaryKeyValueBase {
     */
     PrimaryKeyValues: PrimaryKeyValue[];
 
-    //MJ Server's DuplicateRecordResolve has a copy of this property
-    //changes here should be applied there as well
+    constructor() {
+        this.PrimaryKeyValues = [];
+    }
+
     GetCompositeKey(): string {
         
         if(!this.PrimaryKeyValues){
@@ -70,38 +72,84 @@ export class PrimaryKeyValueBase {
             return keyValue.Value.toString();
         }).join(", ");
     }
+
+    GetCompositeKeyAsSQLString(): string {
+        return this.PrimaryKeyValues.map((keyValue, index) => {
+            return `${keyValue.FieldName} = ${keyValue.Value}`;
+        }).join(" AND ");
+    }
+
+    /**
+     * Returns a copy of the PrimaryKeyValues array but with the Value properties as string
+     */
+    GetValuesAsString(): PrimaryKeyValue[] {
+        return this.PrimaryKeyValues.map((keyValue, index) => {
+            return {
+                FieldName: keyValue.FieldName,
+                Value: keyValue.Value.toString()
+            }
+        });
+    }
+
+    /**
+     * Returns the PrimaryKeyValues as a list of strings in the format "FieldName=Value"
+     */
+    ToList(): string[] {
+        return this.PrimaryKeyValues.map((pk) => {
+            return `${pk.FieldName}=${pk.Value}`;
+        });
+    }
+
+    ToString(): string {
+        return this.ToList().join(", ");
+    }
 }
 
 export class PotentialDuplicate extends PrimaryKeyValueBase {
     ProbabilityScore: number
 }
 
-export class PotentialDuplicateRequest extends PrimaryKeyValueBase {
-    /**
-    * The ID of the entity document to use
-    **/
-    EntityDocumentID: number;
+export class PotentialDuplicateRequest {
     /**
     * The ID of the entity the record belongs to
     **/
-    EntityID?: number;
+    EntityID: number;
     /**
-    * The name of the entity the record belongs to
+    * The ID of the List entity to use
     **/
-    EntityName?: string;
+    ListID: number
+    /**
+     * The Primary Key values of each record
+     * we're checking for duplicates
+     */
+    RecordIDs: PrimaryKeyValueBase[]; 
+    /**
+    * The ID of the entity document to use
+    **/
+    EntityDocumentID?: number;
     /**
     * The minimum score in order to consider a record a potential duplicate
     **/
     ProbabilityScore?: number;
+
     /**
     * Additional options to pass to the provider
     **/
     Options?: any;
 }
 
-export class PotentialDuplicateResponse {
+export class PotentialDuplicateResult {
     EntityID: number;
+    RecordPrimaryKeys: PrimaryKeyValueBase;
     Duplicates: PotentialDuplicate[];
+    DuplicateRunDetailMatchRecordIDs: number[];
+}
+
+//Wrapper for the PotentialDuplicateResponse class that includes  additional properties
+export class PotentialDuplicateResponse {
+    Status: 'Inprogress' | 'Success' | 'Error';
+    ErrorMessage?: string;
+    PotentialDuplicateResult: PotentialDuplicateResult[];
 }
 
 export interface IEntityDataProvider {
@@ -187,7 +235,7 @@ export interface IMetadataProvider {
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
      * 
-     * @param params object containing many properties used in fetching records and determining which ones to return
+     * @param params Object containing many properties used in fetching records and determining which ones to return
      */
     GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse>
 

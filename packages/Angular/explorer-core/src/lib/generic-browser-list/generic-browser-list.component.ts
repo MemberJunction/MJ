@@ -75,7 +75,7 @@ export class GenericBrowserListComponent implements OnInit{
   private newFolderText: string = "Sample Folder";
   private resourceTypes: ResourceTypeEntity[] = [];
 
-  data = [
+  public createButtonDropdownData = [
     { text: "Folder" },
   ];
 
@@ -87,7 +87,7 @@ export class GenericBrowserListComponent implements OnInit{
 
   public async ngOnInit(): Promise<void> {
     if(!this.disableAddButton){
-      this.data.unshift({ text: this.resourceName });
+      this.createButtonDropdownData.unshift({ text: this.resourceName });
     }
 
     const md: Metadata = new Metadata();

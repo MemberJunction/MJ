@@ -1,10 +1,10 @@
 
 
 // Google Gemini Import
-import { Content, GoogleGenerativeAI, Part, TextPart } from "@google/generative-ai";
+import { Content, GoogleGenerativeAI, TextPart } from "@google/generative-ai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, EmbedParams, EmbedResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")

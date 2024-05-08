@@ -30,26 +30,53 @@
                 <span class="fa-regular fa-file-excel"></span>
                   Export to Excel
               </button>
-              <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
-              <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
-              <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
-              <button (click)="enableMergeOrCompare(true, 'compare')" *ngIf="compareMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
-  
-              <!-- 3 buttons for merge. First one only shows when merge is getting goin in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending merge.  -->
-              <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
-              <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="!mergeMode && !compareMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
-              <button (click)="enableMergeOrCompare(true, 'merge')" *ngIf="mergeMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
-              <button
-                  kendoButton themeColor="info"
-                  *ngIf="showRefreshButton && !compareMode && !mergeMode"
-                  (click)="RefreshFromSavedParams()">
-                  <span class="fa-solid fa-arrow-rotate-right"></span>
-                  Refresh
-              </button>
-          </ng-template>
+
+              <!-- 3 buttons for duplicate. First one only shows when duplication is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending duple.  -->
+            <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="(!compareMode && !mergeMode && !duplicateMode)" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                Search For Duplicates
+            </button>
+            <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="duplicateMode" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                Search For Duplicates
+            </button>
+            <!--
+            <button (click)="enableCheckbox(true, 'duplicate')" *ngIf="duplicateMode" kendoButton class="k-button-solid-base list-button">
+                Cancel
+            </button>
+            -->
+
+
+            <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
+            <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode && !duplicateMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
+            <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
+            <!--
+            <button (click)="enableMergeOrCompare(true, 'compare')" *ngIf="compareMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
+            -->
+
+            <!-- 3 buttons for merge. First one only shows when merge is getting goin in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending merge.  -->
+            <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="!mergeMode && !compareMode && !duplicateMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
+            <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
+            <!--
+            <button (click)="enableMergeOrCompare(true, 'merge')" *ngIf="mergeMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
+            -->
+            
+            @if(compareMode || mergeMode || duplicateMode){
+                <button (click)="enableCheckbox(true, '')" kendoButton class="k-button-solid-base list-button">
+                    Cancel
+                </button>
+            }
+            @if(showRefreshButton && !compareMode && !mergeMode && !duplicateMode){
+                <button
+                kendoButton
+                class="list-button"
+                (click)="RefreshFromSavedParams()">
+                    <span class="fa-solid fa-arrows-rotate"></span>
+                        Refresh
+                </button>
+            }
+        </ng-template>
           
           <kendo-grid-checkbox-column 
-              *ngIf="compareMode || mergeMode" 
+              *ngIf="compareMode || mergeMode || duplicateMode" 
               [width]="50" 
               [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }" 
               [style]="{'text-align': 'center', 'vertical-align': 'center'}">
@@ -76,7 +103,7 @@
           </kendo-excelexport>
       </kendo-grid>
       
-      <div  #compareDialogContainer>
+      <div #compareDialogContainer>
           <div *ngIf="isCompareDialogOpened">
               <div class="k-overlay"></div>
               <kendo-window
@@ -102,16 +129,18 @@
                       </mj-compare-records>
                   </div>
                   <div class="k-actions k-actions-end">
-                      <button *ngIf="compareMode" kendoButton type="button" (click)="closeCompareDialog('close')">Close</button>
-                      <button *ngIf="mergeMode"kendoButton type="button" (click)="closeCompareDialog('cancel')">Cancel</button>
-                      <button *ngIf="mergeMode"
-                      kendoButton
-                      themeColor="primary"
-                      type="button"
-                      (click)="closeCompareDialog('merge')"
-                      >
-                      Merge Records
-                      </button>
+                    <button *ngIf="mergeMode" kendoButton themeColor="primary" type="button" (click)="closeCompareDialog('merge')">
+                        Merge Records
+                    </button>
+                    <button *ngIf="duplicateMode" kendoButton themeColor="primary" type="button" (click)="findDuplicateRecords()">
+                        Search for Duplicates
+                    </button>
+                    <button *ngIf="compareMode" kendoButton type="button" (click)="closeCompareDialog('close')">
+                        Close
+                    </button>
+                    <button *ngIf="mergeMode || duplicateMode" kendoButton type="button" (click)="closeCompareDialog('cancel')">
+                        Cancel
+                    </button>
                   </div>      
                   <kendo-dialog
                       title="Confirm Choice"

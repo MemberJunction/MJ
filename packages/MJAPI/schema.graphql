@@ -2369,21 +2369,37 @@ type PaymentTermsType_ {
 }
 
 input PotentialDuplicateRequestType {
-  EntitiyID: Int
-  EntityDocumentID: Int!
-  EntityName: String
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  EntityDocumentID: Int
+  EntityID: Int!
+  ListID: Int!
   ProbabilityScore: Int
+  RecordIDs: [PrimaryKeyValueBaseInputType!]!
 }
 
 type PotentialDuplicateResponseType {
+  ErrorMessage: String
+  PotentialDuplicateResult: [PotentialDuplicateResultType!]!
+  Status: String!
+}
+
+type PotentialDuplicateResultType {
+  DuplicateRunDetailMatchRecordIDs: [Int!]!
   Duplicates: [PotentialDuplicateType!]!
-  EntityID: Int!
+  EntityID: Int
+  RecordPrimaryKeys: PrimaryKeyValueBaseOutputType!
 }
 
 type PotentialDuplicateType {
   PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   ProbabilityScore: Float!
+}
+
+input PrimaryKeyValueBaseInputType {
+  PrimaryKeyValues: [PrimaryKeyValueInputType!]! = []
+}
+
+type PrimaryKeyValueBaseOutputType {
+  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
 }
 
 input PrimaryKeyValueInputType {

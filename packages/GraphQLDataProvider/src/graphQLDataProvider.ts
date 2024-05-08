@@ -10,7 +10,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse  } from "@memberjunction/core";
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase,  
+         LogStatus} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -452,27 +453,41 @@ npm
 
         const query: string = gql`query GetRecordDuplicatesQuery ($params: PotentialDuplicateRequestType!) {
             GetRecordDuplicates(params: $params) {
-                EntityID
-                Duplicates {
-                    ProbabilityScore
-                    PrimaryKeyValues {
-                        FieldName
-                        Value
+                Status
+                ErrorMessage
+                PotentialDuplicateResult {
+                    EntityID
+                    DuplicateRunDetailMatchRecordIDs
+                    RecordPrimaryKeys {
+                        PrimaryKeyValues {
+                            FieldName
+                            Value
+                    }
+                }
+                    Duplicates {
+                        ProbabilityScore
+                        PrimaryKeyValues {
+                            FieldName
+                            Value
+                        }
                     }
                 }
             }
         }`
 
-        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: {
-            ...params,
-            PrimaryKeyValues: params.PrimaryKeyValues.map(pkv => {
-                // map each pkv so that its Value is a string
-                return { 
-                            FieldName: pkv.FieldName, 
-                            Value: pkv.Value.toString()
-                       }
-                })
-        }});
+        let request = {
+            EntityID: params.EntityID,
+            EntityDocumentID: params.EntityDocumentID,
+            ListID: params.ListID,
+            ProbabilityScore: params.ProbabilityScore,
+            Options: params.Options,
+            RecordIDs: params.RecordIDs.map(recordID => {
+                let pkv = new PrimaryKeyValueBase();
+                pkv.PrimaryKeyValues = recordID.GetValuesAsString();
+                return pkv;
+            })
+        }
+        const data = await GraphQLDataProvider.ExecuteGQL(query, {params: request});
 
         if(data && data.GetRecordDuplicates){
             return data.GetRecordDuplicates;

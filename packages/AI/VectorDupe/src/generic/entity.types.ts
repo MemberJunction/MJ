@@ -20,5 +20,6 @@ export type EntitiyRecordDocument = {
     VectorIndexID: number,
     VectorID: number,
     VectorJSON: string,
-    EntitiyRecordUpdatedAt: Date
+    EntitiyRecordUpdatedAt: Date,
+    EntityRecordDocumentID: number
 }
