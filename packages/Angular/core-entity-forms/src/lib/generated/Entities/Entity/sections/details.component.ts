@@ -96,6 +96,12 @@ import { EntityEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="spMatch"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="EntityObjectSubclassName"
             Type="textarea"
             [EditMode]="EditMode"
