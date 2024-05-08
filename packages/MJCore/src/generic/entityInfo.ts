@@ -482,17 +482,18 @@ export class EntityFieldInfo extends BaseInfo {
 /**
  * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
  */
-export class PrimaryKeyValue {
+export class KeyValuePair {
     FieldName: string
     Value: any
 }
+
 /**
  * Utility function to compare two primary key sets to see if they are the same or not
  * @param pkeyValues1 
  * @param pkeyValues2 
  * @returns true if the primary key values are the same, false if they are different
  */
-export function ComparePrimaryKeys(pkeyValues1: PrimaryKeyValue[], pkeyValues2: PrimaryKeyValue[]): boolean {
+export function ComparePrimaryKeys(pkeyValues1: KeyValuePair[], pkeyValues2: KeyValuePair[]): boolean {
     if (pkeyValues1.length !== pkeyValues2.length)
     return false;
 
@@ -971,7 +972,7 @@ export class RecordDependency {
     /**
      * The value of the primary key field in the parent record. At present, MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
      */
-    PrimaryKeyValue: any
+    KeyValuePair: any
 }
 
 /**
@@ -985,11 +986,11 @@ export class RecordMergeRequest {
     /**
      * The primary key value(s) for the surviving record - if the entity in question has a single-valued primary key this will be an array with a single element, otherwise it will be an array with multiple elements
      */
-    SurvivingRecordPrimaryKeyValues: PrimaryKeyValue[]
+    SurvivingRecordKeyValuePairs: KeyValuePair[]
     /**
      * The primary key value(s) for the record(s) to merge into the surviving record - if the entity in question has a single-valued primary key, each item in the top level array will be an array with a single element, otherwise each item in the top level array will be an array with multiple elements
      */
-    RecordsToMerge: PrimaryKeyValue[][] // array of arrays of primary key values
+    RecordsToMerge: KeyValuePair[][] // array of arrays of primary key values
     /**
      * If you want to keep the values in the fields of the surviving record as they are, leave this blank. If you want to override the values in the surviving record with other values, specify the values you would like for each field in this array of objects. Each object has two properties, FieldName and Value. The FieldName is the name of the field to set and the Value is the value to set in it.
      */
@@ -1003,7 +1004,7 @@ export class RecordMergeDetailResult {
     /**
      * The primary key value(s) for a record that was merged
      */
-    PrimaryKeyValues: PrimaryKeyValue[]
+    KeyValuePairs: KeyValuePair[]
     /**
      * True if the merge for this specific record was successful, false if not
      */

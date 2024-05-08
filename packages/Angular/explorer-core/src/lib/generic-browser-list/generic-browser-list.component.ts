@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, OnInit, Output, input } from '@angular/
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
-import { BaseEntity, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core';
+import { BaseEntity, Metadata, KeyValuePair, RunView } from '@memberjunction/core';
 import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
 import { Subscription, Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
@@ -275,7 +275,7 @@ export class GenericBrowserListComponent implements OnInit{
     this.showLoader = true;
     const md = new Metadata();
     let folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.CategoryEntityName);
-    let pkv: PrimaryKeyValue = new PrimaryKeyValue();
+    let pkv: KeyValuePair = new KeyValuePair();
     pkv.FieldName = "ID";
     pkv.Value = folder.ID;
     //create view browser component - this will be used to display views
@@ -315,7 +315,7 @@ export class GenericBrowserListComponent implements OnInit{
       const md = new Metadata();
       
       let entityObject = await md.GetEntityObject(this.ItemEntityName);
-      let pkv: PrimaryKeyValue = new PrimaryKeyValue();
+      let pkv: KeyValuePair = new KeyValuePair();
       pkv.FieldName = "ID";
       pkv.Value = entityID;
       let loadResult = await entityObject.InnerLoad([pkv]);
@@ -402,7 +402,7 @@ export class GenericBrowserListComponent implements OnInit{
     item.Favorite = !item.Favorite;
     const md: Metadata = new Metadata();
     let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
-    let pkv: PrimaryKeyValue[] = [{FieldName: "ID", Value: item.Data.ID}];
+    let pkv: KeyValuePair[] = [{FieldName: "ID", Value: item.Data.ID}];
     await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, pkv, item.Favorite);
   }
 

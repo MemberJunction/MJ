@@ -1751,12 +1751,12 @@ type EntityRecordDocument_ {
 
 input EntityRecordNameInput {
   EntityName: String!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  KeyValuePairs: [KeyValuePairInputType!]!
 }
 
 type EntityRecordNameResult {
   EntityName: String!
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  KeyValuePairs: [KeyValuePairOutputType!]!
   RecordName: String
   Status: String!
   Success: Boolean!
@@ -2357,7 +2357,7 @@ input PotentialDuplicateRequestType {
   EntityID: Int!
   ListID: Int!
   ProbabilityScore: Int
-  RecordIDs: [PrimaryKeyValueBaseInputType!]!
+  RecordIDs: [KeyValuePairBaseInputType!]!
 }
 
 type PotentialDuplicateResponseType {
@@ -2370,28 +2370,28 @@ type PotentialDuplicateResultType {
   DuplicateRunDetailMatchRecordIDs: [Int!]!
   Duplicates: [PotentialDuplicateType!]!
   EntityID: Int
-  RecordPrimaryKeys: PrimaryKeyValueBaseOutputType!
+  RecordPrimaryKeys: KeyValuePairBaseOutputType!
 }
 
 type PotentialDuplicateType {
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  KeyValuePairs: [KeyValuePairOutputType!]!
   ProbabilityScore: Float!
 }
 
-input PrimaryKeyValueBaseInputType {
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]! = []
+input KeyValuePairBaseInputType {
+  KeyValuePairs: [KeyValuePairInputType!]! = []
 }
 
-type PrimaryKeyValueBaseOutputType {
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+type KeyValuePairBaseOutputType {
+  KeyValuePairs: [KeyValuePairOutputType!]!
 }
 
-input PrimaryKeyValueInputType {
+input KeyValuePairInputType {
   FieldName: String!
   Value: String!
 }
 
-type PrimaryKeyValueOutputType {
+type KeyValuePairOutputType {
   FieldName: String!
   Value: String!
 }
@@ -2487,7 +2487,7 @@ type Query {
   EntitySetting(ID: Int!): EntitySetting_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
-  ExecuteAskSkipRecordChat(ConversationId: Int!, EntityName: String!, PrimaryKeys: [PrimaryKeyValueInputType!]!, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRecordChat(ConversationId: Int!, EntityName: String!, PrimaryKeys: [KeyValuePairInputType!]!, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   File(ID: Int!): File_
   FileCategory(ID: Int!): FileCategory_
@@ -2496,10 +2496,10 @@ type Query {
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
-  GetEntityRecordName(EntityName: String!, PrimaryKeyValues: [PrimaryKeyValueInputType!]!): EntityRecordNameResult!
+  GetEntityRecordName(EntityName: String!, KeyValuePairs: [KeyValuePairInputType!]!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
-  GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
+  GetRecordDependencies(entityName: String!, KeyValuePairs: [KeyValuePairInputType!]!): [RecordDependencyResult!]!
   GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
@@ -3031,7 +3031,7 @@ type RecordChange_ {
 type RecordDependencyResult {
   EntityName: String!
   FieldName: String!
-  PrimaryKeyValue: String!
+  KeyValuePair: String!
   RelatedEntityName: String!
 }
 
@@ -3047,7 +3047,7 @@ type RecordMergeDeletionLog_ {
 
 type RecordMergeDetailResult {
   Message: String
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  KeyValuePairs: [KeyValuePairOutputType!]!
   RecordMergeDeletionLogID: Int
   Success: Boolean!
 }
@@ -3075,8 +3075,8 @@ type RecordMergeLog_ {
 input RecordMergeRequest {
   EntityName: String!
   FieldMap: [FieldMapping!]
-  RecordsToMerge: [[PrimaryKeyValueInputType!]!]!
-  SurvivingRecordPrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  RecordsToMerge: [[KeyValuePairInputType!]!]!
+  SurvivingRecordKeyValuePairs: [KeyValuePairInputType!]!
 }
 
 type RecordMergeRequestOutput {
@@ -5605,21 +5605,21 @@ type UserApplication_ {
 type UserFavoriteResult {
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  KeyValuePairs: [KeyValuePairOutputType!]!
   Success: Boolean!
   UserID: Int!
 }
 
 input UserFavoriteSearchParams {
   EntityID: Int!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  KeyValuePairs: [KeyValuePairInputType!]!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  KeyValuePairs: [KeyValuePairInputType!]!
   UserID: Int!
 }
 

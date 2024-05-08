@@ -1,5 +1,5 @@
 import { EntitySyncConfig } from '../generic/entitySyncConfig.types';
-import { BaseEntity, EntityField, LogError, LogStatus, PrimaryKeyValue, RunViewParams, RunViewResult, UserInfo,  } from "@memberjunction/core";
+import { BaseEntity, EntityField, LogError, LogStatus, KeyValuePair, RunViewParams, RunViewResult, UserInfo,  } from "@memberjunction/core";
 import { IProcedureResult, Request } from 'mssql';
 import { EmbedTextsParams, EmbedTextsResult, Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';

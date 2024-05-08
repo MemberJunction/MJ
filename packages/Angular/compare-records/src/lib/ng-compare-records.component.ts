@@ -1,7 +1,7 @@
 import { Component, ElementRef, Input, ViewChild } from '@angular/core';
 import { GridComponent, RowClassArgs } from '@progress/kendo-angular-grid';
 import { Subscription, debounceTime, fromEvent } from 'rxjs';
-import { BaseEntity, ComparePrimaryKeys, EntityDependency, EntityField, EntityFieldInfo, EntityInfo, LogError, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core'
+import { BaseEntity, ComparePrimaryKeys, EntityDependency, EntityField, EntityFieldInfo, EntityInfo, LogError, Metadata, KeyValuePair, RunView } from '@memberjunction/core'
 import { ViewColumnInfo } from '@memberjunction/core-entities'
 
 @Component({
@@ -23,8 +23,8 @@ export class CompareRecordsComponent {
   public columns: any[] = [];
   public showDifferences: boolean = true;
   public suppressBlankFields: boolean = true;
-  public selectedRecordPKeyVal: PrimaryKeyValue[] = [];
-  public fieldMap: {fieldName: string, primaryKeyValues: PrimaryKeyValue[], value: any}[] = [];
+  public selectedRecordPKeyVal: KeyValuePair[] = [];
+  public fieldMap: {fieldName: string, KeyValuePairs: KeyValuePair[], value: any}[] = [];
 
   @ViewChild('kendoGrid', { read: GridComponent }) kendoGridElement: GridComponent | null = null;
   @ViewChild('kendoGrid', { read: ElementRef }) kendoGridElementRef: ElementRef | null = null;
@@ -83,14 +83,14 @@ export class CompareRecordsComponent {
     }
     return pkeyString;
   }
-  protected getPKeyValues(record: any): PrimaryKeyValue[] {
+  protected getPKeyValues(record: any): KeyValuePair[] {
     if (!record)
       return [];
 
     // iterate through the record's primary key(s) and construct a string that represents the primary key
-    let pkeyValues: PrimaryKeyValue[] = [];
+    let pkeyValues: KeyValuePair[] = [];
     for (const pkey of this.primaryKeys) {
-      const pkeyValue = new PrimaryKeyValue();
+      const pkeyValue = new KeyValuePair();
       pkeyValue.FieldName = pkey.Name;
       pkeyValue.Value = record[pkey.Name];
       pkeyValues.push(pkeyValue);
@@ -201,8 +201,8 @@ export class CompareRecordsComponent {
             obj['Fields'] = column.Name;
             this.recordsToCompare.forEach((record, index: number) => { 
               const pkeyVals = this.getPKeyValues(record);
-              obj[this.getPKeyString(record)] = { Field: column.Name, Value: record.Get(column.Name), metaData: column, primaryKeyValues:pkeyVals };
-              this.columns[index + 1] = { field: '_' + this.getPKeyString(record), primaryKeyValues: pkeyVals, title: this.GetColumnHeaderTextFromPKeys(pkeyVals), width: 200, locked: true, lockable: false, filterable: false, sortable: false };
+              obj[this.getPKeyString(record)] = { Field: column.Name, Value: record.Get(column.Name), metaData: column, KeyValuePairs:pkeyVals };
+              this.columns[index + 1] = { field: '_' + this.getPKeyString(record), KeyValuePairs: pkeyVals, title: this.GetColumnHeaderTextFromPKeys(pkeyVals), width: 200, locked: true, lockable: false, filterable: false, sortable: false };
             });
             if ((this.suppressBlankFields || this.showDifferences) && !['ID', 'Name'].includes(obj.Fields)) {
               let tempObj = { ...obj };
@@ -240,7 +240,7 @@ export class CompareRecordsComponent {
     }
   }
 
-  protected _recordDependencies: {pkeyValues: PrimaryKeyValue[], dependencies: EntityDependency[]}[] = [];  
+  protected _recordDependencies: {pkeyValues: KeyValuePair[], dependencies: EntityDependency[]}[] = [];  
   public async SetDefaultSelectedRecord() {
     try {
       // find out how many dependencies each record has
@@ -249,15 +249,15 @@ export class CompareRecordsComponent {
         // dependencies not loaded yet, so load 'em up
         this._recordDependencies = [];
         for (const record of this.recordsToCompare) {
-          const primaryKeyValues = this.getPKeyValues(record);
-          const dependencies = await md.GetRecordDependencies(this.entityName, primaryKeyValues)
-          this._recordDependencies.push({pkeyValues: primaryKeyValues, dependencies: dependencies});
+          const KeyValuePairs = this.getPKeyValues(record);
+          const dependencies = await md.GetRecordDependencies(this.entityName, KeyValuePairs)
+          this._recordDependencies.push({pkeyValues: KeyValuePairs, dependencies: dependencies});
         }
       }
       if (this._recordDependencies.length > 0) {
         // the default is simply the record with the most dependencies, and if they're all equal, the first one
         let maxDependencies = 0;
-        let defaultPkeyValue: PrimaryKeyValue[] = this._recordDependencies[0].pkeyValues; // default to first record
+        let defaultPkeyValue: KeyValuePair[] = this._recordDependencies[0].pkeyValues; // default to first record
         for (const record of this._recordDependencies) {
           if (record.dependencies.length > maxDependencies) {
             maxDependencies = record.dependencies.length;
@@ -278,8 +278,8 @@ export class CompareRecordsComponent {
 
   public FormatColumnValue(dataItem: any, column: any, maxLength: number) { //column: ViewColumnInfo, value: string, maxLength: number) {
     try {
-      if (dataItem && column && column.primaryKeyValues) { 
-        const record = this.recordsToCompare.find(r => ComparePrimaryKeys(this.getPKeyValues(r), column.primaryKeyValues));
+      if (dataItem && column && column.KeyValuePairs) { 
+        const record = this.recordsToCompare.find(r => ComparePrimaryKeys(this.getPKeyValues(r), column.KeyValuePairs));
         const pkeyString = this.getPKeyString(record);
         const item = dataItem[pkeyString]
         const val = item.Value;
@@ -304,7 +304,7 @@ export class CompareRecordsComponent {
       const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
       if (fieldMapIndex >= 0) {
         // we have a field map for this field, so see if the pkeys matches the selected pkeys
-        return (ComparePrimaryKeys(pkeyValues, this.fieldMap[fieldMapIndex].primaryKeyValues));
+        return (ComparePrimaryKeys(pkeyValues, this.fieldMap[fieldMapIndex].KeyValuePairs));
       }
       else {
         // we do not have a field map for this field, so see if the pkeys matches the selected pkeys
@@ -365,10 +365,10 @@ export class CompareRecordsComponent {
   }
 
   public GetColumnHeaderText(column: any) {
-    return this.GetColumnHeaderTextFromPKeys(column?.primaryKeyValues);
+    return this.GetColumnHeaderTextFromPKeys(column?.KeyValuePairs);
   }
 
-  public GetColumnHeaderTextFromPKeys(pkeyValues: PrimaryKeyValue[]) {
+  public GetColumnHeaderTextFromPKeys(pkeyValues: KeyValuePair[]) {
     if (pkeyValues) {
       // see if we have any dependencies
       const r = this._recordDependencies.find(r =>  ComparePrimaryKeys(r.pkeyValues, pkeyValues) );
@@ -409,12 +409,12 @@ export class CompareRecordsComponent {
           const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
           if (fieldMapIndex >= 0) {
             // we found an entry in the field map for this field, so update it
-            this.fieldMap[fieldMapIndex].primaryKeyValues = currentRecordPkeys;
+            this.fieldMap[fieldMapIndex].KeyValuePairs = currentRecordPkeys;
             this.fieldMap[fieldMapIndex].value = event.dataItem[currentRecordPkeyString].Value;
           }
           else {
             // we didn't find an entry in the field map for this field, so add it
-            this.fieldMap.push({fieldName: fieldName, primaryKeyValues: currentRecordPkeys, value: event.dataItem[currentRecordPkeyString].Value});
+            this.fieldMap.push({fieldName: fieldName, KeyValuePairs: currentRecordPkeys, value: event.dataItem[currentRecordPkeyString].Value});
           }
         }
         else {

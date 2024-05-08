@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from "type-graphql";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError, PrimaryKeyValueBase, PotentialDuplicateResult } from '@memberjunction/core';
-import {PrimaryKeyValueInputType, PrimaryKeyValueOutputType} from './MergeRecordsResolver'
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, KeyValuePair, LogError, CompositeKey, PotentialDuplicateResult } from '@memberjunction/core';
+import {KeyValuePairInputType, KeyValuePairOutputType} from './MergeRecordsResolver'
 import { AppContext } from "../types";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
@@ -15,8 +15,8 @@ export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => Int)
   EntityID: number;
 
-  @Field(() => [PrimaryKeyValueBaseInputType])
-  RecordIDs: PrimaryKeyValueBase[];
+  @Field(() => [CompositeKeyInputType])
+  RecordIDs: CompositeKey[];
 
   @Field(() => Int, { nullable: true })
   EntityDocumentID: number;
@@ -29,15 +29,15 @@ export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
 }
 
 @InputType()
-export class PrimaryKeyValueBaseInputType extends PrimaryKeyValueBase {
-  @Field(() => [PrimaryKeyValueInputType])
-  PrimaryKeyValues: PrimaryKeyValue[];
+export class CompositeKeyInputType extends CompositeKey {
+  @Field(() => [KeyValuePairInputType])
+  KeyValuePairs: KeyValuePair[];
 }
 
 @ObjectType()
-export class PrimaryKeyValueBaseOutputType extends PrimaryKeyValueBase {
-  @Field(() => [PrimaryKeyValueOutputType])
-  PrimaryKeyValues: PrimaryKeyValue[];
+export class CompositeKeyOutputType extends CompositeKey {
+  @Field(() => [KeyValuePairOutputType])
+  KeyValuePairs: KeyValuePair[];
 }
 
 @ObjectType()
@@ -45,8 +45,8 @@ export class PotentialDuplicateType extends PotentialDuplicate {
   @Field(() => Float)
   ProbabilityScore: number;
 
-  @Field(() => [PrimaryKeyValueOutputType])
-  PrimaryKeyValues: PrimaryKeyValueOutputType[];
+  @Field(() => [KeyValuePairOutputType])
+  KeyValuePairs: KeyValuePairOutputType[];
 }
 
 @ObjectType()
@@ -57,8 +57,8 @@ export class PotentialDuplicateResultType extends PotentialDuplicateResult {
   @Field(() => [PotentialDuplicateType])
   Duplicates: PotentialDuplicateType[];
 
-  @Field(() => PrimaryKeyValueBaseOutputType)
-  RecordPrimaryKeys: PrimaryKeyValueBase;
+  @Field(() => CompositeKeyOutputType)
+  RecordPrimaryKeys: CompositeKey;
 
   @Field(() => [Int])
   DuplicateRunDetailMatchRecordIDs: number[];

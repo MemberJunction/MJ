@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { PrimaryKeyValue } from '@memberjunction/core';
+import { KeyValuePair } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
  
 
@@ -16,7 +16,7 @@ export class SkipChatWithRecordWindowComponent  {
   @Input() AllowSend: boolean = true;
   @Input() public Title: string = "Chat with Record"
   @Input() public LinkedEntityID: number = 0; 
-  @Input() public LinkedEntityPrimaryKeys: PrimaryKeyValue[] = [];
+  @Input() public LinkedEntityPrimaryKeys: KeyValuePair[] = [];
 
   @Input() public WindowOpened: boolean = true;
 

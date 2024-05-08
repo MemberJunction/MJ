@@ -10,7 +10,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange, 
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase,  
+         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey,  
          LogStatus} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -379,11 +379,11 @@ npm
         return ProviderType.Network;
     }
 
-    public async GetRecordChanges(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = '${primaryKeyValues.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${KeyValuePairs.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -404,29 +404,29 @@ npm
 
 
     /**
-     * Returns a list of dependencies - records that are linked to the specified Entity/primaryKeyValues combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
+     * Returns a list of dependencies - records that are linked to the specified Entity/KeyValuePairs combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValues the primaryKeyValues of the record to check
+     * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $primaryKeyValues: [PrimaryKeyValueInputType!]!) {
-                GetRecordDependencies(entityName: $entityName, primaryKeyValues: $primaryKeyValues) {
+            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $KeyValuePairs: [KeyValuePairInputType!]!) {
+                GetRecordDependencies(entityName: $entityName, KeyValuePairs: $KeyValuePairs) {
                     EntityName
                     RelatedEntityName
                     FieldName
-                    PrimaryKeyValue 
+                    KeyValuePair 
                 }
             }`
 
             // now we have our query built, execute it
             const vars = {
                 entityName: entityName,
-                primaryKeyValues: primaryKeyValues.map(pkv => {
+                KeyValuePairs: KeyValuePairs.map(pkv => {
                     return {
                         FieldName: pkv.FieldName,
                         Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
@@ -458,14 +458,14 @@ npm
                     EntityID
                     DuplicateRunDetailMatchRecordIDs
                     RecordPrimaryKeys {
-                        PrimaryKeyValues {
+                        KeyValuePairs {
                             FieldName
                             Value
                     }
                 }
                     Duplicates {
                         ProbabilityScore
-                        PrimaryKeyValues {
+                        KeyValuePairs {
                             FieldName
                             Value
                         }
@@ -481,8 +481,8 @@ npm
             ProbabilityScore: params.ProbabilityScore,
             Options: params.Options,
             RecordIDs: params.RecordIDs.map(recordID => {
-                let pkv = new PrimaryKeyValueBase();
-                pkv.PrimaryKeyValues = recordID.GetValuesAsString();
+                let pkv = new CompositeKey();
+                pkv.KeyValuePairs = recordID.ValuesAsString();
                 return pkv;
             })
         }
@@ -502,7 +502,7 @@ npm
                     OverallStatus
                     RecordMergeLogID
                     RecordStatus {
-                        PrimaryKeyValues {
+                        KeyValuePairs {
                             FieldName
                             Value
                         }
@@ -516,7 +516,7 @@ npm
             // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
             const newRequest: RecordMergeRequest = {
                 EntityName: request.EntityName,
-                SurvivingRecordPrimaryKeyValues: request.SurvivingRecordPrimaryKeyValues.map(pkv => {
+                SurvivingRecordKeyValuePairs: request.SurvivingRecordKeyValuePairs.map(pkv => {
                     return {
                         FieldName: pkv.FieldName,
                         Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
@@ -644,15 +644,15 @@ npm
             return null;
         }
     }
-    public async Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+    public async Load(entity: BaseEntity, KeyValuePairs: KeyValuePair[], EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
             const vars = {};
             let pkeyInnerParamString: string = '';
             let pkeyOuterParamString: string = '';
 
-            for (let i = 0; i < PrimaryKeyValues.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === PrimaryKeyValues[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
-                const val = PrimaryKeyValues[i].Value;
+            for (let i = 0; i < KeyValuePairs.length; i++) {
+                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const val = KeyValuePairs[i].Value;
                 const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
 
                 // build up the param string for the outer query definition
@@ -667,7 +667,7 @@ npm
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
-                    if (isNaN(PrimaryKeyValues[i].Value))
+                    if (isNaN(KeyValuePairs[i].Value))
                         throw new Error(`Primary Key value ${val} (${field.Name}) is not a valid number`);
                     vars[field.CodeName] =  parseInt(val); // converting to number here for graphql type to work properly
                 }
@@ -876,7 +876,7 @@ npm
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[]): Promise<boolean> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -890,7 +890,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            PrimaryKeyValues: primaryKeyValues.map(pkv => { 
+                                                                            KeyValuePairs: KeyValuePairs.map(pkv => { 
                                                                                                                             return { 
                                                                                                                                 FieldName: pkv.FieldName,
                                                                                                                                 Value: pkv.Value.toString()
@@ -903,7 +903,7 @@ npm
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, KeyValuePairs: KeyValuePair[], isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -916,7 +916,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId, 
                                                                                 EntityID: e.ID, 
-                                                                                PrimaryKeyValues: primaryKeyValues.map(pkv => { 
+                                                                                KeyValuePairs: KeyValuePairs.map(pkv => { 
                                                                                         return { 
                                                                                             FieldName: pkv.FieldName,
                                                                                             Value: pkv.Value.toString()
@@ -929,12 +929,12 @@ npm
             return data.SetRecordFavoriteStatus.Success;        
     }
 
-    public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
-        if (!entityName || !primaryKeyValues)
+    public async GetEntityRecordName(entityName: string, KeyValuePairs: KeyValuePair[]): Promise<string> {
+        if (!entityName || !KeyValuePairs)
             return null;
 
-        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $PrimaryKeyValues: [PrimaryKeyValueInputType!]!) {
-            GetEntityRecordName(EntityName: $EntityName, PrimaryKeyValues: $PrimaryKeyValues) {
+        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $KeyValuePairs: [KeyValuePairInputType!]!) {
+            GetEntityRecordName(EntityName: $EntityName, KeyValuePairs: $KeyValuePairs) {
                 Success
                 Status
                 RecordName
@@ -942,7 +942,7 @@ npm
         }` 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    PrimaryKeyValues: primaryKeyValues.map(pkv => {
+                                                                    KeyValuePairs: KeyValuePairs.map(pkv => {
                                                                             // map each pkv so that its Value is a string
                                                                             return { 
                                                                                         FieldName: pkv.FieldName, 
@@ -962,7 +962,7 @@ npm
             GetEntityRecordNames(info: $info) {
                 Success
                 Status
-                PrimaryKeyValues {
+                KeyValuePairs {
                     FieldName
                     Value
                 }
@@ -972,10 +972,10 @@ npm
         }` 
  
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
-            // map each info item so that each of its PrimaryKeyValues.Value is a string
+            // map each info item so that each of its KeyValuePairs.Value is a string
             return { 
                      EntityName: i.EntityName, 
-                     PrimaryKeyValues: i.PrimaryKeyValues.map(pkv => { 
+                     KeyValuePairs: i.KeyValuePairs.map(pkv => { 
                         return { FieldName: pkv.FieldName, 
                                  Value: pkv.Value.toString() 
                                } 

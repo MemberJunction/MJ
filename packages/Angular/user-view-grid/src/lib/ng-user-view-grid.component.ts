@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys, PrimaryKeyValueBase, PotentialDuplicateRequest } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, ComparePrimaryKeys, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -20,7 +20,7 @@ import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  primaryKeyValues: PrimaryKeyValue[];
+  KeyValuePairs: KeyValuePair[];
 }
 
 export type GridRowEditedEvent = {
@@ -367,14 +367,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(this.compareMode || this.mergeMode ) return;
     
     if (this._entityInfo) {
-      const pkeyVals: PrimaryKeyValue[] = [];
+      const pkeyVals: KeyValuePair[] = [];
       this._entityInfo.PrimaryKeys.forEach((pkey: EntityFieldInfo) => {
         pkeyVals.push({FieldName: pkey.Name, Value: this.viewData[args.rowIndex][pkey.Name]})
       })
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        primaryKeyValues: pkeyVals
+        KeyValuePairs: pkeyVals
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -388,13 +388,13 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (this.EditMode==='None' && this.AutoNavigate) {
         // tell app router to go to this record
-        const pkVals: string =  this.GeneratePrimaryKeyValueString(pkeyVals);
+        const pkVals: string =  this.GenerateKeyValuePairString(pkeyVals);
         this.router.navigate(['resource', 'record', pkVals], { queryParams: { Entity: this._entityInfo.Name } })
       }
     } 
   } 
 
-  public GeneratePrimaryKeyValueString(pkVals: PrimaryKeyValue[]): string {
+  public GenerateKeyValuePairString(pkVals: KeyValuePair[]): string {
     return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
   }
 
@@ -767,15 +767,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
               return {
                 FieldName: pkey.Name,
                 Value: r.Get(pkey.Name)
-              } as PrimaryKeyValue
+              } as KeyValuePair
             })
-          }).filter((pkeyVals: PrimaryKeyValue[]) => {
+          }).filter((pkeyVals: KeyValuePair[]) => {
             if (!this.recordCompareComponent)
               return false;
             else
               return !ComparePrimaryKeys(pkeyVals, this.recordCompareComponent.selectedRecordPKeyVal)
           }),
-          SurvivingRecordPrimaryKeyValues: this.recordCompareComponent.selectedRecordPKeyVal,
+          SurvivingRecordKeyValuePairs: this.recordCompareComponent.selectedRecordPKeyVal,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,

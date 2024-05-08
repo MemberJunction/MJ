@@ -1,7 +1,7 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, LogError, LogStatus, Metadata, PrimaryKeyValue, PrimaryKeyValueBase, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEntity, LogError, LogStatus, Metadata, KeyValuePair, CompositeKey, RunView, UserInfo } from "@memberjunction/core";
 import { AIModelEntity, AIModelEntityExtended, EntityDocumentEntity, EntityEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 
@@ -91,7 +91,7 @@ export class VectorBase {
         return entityDocument;
     }
 
-    protected async getRecordsByEntityID(entityID: number, recordIDs?: PrimaryKeyValueBase[]): Promise<BaseEntity[]> {
+    protected async getRecordsByEntityID(entityID: number, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const rvResult = await this._runView.RunView({
             EntityName: "Entities",
             ExtraFilter: `ID = ${entityID}`,
@@ -119,9 +119,9 @@ export class VectorBase {
         return rvResult2.Results;
     }
 
-    protected buildExtraFilter(keyValues: PrimaryKeyValueBase[]): string {
+    protected buildExtraFilter(keyValues: CompositeKey[]): string {
         return keyValues.map((keyValue) => {
-            return keyValue.PrimaryKeyValues.map((keys: PrimaryKeyValue) => {
+            return keyValue.KeyValuePairs.map((keys: KeyValuePair) => {
                 return `${keys.FieldName} = '${keys.Value}'`;
             }).join(" AND ");
         }).join("\n OR ");

@@ -3,7 +3,7 @@ import { BaseFormComponent } from './base-form-component';
 import { ChatComponent, ChatMessage } from '@memberjunction/ng-chat';
 import { SharedService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Metadata, PrimaryKeyValue, RunView, TransactionGroupBase } from '@memberjunction/core';
+import { Metadata, KeyValuePair, RunView, TransactionGroupBase } from '@memberjunction/core';
 import { ConversationDetailEntity } from '@memberjunction/core-entities';
 import { SkipAPIChatWithRecordResponse } from '@memberjunction/skip-types';
 
@@ -93,8 +93,8 @@ export class FormToolbarComponent {
         this.form.SaveRecord(true);
     }
 
-    public get LinkedEntityPrimaryKeys(): PrimaryKeyValue[] {
-        return this.form.record.PrimaryKeys.map(pk => <PrimaryKeyValue>{FieldName: pk.Name, Value: pk.Value})
+    public get LinkedEntityPrimaryKeys(): KeyValuePair[] {
+        return this.form.record.PrimaryKeys.map(pk => <KeyValuePair>{FieldName: pk.Name, Value: pk.Value})
     }
 
     public SkipChatVisible: boolean = false;

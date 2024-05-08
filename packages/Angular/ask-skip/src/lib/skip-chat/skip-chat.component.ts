@@ -1,7 +1,7 @@
   import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { LogError, Metadata, PrimaryKeyValue, RunQuery, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, KeyValuePair, RunQuery, RunView, UserInfo } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -31,7 +31,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @Input() public Title: string = "Ask Skip"
   @Input() public DataContextID: number = 0;
   @Input() public LinkedEntity: string = '';
-  @Input() public LinkedEntityPrimaryKeys: PrimaryKeyValue[] = [];
+  @Input() public LinkedEntityPrimaryKeys: KeyValuePair[] = [];
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
  

@@ -1,5 +1,5 @@
 import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, PrimaryKeyValueBase, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, EntityField, RecordMergeRequest } from "@memberjunction/core";
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, RunView, UserInfo, BaseEntity, PotentialDuplicateResult, Metadata, LogError, EntityField, RecordMergeRequest } from "@memberjunction/core";
 import { LogStatus } from "@memberjunction/core";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
@@ -29,9 +29,14 @@ export class DuplicateRecordDetector extends VectorBase {
             entityDocument = await this.getFirstActiveEntityDocumentForEntity(params.EntityID);
             if(!entityDocument){
                 LogStatus(`No active Entity Document found for entity ${params.EntityID}, creating one`);
+                //Update: No longer creating an entity docuement if one is not found
+                //If an entitiy document is not found, that is our indicator that the 
+                //underlying entity's records have not been vectorized yet
+                /*
                 const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
                 const defaultAIModel: AIModelEntity = super.getAIModel();
                 entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
+                */
             }
         }
 
@@ -43,6 +48,8 @@ export class DuplicateRecordDetector extends VectorBase {
             response.Status = 'Error';
             return response;
         }
+
+        LogStatus(JSON.stringify(entityDocument, null, "\t"));
 
         /*
         let vectorizer = new EntityVectorSyncer();
@@ -103,20 +110,20 @@ export class DuplicateRecordDetector extends VectorBase {
         const topK: number = 5;
         let results: PotentialDuplicateResult[] = [];
         for (const [index, vector] of embedTextsResult.vectors.entries()){
-            const recordID: PrimaryKeyValueBase = this.convertPrimaryKeysIntoCompositeKey(records[index].PrimaryKeys);
+            const recordID: CompositeKey = this.convertPrimaryKeysIntoCompositeKey(records[index].PrimaryKeys);
             let queryResult = await this._vectorDB.getVectorDuplicates({ vector: vector, topK: topK, includeMetadata: true, includeValues: false });
             if(queryResult.success){
                 queryResult.data.Duplicates = queryResult.data.Duplicates.filter((dupe) => {
                     return dupe.ProbabilityScore >= entityDocument.PotentialMatchThreshold;
                 });
                 let result: PotentialDuplicateResult = queryResult.data as PotentialDuplicateResult;
-                //const compositeKey: string = params.RecordIDs[index].GetCompositeKey();
-                //LogStatus(`Query result for ${compositeKey} returned ${response.Duplicates.length} potential duplicates`);
+                
                 result.EntityID = entityDocument.EntityID;
                 result.RecordPrimaryKeys = recordID;
                 results.push(result);
+                
                 //now update all of the dupe run detail records
-                let dupeRunDetail: DuplicateRunDetailEntity = duplicateRunDetails.find((detail) => detail.RecordID === recordID.GetCompositeKeyAsSQLString());
+                let dupeRunDetail: DuplicateRunDetailEntity = duplicateRunDetails.find((detail) => detail.RecordID === recordID.ToString());
                 if(dupeRunDetail){
                     const matchRecords = await this.createDuplicateRunDetailMatchesForRecord(dupeRunDetail.ID, result);
                     result.DuplicateRunDetailMatchRecordIDs = matchRecords.map((match) => match.ID);    
@@ -127,7 +134,7 @@ export class DuplicateRecordDetector extends VectorBase {
                     }
                 }
                 else{
-                    LogError(`Failed to find Duplicate Run Detail record for ${recordID.GetCompositeKeyAsSQLString()}`);
+                    LogError(`Failed to find Duplicate Run Detail record for ${recordID.ToString()}`);
                 }
             }
         }
@@ -151,7 +158,7 @@ export class DuplicateRecordDetector extends VectorBase {
         return response;
     }
 
-    private async GetRecordsByEntityID(entityID: number, recordIDs: PrimaryKeyValueBase[]): Promise<BaseEntity[]> {
+    private async GetRecordsByEntityID(entityID: number, recordIDs: CompositeKey[]): Promise<BaseEntity[]> {
         const rvResult = await this._runView.RunView({
             EntityName: "Entities",
             ExtraFilter: `ID = ${entityID}`
@@ -214,14 +221,14 @@ export class DuplicateRecordDetector extends VectorBase {
         return duplicateRun;
     }
 
-    private async createDuplicateRunDetailRecords(recordIDs: PrimaryKeyValueBase[], duplicateRunID: number): Promise<DuplicateRunDetailEntity[]> {
+    private async createDuplicateRunDetailRecords(recordIDs: CompositeKey[], duplicateRunID: number): Promise<DuplicateRunDetailEntity[]> {
         let results: DuplicateRunDetailEntity[] = [];
         const md: Metadata = new Metadata();
         for(const recordID of recordIDs){
             let runDetail: DuplicateRunDetailEntity = await md.GetEntityObject<DuplicateRunDetailEntity>('Duplicate Run Details');
             runDetail.NewRecord();
             runDetail.DuplicateRunID = duplicateRunID;
-            runDetail.RecordID = recordID.GetCompositeKeyAsSQLString();
+            runDetail.RecordID = recordID.ToString();
             runDetail.MatchStatus = 'Pending';
             runDetail.MergeStatus = 'Pending';
             const success = await super.SaveEntity(runDetail);
@@ -313,14 +320,14 @@ export class DuplicateRecordDetector extends VectorBase {
         return list;
     }
 
-    private async createListDetailsForDupeRun(recordIDs: PrimaryKeyValueBase[], listID: number): Promise<void> {
+    private async createListDetailsForDupeRun(recordIDs: CompositeKey[], listID: number): Promise<void> {
         const md: Metadata = new Metadata();
 
         for(const recordID of recordIDs){
             const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
             listDetail.NewRecord();
             listDetail.ListID = listID;
-            listDetail.RecordID = recordID.GetCompositeKeyAsSQLString();
+            listDetail.RecordID = recordID.ToString();
             listDetail.ContextCurrentUser = super.CurrentUser;
             await listDetail.Save();
         }
@@ -349,9 +356,9 @@ export class DuplicateRecordDetector extends VectorBase {
         return matchRecords;
     }
 
-    private convertPrimaryKeysIntoCompositeKey(pkv: EntityField[]): PrimaryKeyValueBase {
-        const pk: PrimaryKeyValueBase = new PrimaryKeyValueBase();
-        pk.PrimaryKeyValues = pkv.map((pk) => {
+    private convertPrimaryKeysIntoCompositeKey(pkv: EntityField[]): CompositeKey {
+        const pk: CompositeKey = new CompositeKey();
+        pk.KeyValuePairs = pkv.map((pk) => {
             return { FieldName: pk.Name, Value: pk.Value };
         });
         return pk;
@@ -369,8 +376,8 @@ export class DuplicateRecordDetector extends VectorBase {
                     //merge
                     let mergeParams: RecordMergeRequest = new RecordMergeRequest();
                     mergeParams.EntityName = entityDocument.Entity;
-                    mergeParams.SurvivingRecordPrimaryKeyValues = dupeResult.RecordPrimaryKeys.PrimaryKeyValues;
-                    mergeParams.RecordsToMerge = [dupe.PrimaryKeyValues];
+                    mergeParams.SurvivingRecordKeyValuePairs = dupeResult.RecordPrimaryKeys.KeyValuePairs;
+                    mergeParams.RecordsToMerge = [dupe.KeyValuePairs];
                     let result = await md.MergeRecords(mergeParams, super.CurrentUser);
                     if(result.Success){
                         let dupeRunMatchRecord: DuplicateRunDetailMatchEntity = await md.GetEntityObject<DuplicateRunDetailMatchEntity>('Duplicate Run Detail Matches', super.CurrentUser);

@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, Input, ViewChild } from "@angular/core";
-import { LogError, Metadata, PrimaryKeyValue, RunView } from "@memberjunction/core";
+import { LogError, Metadata, KeyValuePair, RunView } from "@memberjunction/core";
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from "@memberjunction/core-entities";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { ChatComponent, ChatMessage, ChatWelcomeQuestion } from "@memberjunction/ng-chat";
@@ -13,7 +13,7 @@ import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
   })  
 export class SkipChatWithRecordComponent implements AfterViewInit {
   @Input() LinkedEntityID!: number;
-  @Input() LinkedPrimaryKeys: PrimaryKeyValue[] = [];
+  @Input() LinkedPrimaryKeys: KeyValuePair[] = [];
   
   @ViewChild('mjChat') mjChat!: ChatComponent;
 
@@ -106,7 +106,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
           // send messages to Skip from here using graphql
           try {
               this.mjChat.ShowWaitingIndicator = true;
-              const gql = `query ExecuteAskSkipRecordChatQuery($userQuestion: String!, $conversationId: Int!, $entityName: String!, $primaryKeys: [PrimaryKeyValueInputType!]!) {
+              const gql = `query ExecuteAskSkipRecordChatQuery($userQuestion: String!, $conversationId: Int!, $entityName: String!, $primaryKeys: [KeyValuePairInputType!]!) {
                   ExecuteAskSkipRecordChat(UserQuestion: $userQuestion, ConversationId: $conversationId, EntityName: $entityName, PrimaryKeys: $primaryKeys) {
                       Success
                       Status
@@ -120,7 +120,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   userQuestion: message.message, 
                   entityName: this.LinkedEntityName,
                   conversationId: this._conversationId,
-                  primaryKeys: this.LinkedPrimaryKeys.map(pk => <PrimaryKeyValue>{FieldName: pk.FieldName, Value: pk.Value.toString()}),
+                  primaryKeys: this.LinkedPrimaryKeys.map(pk => <KeyValuePair>{FieldName: pk.FieldName, Value: pk.Value.toString()}),
               });
       
               if (result?.ExecuteAskSkipRecordChat?.Success) {

@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from "@angular/core";
-import { PrimaryKeyValue, RunViewParams } from "@memberjunction/core";
+import { KeyValuePair, RunViewParams } from "@memberjunction/core";
 import { GridRowClickedEvent, GridRowEditedEvent, UserViewGridComponent } from "@memberjunction/ng-user-view-grid";
 import { SharedService } from "@memberjunction/ng-shared";
 import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
@@ -45,9 +45,9 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
             return 0;
     }    
     /**
-     * Returns the ViewID as an array of PrimaryKeyValue
+     * Returns the ViewID as an array of KeyValuePair
      */
-    public get ViewIDAsPrimaryKeyArray(): PrimaryKeyValue[] {
+    public get ViewIDAsPrimaryKeyArray(): KeyValuePair[] {
         return [{FieldName: "ID", Value: this.ViewID}];
     }
     public selectTabHandler() {

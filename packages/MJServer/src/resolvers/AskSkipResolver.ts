@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, PrimaryKeyValue, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, KeyValuePair, RunView, UserInfo } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context'
@@ -18,7 +18,7 @@ import { registerEnumType } from "type-graphql";
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util';
 import { GetAIAPIKey } from '@memberjunction/ai';
-import { PrimaryKeyValueInputType } from './MergeRecordsResolver';
+import { KeyValuePairInputType } from './MergeRecordsResolver';
 
 
 enum SkipResponsePhase {
@@ -73,7 +73,7 @@ export class AskSkipResolver {
   async ExecuteAskSkipRecordChat(@Arg('UserQuestion', () => String) UserQuestion: string,
                                  @Arg('ConversationId', () => Int) ConversationId: number,
                                  @Arg('EntityName', () => String) EntityName: string,
-                                 @Arg('PrimaryKeys', () => [PrimaryKeyValueInputType]) PrimaryKeys: PrimaryKeyValueInputType[],
+                                 @Arg('PrimaryKeys', () => [KeyValuePairInputType]) PrimaryKeys: KeyValuePairInputType[],
                                  @Ctx() { dataSource, userPayload }: AppContext,
                                  @PubSub() pubSub: PubSubEngine) {
     // In this function we're simply going to call the Skip API and pass along the message from the user

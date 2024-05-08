@@ -23,7 +23,7 @@ export class EntitySubClassGeneratorBase {
     }
     
     public generateEntitySubClassFileHeader(): string {
-        return `import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
+        return `import { BaseEntity, KeyValuePair, EntitySaveOptions } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
     `
     }
@@ -95,7 +95,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(${loadFieldString}, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
+            const pkeyValues: KeyValuePair[] = [];
             ${entity.PrimaryKeys.map(f => `pkeyValues.push({ FieldName: '${f.Name}', Value: ${f.CodeName} });`).join('\n        ')}
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }

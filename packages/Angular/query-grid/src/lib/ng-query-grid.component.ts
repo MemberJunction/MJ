@@ -1,6 +1,6 @@
 import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit } from '@angular/core';
 
-import { Metadata, BaseEntity, LogError, PrimaryKeyValue, RunQueryParams, RunQuery } from '@memberjunction/core';
+import { Metadata, BaseEntity, LogError, KeyValuePair, RunQueryParams, RunQuery } from '@memberjunction/core';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, SelectableSettings} from "@progress/kendo-angular-grid";
 
@@ -10,7 +10,7 @@ import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@me
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  primaryKeyValues: PrimaryKeyValue[];
+  KeyValuePairs: KeyValuePair[];
 }
  
 @Component({

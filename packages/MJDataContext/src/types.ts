@@ -1,4 +1,4 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, PrimaryKeyValue, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, QueryInfo, RunQuery, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
 import { DataContextEntity, DataContextItemEntity, UserViewEntityExtended } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 
@@ -319,7 +319,7 @@ export class DataContextItem {
         try {
             const md = new Metadata();
             const record = await md.GetEntityObject(this.EntityName, contextUser);
-            const pkeyVals: PrimaryKeyValue[] = [];
+            const pkeyVals: KeyValuePair[] = [];
             const ei = md.Entities.find((e) => e.ID === this.EntityID);
             const rawVals = this.RecordID.split(',');
             for (let i = 0; i < ei.PrimaryKeys.length; i++) {

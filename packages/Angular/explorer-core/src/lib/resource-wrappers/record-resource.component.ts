@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { BaseResourceComponent, ResourceData } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, PrimaryKeyValue } from '@memberjunction/core';
+import { Metadata, KeyValuePair } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 
 export function LoadRecordResource() {
@@ -11,13 +11,13 @@ export function LoadRecordResource() {
 @RegisterClass(BaseResourceComponent, 'Records')
 @Component({
     selector: 'mj-record-resource',
-    template: `<mj-single-record [primaryKeyValues]="this.primaryKeyValues" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()" mjFillContainer></mj-single-record>`
+    template: `<mj-single-record [KeyValuePairs]="this.KeyValuePairs" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()" mjFillContainer></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
-    public get primaryKeyValues(): PrimaryKeyValue[] {
-        return EntityRecordResource.GetPrimaryKeyValues(this.Data);
+    public get KeyValuePairs(): KeyValuePair[] {
+        return EntityRecordResource.GetKeyValuePairs(this.Data);
     }
-    public static GetPrimaryKeyValues(data: ResourceData): PrimaryKeyValue[] {
+    public static GetKeyValuePairs(data: ResourceData): KeyValuePair[] {
         const md = new Metadata();
         const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
         if (!e)
@@ -31,7 +31,7 @@ export class EntityRecordResource extends BaseResourceComponent {
             return ''
         else {
             const md = new Metadata();
-            const pKeys = EntityRecordResource.GetPrimaryKeyValues(data);  
+            const pKeys = EntityRecordResource.GetKeyValuePairs(data);  
             const name = await md.GetEntityRecordName(data.Configuration.Entity, pKeys);
             const displayId = pKeys.length > 1 ? pKeys.map(p => p.Value).join(', ') : pKeys[0].Value;         
             return (name ? name : data.Configuration.Entity) + ` (${displayId})`;
