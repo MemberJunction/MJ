@@ -4,6 +4,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, LogError, LogStatus, Metadata, PrimaryKeyValue, PrimaryKeyValueBase, RunView, UserInfo } from "@memberjunction/core";
 import { AIModelEntity, AIModelEntityExtended, EntityDocumentEntity, EntityEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
+import { RECORD_DUPLICATES_TYPE_ID } from "../constants";
 
 export class VectorBase {
     _runView: RunView;
@@ -158,7 +159,7 @@ export class VectorBase {
         entityDocument.NewRecord();
         entityDocument.Set("Name", `Default duplicate record Entity Document for the ${entity.Name} entity using vector database ${vectorDatabase.Name} and AI Model ${AIModel.Name}`);
         entityDocument.Set("EntityID", entityID);
-        entityDocument.Set("TypeID", 9); //hardcoded, but we know that 9 is the ID for Record Duplicates
+        entityDocument.Set("TypeID", RECORD_DUPLICATES_TYPE_ID);
         entityDocument.Set("Status", "Active");
         entityDocument.Set("Template", EDTemplate);
         entityDocument.Set("VectorDatabaseID", vectorDatabase.ID);
