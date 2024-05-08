@@ -20,7 +20,6 @@
     "@angular/platform-browser": "~17.2.2",
     "@angular/platform-browser-dynamic": "~17.2.2",
     "@angular/router": "~17.2.2",
-    "@auth0/auth0-angular": "^2.2.3",
     "@azure/msal-angular": "^3.0.11",
     "@memberjunction/core": "~1.2.2",
     "@memberjunction/core-entities": "~1.2.2",
