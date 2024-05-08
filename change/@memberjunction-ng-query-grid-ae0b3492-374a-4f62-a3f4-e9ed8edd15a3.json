@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Applying package updates [skip ci]",
+  "packageName": "@memberjunction/ng-query-grid",
+  "email": "155523863+JS-BC@users.noreply.github.com",
+  "dependentChangeType": "patch"
+}
