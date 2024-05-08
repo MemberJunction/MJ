@@ -1,4 +1,4 @@
-import { BaseEntity } from "./baseEntity";
+import { BaseEntity, EntityField } from "./baseEntity";
 import { EntityDependency, EntityInfo, KeyValuePair, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
@@ -128,6 +128,15 @@ export class CompositeKey {
         }
 
         return this.EqualsKey(compositeKey.KeyValuePairs);
+    }
+
+    LoadFromEntityFields(fields: EntityField[]): void {
+        this.KeyValuePairs = fields.map((field) => {
+            return {
+                FieldName: field.Name,
+                Value: field.Value
+            }
+        });
     }
 }
 

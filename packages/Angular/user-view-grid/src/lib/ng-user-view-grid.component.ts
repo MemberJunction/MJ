@@ -446,13 +446,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
-            record = await md.GetEntityObject(this._entityInfo.Name);
-            await record.InnerLoad(this._entityInfo.PrimaryKeys.map(pk => {
+            let compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs = this._entityInfo.PrimaryKeys.map(pk => {
               return {
                 FieldName: pk.Name,
                 Value: dataItem[pk.Name]
               };
-            }));
+            });
+            record = await md.GetEntityObject(this._entityInfo.Name);
+            await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
             if (!bSaved)
@@ -462,12 +464,14 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
-              await record.InnerLoad(this._entityInfo.PrimaryKeys.map(pk => {
+              let compositeKey: CompositeKey = new CompositeKey();
+              compositeKey.KeyValuePairs = this._entityInfo.PrimaryKeys.map(pk => {
                 return {
                   FieldName: pk.Name,
                   Value: dataItem[pk.Name]
                 };
-              }));
+              });
+              await record.InnerLoad(compositeKey);
               this._pendingRecords.push({record, 
                                          row: args.rowIndex, 
                                          dataItem}); // don't save - put the changed record on a queue for saving later by our container

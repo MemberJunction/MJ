@@ -1,4 +1,4 @@
-import { BaseEntity, KeyValuePair, EntitySaveOptions } from "@memberjunction/core";
+import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
     
     /**
@@ -25,7 +25,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -131,7 +131,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -237,7 +237,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -366,7 +366,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -769,7 +769,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -1162,7 +1162,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -1257,7 +1257,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -1543,7 +1543,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -1637,7 +1637,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -2031,7 +2031,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -2137,7 +2137,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -2398,7 +2398,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -2482,7 +2482,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
@@ -2633,7 +2633,7 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: KeyValuePair[] = [];
+            const pkeyValues: PrimaryKeyValue[] = [];
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }

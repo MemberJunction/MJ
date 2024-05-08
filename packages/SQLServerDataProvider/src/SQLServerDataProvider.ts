@@ -9,7 +9,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
+         CompositeKey} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -802,7 +803,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 2 - update the surviving record, but only do this if we were provided a field map
             if (request.FieldMap && request.FieldMap.length > 0) {
                 const survivor: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser)
-                await survivor.InnerLoad(request.SurvivingRecordKeyValuePairs);
+                let compositeKey: CompositeKey = new CompositeKey();
+                compositeKey.KeyValuePairs = request.SurvivingRecordKeyValuePairs;
+                await survivor.InnerLoad(compositeKey);
                 for (const fieldMap of request.FieldMap) {
                     survivor.Set(fieldMap.FieldName, fieldMap.Value);
                 }
@@ -827,8 +830,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 for (const dependency of dependencies) {
                     const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-                    const pk: KeyValuePair = {FieldName: reInfo.PrimaryKey.Name, Value: dependency.KeyValuePair};
-                    await relatedEntity.InnerLoad([pk]);
+                    let reInfoCompositeKey: CompositeKey = new CompositeKey();
+                    reInfoCompositeKey.KeyValuePairs = [{FieldName: reInfo.PrimaryKey.Name, Value: dependency.KeyValuePair}];
+                    await relatedEntity.InnerLoad(reInfoCompositeKey);
                     relatedEntity.Set(dependency.FieldName, request.SurvivingRecordKeyValuePairs[0].Value); // only support single field foreign keys for now
                     /*
                     if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
@@ -845,9 +849,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 }
                 // if we get here, that means that all of the dependencies were updated successfully, so we can now delete the records to be merged
                 const recordToDelete: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
-                await recordToDelete.InnerLoad(pksToDelete);
+                let compositeKey: CompositeKey = new CompositeKey();
+                compositeKey.KeyValuePairs = pksToDelete;
+                await recordToDelete.InnerLoad(compositeKey);
                 if (!await recordToDelete.Delete()) {
-                    newRecStatus.Message = `Error deleting record ${pksToDelete.map(pk => pk.FieldName + ' : ' + pk.Value).join(',')} for entity ${request.EntityName}`;
+                    newRecStatus.Message = `Error deleting record ${compositeKey.ToString()} for entity ${request.EntityName}`;
                     throw new Error(newRecStatus.Message);
                 }
                 else 

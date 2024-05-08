@@ -1,7 +1,7 @@
 import { Component, ElementRef, Input, ViewChild } from '@angular/core';
 import { GridComponent, RowClassArgs } from '@progress/kendo-angular-grid';
 import { Subscription, debounceTime, fromEvent } from 'rxjs';
-import { BaseEntity, ComparePrimaryKeys, EntityDependency, EntityField, EntityFieldInfo, EntityInfo, LogError, Metadata, KeyValuePair, RunView } from '@memberjunction/core'
+import { BaseEntity, EntityDependency, EntityField, EntityFieldInfo, EntityInfo, LogError, Metadata, KeyValuePair, RunView, CompositeKey } from '@memberjunction/core'
 import { ViewColumnInfo } from '@memberjunction/core-entities'
 
 @Component({
@@ -23,8 +23,8 @@ export class CompareRecordsComponent {
   public columns: any[] = [];
   public showDifferences: boolean = true;
   public suppressBlankFields: boolean = true;
-  public selectedRecordPKeyVal: KeyValuePair[] = [];
-  public fieldMap: {fieldName: string, KeyValuePairs: KeyValuePair[], value: any}[] = [];
+  public selectedRecordPKeyVal: CompositeKey = new CompositeKey();
+  public fieldMap: {fieldName: string, KeyValuePairs: CompositeKey, value: any}[] = [];
 
   @ViewChild('kendoGrid', { read: GridComponent }) kendoGridElement: GridComponent | null = null;
   @ViewChild('kendoGrid', { read: ElementRef }) kendoGridElementRef: ElementRef | null = null;
@@ -264,7 +264,9 @@ export class CompareRecordsComponent {
             defaultPkeyValue = record.pkeyValues;
           }
         }
-        this.selectedRecordPKeyVal = defaultPkeyValue;
+
+
+        this.selectedRecordPKeyVal.KeyValuePairs = defaultPkeyValue;
       }
     }
     catch (e) {
@@ -279,7 +281,9 @@ export class CompareRecordsComponent {
   public FormatColumnValue(dataItem: any, column: any, maxLength: number) { //column: ViewColumnInfo, value: string, maxLength: number) {
     try {
       if (dataItem && column && column.KeyValuePairs) { 
-        const record = this.recordsToCompare.find(r => ComparePrimaryKeys(this.getPKeyValues(r), column.KeyValuePairs));
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs = column.KeyValuePairs;
+        const record = this.recordsToCompare.find(r => compositeKey.EqualsKey(this.getPKeyValues(r)));
         const pkeyString = this.getPKeyString(record);
         const item = dataItem[pkeyString]
         const val = item.Value;
@@ -298,18 +302,20 @@ export class CompareRecordsComponent {
       // First, figure out which field we are dealing with
       const colIndex = this.columns.indexOf(column);
       const pkeyValues = this.getPKeyValues(this.recordsToCompare[colIndex - 1 /*first column is the field names so always subtract one*/]);
+      const compositeKey: CompositeKey = new CompositeKey();
+      compositeKey.KeyValuePairs = pkeyValues;
 
       const fieldName = dataItem.Fields;
       // now, see if we have a field map for this field
       const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
       if (fieldMapIndex >= 0) {
         // we have a field map for this field, so see if the pkeys matches the selected pkeys
-        return (ComparePrimaryKeys(pkeyValues, this.fieldMap[fieldMapIndex].KeyValuePairs));
+        return compositeKey.Equals(this.fieldMap[fieldMapIndex].KeyValuePairs);
       }
       else {
         // we do not have a field map for this field, so see if the pkeys matches the selected pkeys
         // as we default to the selected record when we don't have a field map
-        return (ComparePrimaryKeys(pkeyValues, this.selectedRecordPKeyVal));
+        return compositeKey.Equals(this.selectedRecordPKeyVal);
       }
     }
     else
@@ -369,11 +375,13 @@ export class CompareRecordsComponent {
   }
 
   public GetColumnHeaderTextFromPKeys(pkeyValues: KeyValuePair[]) {
+    let compositeKey: CompositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs = pkeyValues;
     if (pkeyValues) {
       // see if we have any dependencies
-      const r = this._recordDependencies.find(r =>  ComparePrimaryKeys(r.pkeyValues, pkeyValues) );
-      const prefix = this.selectionMode && ComparePrimaryKeys(this.selectedRecordPKeyVal, pkeyValues) ? '✓✓✓ ' : '';
-      const record = this.recordsToCompare.find(r => ComparePrimaryKeys(this.getPKeyValues(r), pkeyValues));
+      const r = this._recordDependencies.find(r =>  compositeKey.EqualsKey(r.pkeyValues));
+      const prefix = this.selectionMode && compositeKey.Equals(this.selectedRecordPKeyVal) ? '✓✓✓ ' : '';
+      const record = this.recordsToCompare.find(r => compositeKey.EqualsKey(this.getPKeyValues(r)));
       const s = this.getPKeyString(record);
       if (r) {
         return `${prefix}Record: ${s} (${r.dependencies.length} dependencies)`;
@@ -403,18 +411,20 @@ export class CompareRecordsComponent {
       // first check to see if the user selected a read-only field
       if (!event.dataItem[currentRecordPkeyString].metaData.EntityField.ReadOnly) {
         // only make writeable fields selectable
-        if (!ComparePrimaryKeys(this.selectedRecordPKeyVal, currentRecordPkeys)) {
+        if (!this.selectedRecordPKeyVal.EqualsKey(currentRecordPkeys)) {
           // check to see if we have a fieldmap for the current field. If we do have one, then update it to the current record
           // if we don't have one, then add it
           const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
           if (fieldMapIndex >= 0) {
             // we found an entry in the field map for this field, so update it
-            this.fieldMap[fieldMapIndex].KeyValuePairs = currentRecordPkeys;
+            this.fieldMap[fieldMapIndex].KeyValuePairs.KeyValuePairs = currentRecordPkeys;
             this.fieldMap[fieldMapIndex].value = event.dataItem[currentRecordPkeyString].Value;
           }
           else {
             // we didn't find an entry in the field map for this field, so add it
-            this.fieldMap.push({fieldName: fieldName, KeyValuePairs: currentRecordPkeys, value: event.dataItem[currentRecordPkeyString].Value});
+            let cKey: CompositeKey = new CompositeKey();
+            cKey.KeyValuePairs = currentRecordPkeys;
+            this.fieldMap.push({fieldName: fieldName, KeyValuePairs: cKey, value: event.dataItem[currentRecordPkeyString].Value});
           }
         }
         else {
@@ -444,7 +454,7 @@ export class CompareRecordsComponent {
           });
           if (columnIndex > 0) {
             // check for colIndex > 0, not >=0 because the first column is the field names, so we don't want to select that
-            this.selectedRecordPKeyVal = this.getPKeyValues(this.recordsToCompare[columnIndex - 1/*always remove 1 because the first col is the "Fields" column*/]);
+            this.selectedRecordPKeyVal.KeyValuePairs = this.getPKeyValues(this.recordsToCompare[columnIndex - 1/*always remove 1 because the first col is the "Fields" column*/]);
           }
         }
     }
