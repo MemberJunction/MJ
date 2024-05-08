@@ -172,20 +172,7 @@ export class VectorBase {
             throw new Error(`Failed to save Entity Document for ${entityID}`);
         }
     }
-
-    protected parseStringTemplate(str: string, obj: any): string {
-        //Split string into non-argument textual parts
-        let parts = str.split(/\$\{(?!\d)[\wæøåÆØÅ]*\}/);
-    
-        //Split string into property names. Empty array if match fails.
-        let args = str.match(/[^{\}]+(?=})/g) || [];
-    
-        //Map parameters from obj by property name. Solution is limited by shallow one level mapping. 
-        //Undefined values are substituted with an empty string, but other falsy values are accepted.
-        let parameters = args.map(argument => obj[argument] || (obj[argument] === undefined ? "" : obj[argument]));
-        return String.raw({ raw: parts }, ...parameters);
-    }
-
+     
     protected getAIModel(id?: number): AIModelEntityExtended {
         /*elim this hardcoding by adding virtual field for Type to AI Models entity*/
         let model: AIModelEntityExtended;

@@ -8,7 +8,9 @@ import { AIModelEntity, EntityDocumentEntity, EntityRecordDocumentEntity, Vector
 import { AIEngine } from "@memberjunction/aiengine";
 import { vectorSyncRequest } from '../generic/vectorSync.types';
 import { VectorBase } from '@memberjunction/ai-vectors'
+import { EntityDocumentTemplateParser } from '../generic/EntityDocumentTemplateParser';
 
+ 
 export class EntityVectorSyncer extends VectorBase {
     _startTime: Date; 
     _endTime: Date;
@@ -18,6 +20,8 @@ export class EntityVectorSyncer extends VectorBase {
     }
 
     public async vectorizeEntity(request: vectorSyncRequest, contextUser: UserInfo): Promise<any> {
+        const parser = EntityDocumentTemplateParser.CreateInstance();
+
         super.CurrentUser = contextUser;
         const entityDocument: EntityDocumentEntity = await super.getEntityDocument(request.entityDocumentID);
         const vectorIndexEntity: VectorIndexEntity = await this.getOrCreateVecotrIndex(entityDocument);
@@ -33,7 +37,8 @@ export class EntityVectorSyncer extends VectorBase {
         for (const batch of chunks){
             let templates: string[] = [];
             for(const record of batch){
-                templates.push(super.parseStringTemplate(entityDocument.Template, record));
+                const parseResult = await parser.Parse(entityDocument.Template, request.entityID, record)
+                templates.push(parseResult);
             }
 
             const embeddings: EmbedTextsResult = await obj.embedding.EmbedTexts({texts: templates, model: null});
