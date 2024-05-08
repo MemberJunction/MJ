@@ -7,7 +7,7 @@ import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 export class DuplicateRunEntity_Server extends DuplicateRunEntity  {
     public async Save(): Promise<boolean> {
         const saveResult: boolean = await super.Save();
-        if (saveResult && this.EndedAt !== null) {
+        if (saveResult && this.EndedAt === null) {
             // do something
             const duplicateRecordDetector: DuplicateRecordDetector = new DuplicateRecordDetector();
             let request: PotentialDuplicateRequest = new PotentialDuplicateRequest();

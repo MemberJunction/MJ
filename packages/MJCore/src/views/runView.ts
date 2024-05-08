@@ -97,11 +97,11 @@ export type RunViewParams = {
     AuditLogDescription?: string
 
     /**
-     * Result Type is either 'simple' or 'entity_object' and defaults to 'Plain'. If 'EntityObject' is specified, the Results[] array will contain
-     * BaseEntity-derived objects instead of plain objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
-     * if you plan to do any update/delete operations on the data.
+     * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
+     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
+     * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
      */
-    ResultType?: 'simple' | 'entity_object';
+    ResultType?: 'simple' | 'entity_object' | 'count_only';
 } 
 
 /**

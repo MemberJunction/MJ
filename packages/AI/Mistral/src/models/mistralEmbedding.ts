@@ -23,11 +23,15 @@ export class MistralEmbedding extends Embeddings {
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
         params.model = params.model || "mistral-embed";
         const response: EmbeddingResponse = await MistralEmbedding._client.embeddings(params.model, [params.text]);
+        let vector: number[] = [];
+        if (response.data.length > 0){
+            vector = response.data[0].embedding;
+        }
         return {
             object: response.object,
             model: response.model,
             ModelUsage: new ModelUsage(response.usage.prompt_tokens, response.usage.completion_tokens),
-            vector: response.data[0].embedding
+            vector: vector
         };
     }
 

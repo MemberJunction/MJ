@@ -2534,12 +2534,25 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Cascade Deletes
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
         */
         get CascadeDeletes(): boolean {  
             return this.Get('CascadeDeletes');
         }
         set CascadeDeletes(value: boolean) {
             this.Set('CascadeDeletes', value);
+        }
+        /**
+        * * Field Name: spMatch
+        * * Display Name: sp Match
+        * * SQL Data Type: nvarchar(255)
+        * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
+        */
+        get spMatch(): string | null {  
+            return this.Get('spMatch');
+        }
+        set spMatch(value: string | null) {
+            this.Set('spMatch', value);
         }
         /**
         * * Field Name: UserFormGenerated
@@ -12595,19 +12608,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Data Context Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof DataContextItemEntity
-        * @throws {Error} - Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12824,19 +12825,7 @@ import { RegisterClass } from "@memberjunction/global";
             pkeyValues.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Data Contexts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof DataContextEntity
-        * @throws {Error} - Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -14090,6 +14079,23 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('DuplicateRunDetailID', value);
         }
         /**
+        * * Field Name: MatchSource
+        * * Display Name: Match Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Vector'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * SP
+        *   * Vector
+        * * Description: Either Vector or SP
+        */
+        get MatchSource(): 'SP' | 'Vector' {  
+            return this.Get('MatchSource');
+        }
+        set MatchSource(value: 'SP' | 'Vector') {
+            this.Set('MatchSource', value);
+        }
+        /**
         * * Field Name: MatchRecordID
         * * Display Name: Match Record ID
         * * SQL Data Type: nvarchar(500)
@@ -14337,7 +14343,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EntityDocument
         * * Display Name: Entity Document
         * * SQL Data Type: nvarchar(250)
-        * * Default Value: null
         */
         get EntityDocument(): string {  
             return this.Get('EntityDocument');
@@ -14465,7 +14470,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -14676,7 +14680,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
@@ -14686,7 +14689,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: StartedByUser
         * * Display Name: Started By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get StartedByUser(): string {  
             return this.Get('StartedByUser');
@@ -14696,7 +14698,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovedByUser
         * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get ApprovedByUser(): string | null {  
             return this.Get('ApprovedByUser');
@@ -14706,7 +14707,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SourceList
         * * Display Name: Source List
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get SourceList(): string {  
             return this.Get('SourceList');
