@@ -1,5 +1,6 @@
 import { Metadata } from "@memberjunction/core";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { EntityVectorSyncer } from "../models/entityVectorSync";
 
 /**
  * This is an abstract base class, use the EntityDocumentTemplateParser class or a sub-class thereof.
@@ -104,10 +105,10 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
      * @param entityRecord 
      * @param relationshipName 
      * @param maxRows 
-     * @param templateName 
+     * @param entityDocumentName 
      * @returns 
      */
-    protected async Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, templateName: string) {
+    protected async Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, entityDocumentName: string) {
         // super inefficient handling to start, we'll optimize this later to call the related stuff in batch
         const md = new Metadata();
 
@@ -129,9 +130,37 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
         const reData = await obj.GetRelatedEntityDataExt(re, null, maxRows)
 
         if (reData && reData.Data) {
-            // temp, just return the data in a simple JSON.stringify call
-            // later, replace this by recursively calling for a parser to parse a doc template based on the provide doc tempalte name, if one provided
-            return JSON.stringify({ Relationship: relationshipName, Data: reData.Data});
+            // now, get the entity document info if provided
+            if (entityDocumentName && entityDocumentName.trim().length > 0) {
+                // we have a document name, attempt to locate it
+                const doc = await EntityVectorSyncer.GetEntityDocumentByName(entityDocumentName);
+                if (doc) {
+                    // we have the document, now we need to parse it and build a result that is the concatenation of all the parsed documents
+                    // start off by creating an instance of the parser using CreateInstance() so we're using the highest priority registered subclass
+                    const parser = EntityDocumentTemplateParser.CreateInstance();
+
+                    // now we need to batch the requests to the parser to have the right concurrency
+                    const batchSize = 10; // Set the batch size to the desired number of concurrent requests
+                    const results = [];
+                    
+                    for (let i = 0; i < reData.Data.length; i += batchSize) {
+                        const batchPromises = reData.Data.slice(i, i + batchSize).map(data => {
+                            return parser.Parse(doc.Template, re.RelatedEntityID, data);
+                        });
+                        const batchResults = await Promise.all(batchPromises);
+                        results.push(...batchResults);
+                    }
+                    
+                    return results.map(r => r + "\n\n").join('');
+                }
+                else {
+                    throw new Error(`Entity Document with name ${entityDocumentName} not found.`);
+                }
+            }
+            else {
+                // no entity document name provided, just return the data in a simple format
+                return JSON.stringify({ Relationship: relationshipName, Data: reData.Data});
+            }
         }
         else {
             return "{ No Data for: " + relationshipName + " }"

@@ -4,7 +4,6 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { BaseEntity, LogError, LogStatus, Metadata, PrimaryKeyValue, PrimaryKeyValueBase, RunView, UserInfo } from "@memberjunction/core";
 import { AIModelEntity, AIModelEntityExtended, EntityDocumentEntity, EntityEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
-import { RECORD_DUPLICATES_TYPE_ID } from "../constants";
 
 export class VectorBase {
     _runView: RunView;
@@ -22,91 +21,14 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
-    protected async getVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, createDocumentIfNotFound: boolean = true): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
-        let entityDocument: EntityDocumentEntity | null = await this.getEntityDocument(entityDocumentID) || await this.getFirstActiveEntityDocumentForEntity(entityDocumentID);
-        if(!entityDocument){
-            if(createDocumentIfNotFound){
-                if(!entityDocument){
-                    LogStatus(`No active Entity Document found for entity ${entityDocumentID}, creating one`);
-                    const defaultVectorDB: VectorDatabaseEntity = this.getVectorDatabase();
-                    const defaultAIModel: AIModelEntity = this.getAIModel();
-                    entityDocument = await this.createEntityDocumentForEntity(entityDocumentID, defaultVectorDB, defaultAIModel);
-                }
-            }
-            else{
-                throw new Error(`No Entity Document found for ID=${entityDocumentID}`);
-            }
-        }
 
-        LogStatus(`Using vector database ${entityDocument.VectorDatabaseID} and AI Model ${entityDocument.AIModelID}`);
-
-        const vectorDBEntity: VectorDatabaseEntity = this.getVectorDatabase(entityDocument.VectorDatabaseID);
-        const aiModelEntity: AIModelEntity = this.getAIModel(entityDocument.AIModelID);
-
-        LogStatus(`AIModel driver class: ${aiModelEntity.DriverClass}`);
-        LogStatus(`VectorDB class key: ${vectorDBEntity.ClassKey}`);
-
-        const embeddingAPIKey: string = GetAIAPIKey(aiModelEntity.DriverClass);
-        const vectorDBAPIKey: string = GetAIAPIKey(vectorDBEntity.ClassKey);
-
-        if(!embeddingAPIKey){
-            throw Error(`No API Key found for AI Model ${aiModelEntity.DriverClass}`);
-        }
-
-        if(!vectorDBAPIKey){
-            throw Error(`No API Key found for Vector Database ${vectorDBEntity.ClassKey}`);
-        }
-
-        //LogStatus(`Embedding API Key: ${embeddingAPIKey} VectorDB API Key: ${vectorDBAPIKey}`);
-        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<Embeddings>(Embeddings, aiModelEntity.DriverClass, embeddingAPIKey)
-        const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDBEntity.ClassKey, vectorDBAPIKey);
-
-        if(!embedding){
-            throw Error(`Failed to create Embeddings instance for AI Model ${aiModelEntity.DriverClass}`);
-        }
-
-        if(!vectorDB){
-            throw Error(`Failed to create Vector Database instance for ${vectorDBEntity.ClassKey}`);
-        }
-
-        return {embedding, vectorDB};
-    }
-
-    protected async getEntityDocument(id: number): Promise<EntityDocumentEntity | null> {
-        const entityDocument: EntityDocumentEntity = await this.runViewForSingleValue<EntityDocumentEntity>("Entity Documents", `ID = ${id}`);
-        if(!entityDocument){
-            LogError(`Entity Document with ID=${id} not found`);
-            return null;
-        }
-
-        return entityDocument;
-    }
-
-    protected async getFirstActiveEntityDocumentForEntity(entityID: number): Promise<EntityDocumentEntity | null> {
-        const entityDocument: EntityDocumentEntity = await this.runViewForSingleValue<EntityDocumentEntity>("Entity Documents", `EntityID = ${entityID} AND TypeID = 9 AND Status = 'Active'`);
-        if(!entityDocument){
-            LogError(`No active Entity Document with entityID=${entityID} found`);
-            return null;
-        }
-
-        return entityDocument;
-    }
 
     protected async getRecordsByEntityID(entityID: number, recordIDs?: PrimaryKeyValueBase[]): Promise<BaseEntity[]> {
-        const rvResult = await this._runView.RunView({
-            EntityName: "Entities",
-            ExtraFilter: `ID = ${entityID}`,
-            ResultType: 'entity_object'
-        }, this.CurrentUser);
+        const md = new Metadata();
+        const entity = md.Entities.find(e => e.ID === entityID);
+        if (!entity) 
+            throw new Error(`Entity with ID ${entityID} not found.`);
 
-        if(!rvResult.Success){
-            throw new Error(rvResult.ErrorMessage);
-        }
-        else if(rvResult.RowCount === 0){
-            throw new Error(`No Entity with ID=${entityID} not found`);
-        }
-
-        const entity: EntityEntity = rvResult.Results[0] as EntityEntity;
         const rvResult2 = await this._runView.RunView({
             EntityName: entity.Name,
             ExtraFilter: recordIDs ? this.buildExtraFilter(recordIDs): undefined,
@@ -128,51 +50,6 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
-    protected async createEntityDocumentForEntity(entityID: number, vectorDatabase: VectorDatabaseEntity, AIModel: AIModelEntity): Promise<EntityDocumentEntity> {
-        const entity: EntityEntity = await this.runViewForSingleValue<EntityEntity>("Entities", `ID = ${entityID}`);
-        if(!entity){
-            LogError(`Entity with ID ${entityID} not found`);
-            return null;
-        }
-
-        const rvResult = await this._runView.RunView({
-            EntityName: "Entity Fields", 
-            ExtraFilter: `EntityID = ${entityID}`
-        }, this.CurrentUser);
-
-        if(!rvResult.Success){
-            LogError(rvResult.ErrorMessage);
-            return null;
-        }
-        else if(rvResult.RowCount === 0){
-            LogError(`No fields found for entity ${entity.Name}`);
-            return null;
-        }
-
-        const entityFields = rvResult.Results;
-        const EDTemplate: string = entityFields.map(entityField => {
-            return `${entityField.Name}: \$\{${entityField.Name}\}`;
-        }).join(" ");
-
-        const md: Metadata = new Metadata();
-        const entityDocument: EntityDocumentEntity = await md.GetEntityObject<EntityDocumentEntity>("Entity Documents");
-        entityDocument.NewRecord();
-        entityDocument.Set("Name", `Default duplicate record Entity Document for the ${entity.Name} entity using vector database ${vectorDatabase.Name} and AI Model ${AIModel.Name}`);
-        entityDocument.Set("EntityID", entityID);
-        entityDocument.Set("TypeID", RECORD_DUPLICATES_TYPE_ID);
-        entityDocument.Set("Status", "Active");
-        entityDocument.Set("Template", EDTemplate);
-        entityDocument.Set("VectorDatabaseID", vectorDatabase.ID);
-        entityDocument.Set("AIModelID", AIModel.ID);
-        let saveResult = await this.SaveEntity(entityDocument);
-        if(saveResult){
-            return entityDocument;
-        }
-        else{
-            throw new Error(`Failed to save Entity Document for ${entityID}`);
-        }
-    }
-     
     protected getAIModel(id?: number): AIModelEntityExtended {
         /*elim this hardcoding by adding virtual field for Type to AI Models entity*/
         let model: AIModelEntityExtended;
