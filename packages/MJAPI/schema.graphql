@@ -3617,6 +3617,11 @@ input RunDynamicViewInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
   UserSearchString: String
 }
 
@@ -4350,6 +4355,11 @@ input RunViewByIDInput {
   OverrideExcludeFilter: String
 
   """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
+
+  """
   If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.
   """
   SaveViewResults: Boolean
@@ -4407,6 +4417,11 @@ input RunViewByNameInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
 
   """
   If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.
