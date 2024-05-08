@@ -1,4 +1,4 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, EmbedParams, EmbedResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass } from '@memberjunction/global';
 import { ChatCompletionMessageParam } from "openai/resources";

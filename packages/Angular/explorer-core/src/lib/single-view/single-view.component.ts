@@ -1,7 +1,7 @@
 import { Component, ViewChild, Input, Output, EventEmitter, AfterViewInit, OnInit } from '@angular/core';
 import { GridRowClickedEvent } from '@memberjunction/ng-user-view-grid';
 import { UserViewGridWithAnalysisComponent } from '@memberjunction/ng-ask-skip';
-import { Metadata, EntityInfo, LogError } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogError, PrimaryKeyValueBase } from '@memberjunction/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
@@ -42,7 +42,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   }
 
   private async initialLoad() {
-    const md = new Metadata()
+    const md = new Metadata();
     if (this.viewId || this.viewName) {
       let view: UserViewEntity | null = null;
       if (this.viewId)

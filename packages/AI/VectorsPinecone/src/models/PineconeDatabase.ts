@@ -1,8 +1,9 @@
 import { pineconeDefaultIndex } from '../config';
 import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
-import { FetchResponse, Index, Pinecone, PineconeRecord, QueryOptions } from '@pinecone-database/pinecone';
+import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
+import { PotentialDuplicate, PotentialDuplicateResult, PrimaryKeyValue } from '@memberjunction/core';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
@@ -165,6 +166,46 @@ export class PineconeDatabase extends VectorDBBase {
         return this.wrapResponse(null);
     }
 
+    public async getVectorDuplicates(params: QueryOptions): Promise<BaseResponse> {
+        params.includeMetadata = true;
+        const queryResponse = await this.queryIndex(params);
+        if(queryResponse.success){
+            let response: PotentialDuplicateResult = new PotentialDuplicateResult();
+            response.Duplicates = [];
+            for(const match of queryResponse.data.matches){
+                const record: {id: string, score: number, metadata: any} = match;
+                if(!record.metadata || !record.metadata.PrimaryKeys){
+                    continue;
+                }
+
+                const metadata: {PrimaryKeys: string[]} = record.metadata;
+                if(!metadata.PrimaryKeys){
+                    continue;
+                }
+
+                let duplicate: PotentialDuplicate = new PotentialDuplicate();
+                duplicate.ProbabilityScore = record.score;
+                duplicate.PrimaryKeyValues = metadata.PrimaryKeys.map((pk: string) => {
+                    let keyValue = pk.split("=");
+                    let primaryKeyValue: PrimaryKeyValue = new PrimaryKeyValue();
+                    primaryKeyValue.FieldName = keyValue[0];
+                    primaryKeyValue.Value = keyValue[1];
+                    return primaryKeyValue;
+                });
+                
+                response.Duplicates.push(duplicate);
+            }
+
+            return this.wrapResponse(response);
+        }
+
+        return {
+            success: false,
+            message: queryResponse.message,
+            data: null
+        }
+    }
+
     private wrapResponse(data: any): BaseResponse {
         return {
             success: true,
@@ -172,4 +213,8 @@ export class PineconeDatabase extends VectorDBBase {
             data: data
         }
     };
+}
+
+export function LoadPineconeVectorDB() {
+    // this does nothing but prevents the class from being removed by the tree shaker
 }

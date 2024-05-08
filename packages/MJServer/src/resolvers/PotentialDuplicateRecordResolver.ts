@@ -1,26 +1,43 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from "type-graphql";
-import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError } from '@memberjunction/core';
+import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, PrimaryKeyValue, LogError, PrimaryKeyValueBase, PotentialDuplicateResult } from '@memberjunction/core';
 import {PrimaryKeyValueInputType, PrimaryKeyValueOutputType} from './MergeRecordsResolver'
 import { AppContext } from "../types";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
+//load the default vectorDB and embedding model
+import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
+import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
+LoadMistralEmbedding();
+LoadPineconeVectorDB();
+
 @InputType()
 export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   @Field(() => Int)
-  EntityDocumentID: number;
+  EntityID: number;
 
-  @Field(() => [PrimaryKeyValueInputType])
-  PrimaryKeyValues: PrimaryKeyValueInputType[];
+  @Field(() => [PrimaryKeyValueBaseInputType])
+  RecordIDs: PrimaryKeyValueBase[];
 
   @Field(() => Int, { nullable: true })
-  EntitiyID: number;
-
-  @Field(() => String, { nullable: true })
-  EntityName: string;
+  EntityDocumentID: number;
 
   @Field(() => Int, { nullable: true })
   ProbabilityScore: number;
+  
+  @Field(() => Int)
+  ListID: number;
+}
 
+@InputType()
+export class PrimaryKeyValueBaseInputType extends PrimaryKeyValueBase {
+  @Field(() => [PrimaryKeyValueInputType])
+  PrimaryKeyValues: PrimaryKeyValue[];
+}
+
+@ObjectType()
+export class PrimaryKeyValueBaseOutputType extends PrimaryKeyValueBase {
+  @Field(() => [PrimaryKeyValueOutputType])
+  PrimaryKeyValues: PrimaryKeyValue[];
 }
 
 @ObjectType()
@@ -33,13 +50,31 @@ export class PotentialDuplicateType extends PotentialDuplicate {
 }
 
 @ObjectType()
-export class PotentialDuplicateResponseType extends PotentialDuplicateResponse{
-
-  @Field(() => Int)
+export class PotentialDuplicateResultType extends PotentialDuplicateResult {
+  @Field(() => Int, { nullable: true })
   EntityID: number;
 
   @Field(() => [PotentialDuplicateType])
   Duplicates: PotentialDuplicateType[];
+
+  @Field(() => PrimaryKeyValueBaseOutputType)
+  RecordPrimaryKeys: PrimaryKeyValueBase;
+
+  @Field(() => [Int])
+  DuplicateRunDetailMatchRecordIDs: number[];
+}
+
+@ObjectType()
+export class PotentialDuplicateResponseType extends PotentialDuplicateResponse{
+
+  @Field(() => String)
+  Status: 'Inprogress' | 'Success' | 'Error';
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+
+  @Field(() => [PotentialDuplicateResultType])
+  PotentialDuplicateResult: PotentialDuplicateResult[]
 }
 
 @Resolver(PotentialDuplicateResponseType)

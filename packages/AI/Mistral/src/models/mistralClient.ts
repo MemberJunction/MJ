@@ -187,8 +187,9 @@ export class MistralClient {
    * e.g. ['What is the best French cheese?']
    * @return {Promise<Object>}
    */
-  public async embeddings(model: string, input: string): Promise<EmbeddingResponse> {
-    const request = {
+  public async embeddings(model: string, input: string[]): Promise<EmbeddingResponse> {
+    try{
+      const request = {
         model: model,
         input: input, 
       };
@@ -196,5 +197,9 @@ export class MistralClient {
         'post', 'v1/embeddings', request,
       );
       return response;
+    }
+    catch(error){
+      throw new Error(error);
+    }
   }
 }

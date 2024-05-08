@@ -1,7 +1,5 @@
 import { AI_PROMPT, Anthropic, HUMAN_PROMPT } from "@anthropic-ai/sdk";
 import { BaseLLM, ChatMessage, ChatParams, ChatResult, ClassifyParams, ClassifyResult, 
-    EmbedParams, 
-    EmbedResult, 
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams, 
     SummarizeResult } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";

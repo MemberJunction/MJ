@@ -1,4 +1,6 @@
-import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexList, RecordMetadata, UpdateOptions, VectorRecord } from "./record";
+import { BaseRequestParams, BaseResponse, CreateIndexParams, 
+        EditIndexParams, IndexList, RecordMetadata, UpdateOptions, 
+        VectorRecord } from "./record";
 import { QueryOptions, QueryResponse } from './query.types';
 
 export abstract class VectorDBBase {
@@ -24,6 +26,7 @@ export abstract class VectorDBBase {
     abstract deleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
     abstract editIndex(params: EditIndexParams): BaseResponse  | Promise<BaseResponse>;
     abstract queryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
+    abstract getVectorDuplicates(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
 
     abstract createRecord(record: VectorRecord): BaseResponse | Promise<BaseResponse>;
     abstract createRecords(record: VectorRecord[]): BaseResponse  | Promise<BaseResponse>;

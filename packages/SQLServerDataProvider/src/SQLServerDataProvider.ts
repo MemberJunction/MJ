@@ -11,7 +11,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus} from "@memberjunction/core";
 
-import { AuditLogEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { AuditLogEntity, DuplicateRunEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
 import { QueueManager } from '@memberjunction/queue'
 
@@ -308,13 +308,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
 
-                // now we can run the viewSQL
-                const retData = await this._dataSource.query(viewSQL);
+                // now we can run the viewSQL, but only do this if the ResultType !== 'count_only', otherwise we don't need to run the viewSQL
+                const retData = params.ResultType === 'count_only' ? [] : await this._dataSource.query(viewSQL);
 
-                // finally, if we have a countSQL, we need to run that first to get the row count
+                // finally, if we have a countSQL, we need to run that to get the row count
                 // but only do that if the # of rows returned is equal to the max rows, otherwise we know we have all the rows
+                // OR do that if we are doing a count_only
                 let rowCount = null;
-                if (countSQL && retData.length === entityInfo.UserViewMaxRows) {
+                if (countSQL && (params.ResultType === 'count_only' || retData.length === entityInfo.UserViewMaxRows)) {
                     const countResult = await this._dataSource.query(countSQL);
                     if (countResult && countResult.length > 0) {
                         rowCount = countResult[0].TotalRowCount;
@@ -338,7 +339,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 }
 
                 return { 
-                        RowCount: retData.length,
+                        RowCount: params.ResultType === 'count_only' ? rowCount : retData.length, /*this property should be total row count if the ResultType='count_only' otherwise it should be the row count of the returned rows */
                         TotalRowCount: rowCount ? rowCount : retData.length,
                         Results: retData, 
                         UserViewRunID: userViewRunID,
@@ -746,11 +747,34 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             throw new Error("User context is required to get record duplicates.");
         }
 
-        if(!this._recordDupeDetector){
-            this._recordDupeDetector = new DuplicateRecordDetector();
+        const listEntity: ListEntity = await this.GetEntityObject<ListEntity>('Lists');
+        listEntity.ContextCurrentUser = contextUser;
+        let success = await listEntity.Load(params.ListID);
+        if(!success){
+            throw new Error(`List with ID ${params.ListID} not found.`);
         }
 
-        return await this._recordDupeDetector.getDuplicateRecords(params, contextUser);
+        let duplicateRun: DuplicateRunEntity = await this.GetEntityObject<DuplicateRunEntity>('Duplicate Runs');
+        duplicateRun.NewRecord();
+        duplicateRun.EntityID = params.EntityID;
+        duplicateRun.StartedByUserID = contextUser.ID;
+        duplicateRun.StartedAt = new Date();
+        duplicateRun.ProcessingStatus = 'In Progress';
+        duplicateRun.ApprovalStatus = 'Pending';
+        duplicateRun.SourceListID = listEntity.ID;
+        duplicateRun.ContextCurrentUser = contextUser;
+        
+        const saveResult = await duplicateRun.Save();
+        if(!saveResult){
+            throw new Error(`Failed to save Duplicate Run Entity`);
+        }
+
+        let response: PotentialDuplicateResponse = {
+            Status: 'Inprogress',
+            PotentialDuplicateResult: []
+        };
+
+        return response;
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo): Promise<RecordMergeResult> {
