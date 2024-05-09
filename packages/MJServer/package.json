@@ -8,7 +8,7 @@
   "license": "ISC",
   "scripts": {
     "clean": "rimraf dist",
-    "build": "rimraf dist && tsc",
+    "build": "tsc",
     "watch": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint:eslint": "eslint \"**/*.{ts,js,}\" --max-warnings=0",

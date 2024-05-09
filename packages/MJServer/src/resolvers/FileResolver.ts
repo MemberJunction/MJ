@@ -30,6 +30,7 @@ export class CreateFilePayload {
   File: File_;
   @Field(() => String)
   UploadUrl: string;
+  @Field(() => Boolean)
   NameExists: boolean;
 }
 
@@ -54,8 +55,8 @@ export class FileResolver extends FileResolverBase {
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
     // Check to see if there's already an object with that name
-    const sameName = await super.findBy(dataSource, 'Files', { Name: input.Name });
-    const NameExists = input.Name === sameName?.Name;
+    const [sameName] = await this.findBy(dataSource, 'Files', { Name: input.Name, ProviderID: input.ProviderID });
+    const NameExists = Boolean(sameName);
 
     const fileRecord = (await super.CreateFile({ ...input, Status: 'Pending' }, { dataSource, userPayload }, pubSub)) as File_;
 
