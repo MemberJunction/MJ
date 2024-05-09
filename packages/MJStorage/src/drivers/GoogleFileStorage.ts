@@ -3,8 +3,6 @@ import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import { CreatePreAuthUploadUrlPayload, FileStorageBase } from '../generic/FileStorageBase';
 
-
-
 @RegisterClass(FileStorageBase, 'Google Cloud Storage')
 export class GoogleFileStorage extends FileStorageBase {
   private _bucket: string;
@@ -25,9 +23,9 @@ export class GoogleFileStorage extends FileStorageBase {
       expires: Date.now() + 10 * 60 * 1000, // 10 mins
     } as const;
 
-     const [UploadUrl] = await file.getSignedUrl(options);
+    const [UploadUrl] = await file.getSignedUrl(options);
 
-     return { UploadUrl };
+    return { UploadUrl };
   }
 
   public async CreatePreAuthDownloadUrl(objectName: string): Promise<string> {
@@ -41,6 +39,17 @@ export class GoogleFileStorage extends FileStorageBase {
     const [url] = await file.getSignedUrl(options);
 
     return url;
+  }
+
+  public async MoveObject(oldObjectName: string, newObjectName: string) {
+    try {
+      const response = await this._client.bucket(this._bucket).file(oldObjectName).rename(newObjectName);
+      return true;
+    } catch (e) {
+      console.error('Error renaming file in Google storage', { oldObjectName, newObjectName, bucket: this._bucket });
+      console.error(e);
+      return false;
+    }
   }
 
   public async DeleteObject(objectName: string): Promise<boolean> {
