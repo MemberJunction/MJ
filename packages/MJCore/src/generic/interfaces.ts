@@ -149,6 +149,12 @@ export class CompositeKey {
             }
         });
     }
+
+    ToURLSegment(segment?: string): string {
+        return this.KeyValuePairs.map((pk) => {
+            return `${pk.FieldName}|${pk.Value}`;
+        }).join(segment || "| |");
+    }
 }
 
 export class PotentialDuplicate extends CompositeKey {
