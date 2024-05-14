@@ -5,7 +5,7 @@ import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { MJGlobal } from "@memberjunction/global";
 import { AIModelEntity, DuplicateRunDetailEntity, DuplicateRunDetailMatchEntity, DuplicateRunEntity, EntityDocumentEntity, EntityEntity, ListDetailEntity, ListEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
-import { EntityVectorSyncer, vectorSyncRequest } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateParser, EntityDocumentTemplateParserBase, EntityVectorSyncer, vectorSyncRequest } from "@memberjunction/ai-vector-sync";
 
 export class DuplicateRecordDetector extends VectorBase {
 
@@ -19,24 +19,27 @@ export class DuplicateRecordDetector extends VectorBase {
 
     public async getDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {        
         super.CurrentUser = contextUser;
-        //params.EntityID = 25050001;
+        
+        params.EntityID = 25050001;
+        params.EntityDocumentID = 17;
+
+        let vectorizer = new EntityVectorSyncer();
+        vectorizer.CurrentUser = super.CurrentUser;
 
         let entityDocument: EntityDocumentEntity | null = null;
         if(params.EntityDocumentID){
-            entityDocument = await this.getEntityDocument(params.EntityDocumentID);
+            entityDocument = await vectorizer.GetEntityDocument(params.EntityDocumentID);
         }
         else {
-            entityDocument = await this.getFirstActiveEntityDocumentForEntity(params.EntityID);
+            entityDocument = await vectorizer.GetFirstActiveEntityDocumentForEntity(params.EntityID);
             if(!entityDocument){
-                LogStatus(`No active Entity Document found for entity ${params.EntityID}, creating one`);
+                throw Error(`No active Entity Document found for entity ${params.EntityID}`);
                 //Update: No longer creating an entity docuement if one is not found
                 //If an entitiy document is not found, that is our indicator that the 
                 //underlying entity's records have not been vectorized yet
-                /*
-                const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
-                const defaultAIModel: AIModelEntity = super.getAIModel();
-                entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
-                */
+                //const defaultVectorDB: VectorDatabaseEntity = super.getVectorDatabase();
+                //const defaultAIModel: AIModelEntity = super.getAIModel();
+                //entityDocument = await this.createEntityDocumentForEntity(params.EntityID, defaultVectorDB, defaultAIModel);
             }
         }
 
@@ -49,10 +52,6 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        LogStatus(JSON.stringify(entityDocument, null, "\t"));
-
-        /*
-        let vectorizer = new EntityVectorSyncer();
         const request: vectorSyncRequest = {
             entityID: entityDocument.EntityID,
             entityDocumentID: entityDocument.ID,
@@ -60,8 +59,7 @@ export class DuplicateRecordDetector extends VectorBase {
             options: {}
         }
 
-        await vectorizer.vectorizeEntity(request, super.CurrentUser);
-        */
+        //await vectorizer.VectorizeEntity(request, super.CurrentUser);
 
         const list: ListEntity = await this.getListEntity(params.ListID);
         let duplicateRun: DuplicateRunEntity = params.Options?.DuplicateRunID ? await this.getDuplicateRunEntity(params.Options?.DuplicateRunID) : await this.getDuplicateRunEntityByListID(list.ID);
@@ -102,9 +100,16 @@ export class DuplicateRecordDetector extends VectorBase {
 
         let records = await this.GetRecordsByListID(list.ID, entityDocument.EntityID);
 
-        const recordTemplates: string[] = records.map((record: BaseEntity) => {
-            return this.parseStringTemplate(entityDocument.Template, record);
-        });
+        LogStatus("Vectorizing " + records.length + " records");
+        const templateParser: EntityDocumentTemplateParserBase = EntityDocumentTemplateParser.CreateInstance();
+        const recordTemplates: string[] = [];
+        //Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, entityDocumentName: string)
+        let sampleTemplate: string = entityDocument.Template;
+        //sampleTemplate += " ${Relationship('Deals', 5, 'Sample Relationship Document for crm.Deals Entity')} ${Relationship('Deals', 5, 'Second Sample Relationship Document for crm.Deals Entity')}";
+        for(const record of records){
+            const template = await templateParser.Parse(sampleTemplate, entityDocument.EntityID, record, contextUser);
+            recordTemplates.push(template);
+        }
 
         let embedTextsResult = await this._embedding.EmbedTexts({ texts: recordTemplates, model: null });        
         const topK: number = 5;

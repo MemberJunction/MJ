@@ -1,65 +1,13 @@
-import { EntitySyncConfig } from '../generic/entitySyncConfig.types';
-import { BaseEntity, EntityField, LogError, LogStatus, Metadata, PrimaryKeyValue, RunView, RunViewParams, RunViewResult, UserInfo,  } from "@memberjunction/core";
-import { IProcedureResult, Request } from 'mssql';
-import { EmbedTextsParams, EmbedTextsResult, Embeddings, GetAIAPIKey} from '@memberjunction/ai';
+import { BaseEntity, EntityField, LogError, LogStatus, Metadata, UserInfo,  } from "@memberjunction/core";
+import { EmbedTextsResult, Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
 import { AIModelEntity, EntityDocumentEntity, EntityRecordDocumentEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
-import { AIEngine } from "@memberjunction/aiengine";
 import { vectorSyncRequest } from '../generic/vectorSync.types';
 import { VectorBase } from '@memberjunction/ai-vectors'
 import { EntityDocumentTemplateParser } from '../generic/EntityDocumentTemplateParser';
 import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
-
-
-/**
- * Simple caching class to load all Entity Documents at once into memory
- */
-export class EntityDocumentCache {
-    private _loaded: boolean = false;
-    private _cache: { [key: number]: EntityDocumentEntity } = {};
-    protected Cache(): { [key: number]: EntityDocumentEntity } {
-        return this._cache;
-    }
-    public GetDocument(EntityDocumentID: number): EntityDocumentEntity | null {
-        return this._cache[EntityDocumentID] || null;
-    }
-    public GetDocumentByName(EntityDocumentName: string): EntityDocumentEntity | null {
-        return Object.values(this._cache).find(ed => ed.Name.trim().toLowerCase() === EntityDocumentName.trim().toLowerCase()) || null;
-    }   
-
-    private static _instance: EntityDocumentCache;
-    public static get Instance(): EntityDocumentCache {
-        if(!EntityDocumentCache._instance){
-            EntityDocumentCache._instance = new EntityDocumentCache();
-        }
-        return EntityDocumentCache._instance;
-    }
-
-    constructor() {
-        // load up the cache
-        this.Refresh();
-    }
-
-    public get IsLoaded(): boolean {
-        return this._loaded;
-    }
-
-    public async Refresh() {
-        this._cache = {};
-        // now load up the cache with all the entity documents
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: "Entity Documents",
-            ResultType: "entity_object"
-        });
-        if (result && result.Success) {
-            for (const entityDocument of result.Results) {
-                this._cache[entityDocument.ID] = entityDocument;
-            }
-        }
-    }
-}
+import { EntityDocumentCache } from './EntityDocumentCache';
 
 export class EntityVectorSyncer extends VectorBase {
     _startTime: Date; 
@@ -70,12 +18,15 @@ export class EntityVectorSyncer extends VectorBase {
     }
 
     public async VectorizeEntity(request: vectorSyncRequest, contextUser: UserInfo): Promise<any> {
-        const parser = EntityDocumentTemplateParser.CreateInstance();
+        if(!contextUser){
+            throw new Error('ContextUser is required to vectorize the entity');
+        }
 
         super.CurrentUser = contextUser;
-        const entityDocument: EntityDocumentEntity = await EntityVectorSyncer.GetEntityDocument(request.entityDocumentID);
-        const vectorIndexEntity: VectorIndexEntity = await this.getOrCreateVectorIndex(entityDocument);
-        const obj = await this.getVectorDatabaseAndEmbeddingClassByEntityDocumentID(request.entityDocumentID);
+        const parser = EntityDocumentTemplateParser.CreateInstance();
+        const entityDocument: EntityDocumentEntity = await this.GetEntityDocument(request.entityDocumentID);
+        const vectorIndexEntity: VectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
+        const obj = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(request.entityDocumentID);
         const allrecords: BaseEntity[] = await super.getRecordsByEntityID(request.entityID);
         
         //small number in the hopes we dont hit embedding token limits
@@ -89,7 +40,7 @@ export class EntityVectorSyncer extends VectorBase {
             for(const record of batch){
                 // don't await here, fire off all the Parse requests within the batch at once in parallel, we will wait
                 // below for all of them to complete
-                const promise = parser.Parse(entityDocument.Template, request.entityID, record);
+                const promise = parser.Parse(entityDocument.Template, request.entityID, record, contextUser);
                 promises.push(promise);
             }
             const templates: string[] = await Promise.all(promises);
@@ -140,13 +91,12 @@ export class EntityVectorSyncer extends VectorBase {
 
             //add a delay to avoid rate limiting
             let delayRes = await this.delay(1000);
-            count++;
+            count += 1;
             LogStatus(`Chunk ${count} of out ${chunks.length} processed`);
         }
 
         return null;
     }
-
 
     /**
      * This method will create a default Entity Document for the given entityID, vectorDatabase, and AIModel
@@ -184,8 +134,8 @@ export class EntityVectorSyncer extends VectorBase {
     }
 
 
-    protected async getVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, createDocumentIfNotFound: boolean = true): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
-        let entityDocument: EntityDocumentEntity | null = await EntityVectorSyncer.GetEntityDocument(entityDocumentID) || await this.getFirstActiveEntityDocumentForEntity(entityDocumentID);
+    protected async GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID: number, createDocumentIfNotFound: boolean = false): Promise<{embedding: Embeddings, vectorDB: VectorDBBase}> {
+        let entityDocument: EntityDocumentEntity | null = await this.GetEntityDocument(entityDocumentID) || await this.GetFirstActiveEntityDocumentForEntity(entityDocumentID);
         if(!entityDocument){
             if(createDocumentIfNotFound){
                 if(!entityDocument){
@@ -231,22 +181,23 @@ export class EntityVectorSyncer extends VectorBase {
         return {embedding, vectorDB};
     }
 
-    public static async GetEntityDocument(EntityDocumentID: number): Promise<EntityDocumentEntity | null> {
+    public async GetEntityDocument(EntityDocumentID: number): Promise<EntityDocumentEntity | null> {
         const cache = EntityDocumentCache.Instance;
         if (!cache.IsLoaded) {
-            await cache.Refresh();
+            await cache.Refresh(super.CurrentUser);
         }
         return cache.GetDocument(EntityDocumentID);
     }
-    public static async GetEntityDocumentByName(EntityDocumentName: string): Promise<EntityDocumentEntity | null> {
+
+    public async GetEntityDocumentByName(EntityDocumentName: string, ContextUser?: UserInfo): Promise<EntityDocumentEntity | null> {
         const cache = EntityDocumentCache.Instance;
         if (!cache.IsLoaded) {
-            await cache.Refresh();
+            await cache.Refresh(ContextUser);
         }
         return cache.GetDocumentByName(EntityDocumentName);
     }
 
-    protected async getFirstActiveEntityDocumentForEntity(entityID: number): Promise<EntityDocumentEntity | null> {
+    public async GetFirstActiveEntityDocumentForEntity(entityID: number): Promise<EntityDocumentEntity | null> {
         const entityDocument: EntityDocumentEntity = await this.runViewForSingleValue<EntityDocumentEntity>("Entity Documents", `EntityID = ${entityID} AND TypeID = 9 AND Status = 'Active'`);
         if(!entityDocument){
             LogError(`No active Entity Document with entityID=${entityID} found`);
@@ -257,17 +208,19 @@ export class EntityVectorSyncer extends VectorBase {
     }
      
 
-    private async getOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
+    private async GetOrCreateVectorIndex(entityDocument: EntityDocumentEntity): Promise<VectorIndexEntity> {
         let vectorIndexEntity: VectorIndexEntity = await super.runViewForSingleValue("Vector Indexes", `VectorDatabaseID = ${entityDocument.VectorDatabaseID} AND EmbeddingModelID = ${entityDocument.AIModelID}`);
         if(vectorIndexEntity){
             return vectorIndexEntity;
         }
 
+        LogStatus(`No Vector Index found for entityDocument ${entityDocument.ID}, creating one`)
         try{
             vectorIndexEntity = await super.Metadata.GetEntityObject<VectorIndexEntity>("Vector Indexes");
             vectorIndexEntity.NewRecord();
             vectorIndexEntity.VectorDatabaseID = entityDocument.VectorDatabaseID;
             vectorIndexEntity.EmbeddingModelID = entityDocument.AIModelID;
+            vectorIndexEntity.Name = `Vector Index for entityDocument ${entityDocument.EntityID}`;
             vectorIndexEntity.Set("EntityRecordUpdatedAt", new Date());
             vectorIndexEntity.Set("EntityDocumentID", entityDocument.ID);
             //not a very descriptive description, but the view has the name of the vectorDB and embedding model used

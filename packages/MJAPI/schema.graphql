@@ -347,6 +347,14 @@ type Company_ {
   WorkflowsArray: [Workflow_!]!
 }
 
+input CompositeKeyInputType {
+  KeyValuePairs: [KeyValuePairInputType!]! = []
+}
+
+type CompositeKeyOutputType {
+  KeyValuePairs: [KeyValuePairOutputType!]!
+}
+
 type ContactLevel_ {
   ContactsArray: [Contact_!]!
   CreatedAt: Timestamp!
@@ -1755,13 +1763,13 @@ type EntityRecordDocument_ {
 }
 
 input EntityRecordNameInput {
+  CompositeKey: CompositeKeyInputType!
   EntityName: String!
-  KeyValuePairs: [KeyValuePairInputType!]!
 }
 
 type EntityRecordNameResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityName: String!
-  KeyValuePairs: [KeyValuePairOutputType!]!
   RecordName: String
   Status: String!
   Success: Boolean!
@@ -2099,6 +2107,16 @@ type Invoice_ {
   UpdatedAt: Timestamp!
 }
 
+input KeyValuePairInputType {
+  FieldName: String!
+  Value: String!
+}
+
+type KeyValuePairOutputType {
+  FieldName: String!
+  Value: String!
+}
+
 """Tracks the records within each list."""
 type ListDetail_ {
   ID: Int!
@@ -2373,7 +2391,7 @@ input PotentialDuplicateRequestType {
   EntityID: Int!
   ListID: Int!
   ProbabilityScore: Int
-  RecordIDs: [KeyValuePairBaseInputType!]!
+  RecordIDs: [CompositeKeyInputType!]!
 }
 
 type PotentialDuplicateResponseType {
@@ -2386,30 +2404,12 @@ type PotentialDuplicateResultType {
   DuplicateRunDetailMatchRecordIDs: [Int!]!
   Duplicates: [PotentialDuplicateType!]!
   EntityID: Int
-  RecordPrimaryKeys: KeyValuePairBaseOutputType!
+  RecordPrimaryKeys: CompositeKeyOutputType!
 }
 
 type PotentialDuplicateType {
   KeyValuePairs: [KeyValuePairOutputType!]!
   ProbabilityScore: Float!
-}
-
-input KeyValuePairBaseInputType {
-  KeyValuePairs: [KeyValuePairInputType!]! = []
-}
-
-type KeyValuePairBaseOutputType {
-  KeyValuePairs: [KeyValuePairOutputType!]!
-}
-
-input KeyValuePairInputType {
-  FieldName: String!
-  Value: String!
-}
-
-type KeyValuePairOutputType {
-  FieldName: String!
-  Value: String!
 }
 
 type PushStatusNotification {
@@ -2512,10 +2512,10 @@ type Query {
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
-  GetEntityRecordName(EntityName: String!, KeyValuePairs: [KeyValuePairInputType!]!): EntityRecordNameResult!
+  GetEntityRecordName(CompositeKey: CompositeKeyInputType!, EntityName: String!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
-  GetRecordDependencies(entityName: String!, KeyValuePairs: [KeyValuePairInputType!]!): [RecordDependencyResult!]!
+  GetRecordDependencies(CompositeKey: [CompositeKeyInputType!]!, entityName: String!): [RecordDependencyResult!]!
   GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
@@ -3062,8 +3062,8 @@ type RecordMergeDeletionLog_ {
 }
 
 type RecordMergeDetailResult {
-  Message: String
   KeyValuePairs: [KeyValuePairOutputType!]!
+  Message: String
   RecordMergeDeletionLogID: Int
   Success: Boolean!
 }
@@ -5644,15 +5644,15 @@ type UserFavoriteResult {
 }
 
 input UserFavoriteSearchParams {
+  CompositeKey: [CompositeKeyInputType!]!
   EntityID: Int!
-  KeyValuePairs: [KeyValuePairInputType!]!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
+  CompositeKey: [CompositeKeyInputType!]!
   EntityID: Int!
   IsFavorite: Boolean!
-  KeyValuePairs: [KeyValuePairInputType!]!
   UserID: Int!
 }
 

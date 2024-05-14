@@ -1,5 +1,5 @@
 import { BaseEntity, EntityField } from "./baseEntity";
-import { EntityDependency, EntityInfo, KeyValuePair, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityFieldInfo, EntityInfo, KeyValuePair, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -146,6 +146,15 @@ export class CompositeKey {
             return {
                 FieldName: field.Name,
                 Value: field.Value
+            }
+        });
+    }
+
+    LoadFromEntityInfoAndRecord(entity: EntityInfo, entityRecord: any): void {
+        this.KeyValuePairs = entity.PrimaryKeys.map((pk) => {
+            return {
+                FieldName: pk.Name,
+                Value: entityRecord[pk.Name]
             }
         });
     }

@@ -1,9 +1,6 @@
-import { Embeddings, GetAIAPIKey } from "@memberjunction/ai";
-import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, LogError, LogStatus, Metadata, PrimaryKeyValue, PrimaryKeyValueBase, RunView, UserInfo } from "@memberjunction/core";
-import { AIModelEntity, AIModelEntityExtended, EntityDocumentEntity, EntityEntity, VectorDatabaseEntity } from "@memberjunction/core-entities";
-import { MJGlobal } from "@memberjunction/global";
+import { BaseEntity, LogError, Metadata, CompositeKey, RunView, UserInfo } from "@memberjunction/core";
+import { AIModelEntityExtended, VectorDatabaseEntity } from "@memberjunction/core-entities";
 
 export class VectorBase {
     _runView: RunView;
@@ -21,30 +18,29 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
-
-
-    protected async getRecordsByEntityID(entityID: number, recordIDs?: PrimaryKeyValueBase[]): Promise<BaseEntity[]> {
+    protected async getRecordsByEntityID(entityID: number, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.ID === entityID);
-        if (!entity) 
+        if (!entity){
             throw new Error(`Entity with ID ${entityID} not found.`);
+        }
 
-        const rvResult2 = await this._runView.RunView({
+        const rvResult = await this._runView.RunView({
             EntityName: entity.Name,
             ExtraFilter: recordIDs ? this.buildExtraFilter(recordIDs): undefined,
             ResultType: 'entity_object'
         }, this.CurrentUser);
 
-        if(!rvResult2.Success){
-            throw new Error(rvResult2.ErrorMessage);
+        if(!rvResult.Success){
+            throw new Error(rvResult.ErrorMessage);
         }
 
-        return rvResult2.Results;
+        return rvResult.Results;
     }
 
-    protected buildExtraFilter(keyValues: PrimaryKeyValueBase[]): string {
-        return keyValues.map((keyValue) => {
-            return keyValue.PrimaryKeyValues.map((keys: PrimaryKeyValue) => {
+    protected buildExtraFilter(CompositeKey: CompositeKey[]): string {
+        return CompositeKey.map((keyValue) => {
+            return keyValue.KeyValuePairs.map((keys) => {
                 return `${keys.FieldName} = '${keys.Value}'`;
             }).join(" AND ");
         }).join("\n OR ");

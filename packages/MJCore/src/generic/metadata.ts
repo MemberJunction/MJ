@@ -6,6 +6,7 @@ import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./secur
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { LogStatus } from "./logging";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -210,7 +211,6 @@ export class Metadata {
                 throw new Error('GetEntityRecordName: KeyValuePairs cannot contain null values. FieldName: ' + CompositeKey.KeyValuePairs[j]?.FieldName);
             }
         }
-        
         return await Metadata.Provider.GetEntityRecordName(entityName, CompositeKey);
     }
 

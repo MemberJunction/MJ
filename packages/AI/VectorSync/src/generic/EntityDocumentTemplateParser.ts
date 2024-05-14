@@ -1,4 +1,4 @@
-import { Metadata } from "@memberjunction/core";
+import { CompositeKey, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import { EntityVectorSyncer } from "../models/entityVectorSync";
 
@@ -6,12 +6,6 @@ import { EntityVectorSyncer } from "../models/entityVectorSync";
  * This is an abstract base class, use the EntityDocumentTemplateParser class or a sub-class thereof.
  */
 export abstract class EntityDocumentTemplateParserBase {
-    /** Convenience method to get an instance of the class and uses the ClassFactory so we can create sub-classes if they are registered with higher priorities than the base class */
-    public static CreateInstance(): EntityDocumentTemplateParserBase {
-        return MJGlobal.Instance.ClassFactory.CreateInstance<EntityDocumentTemplateParserBase>(EntityDocumentTemplateParserBase);
-    }
-
-
     public static ClearCache() {
         EntityDocumentTemplateParserBase.__cache = {};
     }
@@ -30,14 +24,24 @@ export abstract class EntityDocumentTemplateParserBase {
      * @param Template - the document template to parse
      * @param EntityID - the ID of the entity
      * @param EntityRecord - the values for the entity record
+     * @param ContextUser - the current user
      * @returns the evaluated value of the template incorporating fields and function call(s), if any.
      */
-    public async Parse(Template: string, EntityID: number, EntityRecord: any): Promise<string> {
+    public async Parse(Template: string, EntityID: number, EntityRecord: any, ContextUser: UserInfo): Promise<string> {
+
+        if(!ContextUser){
+            throw new Error('ContextUser is required to parse the template');
+        }
+
         const md = new Metadata();
         const entityInfo = md.Entities.find(e => e.ID === EntityID);
-        if (!entityInfo) 
+        if (!entityInfo){
             throw new Error(`Entity with ID ${EntityID} not found.`);
-        const entityRecordPrimaryKey = entityInfo.PrimaryKeys.map(pk => pk.Name + '|' + EntityRecord[pk.Name]).join('||'); // TODO TO-DO TO DO ----- @Jonathan - replace this with CompositeKey.stringify after you have that done
+        }
+
+        let compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, EntityRecord);
+        //const entityRecordPrimaryKey = entityInfo.PrimaryKeys.map(pk => pk.Name + '|' + EntityRecord[pk.Name]).join('||'); // TODO TO-DO TO DO ----- @Jonathan - replace this with CompositeKey.stringify after you have that done
 
         const regex = /\$\{([^{}]+)\}/g;
         const matches = Template.matchAll(regex);
@@ -45,12 +49,12 @@ export abstract class EntityDocumentTemplateParserBase {
         // Convert matches to an array to handle them asynchronously
         const replacements = Array.from(matches).map(async match => {
             const content = match[1]; // The captured group from regex
-            const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, entityRecordPrimaryKey, content);
+            const cacheKey = EntityDocumentTemplateParserBase.CreateCacheKey(EntityID, compositeKey.ToString(), content);
             
             // check the cache and if we don't have an entry in the cache, add it
             if (!EntityDocumentTemplateParserBase._cache[cacheKey]) {
                 // Cache miss, evaluate and store the result
-                EntityDocumentTemplateParserBase._cache[cacheKey] = await this.evalSingleArgument(content, EntityID, EntityRecord);
+                EntityDocumentTemplateParserBase._cache[cacheKey] = await this.evalSingleArgument(content, EntityID, EntityRecord, ContextUser);
             }
 
             return {
@@ -71,17 +75,27 @@ export abstract class EntityDocumentTemplateParserBase {
         return resolvedTemplate;
     }
 
-    protected async evalSingleArgument (argument: string, entityID: number, entityRecord: any): Promise<string> {
+    protected async evalSingleArgument (argument: string, entityID: number, entityRecord: any, ContextUser: UserInfo): Promise<string> {
         const funcMatch = argument.match(/(\w+)\(([^)]*)\)/);
         if (funcMatch) {
             const [, funcName, paramsString] = funcMatch;
-            const params = paramsString.split(',').map(param => param.trim());
+            const params = paramsString.split(',').map(param => {
+                param = param.trim();
+                //if the string is wrapped in single or double quotes, remove them
+                if (param.startsWith('"') && param.endsWith('"')) {
+                    return param.slice(1, -1);
+                } else if (param.startsWith("'") && param.endsWith("'")) {
+                    return param.slice(1, -1);
+                } else {
+                    return param; 
+                }
+            });
 
             
             // Check if the method exists on this instance
             if (typeof this[funcName] === 'function') {
                 // Call the instance method dynamically using its name and spread the params
-                return this[funcName](entityID, entityRecord, ...params);
+                return this[funcName](entityID, entityRecord, ContextUser, ...params);
             } else {
                 throw new Error(`Function ${funcName} is not defined.`);
             }
@@ -99,6 +113,12 @@ export abstract class EntityDocumentTemplateParserBase {
  */
 @RegisterClass(EntityDocumentTemplateParser)
 export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBase {
+
+    /** Convenience method to get an instance of the class and uses the ClassFactory so we can create sub-classes if they are registered with higher priorities than the base class */
+    public static CreateInstance(): EntityDocumentTemplateParser {
+        return MJGlobal.Instance.ClassFactory.CreateInstance<EntityDocumentTemplateParser>(EntityDocumentTemplateParser);
+    }
+
     /**
      * This function 
      * @param entityID 
@@ -108,32 +128,38 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
      * @param entityDocumentName 
      * @returns 
      */
-    protected async Relationship(entityID: number, entityRecord: any, relationshipName: string, maxRows: number, entityDocumentName: string) {
+    protected async Relationship(entityID: number, entityRecord: any, ContextUser: UserInfo, relationshipName: string, maxRows: number, entityDocumentName: string): Promise<string> {
         // super inefficient handling to start, we'll optimize this later to call the related stuff in batch
         const md = new Metadata();
+        const vectorSyncer: EntityVectorSyncer = new EntityVectorSyncer();
+        vectorSyncer.CurrentUser = ContextUser;
 
         const entityInfo = md.Entities.find(e => e.ID === entityID);    
-        if (!entityInfo)
+        if (!entityInfo){
             throw new Error(`Entity with ID ${entityID} not found.`);
+        }
 
         const re = entityInfo.RelatedEntities.find(re => re.RelatedEntity === relationshipName);
-        if (!re)
+        if (!re){
             throw new Error(`Relationship ${relationshipName} not found for entity ${entityInfo.Name}`);
+        }
 
-        const obj = await md.GetEntityObject(entityInfo.Name);
-        await obj.InnerLoad(entityInfo.PrimaryKeys.map(pk => {
-            return {
-                    FieldName: pk.Name, 
-                    Value: entityRecord[pk.Name]
-                }
-        }));
+        const obj = await md.GetEntityObject(entityInfo.Name, ContextUser);
+        let compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, entityRecord);
+        let loadResult: boolean = await obj.InnerLoad(compositeKey);
+        if (!loadResult){
+            LogError(`Failed to load entity ${entityInfo.Name} with ID ${compositeKey.ToString()}`);
+            return "";
+        }
+
         const reData = await obj.GetRelatedEntityDataExt(re, null, maxRows)
 
         if (reData && reData.Data) {
             // now, get the entity document info if provided
             if (entityDocumentName && entityDocumentName.trim().length > 0) {
                 // we have a document name, attempt to locate it
-                const doc = await EntityVectorSyncer.GetEntityDocumentByName(entityDocumentName);
+                const doc = await vectorSyncer.GetEntityDocumentByName(entityDocumentName, ContextUser);
                 if (doc) {
                     // we have the document, now we need to parse it and build a result that is the concatenation of all the parsed documents
                     // start off by creating an instance of the parser using CreateInstance() so we're using the highest priority registered subclass
@@ -145,7 +171,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
                     
                     for (let i = 0; i < reData.Data.length; i += batchSize) {
                         const batchPromises = reData.Data.slice(i, i + batchSize).map(data => {
-                            return parser.Parse(doc.Template, re.RelatedEntityID, data);
+                            return parser.Parse(doc.Template, re.RelatedEntityID, data, ContextUser);
                         });
                         const batchResults = await Promise.all(batchPromises);
                         results.push(...batchResults);
@@ -154,7 +180,8 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
                     return results.map(r => r + "\n\n").join('');
                 }
                 else {
-                    throw new Error(`Entity Document with name ${entityDocumentName} not found.`);
+                    LogStatus(`Entity Document with name ${entityDocumentName} not found.`);
+                    return "";
                 }
             }
             else {

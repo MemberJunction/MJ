@@ -919,7 +919,7 @@ npm
             return null;
         }
 
-        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $CompositeKey: [CompositeKeyInputType!]!) {
+        const query = gql`query GetEntityRecordNameQuery ($EntityName: String!, $CompositeKey: CompositeKeyInputType!) {
             GetEntityRecordName(EntityName: $EntityName, CompositeKey: $CompositeKey) {
                 Success
                 Status
@@ -928,7 +928,7 @@ npm
         }` 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    CompositeKey: CompositeKey
+                                                                    CompositeKey
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -942,9 +942,11 @@ npm
             GetEntityRecordNames(info: $info) {
                 Success
                 Status
-                KeyValuePairs {
-                    FieldName
-                    Value
+                CompositeKey {
+                    KeyValuePairs {
+                        FieldName
+                        Value
+                    }
                 }
                 EntityName
                 RecordName
@@ -952,10 +954,11 @@ npm
         }` 
  
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
-            // map each info item so that each of its KeyValuePairs.Value is a string
+            let copy: CompositeKey = new CompositeKey();
+            copy.KeyValuePairs = i.CompositeKey.ValuesAsString();
             return { 
                      EntityName: i.EntityName, 
-                     CompositeKey: i.CompositeKey
+                     CompositeKey: copy
                     } 
                 })});
         if (data && data.GetEntityRecordNames)

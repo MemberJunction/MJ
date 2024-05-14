@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-import { Metadata, RunView, EntityRecordNameInput, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, EntityRecordNameInput, CompositeKey, EntityRecordNameResult } from '@memberjunction/core';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
 @Component({
@@ -32,7 +32,7 @@ export class FavoritesComponent {
       compositeKey.KeyValuePairs = [{ FieldName: 'ID', Value: fav.RecordID }];
       return { EntityName: fav.Entity, CompositeKey: compositeKey }
     })
-    const results = await md.GetEntityRecordNames(input)
+    const results: EntityRecordNameResult[] = await md.GetEntityRecordNames(input);
     if (results) {
       results.forEach((result) => {
         const fav = this.favorites.find(f => f.Entity == result.EntityName && f.RecordID == result.CompositeKey.KeyValuePairs[0].Value)

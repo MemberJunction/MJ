@@ -1,15 +1,14 @@
-import { Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
-import { KeyValuePairInputType, KeyValuePairOutputType } from './MergeRecordsResolver';
-import { CompositeKeyInputType } from './PotentialDuplicateRecordResolver';
+import { CompositeKeyInputType, CompositeKeyOutputType } from './PotentialDuplicateRecordResolver';
 
 @InputType()
 export class EntityRecordNameInput {
   @Field(() => String)
   EntityName: string;
 
-  @Field(() => [CompositeKeyInputType])
+  @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKey;
 }
 
@@ -21,8 +20,8 @@ export class EntityRecordNameResult {
   @Field(() => String)
   Status: string;
 
-  @Field(() => [KeyValuePairOutputType])
-  KeyValuePairs: KeyValuePair[];
+  @Field(() => CompositeKeyOutputType)
+  CompositeKey: CompositeKey;
 
   @Field(() => String)
   EntityName: string;
@@ -36,7 +35,7 @@ export class EntityRecordNameResolver {
   @Query(() => EntityRecordNameResult)
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
-    @Arg('CompositeKey', () => [CompositeKeyInputType]) CompositeKey: CompositeKey,
+    @Arg('CompositeKey', () => CompositeKeyInputType) CompositeKey: CompositeKey,
     @Ctx() {}: AppContext
   ): Promise<EntityRecordNameResult> {
     const md = new Metadata();
@@ -61,17 +60,17 @@ export class EntityRecordNameResolver {
     if (e) {
       const recordName = await md.GetEntityRecordName(e.Name, CompositeKey);
       if (recordName) 
-        return { Success: true, Status: 'OK', KeyValuePairs: CompositeKey.KeyValuePairs, RecordName: recordName, EntityName: EntityName };
+        return { Success: true, Status: 'OK', CompositeKey, RecordName: recordName, EntityName };
       else
         return {
           Success: false,
           Status: `Name for record, or record ${CompositeKey.ToString()} itself not found, could be an access issue if user doesn't have Row Level Access (RLS) if RLS is enabled for this entity`,
-          KeyValuePairs: CompositeKey.KeyValuePairs,
-          EntityName: EntityName,
+          CompositeKey,
+          EntityName
         };
     } 
     else 
-      return { Success: false, Status: `Entity ${EntityName} not found`, KeyValuePairs: CompositeKey.KeyValuePairs, EntityName: EntityName };
+      return { Success: false, Status: `Entity ${EntityName} not found`, CompositeKey, EntityName };
   }
 }
 
