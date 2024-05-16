@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
@@ -24,7 +24,7 @@ export class AWSFileStorage extends FileStorageBase {
       secretAccessKey: env.get('STORAGE_AWS_SECRET_ACCESS_KEY').required().asString(),
     };
 
-    this._client = new S3Client({ region, credentials })
+    this._client = new S3Client({ region, credentials });
   }
 
   public async CreatePreAuthUploadUrl(objectName: string): Promise<CreatePreAuthUploadUrlPayload> {
@@ -40,6 +40,26 @@ export class AWSFileStorage extends FileStorageBase {
     const command = new GetObjectCommand({ Bucket: this._bucket, Key: key });
 
     return getSignedUrl(this._client, command, { expiresIn: 10 * 60 }); // 10 minutes
+  }
+
+  public async MoveObject(oldObjectName: string, newObjectName: string) {
+    const oldKey = `${this._keyPrefix}${oldObjectName}`;
+    const newKey = `${this._keyPrefix}${newObjectName}`;
+    const copyCommand = new CopyObjectCommand({
+      Bucket: this._bucket,
+      CopySource: `/${this._bucket}/${oldKey}`,
+      Key: newKey,
+    });
+
+    try {
+      await this._client.send(copyCommand);
+    } catch (e) {
+      console.error('Error copying object in S3 storage', { oldKey, newKey, bucket: this._bucket });
+      console.error(e);
+      return false;
+    }
+
+    return this.DeleteObject(oldObjectName);
   }
 
   public async DeleteObject(objectName: string): Promise<boolean> {
