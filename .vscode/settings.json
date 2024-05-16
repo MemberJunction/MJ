@@ -2,5 +2,6 @@
   "editor.codeActionsOnSave": {
     "source.fixAll": "never",
     "source.organizeImports": "never"
-  }
+  },
+  "angular.enable-strict-mode-prompt": false
 }

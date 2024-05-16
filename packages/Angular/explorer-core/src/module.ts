@@ -1,23 +1,23 @@
 import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { RouterModule, RouteReuseStrategy } from '@angular/router';
 
 // Kendo UI Angular imports
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { ChartsModule } from '@progress/kendo-angular-charts';
-import { DialogsModule } from "@progress/kendo-angular-dialog";
+import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { FilterModule } from "@progress/kendo-angular-filter";
+import { FilterModule } from '@progress/kendo-angular-filter';
 import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
 import { LayoutModule, TabStripModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
-import { SortableModule } from "@progress/kendo-angular-sortable";
-import { TreeViewModule } from "@progress/kendo-angular-treeview";
+import { SortableModule } from '@progress/kendo-angular-sortable';
+import { TreeViewModule } from '@progress/kendo-angular-treeview';
 
 // MJ
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
@@ -69,9 +69,10 @@ import { SingleSearchResultComponent } from './lib/single-search-result/single-s
 import { SingleViewComponent } from './lib/single-view/single-view.component';
 import { UserNotificationsComponent } from './lib/user-notifications/user-notifications.component';
 import { UserProfileComponent } from './lib/user-profile/user-profile.component';
-import {ExpansionPanelComponent} from './lib/expansion-panel-component/expansion-panel-component';
-import {ApplicationViewComponent} from './lib/app-view/application-view.component';
+import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansion-panel-component';
+import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
+import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 
 @NgModule({
   declarations: [
@@ -111,9 +112,10 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     UserNotificationsComponent,
     QueryResource,
     ExpansionPanelComponent,
-    ApplicationViewComponent
+    ApplicationViewComponent,
   ],
   imports: [
+    AppRoutingModule,
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
@@ -153,7 +155,7 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     ExplorerSettingsModule,
     FileStorageModule,
     UserViewPropertiesDialogModule,
-    MJTabStripModule
+    MJTabStripModule,
   ],
   exports: [
     FormToolbarComponent,
@@ -188,7 +190,8 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
     EditDashboardComponent,
     UserNotificationsComponent,
     ExpansionPanelComponent,
-    ApplicationViewComponent
+    ApplicationViewComponent,
   ],
+  providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })
 export class ExplorerCoreModule {}
