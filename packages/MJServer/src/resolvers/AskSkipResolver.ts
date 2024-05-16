@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, KeyValuePair, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, KeyValuePair, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { AppContext, UserPayload } from '../types';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { DataContext } from '@memberjunction/data-context'
@@ -19,6 +19,7 @@ import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { KeyValuePairInputType } from './MergeRecordsResolver';
+import { CompositeKeyInputType } from './PotentialDuplicateRecordResolver';
 
 
 enum SkipResponsePhase {
@@ -73,7 +74,7 @@ export class AskSkipResolver {
   async ExecuteAskSkipRecordChat(@Arg('UserQuestion', () => String) UserQuestion: string,
                                  @Arg('ConversationId', () => Int) ConversationId: number,
                                  @Arg('EntityName', () => String) EntityName: string,
-                                 @Arg('PrimaryKeys', () => [KeyValuePairInputType]) PrimaryKeys: KeyValuePairInputType[],
+                                 @Arg('CompositeKey', () => CompositeKeyInputType) CompositeKey: CompositeKeyInputType,
                                  @Ctx() { dataSource, userPayload }: AppContext,
                                  @PubSub() pubSub: PubSubEngine) {
     // In this function we're simply going to call the Skip API and pass along the message from the user
@@ -96,7 +97,7 @@ export class AskSkipResolver {
       dci.DataContextID = dataContext.ID;
       dci.Type = 'single_record';
       dci.EntityID = md.Entities.find((e) => e.Name === EntityName)?.ID;
-      dci.RecordID = PrimaryKeys.map((pk) => pk.Value).join(',');
+      dci.RecordID = CompositeKey.Values();
       await dci.Save();
   
       await dataContext.Load(dataContext.ID, dataSource, false, true, 10, user); // load again because we added a new data context item  
@@ -104,7 +105,7 @@ export class AskSkipResolver {
 
       // also, in the situation for a new convo, we need to update the Conversation ID to have a LinkedEntity and LinkedRecord
       convoEntity.LinkedEntityID = dci.EntityID;
-      convoEntity.LinkedRecordID = PrimaryKeys.map((pk) => pk.Value).join(',');
+      convoEntity.LinkedRecordID = CompositeKey.Values();
       convoEntity.DataContextID = dataContext.ID;
       await convoEntity.Save();
     } 

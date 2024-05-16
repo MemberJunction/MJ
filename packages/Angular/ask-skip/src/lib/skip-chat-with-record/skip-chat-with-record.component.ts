@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, Input, ViewChild } from "@angular/core";
-import { LogError, Metadata, KeyValuePair, RunView, CompositeKey } from "@memberjunction/core";
+import { LogError, Metadata, RunView, CompositeKey } from "@memberjunction/core";
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from "@memberjunction/core-entities";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
 import { ChatComponent, ChatMessage, ChatWelcomeQuestion } from "@memberjunction/ng-chat";
@@ -109,8 +109,8 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
           // send messages to Skip from here using graphql
           try {
               this.mjChat.ShowWaitingIndicator = true;
-              const gql = `query ExecuteAskSkipRecordChatQuery($userQuestion: String!, $conversationId: Int!, $entityName: String!, $primaryKeys: [KeyValuePairInputType!]!) {
-                  ExecuteAskSkipRecordChat(UserQuestion: $userQuestion, ConversationId: $conversationId, EntityName: $entityName, PrimaryKeys: $primaryKeys) {
+              const gql = `query ExecuteAskSkipRecordChatQuery($userQuestion: String!, $conversationId: Int!, $entityName: String!, $compositeKey: CompositeKeyInputType!) {
+                  ExecuteAskSkipRecordChat(UserQuestion: $userQuestion, ConversationId: $conversationId, EntityName: $entityName, CompositeKey: $compositeKey) {
                       Success
                       Status
                       Result
@@ -123,7 +123,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   userQuestion: message.message, 
                   entityName: this.LinkedEntityName,
                   conversationId: this._conversationId,
-                  primaryKeys: this.LinkedCompositeKey.ValuesAsString(),
+                    compositeKey: this.LinkedCompositeKey.GraphQLCopy()
               });
       
               if (result?.ExecuteAskSkipRecordChat?.Success) {

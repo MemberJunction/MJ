@@ -765,9 +765,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
               return false;
             }
 
-            return this.recordCompareComponent.selectedRecordPKeyVal.Equals(compositeKey);
+            return this.recordCompareComponent.selectedRecordCompositeKey.Equals(compositeKey);
           }),
-          SurvivingRecordCompositeKey: this.recordCompareComponent.selectedRecordPKeyVal,
+          SurvivingRecordCompositeKey: this.recordCompareComponent.selectedRecordCompositeKey,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,

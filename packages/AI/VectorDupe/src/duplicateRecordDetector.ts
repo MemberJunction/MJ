@@ -119,7 +119,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const topK: number = 5;
         let results: PotentialDuplicateResult[] = [];
         for (const [index, vector] of embedTextsResult.vectors.entries()){
-            const recordID: CompositeKey = this.convertPrimaryKeysIntoCompositeKey(records[index].PrimaryKeys);
+            const compositeKey: CompositeKey = records[index].CompositeKey;
             let queryResult = await this._vectorDB.getVectorDuplicates({ vector: vector, topK: topK, includeMetadata: true, includeValues: false });
             if(queryResult.success){
                 queryResult.data.Duplicates = queryResult.data.Duplicates.filter((dupe) => {
@@ -128,11 +128,11 @@ export class DuplicateRecordDetector extends VectorBase {
                 let result: PotentialDuplicateResult = queryResult.data as PotentialDuplicateResult;
                 
                 result.EntityID = entityDocument.EntityID;
-                result.RecordCompositeKey = recordID;
+                result.RecordCompositeKey = compositeKey;
                 results.push(result);
                 
                 //now update all of the dupe run detail records
-                let dupeRunDetail: DuplicateRunDetailEntity = duplicateRunDetails.find((detail) => detail.RecordID === recordID.ToString());
+                let dupeRunDetail: DuplicateRunDetailEntity = duplicateRunDetails.find((detail) => detail.RecordID === compositeKey.ToString());
                 if(dupeRunDetail){
                     const matchRecords = await this.createDuplicateRunDetailMatchesForRecord(dupeRunDetail.ID, result);
                     result.DuplicateRunDetailMatchRecordIDs = matchRecords.map((match) => match.ID);    
@@ -143,7 +143,7 @@ export class DuplicateRecordDetector extends VectorBase {
                     }
                 }
                 else{
-                    LogError(`Failed to find Duplicate Run Detail record for ${recordID.ToString()}`);
+                    LogError(`Failed to find Duplicate Run Detail record for ${compositeKey.ToString()}`);
                 }
             }
         }
@@ -328,20 +328,12 @@ export class DuplicateRecordDetector extends VectorBase {
         return matchRecords;
     }
 
-    private convertPrimaryKeysIntoCompositeKey(pkv: EntityField[]): CompositeKey {
-        const pk: CompositeKey = new CompositeKey();
-        pk.KeyValuePairs = pkv.map((pk) => {
-            return { FieldName: pk.Name, Value: pk.Value };
-        });
-        return pk;
-    }
-
     private async mergeRecords(dupeResponse: PotentialDuplicateResponse, entityDocument: EntityDocumentEntity): Promise<void> {
         const md: Metadata = new Metadata();
         for(const dupeResult of dupeResponse.PotentialDuplicateResult){
             for(const [index, dupe] of dupeResult.Duplicates.entries()){
                 if(dupe.ToString() === dupeResult.RecordCompositeKey.ToString()){
-                    //sane record, skip
+                    //same record, skip
                     continue;
                 }
 

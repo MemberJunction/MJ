@@ -41,7 +41,6 @@ export abstract class EntityDocumentTemplateParserBase {
 
         let compositeKey: CompositeKey = new CompositeKey();
         compositeKey.LoadFromEntityInfoAndRecord(entityInfo, EntityRecord);
-        //const entityRecordPrimaryKey = entityInfo.PrimaryKeys.map(pk => pk.Name + '|' + EntityRecord[pk.Name]).join('||'); // TODO TO-DO TO DO ----- @Jonathan - replace this with CompositeKey.stringify after you have that done
 
         const regex = /\$\{([^{}]+)\}/g;
         const matches = Template.matchAll(regex);

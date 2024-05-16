@@ -72,7 +72,7 @@ export class CompositeKey {
     }
 
     /**
-    * @returns a copy of the KeyValuePairs array but with the Value properties as string
+    * @returns a copy of the KeyValuePairs array but with the Value properties as type string
     */
     ValuesAsString(): KeyValuePair[] {
         return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
@@ -188,6 +188,7 @@ export class CompositeKey {
         });
     }
 
+    
     ToURLSegment(segment?: string): string {
         return this.KeyValuePairs.map((pk) => {
             return `${pk.FieldName}|${pk.Value}`;
