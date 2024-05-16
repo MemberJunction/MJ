@@ -603,7 +603,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
     public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<number | null> {
         try {
-            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.KeyValuePairs.map(pkv => pkv.Value).join(',')}'`
+            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
             const result = await this.ExecuteSQL(sSQL);
             if (result && result.length > 0)
                 return result[0].ID;
@@ -672,7 +672,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the primary key(s) to check - only send multiple if you have an entity with a composite primary key
      */
-    public async GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> {
         try {
             // first, get the entity dependencies for this entity
             const entityDependencies = await this.GetEntityDependencies(entityName);
@@ -691,7 +691,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         FROM 
                             [${relatedEntityInfo.SchemaName}].${relatedEntityInfo.BaseView} 
                         WHERE 
-                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, CompositeKey)}`
+                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`
             }
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
@@ -705,14 +705,16 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 //     pkeyValues.push({FieldName: pk.Name, Value: r[pk.Name]}) // add all of the primary keys, which often is as simple as just "ID", but this is generic way to do it
                 // })
                 
-                // for now, we only support foreign keys that are single fields, so we can do this
-                const pkVal = r[entityInfo.PrimaryKey.Name];
+                let compositeKey: CompositeKey = new CompositeKey();
+                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, r);
+                
                 const recordDependency: RecordDependency = {
                     EntityName: r.EntityName,
                     RelatedEntityName: r.RelatedEntityName,
                     FieldName: r.FieldName,
-                    KeyValuePair: pkVal
-                }
+                    CompositeKey: compositeKey
+                };
+                
                 recordDependencies.push(recordDependency);
             }
             return recordDependencies;
@@ -803,9 +805,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 2 - update the surviving record, but only do this if we were provided a field map
             if (request.FieldMap && request.FieldMap.length > 0) {
                 const survivor: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser)
-                let compositeKey: CompositeKey = new CompositeKey();
-                compositeKey.KeyValuePairs = request.SurvivingRecordKeyValuePairs;
-                await survivor.InnerLoad(compositeKey);
+                await survivor.InnerLoad(request.SurvivingRecordCompositeKey);
                 for (const fieldMap of request.FieldMap) {
                     survivor.Set(fieldMap.FieldName, fieldMap.Value);
                 }
@@ -818,24 +818,19 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 3 - update the dependencies for each of the records we will delete
             for (const pksToDelete of request.RecordsToMerge) {
                 const newRecStatus: RecordMergeDetailResult = {
-                    KeyValuePairs: pksToDelete,
+                    CompositeKey: pksToDelete,
                     Success: false,
                     RecordMergeDeletionLogID: null,
                     Message: null,
                 }
                 result.RecordStatus.push(newRecStatus)
-
-                let compositeKeyToDelte: CompositeKey = new CompositeKey();
-                compositeKeyToDelte.KeyValuePairs = pksToDelete;
-                const dependencies = await this.GetRecordDependencies(request.EntityName, compositeKeyToDelte);
+                const dependencies = await this.GetRecordDependencies(request.EntityName, pksToDelete);
                 // now, loop through the dependencies and update the link to point to the surviving record
                 for (const dependency of dependencies) {
                     const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-                    let reInfoCompositeKey: CompositeKey = new CompositeKey();
-                    reInfoCompositeKey.KeyValuePairs = [{FieldName: reInfo.PrimaryKey.Name, Value: dependency.KeyValuePair}];
-                    await relatedEntity.InnerLoad(reInfoCompositeKey);
-                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordKeyValuePairs[0].Value); // only support single field foreign keys for now
+                    await relatedEntity.InnerLoad(dependency.CompositeKey);
+                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.KeyValuePairs[0].Value); // only support single field foreign keys for now
                     /*
                     if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
 
@@ -845,17 +840,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                      */
                     if (!await relatedEntity.Save()) {
                         newRecStatus.Success = false;
-                        newRecStatus.Message = `Error updating dependency record ${dependency.KeyValuePair.FieldName} : ${dependency.KeyValuePair.Value} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordKeyValuePairs[0].Value}`
+                        newRecStatus.Message = `Error updating dependency record ${dependency.CompositeKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
                         throw new Error(newRecStatus.Message);
                     }
                 }
                 // if we get here, that means that all of the dependencies were updated successfully, so we can now delete the records to be merged
                 const recordToDelete: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
-                let compositeKey: CompositeKey = new CompositeKey();
-                compositeKey.KeyValuePairs = pksToDelete;
-                await recordToDelete.InnerLoad(compositeKey);
+                await recordToDelete.InnerLoad(pksToDelete);
                 if (!await recordToDelete.Delete()) {
-                    newRecStatus.Message = `Error deleting record ${compositeKey.ToString()} for entity ${request.EntityName}`;
+                    newRecStatus.Message = `Error deleting record ${pksToDelete.ToString()} for entity ${request.EntityName}`;
                     throw new Error(newRecStatus.Message);
                 }
                 else 
@@ -895,7 +888,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             recordMergeLog.NewRecord();
             recordMergeLog.EntityID = entity.ID;
-            recordMergeLog.SurvivingRecordID = request.SurvivingRecordKeyValuePairs.map(pk => pk.Value).join(','); // this would join together all of the primary key values, which is fine as the primary key is a string    
+            recordMergeLog.SurvivingRecordID = request.SurvivingRecordCompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string    
             recordMergeLog.InitiatedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
             recordMergeLog.ApprovalStatus = 'Approved';
             recordMergeLog.ApprovedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
@@ -930,7 +923,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
                     recordMergeDeletionLog.NewRecord();
                     recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
-                    recordMergeDeletionLog.DeletedRecordID = d.KeyValuePairs.map(pk => pk.Value).join(','); // this would join together all of the primary key values, which is fine as the primary key is a string
+                    recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
                     recordMergeDeletionLog.Status = d.Success ? 'Complete' : 'Error';
                     recordMergeDeletionLog.ProcessingLog = d.Success ? null : d.Message; // only save the message if it failed
                     if (!await recordMergeDeletionLog.Save())

@@ -184,15 +184,8 @@ export class PineconeDatabase extends VectorDBBase {
                 }
 
                 let duplicate: PotentialDuplicate = new PotentialDuplicate();
+                duplicate.LoadFromList(metadata.PrimaryKeys);
                 duplicate.ProbabilityScore = record.score;
-                duplicate.KeyValuePairs = metadata.PrimaryKeys.map((pk: string) => {
-                    let keyValue = pk.split("=");
-                    let keyValuePair: KeyValuePair = new KeyValuePair();
-                    keyValuePair.FieldName = keyValue[0];
-                    keyValuePair.Value = keyValue[1];
-                    return keyValuePair;
-                });
-                
                 response.Duplicates.push(duplicate);
             }
 

@@ -1,7 +1,7 @@
-import { LogError, Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
+import { LogError, Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
-import { CompositeKeyInputType } from './PotentialDuplicateRecordResolver';
+import { CompositeKeyInputType, CompositeKeyOutputType } from './PotentialDuplicateRecordResolver';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -78,7 +78,7 @@ export class RecordDependencyResolver {
     @Query(() => [RecordDependencyResult])
     async GetRecordDependencies(
       @Arg('entityName', () => String) entityName: string,
-      @Arg('CompositeKey', () => [CompositeKeyInputType]) CompositeKey: CompositeKey,
+      @Arg('CompositeKey', () => CompositeKeyInputType) CompositeKey: CompositeKey,
       @Ctx() { dataSource, userPayload }: AppContext,
       @PubSub() pubSub: PubSubEngine
     ) {
@@ -117,11 +117,11 @@ export class RecordMergeRequest {
     @Field(() => String)
     EntityName: string;
 
-    @Field(() => [KeyValuePairInputType])
-    SurvivingRecordKeyValuePairs: KeyValuePair[];
+    @Field(() => CompositeKeyInputType)
+    SurvivingRecordCompositeKey: CompositeKey;
 
-    @Field(() => [[KeyValuePairInputType]])
-    RecordsToMerge: KeyValuePair[][];
+    @Field(() => [CompositeKeyInputType])
+    RecordsToMerge: CompositeKey[];
 
     @Field(() => [FieldMapping], { nullable: true })
     FieldMap?: FieldMapping[];
@@ -145,8 +145,8 @@ export class RecordMergeRequestOutput {
 
 @ObjectType()
 export class RecordMergeDetailResult {
-    @Field(() => [KeyValuePairOutputType])
-    KeyValuePairs: KeyValuePair[];
+    @Field(() => CompositeKeyOutputType)
+    CompositeKey: CompositeKeyOutputType;
 
     @Field(() => Boolean)
     Success: boolean; 

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { EntityInfo, LogError, Metadata, KeyValuePair, RunView } from '@memberjunction/core';
+import { EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -123,9 +123,13 @@ export class SharedService {
     SharedService.RefreshUserNotifications(); // also call this initially when refreshing the dataset...
   }
 
+  /*
   public static GenerateKeyValuePairString(pkVals: KeyValuePair[]): string {
     return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
   }
+  */
+
+  /*
   public static ParsePrimaryKeys(entity: EntityInfo, routeSegment: string): KeyValuePair[] {
     if (!routeSegment.includes('|')) {
       // If not, return a single element array with a default field name
@@ -141,6 +145,7 @@ export class SharedService {
       return pkVals;
     }
   }
+  */
 
   FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {
     if (value === null || value === undefined)

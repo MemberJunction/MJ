@@ -4,7 +4,7 @@ import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
 import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
-import { CompositeKeyInputType } from './PotentialDuplicateRecordResolver';
+import { CompositeKeyInputType, CompositeKeyOutputType } from './PotentialDuplicateRecordResolver';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries
@@ -14,7 +14,7 @@ export class UserFavoriteSearchParams {
   @Field(() => Int)
   EntityID: number;
 
-  @Field(() => [CompositeKeyInputType])
+  @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKey;
 
   @Field(() => Int)
@@ -26,7 +26,7 @@ export class UserFavoriteSetParams {
   @Field(() => Int)
   EntityID: number;
 
-  @Field(() => [CompositeKeyInputType])
+  @Field(() => CompositeKeyInputType)
   CompositeKey: CompositeKey;
 
   @Field(() => Int)
@@ -41,8 +41,8 @@ export class UserFavoriteResult {
   @Field(() => Int)
   EntityID: number;
 
-  @Field(() => [KeyValuePairOutputType])
-  KeyValuePairs: KeyValuePair[];
+  @Field(() => CompositeKeyOutputType)
+  CompositeKey: CompositeKey;
 
   @Field(() => Int)
   UserID: number;
@@ -92,7 +92,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
         Success: true,
         EntityID: params.EntityID,
         UserID: params.UserID,
-        KeyValuePairs: params.CompositeKey.KeyValuePairs,
+        CompositeKey: params.CompositeKey,
         IsFavorite: params.IsFavorite,
       };
     } else throw new Error(`Entity ID:${params.EntityID} not found`);

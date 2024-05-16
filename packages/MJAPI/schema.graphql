@@ -2515,7 +2515,7 @@ type Query {
   GetEntityRecordName(CompositeKey: CompositeKeyInputType!, EntityName: String!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
-  GetRecordDependencies(CompositeKey: [CompositeKeyInputType!]!, entityName: String!): [RecordDependencyResult!]!
+  GetRecordDependencies(CompositeKey: CompositeKeyInputType!, entityName: String!): [RecordDependencyResult!]!
   GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
@@ -3062,7 +3062,7 @@ type RecordMergeDeletionLog_ {
 }
 
 type RecordMergeDetailResult {
-  KeyValuePairs: [KeyValuePairOutputType!]!
+  CompositeKey: CompositeKeyOutputType!
   Message: String
   RecordMergeDeletionLogID: Int
   Success: Boolean!
@@ -3091,8 +3091,8 @@ type RecordMergeLog_ {
 input RecordMergeRequest {
   EntityName: String!
   FieldMap: [FieldMapping!]
-  RecordsToMerge: [[KeyValuePairInputType!]!]!
-  SurvivingRecordKeyValuePairs: [KeyValuePairInputType!]!
+  RecordsToMerge: [CompositeKeyInputType!]!
+  SurvivingRecordCompositeKey: CompositeKeyInputType!
 }
 
 type RecordMergeRequestOutput {
@@ -5636,21 +5636,21 @@ type UserApplication_ {
 }
 
 type UserFavoriteResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityID: Int!
   IsFavorite: Boolean!
-  KeyValuePairs: [KeyValuePairOutputType!]!
   Success: Boolean!
   UserID: Int!
 }
 
 input UserFavoriteSearchParams {
-  CompositeKey: [CompositeKeyInputType!]!
+  CompositeKey: CompositeKeyInputType!
   EntityID: Int!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
-  CompositeKey: [CompositeKeyInputType!]!
+  CompositeKey: CompositeKeyInputType!
   EntityID: Int!
   IsFavorite: Boolean!
   UserID: Int!

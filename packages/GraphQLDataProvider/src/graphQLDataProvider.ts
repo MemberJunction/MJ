@@ -412,10 +412,10 @@ npm
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
-            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: [CompositeKeyInputType!]!) {
+            const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
                 GetRecordDependencies(entityName: $entityName, CompositeKey: $CompositeKey) {
                     EntityName
                     RelatedEntityName
@@ -425,9 +425,12 @@ npm
             }`
 
             // now we have our query built, execute it
+            let copy: CompositeKey = new CompositeKey();
+            copy.KeyValuePairs = compositeKey.ValuesAsString();
+
             const vars = {
                 entityName: entityName,
-                CompositeKey: CompositeKey
+                CompositeKey: compositeKey
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -497,9 +500,11 @@ npm
                     OverallStatus
                     RecordMergeLogID
                     RecordStatus {
-                        KeyValuePairs {
-                            FieldName
-                            Value
+                        CompositeKey {
+                            KeyValuePairs {
+                                FieldName
+                                Value
+                            }
                         }
                         Success
                         RecordMergeDeletionLogID
@@ -509,14 +514,11 @@ npm
             }`
 
             // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
+            let compositeKeyCopy: CompositeKey = new CompositeKey();
+            compositeKeyCopy.KeyValuePairs = request.SurvivingRecordCompositeKey.ValuesAsString();
             const newRequest: RecordMergeRequest = {
                 EntityName: request.EntityName,
-                SurvivingRecordKeyValuePairs: request.SurvivingRecordKeyValuePairs.map(pkv => {
-                    return {
-                        FieldName: pkv.FieldName,
-                        Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
-                    }
-                }),
+                SurvivingRecordCompositeKey: compositeKeyCopy,
                 FieldMap: request.FieldMap?.map(fm => {
                     return {
                         FieldName: fm.FieldName,
@@ -524,13 +526,9 @@ npm
                     }
                 }),
                 RecordsToMerge: request.RecordsToMerge.map(r => {
-                    // array of arrays, each inner array is the primary key values for a record to merge
-                    return r.map(pkv => {
-                        return {
-                            FieldName: pkv.FieldName,
-                            Value: pkv.Value.toString() // turn the value into a string, since that is what the server expects
-                        }
-                    }); 
+                    let copy: CompositeKey = new CompositeKey();
+                    copy.KeyValuePairs = r.ValuesAsString();
+                    return copy;
                 })
             }
 
@@ -871,7 +869,7 @@ npm
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey): Promise<boolean> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -882,10 +880,13 @@ npm
                 IsFavorite
             }
         }` 
+
+        let copy: CompositeKey = new CompositeKey();
+        copy.KeyValuePairs = compositeKey.ValuesAsString();
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            CompositeKey: CompositeKey
+                                                                            CompositeKey: copy
                                                                             } 
                                                                   }
                                                          );
@@ -893,20 +894,22 @@ npm
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
-        if (!e)
+        if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);
+        }
 
         const query = gql`mutation SetRecordFavoriteStatus($params: UserFavoriteSetParams!) {
             SetRecordFavoriteStatus(params: $params){
                 Success
             }
         }` 
+
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId, 
                                                                                 EntityID: e.ID, 
-                                                                                CompositeKey: CompositeKey,
+                                                                                CompositeKey: compositeKey.GraphQLCopy(),
                                                                                 IsFavorite: isFavorite} 
                                                                  }
                                                          );
@@ -914,8 +917,8 @@ npm
             return data.SetRecordFavoriteStatus.Success;        
     }
 
-    public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {
-        if (!entityName || !CompositeKey || CompositeKey.KeyValuePairs?.length === 0){
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
+        if (!entityName || !CompositeKey || compositeKey.KeyValuePairs?.length === 0){
             return null;
         }
 
@@ -926,9 +929,10 @@ npm
                 RecordName
             }
         }` 
+
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    CompositeKey
+                                                                    CompositeKey: compositeKey.GraphQLCopy()
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -954,11 +958,9 @@ npm
         }` 
  
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
-            let copy: CompositeKey = new CompositeKey();
-            copy.KeyValuePairs = i.CompositeKey.ValuesAsString();
             return { 
                      EntityName: i.EntityName, 
-                     CompositeKey: copy
+                     CompositeKey: i.CompositeKey.GraphQLCopy()
                     } 
                 })});
         if (data && data.GetEntityRecordNames)

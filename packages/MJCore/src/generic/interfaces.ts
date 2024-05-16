@@ -62,7 +62,7 @@ export class CompositeKey {
     * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value
     */
     ToString(useIsNull?: boolean): string {
-        return this.KeyValuePairs.map((keyValue: KeyValuePair, index: number) => {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             if(useIsNull && (keyValue.Value === null || keyValue.Value === undefined)){
                 return `${keyValue.FieldName} IS NULL`;
             }
@@ -75,7 +75,7 @@ export class CompositeKey {
     * @returns a copy of the KeyValuePairs array but with the Value properties as string
     */
     ValuesAsString(): KeyValuePair[] {
-        return this.KeyValuePairs.map((keyValue: KeyValuePair, index: number) => {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             return {
                 FieldName: keyValue.FieldName,
                 Value: keyValue.Value.toString()
@@ -84,22 +84,33 @@ export class CompositeKey {
     }
 
     /**
+     * Utility function to return a copy of the CompositeKey with the Value properties as string
+     * @returns a copy of the KeyValuePairs array but with the Value properties as string
+     */
+    GraphQLCopy(): CompositeKey {
+        let copy = new CompositeKey();
+        copy.KeyValuePairs = this.ValuesAsString();
+        return copy;
+    }
+
+    /**
     * @returns the KeyValuePairs as a list of strings in the format "FieldName=Value"
+    * @param delimiter the delimiter to use between the field name and value. Defaults to '='
     * @example ["ID=1", "Name=John"]
     */
-    ToList(): string[] {
+    ToList(delimiter?: string): string[] {
         return this.KeyValuePairs.map((pk) => {
-            return `${pk.FieldName}=${pk.Value}`;
+            return delimiter ? `${pk.FieldName}${delimiter}${pk.Value}` : `${pk.FieldName}=${pk.Value}`;
         });
     }
 
     /**
      * @returns the value of each key value pair in the format "Value1, Value2, Value3"
-     * @param delimiter  
+     * @param delimiter - the delimiter to use between the values. Defaults to ', '
      * @example "1, John"
      */
     Values(delimiter?: string): string {
-        return this.KeyValuePairs.map((keyValue: KeyValuePair, index: number) => {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             return keyValue.Value;
         }).join(delimiter || ", ");
     }
@@ -159,15 +170,50 @@ export class CompositeKey {
         });
     }
 
+    /**
+     * Loads the KeyValuePairs from a list of strings in the format "FieldName=Value"
+     * @param list - the list of strings to load from
+     * @param delimiter - the delimiter to use between the field name and value. Defaults to '='
+     */
+    LoadFromList(list: string[], delimiter?: string): void {
+        this.KeyValuePairs = list.map((pk: string) => {
+            let keyValue = delimiter ? pk.split(delimiter) : pk.split("=");
+            if(keyValue.length === 2){
+                let keyValuePair: KeyValuePair = new KeyValuePair();
+                keyValuePair.FieldName = keyValue[0];
+                keyValuePair.Value = keyValue[1];
+                return keyValuePair;
+            }
+            return;
+        });
+    }
+
     ToURLSegment(segment?: string): string {
         return this.KeyValuePairs.map((pk) => {
             return `${pk.FieldName}|${pk.Value}`;
-        }).join(segment || "| |");
+        }).join(segment || "||");
+    }
+
+    LoadFromURLSegment(entity: EntityInfo, routeSegment: string, segment?: string): void {
+        if (!routeSegment.includes('|')) {
+          // If not, return a single element array with a default field name
+          this.KeyValuePairs = [{ FieldName: entity.PrimaryKey.Name, Value: routeSegment }];
+        }
+        else {
+          const parts = segment ? routeSegment.split(segment) : routeSegment.split('||');
+          const pkVals: KeyValuePair[] = [];
+          for (let p of parts) {
+            const kv = p.split('|');
+            pkVals.push({ FieldName: kv[0], Value: kv[1] });
+          }
+
+          this.KeyValuePairs = pkVals;
+        }
     }
 }
 
 export class PotentialDuplicate extends CompositeKey {
-    ProbabilityScore: number
+    ProbabilityScore: number;
 }
 
 export class PotentialDuplicateRequest {
@@ -201,7 +247,7 @@ export class PotentialDuplicateRequest {
 
 export class PotentialDuplicateResult {
     EntityID: number;
-    RecordPrimaryKeys: CompositeKey;
+    RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];
     DuplicateRunDetailMatchRecordIDs: number[];
 }

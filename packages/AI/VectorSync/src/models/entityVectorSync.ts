@@ -3,7 +3,7 @@ import { EmbedTextsResult, Embeddings, GetAIAPIKey} from '@memberjunction/ai';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { MJGlobal } from '@memberjunction/global';
 import { AIModelEntity, EntityDocumentEntity, EntityRecordDocumentEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
-import { vectorSyncRequest } from '../generic/vectorSync.types';
+import { VectorSyncRequest } from '../generic/vectorSync.types';
 import { VectorBase } from '@memberjunction/ai-vectors'
 import { EntityDocumentTemplateParser } from '../generic/EntityDocumentTemplateParser';
 import { RECORD_DUPLICATES_TYPE_ID } from '../constants';
@@ -17,7 +17,7 @@ export class EntityVectorSyncer extends VectorBase {
         super();
     }
 
-    public async VectorizeEntity(request: vectorSyncRequest, contextUser: UserInfo): Promise<any> {
+    public async VectorizeEntity(request: VectorSyncRequest, contextUser: UserInfo): Promise<any> {
         if(!contextUser){
             throw new Error('ContextUser is required to vectorize the entity');
         }

@@ -511,7 +511,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public async ShowDependencies() {
     // for now dump to console
     const md = new Metadata();
-    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey.Value)
+    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey)
     console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
     console.log(dep);
 

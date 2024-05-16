@@ -406,9 +406,8 @@ export class GenericBrowserListComponent implements OnInit{
     item.Favorite = !item.Favorite;
     const md: Metadata = new Metadata();
     let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
-    let pkv: KeyValuePair[] = [{FieldName: "ID", Value: item.Data.ID}];
     let compositeKey: CompositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = pkv;
+    compositeKey.KeyValuePairs = [{FieldName: "ID", Value: item.Data.ID}];
     await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, compositeKey, item.Favorite);
   }
 

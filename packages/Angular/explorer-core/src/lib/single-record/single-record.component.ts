@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
-import { Metadata, PotentialDuplicateRequest, KeyValuePair, CompositeKey } from '@memberjunction/core';
+import { Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -13,7 +13,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 })
 export class SingleRecordComponent implements OnInit, AfterViewInit {
   @ViewChild(Container, {static: true}) formContainer!: Container;
-  @Input() public KeyValuePairs: KeyValuePair[] = [];
+  @Input() public CompositeKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
@@ -30,16 +30,14 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    let compositeKey: CompositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = this.KeyValuePairs;
-    this.LoadForm(compositeKey, <string>this.entityName)
+    this.LoadForm(this.CompositeKey, <string>this.entityName)
   }
 
   async LoadForm(compositeKey: CompositeKey, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
     if (compositeKey.KeyValuePairs && entityName) {
-      this.entityName = entityName
-      this.KeyValuePairs = compositeKey.KeyValuePairs;
+      this.entityName = entityName;
+      this.CompositeKey = compositeKey;
 
       const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
       const md = new Metadata();

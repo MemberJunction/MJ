@@ -20,7 +20,7 @@ import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  KeyValuePairs: KeyValuePair[];
+  CompositeKey: CompositeKey;
 }
 
 export type GridRowEditedEvent = {
@@ -367,14 +367,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(this.compareMode || this.mergeMode ) return;
     
     if (this._entityInfo) {
-      const pkeyVals: KeyValuePair[] = [];
-      this._entityInfo.PrimaryKeys.forEach((pkey: EntityFieldInfo) => {
-        pkeyVals.push({FieldName: pkey.Name, Value: this.viewData[args.rowIndex][pkey.Name]})
-      })
+      const compositeKey: CompositeKey = new CompositeKey();
+      compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        KeyValuePairs: pkeyVals
+        CompositeKey: compositeKey
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -388,15 +386,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (this.EditMode==='None' && this.AutoNavigate) {
         // tell app router to go to this record
-        const pkVals: string =  this.GenerateKeyValuePairString(pkeyVals);
-        this.router.navigate(['resource', 'record', pkVals], { queryParams: { Entity: this._entityInfo.Name } })
+        this.router.navigate(['resource', 'record', compositeKey.ToURLSegment()], { queryParams: { Entity: this._entityInfo.Name } })
       }
     } 
   } 
-
-  public GenerateKeyValuePairString(pkVals: KeyValuePair[]): string {
-    return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
-  }
 
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
@@ -766,20 +759,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
-            // return an array of primary key values for each record to merge
-            return pkeys.map((pkey: EntityFieldInfo) => {
-              return {
-                FieldName: pkey.Name,
-                Value: r.Get(pkey.Name)
-              } as KeyValuePair
-            })
-          }).filter((pkeyVals: KeyValuePair[]) => {
-            if (!this.recordCompareComponent)
+            return r.CompositeKey;
+          }).filter((compositeKey: CompositeKey) => {
+            if (!this.recordCompareComponent){
               return false;
-            else
-              return this.recordCompareComponent.selectedRecordPKeyVal.EqualsKey(pkeyVals);
+            }
+
+            return this.recordCompareComponent.selectedRecordPKeyVal.Equals(compositeKey);
           }),
-          SurvivingRecordKeyValuePairs: this.recordCompareComponent.selectedRecordPKeyVal.KeyValuePairs,
+          SurvivingRecordCompositeKey: this.recordCompareComponent.selectedRecordPKeyVal,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,
