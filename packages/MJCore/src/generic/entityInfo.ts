@@ -369,13 +369,13 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * For fields in the database that have spaces in them, we need to replace the spaces with _ in order to create variables for stored procedures. This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
+     * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
      */
     private _codeName: string = null
     get CodeName(): string {
-        // the code below replaces spaces with _ and stashes the result in a private variable so we only do this once
+        // the code below replaces characters invalid for SQL identifiers with _ and stashes the result in a private variable so we only do this once
         if (this._codeName == null)
-            this._codeName = this.Name.replace(/\s/g, "_");
+            this._codeName = this.Name.replace(/[\s-]/g, "_");
     
         return this._codeName;
     }
