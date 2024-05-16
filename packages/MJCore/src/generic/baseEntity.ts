@@ -690,12 +690,13 @@ export abstract class BaseEntity {
         }
         else{
             const start = new Date().getTime();
-            this.ValidatePrimaryKeyArray(CompositeKey.KeyValuePairs);
+            this.ValidateCompositeKey(CompositeKey);
 
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
-            if (!this.IsSaved) 
+            if (!this.IsSaved){
                 this.init(); // wipe out current data if we're loading on top of existing record
+            }
 
             const data = await BaseEntity.Provider.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
             if (!data) {
@@ -722,15 +723,15 @@ export abstract class BaseEntity {
         }
     }
 
-    protected ValidatePrimaryKeyArray(KeyValuePairs: KeyValuePair[]) {
+    protected ValidateCompositeKey(compositeKey: CompositeKey) {
         // make sure that KeyValuePairs is an array of 1+ objects, and that each object has a FieldName and Value property and that the FieldName is a valid field on the entity that has IsPrimaryKey set to true
-        if (!KeyValuePairs || KeyValuePairs.length === 0)
+        if (!compositeKey || !compositeKey.KeyValuePairs || compositeKey.KeyValuePairs.length === 0)
             throw new Error('KeyValuePairs cannot be null or empty');
         else {
             // now loop through the array and make sure each object has a FieldName and Value property
             // and that the field name is a valid field on the entity that has IsPrimaryKey set to true
-            for (let i = 0; i < KeyValuePairs.length; i++) {
-                const pk = KeyValuePairs[i];
+            for (let i = 0; i < compositeKey.KeyValuePairs.length; i++) {
+                const pk = compositeKey.KeyValuePairs[i];
                 if (!pk.FieldName || pk.FieldName.trim().length === 0)
                     throw new Error(`KeyValuePairs[${i}].FieldName cannot be null, empty, or whitespace`);
                 if (pk.Value === null || pk.Value === undefined)

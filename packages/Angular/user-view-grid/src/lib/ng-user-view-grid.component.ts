@@ -440,12 +440,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
             let compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.KeyValuePairs = this._entityInfo.PrimaryKeys.map(pk => {
-              return {
-                FieldName: pk.Name,
-                Value: dataItem[pk.Name]
-              };
-            });
+            compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
             record = await md.GetEntityObject(this._entityInfo.Name);
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
@@ -458,12 +453,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
               let compositeKey: CompositeKey = new CompositeKey();
-              compositeKey.KeyValuePairs = this._entityInfo.PrimaryKeys.map(pk => {
-                return {
-                  FieldName: pk.Name,
-                  Value: dataItem[pk.Name]
-                };
-              });
+              compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
               await record.InnerLoad(compositeKey);
               this._pendingRecords.push({record, 
                                          row: args.rowIndex, 

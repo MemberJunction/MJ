@@ -204,14 +204,13 @@ export class Metadata {
      * @param KeyValuePairs
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {
-        // check each primary key value to make sure it's not null
-        for (let j = 0; j < CompositeKey.KeyValuePairs.length; j++) {
-            if (!CompositeKey.KeyValuePairs[j] || !CompositeKey.KeyValuePairs[j].Value) {
-                throw new Error('GetEntityRecordName: KeyValuePairs cannot contain null values. FieldName: ' + CompositeKey.KeyValuePairs[j]?.FieldName);
-            }
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
+        let result = compositeKey.Validate();
+        if(!result.IsValid){
+            throw new Error(result.ErrorMessage);
         }
-        return await Metadata.Provider.GetEntityRecordName(entityName, CompositeKey);
+        
+        return await Metadata.Provider.GetEntityRecordName(entityName, compositeKey);
     }
 
     /**

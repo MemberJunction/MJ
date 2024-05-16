@@ -174,6 +174,7 @@ export class CompositeKey {
      * Loads the KeyValuePairs from a list of strings in the format "FieldName=Value"
      * @param list - the list of strings to load from
      * @param delimiter - the delimiter to use between the field name and value. Defaults to '='
+     * @example ["ID=1", "Name=John"]
      */
     LoadFromList(list: string[], delimiter?: string): void {
         this.KeyValuePairs = list.map((pk: string) => {
@@ -188,7 +189,6 @@ export class CompositeKey {
         });
     }
 
-    
     ToURLSegment(segment?: string): string {
         return this.KeyValuePairs.map((pk) => {
             return `${pk.FieldName}|${pk.Value}`;
@@ -210,6 +210,21 @@ export class CompositeKey {
 
           this.KeyValuePairs = pkVals;
         }
+    }
+
+    /**
+     * Helper method to check if the underlying key value pairs are valid or not
+     * i.e. if any of the key value pairs are null or undefined
+     * @returns true if all key value pairs are valid, false if any are null or undefined
+     */
+    Validate(): {IsValid: boolean, ErrorMessage: string} {
+        for (let j = 0; j < this.KeyValuePairs.length; j++) {
+            if (!this.KeyValuePairs[j] || !this.KeyValuePairs[j].Value) {
+                return {IsValid: false, ErrorMessage: 'CompositeKey.Validate: KeyValuePair cannot contain null values. FieldName: ' + this.KeyValuePairs[j]?.FieldName };
+            }
+        }
+
+        return {IsValid: true, ErrorMessage: ''};
     }
 }
 
@@ -378,7 +393,7 @@ export interface IMetadataProvider {
      * @param CompositeKey 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once

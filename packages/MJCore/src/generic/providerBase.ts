@@ -50,7 +50,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     public abstract get ProviderType(): ProviderType;
 
-    public abstract GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string>;
+    public abstract GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>;
     public abstract GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>;
 
     public abstract GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>;

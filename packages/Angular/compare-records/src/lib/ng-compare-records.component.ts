@@ -24,7 +24,7 @@ export class CompareRecordsComponent {
   public showDifferences: boolean = true;
   public suppressBlankFields: boolean = true;
   public selectedRecordCompositeKey: CompositeKey = new CompositeKey();
-  public fieldMap: {fieldName: string, KeyValuePairs: CompositeKey, value: any}[] = [];
+  public fieldMap: {fieldName: string, CompositeKey: CompositeKey, value: any}[] = [];
 
   @ViewChild('kendoGrid', { read: GridComponent }) kendoGridElement: GridComponent | null = null;
   @ViewChild('kendoGrid', { read: ElementRef }) kendoGridElementRef: ElementRef | null = null;
@@ -317,7 +317,7 @@ export class CompareRecordsComponent {
       const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
       if (fieldMapIndex >= 0) {
         // we have a field map for this field, so see if the pkeys matches the selected pkeys
-        return compositeKey.Equals(this.fieldMap[fieldMapIndex].KeyValuePairs);
+        return compositeKey.Equals(this.fieldMap[fieldMapIndex].CompositeKey);
       }
       else {
         // we do not have a field map for this field, so see if the pkeys matches the selected pkeys
@@ -422,12 +422,12 @@ export class CompareRecordsComponent {
           const fieldMapIndex = this.fieldMap.findIndex(f => f.fieldName === fieldName);
           if (fieldMapIndex >= 0) {
             // we found an entry in the field map for this field, so update it
-            this.fieldMap[fieldMapIndex].KeyValuePairs = currentRecordCompositeKey;
+            this.fieldMap[fieldMapIndex].CompositeKey = currentRecordCompositeKey;
             this.fieldMap[fieldMapIndex].value = event.dataItem[currentRecordCompositeKeyString].Value;
           }
           else {
             // we didn't find an entry in the field map for this field, so add it
-            this.fieldMap.push({fieldName: fieldName, KeyValuePairs: currentRecordCompositeKey, value: event.dataItem[currentRecordCompositeKeyString].Value});
+            this.fieldMap.push({fieldName: fieldName, CompositeKey: currentRecordCompositeKey, value: event.dataItem[currentRecordCompositeKeyString].Value});
           }
         }
         else {

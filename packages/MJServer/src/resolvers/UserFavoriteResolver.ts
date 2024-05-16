@@ -74,7 +74,7 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
       return {
         EntityID: params.EntityID,
         UserID: params.UserID,
-        KeyValuePairs: params.CompositeKey.KeyValuePairs,
+        CompositeKey: params.CompositeKey,
         IsFavorite: await md.GetRecordFavoriteStatus(params.UserID, e.Name, params.CompositeKey),
         Success: true,
       };
