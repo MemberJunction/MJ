@@ -736,6 +736,9 @@ npm
             }
             `
 
+            console.log(query);
+            console.log(vars);
+
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
                 return new Promise((resolve, reject) => {
