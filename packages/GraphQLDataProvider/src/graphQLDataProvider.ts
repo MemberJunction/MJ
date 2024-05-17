@@ -384,7 +384,7 @@ npm
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = '${CompositeKey.KeyValuePairs.map(pkv => pkv.Value).join(',')}' AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${CompositeKey.Values()}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -420,17 +420,19 @@ npm
                     EntityName
                     RelatedEntityName
                     FieldName
-                    KeyValuePair 
+                    CompositeKey {
+                        KeyValuePairs {
+                            FieldName
+                            Value
+                        }
+                    } 
                 }
             }`
 
             // now we have our query built, execute it
-            let copy: CompositeKey = new CompositeKey();
-            copy.KeyValuePairs = compositeKey.ValuesAsString();
-
             const vars = {
                 entityName: entityName,
-                CompositeKey: compositeKey
+                CompositeKey: compositeKey.GraphQLCopy()
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -479,9 +481,7 @@ npm
             ProbabilityScore: params.ProbabilityScore,
             Options: params.Options,
             RecordIDs: params.RecordIDs.map(recordID => {
-                let pkv = new CompositeKey();
-                pkv.KeyValuePairs = recordID.ValuesAsString();
-                return pkv;
+                return recordID.GraphQLCopy();
             })
         }
         const data = await GraphQLDataProvider.ExecuteGQL(query, {params: request});
@@ -514,11 +514,9 @@ npm
             }`
 
             // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
-            let compositeKeyCopy: CompositeKey = new CompositeKey();
-            compositeKeyCopy.KeyValuePairs = request.SurvivingRecordCompositeKey.ValuesAsString();
             const newRequest: RecordMergeRequest = {
                 EntityName: request.EntityName,
-                SurvivingRecordCompositeKey: compositeKeyCopy,
+                SurvivingRecordCompositeKey: request.SurvivingRecordCompositeKey.GraphQLCopy(),
                 FieldMap: request.FieldMap?.map(fm => {
                     return {
                         FieldName: fm.FieldName,
@@ -526,9 +524,7 @@ npm
                     }
                 }),
                 RecordsToMerge: request.RecordsToMerge.map(r => {
-                    let copy: CompositeKey = new CompositeKey();
-                    copy.KeyValuePairs = r.ValuesAsString();
-                    return copy;
+                    return r.GraphQLCopy();
                 })
             }
 
@@ -881,12 +877,10 @@ npm
             }
         }` 
 
-        let copy: CompositeKey = new CompositeKey();
-        copy.KeyValuePairs = compositeKey.ValuesAsString();
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            CompositeKey: copy
+                                                                            CompositeKey: compositeKey.GraphQLCopy()
                                                                             } 
                                                                   }
                                                          );
@@ -918,7 +912,7 @@ npm
     }
 
     public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
-        if (!entityName || !CompositeKey || compositeKey.KeyValuePairs?.length === 0){
+        if (!entityName || !compositeKey || compositeKey.KeyValuePairs?.length === 0){
             return null;
         }
 

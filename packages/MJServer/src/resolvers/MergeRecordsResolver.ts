@@ -66,8 +66,8 @@ export class RecordDependencyResult {
   @Field(() => String)
   FieldName: string; // required
 
-  @Field(() => String)
-  KeyValuePair: string;
+  @Field(() => CompositeKeyOutputType)
+  CompositeKey: CompositeKey;
 }
 
  
@@ -84,7 +84,7 @@ export class RecordDependencyResolver {
     ) {
         try {
             const md = new Metadata();
-            const result = await md.GetRecordDependencies(entityName, CompositeKey)    
+            const result = await md.GetRecordDependencies(entityName, CompositeKey); 
             return result;
         }
         catch (e) {

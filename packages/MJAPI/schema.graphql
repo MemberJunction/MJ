@@ -902,6 +902,7 @@ input CreateFileInput {
 
 type CreateFilePayload {
   File: File_!
+  NameExists: Boolean!
   UploadUrl: String!
 }
 
@@ -2503,7 +2504,7 @@ type Query {
   EntitySetting(ID: Int!): EntitySetting_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
-  ExecuteAskSkipRecordChat(ConversationId: Int!, EntityName: String!, PrimaryKeys: [KeyValuePairInputType!]!, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRecordChat(CompositeKey: CompositeKeyInputType!, ConversationId: Int!, EntityName: String!, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   File(ID: Int!): File_
   FileCategory(ID: Int!): FileCategory_
@@ -3045,9 +3046,9 @@ type RecordChange_ {
 }
 
 type RecordDependencyResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityName: String!
   FieldName: String!
-  KeyValuePair: String!
   RelatedEntityName: String!
 }
 

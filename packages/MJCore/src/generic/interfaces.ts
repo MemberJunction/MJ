@@ -57,7 +57,7 @@ export class CompositeKey {
     }
 
     /** 
-    * @returns a string representation of the primary key values in the format "FieldName=Value
+    * @returns a string representation of the primary key values in the format "FieldName=Value"
     * @example "ID=1 AND Name=John"
     * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value
     */
