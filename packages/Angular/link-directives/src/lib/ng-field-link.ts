@@ -1,6 +1,6 @@
 import { Directive, ElementRef, Renderer2, Input, OnInit, HostListener } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { BaseEntity, EntityField, EntityInfo, LogStatus, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityInfo, LogStatus, Metadata } from '@memberjunction/core';
 import { BaseLink } from './ng-base-link';
 
 @Directive({
@@ -56,11 +56,11 @@ export class FieldLink extends BaseLink implements OnInit {
           // we didn't have the related field mapping info (above), no related entity name field map provided in the entity field metadata, so do a lookup
           // requires a server round trip and hitting the DB, so we try to avoid this
 
-          const pkVals = [{
+          let compositeKey: CompositeKey = new CompositeKey([{
             FieldName: this._targetEntityInfo.PrimaryKey.Name, // AT THE MOMENT - we only support foreign keys with a single value
             Value: this.field.Value
-          }];
-          md.GetEntityRecordName(relatedEntity, pkVals).then(recordName => {
+          }]);
+          md.GetEntityRecordName(relatedEntity, compositeKey).then(recordName => {
             if (recordName && recordName.length > 0)
                 this.renderer.setProperty(this.el.nativeElement, 'textContent', recordName);
           });

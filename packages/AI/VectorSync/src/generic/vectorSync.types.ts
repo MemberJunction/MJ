@@ -1,4 +1,4 @@
-export type vectorSyncRequest = {
+export type VectorSyncRequest = {
     entityID: number;
     entityDocumentID?: number;
     /**

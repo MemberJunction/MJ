@@ -1,5 +1,5 @@
-import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { BaseEntity, EntityField } from "./baseEntity";
+import { EntityDependency, EntityFieldInfo, EntityInfo, KeyValuePair, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -48,42 +48,60 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
-export class PrimaryKeyValueBase {
-    /*
-    * The primary key values of the record 
+export class CompositeKey {
+
+    KeyValuePairs: KeyValuePair[];
+
+    constructor(keyValuePairs?: KeyValuePair[]) {
+        this.KeyValuePairs = keyValuePairs || [];
+    }
+
+    /**
+     * returns the value of the key value pair for the specified field name
+     * @param fieldName the field name to get the value for
+     * @returns the value of the key value pair for the specified field name
+     */
+    GetValueByFieldName(fieldName: string): any {
+        let key = this.KeyValuePairs.find((keyValue) => {
+            return keyValue.FieldName === fieldName;
+        });
+
+        return key ? key.Value : null;
+    }
+
+    /**
+     * returns the value of the key value pair at the specified index
+     * @param index the index of the key value pair to get the value for
+     * @returns the value of the key value pair at the specified index
+     */
+    GetValueByIndex(index: number): any {
+        if (index >= 0 && index < this.KeyValuePairs.length) {
+            return this.KeyValuePairs[index].Value;
+        }
+
+        return null;
+    }
+
+    /** 
+    * @returns a string representation of the primary key values in the format "FieldName=Value"
+    * @example "ID=1 AND Name=John"
+    * @param useIsNull if true, will return "FieldName IS NULL" for any key value pair that has a null or undefined value
     */
-    PrimaryKeyValues: PrimaryKeyValue[];
+    ToString(useIsNull?: boolean): string {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
+            if(useIsNull && (keyValue.Value === null || keyValue.Value === undefined)){
+                return `${keyValue.FieldName} IS NULL`;
+            }
 
-    constructor() {
-        this.PrimaryKeyValues = [];
-    }
-
-    GetCompositeKey(): string {
-        
-        if(!this.PrimaryKeyValues){
-            return "";
-        }
-
-        if(this.PrimaryKeyValues.length === 1){
-            return this.PrimaryKeyValues[0].Value.toString();
-        }
-
-        return this.PrimaryKeyValues.map((keyValue, index) => {
-            return keyValue.Value.toString();
-        }).join(", ");
-    }
-
-    GetCompositeKeyAsSQLString(): string {
-        return this.PrimaryKeyValues.map((keyValue, index) => {
-            return `${keyValue.FieldName} = ${keyValue.Value}`;
+            return `${keyValue.FieldName}=${keyValue.Value}`;
         }).join(" AND ");
     }
 
     /**
-     * Returns a copy of the PrimaryKeyValues array but with the Value properties as string
-     */
-    GetValuesAsString(): PrimaryKeyValue[] {
-        return this.PrimaryKeyValues.map((keyValue, index) => {
+    * @returns a copy of the KeyValuePairs array but with the Value properties as type string
+    */
+    ValuesAsString(): KeyValuePair[] {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             return {
                 FieldName: keyValue.FieldName,
                 Value: keyValue.Value.toString()
@@ -92,21 +110,152 @@ export class PrimaryKeyValueBase {
     }
 
     /**
-     * Returns the PrimaryKeyValues as a list of strings in the format "FieldName=Value"
+     * Utility function to return a copy of the CompositeKey with the Value properties as string
+     * @returns a copy of the KeyValuePairs array but with the Value properties as string
      */
-    ToList(): string[] {
-        return this.PrimaryKeyValues.map((pk) => {
-            return `${pk.FieldName}=${pk.Value}`;
+    Copy(): CompositeKey {
+        let copy = new CompositeKey();
+        copy.KeyValuePairs = this.ValuesAsString();
+        return copy;
+    }
+
+    /**
+    * @returns the KeyValuePairs as a list of strings in the format "FieldName=Value"
+    * @param delimiter the delimiter to use between the field name and value. Defaults to '='
+    * @example ["ID=1", "Name=John"]
+    */
+    ToList(delimiter?: string): string[] {
+        return this.KeyValuePairs.map((pk) => {
+            return delimiter ? `${pk.FieldName}${delimiter}${pk.Value}` : `${pk.FieldName}=${pk.Value}`;
         });
     }
 
-    ToString(): string {
-        return this.ToList().join(", ");
+    /**
+     * @returns the value of each key value pair in the format "Value1, Value2, Value3"
+     * @param delimiter - the delimiter to use between the values. Defaults to ', '
+     * @example "1, John"
+     */
+    Values(delimiter?: string): string {
+        return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
+            return keyValue.Value;
+        }).join(delimiter || ", ");
+    }
+
+    /**
+    * Utility function to compare the key primary key of this object to another sets to see if they are the same or not
+    * @param kvPairs the primary key values to compare against
+    * @returns true if the primary key values are the same, false if they are different
+    */
+    EqualsKey(kvPairs: KeyValuePair[]): boolean {
+        if(!kvPairs || kvPairs.length === 0){
+            return false;
+        }
+
+        if (kvPairs.length !== this.KeyValuePairs.length){
+            return false;
+        }
+
+        for( const [index, kvPair] of kvPairs.entries()){
+            const sourcekvPair = this.KeyValuePairs[index];
+            if(kvPair.FieldName !== sourcekvPair.FieldName || kvPair.Value !== sourcekvPair.Value){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+    * Utility function to compare this composite key to another
+    * @param compositeKey the composite key to compare against
+    * @returns true if the primary key values are the same, false if they are different
+    */
+    Equals(compositeKey: CompositeKey): boolean {
+        if(!compositeKey){
+            return false;
+        }
+
+        return this.EqualsKey(compositeKey.KeyValuePairs);
+    }
+
+    LoadFromEntityFields(fields: EntityField[]): void {
+        this.KeyValuePairs = fields.map((field) => {
+            return {
+                FieldName: field.Name,
+                Value: field.Value
+            }
+        });
+    }
+
+    LoadFromEntityInfoAndRecord(entity: EntityInfo, entityRecord: any): void {
+        this.KeyValuePairs = entity.PrimaryKeys.map((pk) => {
+            return {
+                FieldName: pk.Name,
+                Value: entityRecord[pk.Name]
+            }
+        });
+    }
+
+    /**
+     * Loads the KeyValuePairs from a list of strings in the format "FieldName=Value"
+     * @param list - the list of strings to load from
+     * @param delimiter - the delimiter to use between the field name and value. Defaults to '='
+     * @example ["ID=1", "Name=John"]
+     */
+    LoadFromList(list: string[], delimiter?: string): void {
+        this.KeyValuePairs = list.map((pk: string) => {
+            let keyValue = delimiter ? pk.split(delimiter) : pk.split("=");
+            if(keyValue.length === 2){
+                let keyValuePair: KeyValuePair = new KeyValuePair();
+                keyValuePair.FieldName = keyValue[0];
+                keyValuePair.Value = keyValue[1];
+                return keyValuePair;
+            }
+            return;
+        });
+    }
+
+    ToURLSegment(segment?: string): string {
+        return this.KeyValuePairs.map((pk) => {
+            return `${pk.FieldName}|${pk.Value}`;
+        }).join(segment || "||");
+    }
+
+    LoadFromURLSegment(entity: EntityInfo, routeSegment: string, segment?: string): void {
+        if (!routeSegment.includes('|')) {
+          // If not, return a single element array with a default field name
+          this.KeyValuePairs = [{ FieldName: entity.PrimaryKey.Name, Value: routeSegment }];
+        }
+        else {
+          const parts = segment ? routeSegment.split(segment) : routeSegment.split('||');
+          const pkVals: KeyValuePair[] = [];
+          for (let p of parts) {
+            const kv = p.split('|');
+            pkVals.push({ FieldName: kv[0], Value: kv[1] });
+          }
+
+          this.KeyValuePairs = pkVals;
+        }
+    }
+
+    /**
+     * Helper method to check if the underlying key value pairs are valid or not
+     * i.e. if any of the key value pairs are null or undefined
+     * @returns true if all key value pairs are valid, false if any are null or undefined
+     */
+    Validate(): {IsValid: boolean, ErrorMessage: string} {
+        for (let j = 0; j < this.KeyValuePairs.length; j++) {
+            if (!this.KeyValuePairs[j] || !this.KeyValuePairs[j].Value) {
+                return {IsValid: false, ErrorMessage: 'CompositeKey.Validate: KeyValuePair cannot contain null values. FieldName: ' + this.KeyValuePairs[j]?.FieldName };
+            }
+        }
+
+        return {IsValid: true, ErrorMessage: ''};
     }
 }
 
-export class PotentialDuplicate extends PrimaryKeyValueBase {
-    ProbabilityScore: number
+export class PotentialDuplicate extends CompositeKey {
+    ProbabilityScore: number;
 }
 
 export class PotentialDuplicateRequest {
@@ -122,7 +271,7 @@ export class PotentialDuplicateRequest {
      * The Primary Key values of each record
      * we're checking for duplicates
      */
-    RecordIDs: PrimaryKeyValueBase[]; 
+    RecordIDs: CompositeKey[]; 
     /**
     * The ID of the entity document to use
     **/
@@ -140,7 +289,7 @@ export class PotentialDuplicateRequest {
 
 export class PotentialDuplicateResult {
     EntityID: number;
-    RecordPrimaryKeys: PrimaryKeyValueBase;
+    RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];
     DuplicateRunDetailMatchRecordIDs: number[];
 }
@@ -155,13 +304,13 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 
     Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
 
-    GetRecordChanges(entityName: string, PrimaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]>
+    GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
 }
 
 export class EntitySaveOptions {
@@ -171,13 +320,13 @@ export class EntitySaveOptions {
 
 export class EntityRecordNameInput  {
     EntityName: string;
-    PrimaryKeyValues: PrimaryKeyValue[];
+    CompositeKey: CompositeKey;
 }
 
 export class EntityRecordNameResult  {
-    Success: boolean
-    Status: string
-    PrimaryKeyValues: PrimaryKeyValue[];
+    Success: boolean;
+    Status: string;
+    CompositeKey: CompositeKey
     EntityName: string;
     RecordName?: string;
  }
@@ -228,9 +377,9 @@ export interface IMetadataProvider {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValues the primary key(s) for the record to check
+     * @param CompositeKey the compositeKey for the record to check
      */
-    GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]>  
+    GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]>  
 
     /**
      * Returns a list of record IDs that are possible duplicates of the specified record. 
@@ -267,10 +416,10 @@ export interface IMetadataProvider {
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param primaryKeyValues 
+     * @param CompositeKey 
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
@@ -279,9 +428,9 @@ export interface IMetadataProvider {
      */
     GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]>
 
-    GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean>
+    GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean>
 
-    SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void>
+    SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void>
 
     CreateTransactionGroup(): Promise<TransactionGroupBase>
 

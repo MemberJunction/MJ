@@ -1,6 +1,7 @@
-import { LogError, Metadata, PrimaryKeyValue } from '@memberjunction/core';
+import { LogError, Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
+import { CompositeKeyInputType, CompositeKeyOutputType } from './PotentialDuplicateRecordResolver';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -36,7 +37,7 @@ export class EntityDependencyResolver {
 
 
 @InputType()
-export class PrimaryKeyValueInputType {
+export class KeyValuePairInputType {
   @Field(() => String)
   FieldName: string;
 
@@ -45,7 +46,7 @@ export class PrimaryKeyValueInputType {
 }
 
 @ObjectType()
-export class PrimaryKeyValueOutputType {
+export class KeyValuePairOutputType {
   @Field(() => String)
   FieldName: string;
 
@@ -65,8 +66,8 @@ export class RecordDependencyResult {
   @Field(() => String)
   FieldName: string; // required
 
-  @Field(() => String)
-  PrimaryKeyValue: string;
+  @Field(() => CompositeKeyOutputType)
+  CompositeKey: CompositeKey;
 }
 
  
@@ -77,13 +78,13 @@ export class RecordDependencyResolver {
     @Query(() => [RecordDependencyResult])
     async GetRecordDependencies(
       @Arg('entityName', () => String) entityName: string,
-      @Arg('primaryKeyValues', () => [PrimaryKeyValueInputType]) primaryKeyValues: PrimaryKeyValue[],
+      @Arg('CompositeKey', () => CompositeKeyInputType) CompositeKey: CompositeKey,
       @Ctx() { dataSource, userPayload }: AppContext,
       @PubSub() pubSub: PubSubEngine
     ) {
         try {
             const md = new Metadata();
-            const result = await md.GetRecordDependencies(entityName, primaryKeyValues)    
+            const result = await md.GetRecordDependencies(entityName, CompositeKey); 
             return result;
         }
         catch (e) {
@@ -116,11 +117,11 @@ export class RecordMergeRequest {
     @Field(() => String)
     EntityName: string;
 
-    @Field(() => [PrimaryKeyValueInputType])
-    SurvivingRecordPrimaryKeyValues: PrimaryKeyValue[];
+    @Field(() => CompositeKeyInputType)
+    SurvivingRecordCompositeKey: CompositeKey;
 
-    @Field(() => [[PrimaryKeyValueInputType]])
-    RecordsToMerge: PrimaryKeyValue[][];
+    @Field(() => [CompositeKeyInputType])
+    RecordsToMerge: CompositeKey[];
 
     @Field(() => [FieldMapping], { nullable: true })
     FieldMap?: FieldMapping[];
@@ -144,8 +145,8 @@ export class RecordMergeRequestOutput {
 
 @ObjectType()
 export class RecordMergeDetailResult {
-    @Field(() => [PrimaryKeyValueOutputType])
-    PrimaryKeyValues: PrimaryKeyValue[];
+    @Field(() => CompositeKeyOutputType)
+    CompositeKey: CompositeKeyOutputType;
 
     @Field(() => Boolean)
     Success: boolean; 

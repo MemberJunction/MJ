@@ -1,7 +1,7 @@
 import { Component, ViewChild, Input, Output, EventEmitter, AfterViewInit, OnInit } from '@angular/core';
 import { GridRowClickedEvent } from '@memberjunction/ng-user-view-grid';
 import { UserViewGridWithAnalysisComponent } from '@memberjunction/ng-ask-skip';
-import { Metadata, EntityInfo, LogError, PrimaryKeyValueBase } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogError } from '@memberjunction/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
@@ -77,7 +77,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async handleRowClick(args: GridRowClickedEvent) {
       // tell the router to navigate instead of raising an event directly. router will in turn handle raising the event as required
-      this.router.navigate(['resource', 'record', SharedService.GeneratePrimaryKeyValueString(args.primaryKeyValues)], { queryParams: { Entity: args.entityName } })
+      this.router.navigate(['resource', 'record', args.CompositeKey.ToURLSegment()], { queryParams: { Entity: args.entityName } })
   }
 
   public async LoadView(viewInfo: UserViewEntity) {
