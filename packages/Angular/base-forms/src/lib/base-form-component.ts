@@ -2,7 +2,8 @@ import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, E
 
 import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
 import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType, 
-         EntityRelationshipInfo, Metadata, RunViewParams, LogError } from '@memberjunction/core';
+         EntityRelationshipInfo, Metadata, RunViewParams, LogError, 
+         RecordDependency} from '@memberjunction/core';
 import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
 import { BaseRecordComponent } from './base-record-component';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -26,6 +27,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public GridBottomMargin: number = 100;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
+  public showDeleteDialog: boolean = false;
+  public showCreateDialog: boolean = false;
   private splitterLayoutChangeSubject = new Subject<void>();
 
   private _pendingRecords: BaseEntity[] = [];
@@ -437,8 +440,6 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         return false;
   }
 
-
-
   protected GetTabTopPosition(): number {
     if (this.elementRef && this.elementRef.nativeElement) {
       const tabs = this.elementRef.nativeElement.getElementsByClassName('k-tabstrip');
@@ -523,6 +524,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     //   })
     //   console.log(mergeResult);
     // }
+  }
+
+  public async GetRecordDependencies(): Promise<RecordDependency[]> {
+    const md = new Metadata();
+    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey);
+    return dependencies;
   }
 
   public get EntityInfo(): EntityInfo | undefined {
