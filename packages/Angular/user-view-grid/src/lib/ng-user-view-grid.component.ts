@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys, PrimaryKeyValueBase, PotentialDuplicateRequest } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -20,7 +20,7 @@ import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  primaryKeyValues: PrimaryKeyValue[];
+  CompositeKey: CompositeKey;
 }
 
 export type GridRowEditedEvent = {
@@ -367,14 +367,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(this.compareMode || this.mergeMode ) return;
     
     if (this._entityInfo) {
-      const pkeyVals: PrimaryKeyValue[] = [];
-      this._entityInfo.PrimaryKeys.forEach((pkey: EntityFieldInfo) => {
-        pkeyVals.push({FieldName: pkey.Name, Value: this.viewData[args.rowIndex][pkey.Name]})
-      })
+      const compositeKey: CompositeKey = new CompositeKey();
+      compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        primaryKeyValues: pkeyVals
+        CompositeKey: compositeKey
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -388,15 +386,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (this.EditMode==='None' && this.AutoNavigate) {
         // tell app router to go to this record
-        const pkVals: string =  this.GeneratePrimaryKeyValueString(pkeyVals);
-        this.router.navigate(['resource', 'record', pkVals], { queryParams: { Entity: this._entityInfo.Name } })
+        this.router.navigate(['resource', 'record', compositeKey.ToURLSegment()], { queryParams: { Entity: this._entityInfo.Name } })
       }
     } 
   } 
-
-  public GeneratePrimaryKeyValueString(pkVals: PrimaryKeyValue[]): string {
-    return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
-  }
 
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
@@ -446,13 +439,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
+            let compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
             record = await md.GetEntityObject(this._entityInfo.Name);
-            await record.InnerLoad(this._entityInfo.PrimaryKeys.map(pk => {
-              return {
-                FieldName: pk.Name,
-                Value: dataItem[pk.Name]
-              };
-            }));
+            await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
             if (!bSaved)
@@ -462,12 +452,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
-              await record.InnerLoad(this._entityInfo.PrimaryKeys.map(pk => {
-                return {
-                  FieldName: pk.Name,
-                  Value: dataItem[pk.Name]
-                };
-              }));
+              let compositeKey: CompositeKey = new CompositeKey();
+              compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
+              await record.InnerLoad(compositeKey);
               this._pendingRecords.push({record, 
                                          row: args.rowIndex, 
                                          dataItem}); // don't save - put the changed record on a queue for saving later by our container
@@ -762,20 +749,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
-            // return an array of primary key values for each record to merge
-            return pkeys.map((pkey: EntityFieldInfo) => {
-              return {
-                FieldName: pkey.Name,
-                Value: r.Get(pkey.Name)
-              } as PrimaryKeyValue
-            })
-          }).filter((pkeyVals: PrimaryKeyValue[]) => {
-            if (!this.recordCompareComponent)
+            return r.CompositeKey;
+          }).filter((compositeKey: CompositeKey) => {
+            if (!this.recordCompareComponent){
               return false;
-            else
-              return !ComparePrimaryKeys(pkeyVals, this.recordCompareComponent.selectedRecordPKeyVal)
+            }
+
+            return this.recordCompareComponent.selectedRecordCompositeKey.Equals(compositeKey);
           }),
-          SurvivingRecordPrimaryKeyValues: this.recordCompareComponent.selectedRecordPKeyVal,
+          SurvivingRecordCompositeKey: this.recordCompareComponent.selectedRecordCompositeKey,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,

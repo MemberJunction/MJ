@@ -3,7 +3,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { PotentialDuplicate, PotentialDuplicateResult, PrimaryKeyValue } from '@memberjunction/core';
+import { PotentialDuplicate, PotentialDuplicateResult, KeyValuePair } from '@memberjunction/core';
 
 @RegisterClass(VectorDBBase, "PineconeDatabase", 1)
 export class PineconeDatabase extends VectorDBBase {
@@ -184,15 +184,8 @@ export class PineconeDatabase extends VectorDBBase {
                 }
 
                 let duplicate: PotentialDuplicate = new PotentialDuplicate();
+                duplicate.LoadFromList(metadata.PrimaryKeys);
                 duplicate.ProbabilityScore = record.score;
-                duplicate.PrimaryKeyValues = metadata.PrimaryKeys.map((pk: string) => {
-                    let keyValue = pk.split("=");
-                    let primaryKeyValue: PrimaryKeyValue = new PrimaryKeyValue();
-                    primaryKeyValue.FieldName = keyValue[0];
-                    primaryKeyValue.Value = keyValue[1];
-                    return primaryKeyValue;
-                });
-                
                 response.Duplicates.push(duplicate);
             }
 

@@ -1,11 +1,7 @@
-import { Component, Input, ViewChild } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { BaseFormComponent } from './base-form-component';
-import { ChatComponent, ChatMessage } from '@memberjunction/ng-chat';
 import { SharedService } from '@memberjunction/ng-shared';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Metadata, PrimaryKeyValue, RunView, TransactionGroupBase } from '@memberjunction/core';
-import { ConversationDetailEntity } from '@memberjunction/core-entities';
-import { SkipAPIChatWithRecordResponse } from '@memberjunction/skip-types';
+import { CompositeKey } from '@memberjunction/core';
 
 
 @Component({
@@ -67,7 +63,7 @@ import { SkipAPIChatWithRecordResponse } from '@memberjunction/skip-types';
             @if (form.EntityInfo) {
                 <mj-skip-chat-with-record-window
                     [LinkedEntityID]="form.EntityInfo.ID"
-                    [LinkedEntityPrimaryKeys]="LinkedEntityPrimaryKeys"            
+                    [LinkedEntityCompositeKey]="LinkedEntityCompositeKey"            
                     #mjChat
                     [WindowOpened]="SkipChatVisible" 
                     (WindowClosed)="ShowSkipChat()"
@@ -93,8 +89,8 @@ export class FormToolbarComponent {
         this.form.SaveRecord(true);
     }
 
-    public get LinkedEntityPrimaryKeys(): PrimaryKeyValue[] {
-        return this.form.record.PrimaryKeys.map(pk => <PrimaryKeyValue>{FieldName: pk.Name, Value: pk.Value})
+    public get LinkedEntityCompositeKey(): CompositeKey {
+        return this.form.record.CompositeKey;
     }
 
     public SkipChatVisible: boolean = false;

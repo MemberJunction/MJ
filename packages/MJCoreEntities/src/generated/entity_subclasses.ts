@@ -1,4 +1,4 @@
-import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
+import { BaseEntity, KeyValuePair, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
     
     /**
@@ -26,9 +26,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -139,9 +139,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -342,9 +342,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -463,9 +463,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -582,9 +582,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -688,9 +688,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -795,9 +795,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -900,9 +900,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1016,9 +1016,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1139,9 +1139,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1289,9 +1289,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1575,9 +1575,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -2113,9 +2113,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -2690,9 +2690,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -2931,9 +2931,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -3253,9 +3253,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -3431,9 +3431,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -3748,9 +3748,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -3844,6 +3844,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');
@@ -3876,9 +3877,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -4023,9 +4024,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -4172,9 +4173,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4253,9 +4254,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4412,9 +4413,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4645,9 +4646,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4747,9 +4748,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4852,9 +4853,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -4981,9 +4982,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -5127,9 +5128,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -5211,9 +5212,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5317,9 +5318,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5410,9 +5411,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5552,9 +5553,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5745,9 +5746,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5860,9 +5861,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6035,9 +6036,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -6129,9 +6130,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6247,9 +6248,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6435,9 +6436,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6587,9 +6588,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6712,9 +6713,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6852,9 +6853,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7024,9 +7025,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7210,9 +7211,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7350,9 +7351,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7478,9 +7479,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7715,9 +7716,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7790,9 +7791,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7912,9 +7913,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8173,9 +8174,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8342,9 +8343,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -8458,9 +8459,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8545,9 +8546,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8643,9 +8644,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8730,9 +8731,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9064,9 +9065,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9168,9 +9169,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9319,9 +9320,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9439,9 +9440,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9546,9 +9547,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9631,9 +9632,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9770,9 +9771,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9878,9 +9879,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10052,9 +10053,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -10196,9 +10197,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -10378,9 +10379,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -10539,9 +10540,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10656,9 +10657,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10784,9 +10785,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11000,9 +11001,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11124,9 +11125,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11353,9 +11354,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -11479,9 +11480,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11658,9 +11659,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11755,9 +11756,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11892,9 +11893,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11987,9 +11988,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12121,9 +12122,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12238,9 +12239,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12400,9 +12401,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12604,9 +12605,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -12821,9 +12822,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -12936,9 +12937,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13073,9 +13074,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13198,9 +13199,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13323,9 +13324,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -13464,9 +13465,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13624,9 +13625,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13728,9 +13729,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -13854,9 +13855,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -14040,9 +14041,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -14248,9 +14249,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -14375,9 +14376,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -14502,9 +14503,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -14739,9 +14740,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**

@@ -9,7 +9,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          TypeScriptTypeFromSQLType, EntityFieldTSType, ProviderType, UserInfo, RoleInfo, RecordChange, UserRoleInfo, ILocalStorageProvider, RowLevelSecurityFilterInfo,
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
-         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, PrimaryKeyValue, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus} from "@memberjunction/core";
+         StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
+         CompositeKey} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -595,14 +596,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return ProviderType.Database;
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean> {
-        const id = await this.GetRecordFavoriteID(userId, entityName, primaryKeyValues);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+        const id = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
         return id !== null;
     }
 
-    public async GetRecordFavoriteID(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<number | null> {
+    public async GetRecordFavoriteID(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<number | null> {
         try {
-            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${primaryKeyValues.map(pkv => pkv.Value).join(',')}'`
+            const sSQL = `SELECT ID FROM [${this.MJCoreSchemaName}].vwUserFavorites WHERE UserID=${userId} AND Entity='${entityName}' AND RecordID='${CompositeKey.Values()}'`
             const result = await this.ExecuteSQL(sSQL);
             if (result && result.length > 0)
                 return result[0].ID;
@@ -615,9 +616,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         try {
-            const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, primaryKeyValues);
+            const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, CompositeKey);
             if ((currentFavoriteId === null && isFavorite === false) ||
                 (currentFavoriteId !== null && isFavorite === true)) 
                 return; // no change
@@ -637,7 +638,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // create the record since we are setting isFavorite to TRUE
                 ufEntity.NewRecord();
                 ufEntity.Set('EntityID', e.ID)
-                ufEntity.Set('RecordID', primaryKeyValues.map(pkv => pkv.Value).join(',')); // this is a comma separated list of primary key values, which is fine as the primary key is a string
+                ufEntity.Set('RecordID', CompositeKey.Values()); // this is a comma separated list of primary key values, which is fine as the primary key is a string
                 ufEntity.Set('UserID', userId);
                 if(await ufEntity.Save())
                     return;
@@ -651,9 +652,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }        
     }
 
-    public async GetRecordChanges(entityName: string, primaryKeyValue: any): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
         try {
-            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${primaryKeyValue}' ORDER BY ChangedAt DESC`
+            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.Values()}' ORDER BY ChangedAt DESC`
             return this.ExecuteSQL(sSQL)                                      
         }
         catch (e) {
@@ -669,9 +670,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValues the primary key(s) to check - only send multiple if you have an entity with a composite primary key
+     * @param KeyValuePairs the primary key(s) to check - only send multiple if you have an entity with a composite primary key
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> {
         try {
             // first, get the entity dependencies for this entity
             const entityDependencies = await this.GetEntityDependencies(entityName);
@@ -690,7 +691,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         FROM 
                             [${relatedEntityInfo.SchemaName}].${relatedEntityInfo.BaseView} 
                         WHERE 
-                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, primaryKeyValues)}`
+                            ${entityDependency.FieldName} = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`
             }
             // now, execute the query
             const result = await this.ExecuteSQL(sSQL);
@@ -699,19 +700,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             for (const r of result) {
                 const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === r.EntityName?.trim().toLowerCase());
                 // future, if we support foreign keys that are composite keys, we'll need to enable this code
-                // const pkeyValues: PrimaryKeyValue[] = [];
+                // const pkeyValues: KeyValuePair[] = [];
                 // entityInfo.PrimaryKeys.forEach((pk) => {
                 //     pkeyValues.push({FieldName: pk.Name, Value: r[pk.Name]}) // add all of the primary keys, which often is as simple as just "ID", but this is generic way to do it
                 // })
                 
-                // for now, we only support foreign keys that are single fields, so we can do this
-                const pkVal = r[entityInfo.PrimaryKey.Name];
+                let compositeKey: CompositeKey = new CompositeKey();
+                compositeKey.LoadFromEntityInfoAndRecord(entityInfo, r);
+                
                 const recordDependency: RecordDependency = {
                     EntityName: r.EntityName,
                     RelatedEntityName: r.RelatedEntityName,
                     FieldName: r.FieldName,
-                    PrimaryKeyValue: pkVal
-                }
+                    CompositeKey: compositeKey
+                };
+                
                 recordDependencies.push(recordDependency);
             }
             return recordDependencies;
@@ -723,21 +726,21 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, primaryKeyValues: PrimaryKeyValue[]): string {
+    protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
         const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
         if (!f) 
             throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
 
         if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id')  {
             // simple link to first primary key, most common scenario for linkages
-            return primaryKeyValues[0].Value; 
+            return CompositeKey.GetValueByIndex(0);
         }
         else {
             // linking to something else, so we need to use that field in a sub-query
             // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
             // if we do start to support composite foreign keys, we'll need to update this code to handle that
             const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
-            return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${primaryKeyValues[0].Value}${quotes})`
+            return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`
         }
     }
 
@@ -802,7 +805,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 2 - update the surviving record, but only do this if we were provided a field map
             if (request.FieldMap && request.FieldMap.length > 0) {
                 const survivor: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser)
-                await survivor.InnerLoad(request.SurvivingRecordPrimaryKeyValues);
+                await survivor.InnerLoad(request.SurvivingRecordCompositeKey);
                 for (const fieldMap of request.FieldMap) {
                     survivor.Set(fieldMap.FieldName, fieldMap.Value);
                 }
@@ -815,31 +818,29 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // Step 3 - update the dependencies for each of the records we will delete
             for (const pksToDelete of request.RecordsToMerge) {
                 const newRecStatus: RecordMergeDetailResult = {
-                    PrimaryKeyValues: pksToDelete,
+                    CompositeKey: pksToDelete,
                     Success: false,
                     RecordMergeDeletionLogID: null,
                     Message: null,
                 }
                 result.RecordStatus.push(newRecStatus)
-
                 const dependencies = await this.GetRecordDependencies(request.EntityName, pksToDelete);
                 // now, loop through the dependencies and update the link to point to the surviving record
                 for (const dependency of dependencies) {
                     const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
-                    const pk: PrimaryKeyValue = {FieldName: reInfo.PrimaryKey.Name, Value: dependency.PrimaryKeyValue};
-                    await relatedEntity.InnerLoad([pk]);
-                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordPrimaryKeyValues[0].Value); // only support single field foreign keys for now
+                    await relatedEntity.InnerLoad(dependency.CompositeKey);
+                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0)); // only support single field foreign keys for now
                     /*
-                    if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.PrimaryKeyValue is a single value, not an array
+                    if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
 
-                    for (let pkv of dependency.PrimaryKeyValues) {
+                    for (let pkv of dependency.KeyValuePairs) {
                         relatedEntity.Set(dependency.FieldName, pkv.Value);
                     }
                      */
                     if (!await relatedEntity.Save()) {
                         newRecStatus.Success = false;
-                        newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKeyValue.FieldName} : ${dependency.PrimaryKeyValue.Value} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordPrimaryKeyValues[0].Value}`
+                        newRecStatus.Message = `Error updating dependency record ${dependency.CompositeKey.ToString} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
                         throw new Error(newRecStatus.Message);
                     }
                 }
@@ -847,7 +848,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 const recordToDelete: BaseEntity = await this.GetEntityObject(request.EntityName, contextUser);
                 await recordToDelete.InnerLoad(pksToDelete);
                 if (!await recordToDelete.Delete()) {
-                    newRecStatus.Message = `Error deleting record ${pksToDelete.map(pk => pk.FieldName + ' : ' + pk.Value).join(',')} for entity ${request.EntityName}`;
+                    newRecStatus.Message = `Error deleting record ${pksToDelete.ToString()} for entity ${request.EntityName}`;
                     throw new Error(newRecStatus.Message);
                 }
                 else 
@@ -887,7 +888,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             recordMergeLog.NewRecord();
             recordMergeLog.EntityID = entity.ID;
-            recordMergeLog.SurvivingRecordID = request.SurvivingRecordPrimaryKeyValues.map(pk => pk.Value).join(','); // this would join together all of the primary key values, which is fine as the primary key is a string    
+            recordMergeLog.SurvivingRecordID = request.SurvivingRecordCompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string    
             recordMergeLog.InitiatedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
             recordMergeLog.ApprovalStatus = 'Approved';
             recordMergeLog.ApprovedByUserID = contextUser ? contextUser.ID : this.CurrentUser?.ID;
@@ -922,7 +923,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const recordMergeDeletionLog = <RecordMergeDeletionLogEntity>await this.GetEntityObject('Record Merge Deletion Logs', contextUser);
                     recordMergeDeletionLog.NewRecord();
                     recordMergeDeletionLog.RecordMergeLogID = recordMergeLog.ID;
-                    recordMergeDeletionLog.DeletedRecordID = d.PrimaryKeyValues.map(pk => pk.Value).join(','); // this would join together all of the primary key values, which is fine as the primary key is a string
+                    recordMergeDeletionLog.DeletedRecordID = d.CompositeKey.Values(); // this would join together all of the primary key values, which is fine as the primary key is a string
                     recordMergeDeletionLog.Status = d.Success ? 'Complete' : 'Error';
                     recordMergeDeletionLog.ProcessingLog = d.Success ? null : d.Message; // only save the message if it failed
                     if (!await recordMergeDeletionLog.Save())
@@ -1310,8 +1311,8 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     }
     
 
-    public async Load(entity: BaseEntity, PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
-        const where = PrimaryKeyValues.map((val) => {
+    public async Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+        const where = CompositeKey.KeyValuePairs.map((val) => {
             const pk = entity.EntityInfo.PrimaryKeys.find((pk) => pk.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk)
                 throw new Error(`Primary key ${val.FieldName} not found in entity ${entity.EntityInfo.Name}`);
@@ -1802,15 +1803,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         const result: EntityRecordNameResult[] = [];
         for (let i = 0; i < info.length; i++) {
-            const r = await this.GetEntityRecordName(info[i].EntityName, info[i].PrimaryKeyValues);
-            result.push({ EntityName: info[i].EntityName, PrimaryKeyValues: info[i].PrimaryKeyValues, RecordName: r, Success: r ? true : false, Status: r ? 'Success' : 'Error' });
+            const r = await this.GetEntityRecordName(info[i].EntityName, info[i].CompositeKey);
+            result.push({ EntityName: info[i].EntityName, CompositeKey: info[i].CompositeKey, RecordName: r, Success: r ? true : false, Status: r ? 'Success' : 'Error' });
         }
         return result;
     }
 
-    public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
+    public async GetEntityRecordName(entityName: string, CompositeKey: CompositeKey): Promise<string> {
         try {
-            const sql = this.GetEntityRecordNameSQL(entityName, primaryKeyValues);
+            const sql = this.GetEntityRecordNameSQL(entityName, CompositeKey);
             if (sql) {
                 const data = await this.ExecuteSQL(sql);
                 if (data && data.length === 1) {
@@ -1818,7 +1819,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     return data[0][fields[0]]; // return first field
                 }
                 else {
-                    LogError(`Entity ${entityName} record ${primaryKeyValues.map(pkv => pkv.FieldName + ':' + pkv.Value)} not found, returning null`)
+                    LogError(`Entity ${entityName} record ${CompositeKey.ToString()} not found, returning null`)
                     return null;
                 }
             }
@@ -1829,7 +1830,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }
     }
 
-    protected GetEntityRecordNameSQL(entityName: string, primaryKeyValues: PrimaryKeyValue[]): string {
+    protected GetEntityRecordNameSQL(entityName: string, CompositeKey: CompositeKey): string {
         const e = this.Entities.find(e => e.Name === entityName);
         if (!e)
             throw new Error(`Entity ${entityName} not found`);
@@ -1845,7 +1846,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // got our field, create a SQL Query
                 let sql: string = `SELECT ${f.Name} FROM [${e.SchemaName}].[${e.BaseView}] WHERE `
                 let where: string = '';
-                for (let pkv of primaryKeyValues) {
+                for (let pkv of CompositeKey.KeyValuePairs) {
                     const pk = e.PrimaryKeys.find(pk => pk.Name === pkv.FieldName);
                     const quotes = pk.NeedsQuotes ? "'" : '';
                     if (where.length > 0)

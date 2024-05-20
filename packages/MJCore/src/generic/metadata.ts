@@ -1,11 +1,12 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
-import { EntityDependency, EntityInfo, PrimaryKeyValue, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
+import { DatasetItemFilterType, DatasetResultType, CompositeKey, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { EntityDependency, EntityInfo, KeyValuePair, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { LogStatus } from "./logging";
 
 /**
  * Class used to access a wide array of MemberJunction metadata, to instantiate derived classes of BaseEntity for record access and manipulation and more. This class uses a provider model where different providers transparently plug-in to implement the functionality needed based on where the code is running. The provider in use is generally not of any importance to users of the class and code can be written indepdenent of tier/provider.
@@ -113,26 +114,26 @@ export class Metadata {
     }
 
     /**
-     * Returns true if the combination of userId/entityName/primaryKeyValues has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
+     * Returns true if the combination of userId/entityName/KeyValuePairs has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
      * @param userId 
      * @param entityName 
-     * @param primaryKeyValues 
+     * @param KeyValuePairs 
      * @returns 
      */
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKeyValues);
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey): Promise<boolean> {
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, CompositeKey);
     }
 
     /**
-     * Sets the favorite status for a given user for a specific entityName/primaryKeyValues
+     * Sets the favorite status for a given user for a specific entityName/KeyValuePairs
      * @param userId 
      * @param entityName 
-     * @param primaryKeyValues
+     * @param KeyValuePairs
      * @param isFavorite 
      * @param contextUser 
      */
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKeyValues: PrimaryKeyValue[], isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKeyValues, isFavorite, contextUser);
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, CompositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, CompositeKey, isFavorite, contextUser);
     }
 
     /**
@@ -141,10 +142,10 @@ export class Metadata {
      * is within the EntityField table and specifically the RelatedEntity and RelatedEntityField columns. In turn, this method uses that metadata and queries the database to determine the dependencies. To get the list of entity dependencies
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
-     * @param primaryKeyValue the primary key value to check
+     * @param KeyValuePair the primary key value to check
      */
-    public async GetRecordDependencies(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKeyValues);
+    public async GetRecordDependencies(entityName: string, CompositeKey: CompositeKey): Promise<RecordDependency[]> { 
+        return await Metadata.Provider.GetRecordDependencies(entityName, CompositeKey);
     }
 
     /**
@@ -168,7 +169,7 @@ export class Metadata {
     /**
      * This method will merge two or more records based on the request provided. The RecordMergeRequest type you pass in specifies the record that will survive the merge, the records to merge into the surviving record, and an optional field map that can update values in the surviving record, if desired. The process followed is:
      * 1. The surviving record is loaded and fields are updated from the field map, if provided, and the record is saved. If a FieldMap not provided within the request object, this step is skipped.
-     * 2. For each of the records that will be merged INTO the surviving record, we call the GetEntityDependencies() method and get a list of all other records in the database are linked to the record to be deleted. We then go through each of those dependencies and update the link to point to the SurvivingRecordPrimaryKeyValue and save the record.
+     * 2. For each of the records that will be merged INTO the surviving record, we call the GetEntityDependencies() method and get a list of all other records in the database are linked to the record to be deleted. We then go through each of those dependencies and update the link to point to the SurvivingRecordKeyValuePair and save the record.
      * 3. The record to be deleted is then deleted.
      * 
      * The return value from this method contains detailed information about the execution of the process. In addition, all attempted merges are logged in the RecordMergeLog and RecordMergeDeletionLog tables.
@@ -196,22 +197,20 @@ export class Metadata {
     }
 
     /**
-     * Returns the Name of the specific primaryKeyValues for a given entityName. This is done by 
+     * Returns the Name of the specific KeyValuePairs for a given entityName. This is done by 
      * looking for the IsNameField within the EntityFields collection for a given entity. 
      * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
      * @param entityName 
-     * @param primaryKeyValues
+     * @param KeyValuePairs
      * @returns the name of the record
      */
-    public async GetEntityRecordName(entityName: string, primaryKeyValues: PrimaryKeyValue[]): Promise<string> {
-        // check each primary key value to make sure it's not null
-        for (let j = 0; j < primaryKeyValues.length; j++) {
-            if (!primaryKeyValues[j] || !primaryKeyValues[j].Value) {
-                throw new Error('GetEntityRecordName: primaryKeyValues cannot contain null values. FieldName: ' + primaryKeyValues[j]?.FieldName);
-            }
+    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
+        let result = compositeKey.Validate();
+        if(!result.IsValid){
+            throw new Error(result.ErrorMessage);
         }
         
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKeyValues);
+        return await Metadata.Provider.GetEntityRecordName(entityName, compositeKey);
     }
 
     /**
@@ -222,14 +221,14 @@ export class Metadata {
     public async GetEntityRecordNames(info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> {
         // valiate to make sure we don't have any null primary keys being sent in
         for (let i = 0; i < info.length; i++) {
-            if (!info[i].PrimaryKeyValues || info[i].PrimaryKeyValues.length == 0) {
-                throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot be null or empty. It is for item ' + i.toString() + ' in the input array.');
+            if (!info[i].CompositeKey.KeyValuePairs || info[i].CompositeKey.KeyValuePairs.length == 0) {
+                throw new Error('GetEntityRecordNames: KeyValuePairs cannot be null or empty. It is for item ' + i.toString() + ' in the input array.');
             }
             else {
                 // check each primary key value to make sure it's not null
-                for (let j = 0; j < info[i].PrimaryKeyValues.length; j++) {
-                    if (!info[i].PrimaryKeyValues[j] || !info[i].PrimaryKeyValues[j].Value) {
-                        throw new Error('GetEntityRecordNames: PrimaryKeyValues cannot contain null values. FieldName: ' + info[i].PrimaryKeyValues[j]?.FieldName);
+                for (let j = 0; j < info[i].CompositeKey.KeyValuePairs.length; j++) {
+                    if (!info[i].CompositeKey.KeyValuePairs[j] || !info[i].CompositeKey.KeyValuePairs[j].Value) {
+                        throw new Error('GetEntityRecordNames: KeyValuePairs cannot contain null values. FieldName: ' + info[i].CompositeKey.KeyValuePairs[j]?.FieldName);
                     }
                 }
             }
