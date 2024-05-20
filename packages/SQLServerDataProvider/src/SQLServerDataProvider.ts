@@ -652,9 +652,9 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         }        
     }
 
-    public async GetRecordChanges(entityName: string, KeyValuePair: any): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, compositeKey: CompositeKey): Promise<RecordChange[]> {
         try {
-            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${KeyValuePair}' ORDER BY ChangedAt DESC`
+            const sSQL = `SELECT * FROM [${this.MJCoreSchemaName}].vwRecordChanges WHERE Entity='${entityName}' AND RecordID='${compositeKey.Values()}' ORDER BY ChangedAt DESC`
             return this.ExecuteSQL(sSQL)                                      
         }
         catch (e) {
@@ -733,14 +733,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
         if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id')  {
             // simple link to first primary key, most common scenario for linkages
-            return CompositeKey.KeyValuePairs[0].Value; 
+            return CompositeKey.GetValueByIndex(0);
         }
         else {
             // linking to something else, so we need to use that field in a sub-query
             // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
             // if we do start to support composite foreign keys, we'll need to update this code to handle that
             const quotes = entity.PrimaryKey.NeedsQuotes ? "'" : '';
-            return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${CompositeKey.KeyValuePairs[0].Value}${quotes})`
+            return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.PrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`
         }
     }
 
@@ -830,7 +830,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const reInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === dependency.RelatedEntityName.trim().toLowerCase());
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
                     await relatedEntity.InnerLoad(dependency.CompositeKey);
-                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.KeyValuePairs[0].Value); // only support single field foreign keys for now
+                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0)); // only support single field foreign keys for now
                     /*
                     if we later support composite foreign keys, we'll need to do this instead, at the moment this code will break as dependency.KeyValuePair is a single value, not an array
 

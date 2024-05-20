@@ -432,7 +432,7 @@ npm
             // now we have our query built, execute it
             const vars = {
                 entityName: entityName,
-                CompositeKey: compositeKey.GraphQLCopy()
+                CompositeKey: compositeKey.Copy()
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -481,7 +481,7 @@ npm
             ProbabilityScore: params.ProbabilityScore,
             Options: params.Options,
             RecordIDs: params.RecordIDs.map(recordID => {
-                return recordID.GraphQLCopy();
+                return recordID.Copy();
             })
         }
         const data = await GraphQLDataProvider.ExecuteGQL(query, {params: request});
@@ -516,7 +516,7 @@ npm
             // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
             const newRequest: RecordMergeRequest = {
                 EntityName: request.EntityName,
-                SurvivingRecordCompositeKey: request.SurvivingRecordCompositeKey.GraphQLCopy(),
+                SurvivingRecordCompositeKey: request.SurvivingRecordCompositeKey.Copy(),
                 FieldMap: request.FieldMap?.map(fm => {
                     return {
                         FieldName: fm.FieldName,
@@ -524,7 +524,7 @@ npm
                     }
                 }),
                 RecordsToMerge: request.RecordsToMerge.map(r => {
-                    return r.GraphQLCopy();
+                    return r.Copy();
                 })
             }
 
@@ -641,7 +641,7 @@ npm
 
             for (let i = 0; i < CompositeKey.KeyValuePairs.length; i++) {
                 const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === CompositeKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
-                const val = CompositeKey.KeyValuePairs[i].Value;
+                const val = CompositeKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
 
                 // build up the param string for the outer query definition
@@ -656,7 +656,7 @@ npm
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
-                    if (isNaN(CompositeKey.KeyValuePairs[i].Value))
+                    if (isNaN(CompositeKey.GetValueByIndex(i)))
                         throw new Error(`Primary Key value ${val} (${field.Name}) is not a valid number`);
                     vars[field.CodeName] =  parseInt(val); // converting to number here for graphql type to work properly
                 }
@@ -883,7 +883,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            CompositeKey: compositeKey.GraphQLCopy()
+                                                                            CompositeKey: compositeKey.Copy()
                                                                             } 
                                                                   }
                                                          );
@@ -906,7 +906,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId, 
                                                                                 EntityID: e.ID, 
-                                                                                CompositeKey: compositeKey.GraphQLCopy(),
+                                                                                CompositeKey: compositeKey.Copy(),
                                                                                 IsFavorite: isFavorite} 
                                                                  }
                                                          );
@@ -929,7 +929,7 @@ npm
 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    CompositeKey: compositeKey.GraphQLCopy()
+                                                                    CompositeKey: compositeKey.Copy()
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -957,7 +957,7 @@ npm
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
             return { 
                      EntityName: i.EntityName, 
-                     CompositeKey: i.CompositeKey.GraphQLCopy()
+                     CompositeKey: i.CompositeKey.Copy()
                     } 
                 })});
         if (data && data.GetEntityRecordNames)
