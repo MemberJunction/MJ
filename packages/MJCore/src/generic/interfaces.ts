@@ -52,8 +52,34 @@ export class CompositeKey {
 
     KeyValuePairs: KeyValuePair[];
 
-    constructor() {
-        this.KeyValuePairs = [];
+    constructor(keyValuePairs?: KeyValuePair[]) {
+        this.KeyValuePairs = keyValuePairs || [];
+    }
+
+    /**
+     * returns the value of the key value pair for the specified field name
+     * @param fieldName the field name to get the value for
+     * @returns the value of the key value pair for the specified field name
+     */
+    GetValueByFieldName(fieldName: string): any {
+        let key = this.KeyValuePairs.find((keyValue) => {
+            return keyValue.FieldName === fieldName;
+        });
+
+        return key ? key.Value : null;
+    }
+
+    /**
+     * returns the value of the key value pair at the specified index
+     * @param index the index of the key value pair to get the value for
+     * @returns the value of the key value pair at the specified index
+     */
+    GetValueByIndex(index: number): any {
+        if (index >= 0 && index < this.KeyValuePairs.length) {
+            return this.KeyValuePairs[index].Value;
+        }
+
+        return null;
     }
 
     /** 
@@ -87,7 +113,7 @@ export class CompositeKey {
      * Utility function to return a copy of the CompositeKey with the Value properties as string
      * @returns a copy of the KeyValuePairs array but with the Value properties as string
      */
-    GraphQLCopy(): CompositeKey {
+    Copy(): CompositeKey {
         let copy = new CompositeKey();
         copy.KeyValuePairs = this.ValuesAsString();
         return copy;

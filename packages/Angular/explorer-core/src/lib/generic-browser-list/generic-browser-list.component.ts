@@ -278,8 +278,7 @@ export class GenericBrowserListComponent implements OnInit{
     let pkv: KeyValuePair = new KeyValuePair();
     pkv.FieldName = "ID";
     pkv.Value = folder.ID;
-    let compositeKey: CompositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = [pkv];
+    let compositeKey: CompositeKey = new CompositeKey([pkv]);
     //create view browser component - this will be used to display views
     //then create a new component for applications that wraps around the view browser component 
     let loadResult = await folderEntity.InnerLoad(compositeKey);
@@ -320,8 +319,7 @@ export class GenericBrowserListComponent implements OnInit{
       let pkv: KeyValuePair = new KeyValuePair();
       pkv.FieldName = "ID";
       pkv.Value = entityID;
-      let compositeKey: CompositeKey = new CompositeKey();
-      compositeKey.KeyValuePairs = [pkv];
+      let compositeKey: CompositeKey = new CompositeKey([pkv]);
       let loadResult = await entityObject.InnerLoad(compositeKey);
 
       if(loadResult){
@@ -406,8 +404,7 @@ export class GenericBrowserListComponent implements OnInit{
     item.Favorite = !item.Favorite;
     const md: Metadata = new Metadata();
     let entityName: string = item.Type === ItemType.Folder ? this.CategoryEntityName : this.ItemEntityName;
-    let compositeKey: CompositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = [{FieldName: "ID", Value: item.Data.ID}];
+    let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: item.Data.ID}]);
     await md.SetRecordFavoriteStatus(md.CurrentUser.ID, entityName, compositeKey, item.Favorite);
   }
 

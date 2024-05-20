@@ -123,7 +123,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   userQuestion: message.message, 
                   entityName: this.LinkedEntityName,
                   conversationId: this._conversationId,
-                    compositeKey: this.LinkedCompositeKey.GraphQLCopy()
+                    compositeKey: this.LinkedCompositeKey.Copy()
               });
       
               if (result?.ExecuteAskSkipRecordChat?.Success) {

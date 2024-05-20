@@ -55,7 +55,7 @@ import { MJTabStripComponent } from "@memberjunction/ng-tabstrip";
             return this._compositeKey;
         }
 
-        this._compositeKey.KeyValuePairs = [{FieldName: "ID", Value: this.ViewID}];
+        this._compositeKey = new CompositeKey([{FieldName: "ID", Value: this.ViewID}]);
         return this._compositeKey;
     }
     public selectTabHandler() {

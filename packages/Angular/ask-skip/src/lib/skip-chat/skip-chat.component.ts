@@ -459,11 +459,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         dci.DataContextID = dc.ID;
         if (this.LinkedEntity === 'User Views') {
           dci.Type = 'view';
-          dci.ViewID = this.LinkedEntityCompositeKey.KeyValuePairs[0].Value;
+          dci.ViewID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
         }
         else if (this.LinkedEntity === 'Queries') {
           dci.Type='query';
-          dci.QueryID = this.LinkedEntityCompositeKey.KeyValuePairs[0].Value;
+          dci.QueryID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
         }
         else {
           dci.Type = 'single_record';
@@ -890,9 +890,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           dci.DataContextID = dc.ID;
           dci.Type = type;
           if (type==='view')
-            dci.ViewID = this.LinkedEntityCompositeKey.KeyValuePairs[0].Value;
+            dci.ViewID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
           else if (type==='query')
-            dci.QueryID = this.LinkedEntityCompositeKey.KeyValuePairs[0].Value;
+            dci.QueryID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
           else if (type==='single_record') {
             dci.RecordID = this.LinkedEntityCompositeKey.Values();
             dci.EntityID = e.ID;

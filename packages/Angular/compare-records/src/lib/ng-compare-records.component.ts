@@ -285,8 +285,7 @@ export class CompareRecordsComponent {
   public FormatColumnValue(dataItem: any, column: any, maxLength: number) { //column: ViewColumnInfo, value: string, maxLength: number) {
     try {
       if (dataItem && column && column.KeyValuePairs) { 
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs = column.KeyValuePairs;
+        const compositeKey: CompositeKey = new CompositeKey(column.KeyValuePairs);
         const record = this.recordsToCompare.find(r => compositeKey.Equals(r.CompositeKey));
         if(!record) {
           throw new Error('Record not found');

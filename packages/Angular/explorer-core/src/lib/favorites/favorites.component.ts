@@ -28,14 +28,13 @@ export class FavoritesComponent {
     this.favorites = viewResults.Results // set the result in the list and let the below happen after async and it will update via data binding when done
 
     const input: EntityRecordNameInput[] = this.favorites.map(fav => {
-      let compositeKey: CompositeKey = new CompositeKey();
-      compositeKey.KeyValuePairs = [{ FieldName: 'ID', Value: fav.RecordID }];
+      let compositeKey: CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: fav.RecordID }]);
       return { EntityName: fav.Entity, CompositeKey: compositeKey }
     })
     const results: EntityRecordNameResult[] = await md.GetEntityRecordNames(input);
     if (results) {
       results.forEach((result) => {
-        const fav = this.favorites.find(f => f.Entity == result.EntityName && f.RecordID == result.CompositeKey.KeyValuePairs[0].Value)
+        const fav = this.favorites.find(f => f.Entity == result.EntityName && f.RecordID == result.CompositeKey.GetValueByIndex(0))
         if (fav) {
           // typecast fav to any so we can add the recordname into the object below
           (<any>fav).RecordName = result.Success ? result.RecordName : fav.Entity + ' ' + fav.RecordID
