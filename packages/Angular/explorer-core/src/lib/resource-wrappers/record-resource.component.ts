@@ -35,8 +35,7 @@ export class EntityRecordResource extends BaseResourceComponent {
         }
         else {
             const md = new Metadata();
-            let compositeKey: CompositeKey = new CompositeKey();
-            compositeKey = EntityRecordResource.GetCompositeKey(data);
+            let compositeKey: CompositeKey = EntityRecordResource.GetCompositeKey(data);
             const name = await md.GetEntityRecordName(data.Configuration.Entity, compositeKey);
             const displayId = compositeKey.KeyValuePairs.length > 1 ? compositeKey.Values() : compositeKey.GetValueByIndex(0);         
             return (name ? name : data.Configuration.Entity) + ` (${displayId})`;
