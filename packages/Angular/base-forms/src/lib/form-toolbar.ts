@@ -1,7 +1,8 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnInit } from '@angular/core';
 import { BaseFormComponent } from './base-form-component';
 import { SharedService } from '@memberjunction/ng-shared';
-import { CompositeKey } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, Metadata, RecordDependency } from '@memberjunction/core';
+import { Router } from '@angular/router';
 
 
 @Component({
@@ -14,8 +15,20 @@ import { CompositeKey } from '@memberjunction/core';
     template: `
         <div class="toolbar-container">
             @if (!form.EditMode) {
+                @if(form.UserCanCreate){
+                    <button kendoButton (click)="toggleCreateDialog(true)" title="Create New Record">
+                        <span class="fa-solid fa-plus"></span>
+                        <span class="button-text">Create</span>
+                    </button> 
+                }
+                @if(form.UserCanDelete){
+                    <button kendoButton (click)="toggleDeleteDialog(true)" title="Delete this Record">
+                        <span class="fa-regular fa-trash-can"></span>
+                        <span class="button-text">Delete</span>
+                    </button> 
+                }
                 @if (form.UserCanEdit) {
-                    <button kendoButton (click)="form.StartEditMode()" title="Edit Record">
+                    <button kendoButton (click)="form.StartEditMode()" title="Edit this Record">
                         <span class="fa-solid fa-pen-to-square"></span>
                         <span class="button-text">Edit</span>
                     </button> 
@@ -34,7 +47,7 @@ import { CompositeKey } from '@memberjunction/core';
                 }
             }
             @else {
-                <button kendoButton (mouseup)="saveRecord($event)" title="Save Record">
+                <button kendoButton (mouseup)="saveExistingRecord($event)" title="Save Record">
                     <span class="fa-solid fa-floppy-disk"></span>
                     <span class="button-text">Save</span>
                 </button> 
@@ -73,14 +86,78 @@ import { CompositeKey } from '@memberjunction/core';
             @if (form.isHistoryDialogOpen) {
                 <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
             }
+            <kendo-dialog 
+            [minWidth]="450"
+            [width]="650"
+            class="dialog-wrapper" 
+            title="Confirm" 
+            *ngIf="showDeleteDialog" 
+            (close)="toggleDeleteDialog(false)">
+              <p class="k-m-7.5 k-text-center">
+                Are you sure you want to delete this record?
+              </p>
+              <kendo-dialog-actions class="popup-actions-btn">
+                <button class="cancel-btn" (click)="deleteRecord()" kendoButton themeColor="info">
+                  Yes, Delete
+                </button>
+                <button class="yes-btn" (click)="toggleDeleteDialog(false)" kendoButton fillMode="outline" themeColor="info">
+                  No, Cancel
+                </button>
+              </kendo-dialog-actions>
+            </kendo-dialog>
+            <kendo-dialog
+            [minWidth]="750"
+            [minHeight]="500"
+            [maxHeight]= 800
+            class="dialog-wrapper" 
+            [title]="createNewDialogTitle" 
+            *ngIf="showCreateDialog" 
+            (close)="toggleCreateDialog(false)"
+            >
+                @if(showLoader){
+                    <kendo-loader *ngIf="showLoader" type="converging-spinner"></kendo-loader>
+                }
+                @else{
+                    <mj-form-section [Entity]="form.record.EntityInfo.Name" Section="details" [record]="newRecord" [EditMode]="true"></mj-form-section>
+                }
+                <kendo-dialog-actions class="popup-actions-btn">
+                    <button class="cancel-btn" (click)="saveNewRecord()" kendoButton themeColor="info">
+                        Create
+                    </button>
+                    <button class="yes-btn" (click)="toggleCreateDialog(false)" kendoButton fillMode="outline" themeColor="info">
+                        Cancel
+                    </button>
+                </kendo-dialog-actions>
+            </kendo-dialog>
         </div>
     `
 })
-export class FormToolbarComponent {
+export class FormToolbarComponent implements OnInit {
     @Input() ShowSkipChatButton: boolean = true;
     @Input() form!: BaseFormComponent;
 
-    public saveRecord(event: MouseEvent): void {
+    public showLoader: boolean = false;
+    public showCreateDialog: boolean = false;
+    public showDeleteDialog: boolean = false;
+    public SkipChatVisible: boolean = false;
+    public createNewDialogTitle: string = 'Create New Record';
+    public newRecord!: BaseEntity;
+
+    public get LinkedEntityCompositeKey(): CompositeKey {
+        return this.form.record.CompositeKey;
+    }
+
+    public constructor(private router: Router) {
+    }
+
+    public async ngOnInit(): Promise<void> {
+        if(this.form && this.form.record){
+            this.createNewDialogTitle = `Create New ${this.form.record.EntityInfo.Name} Record`;
+            await this.createNewRecord();
+        }
+    }
+
+    public saveExistingRecord(event: MouseEvent): void {
         // Ensure the button takes focus
         const button = event.target as HTMLElement;
         button.focus();
@@ -89,13 +166,56 @@ export class FormToolbarComponent {
         this.form.SaveRecord(true);
     }
 
-    public get LinkedEntityCompositeKey(): CompositeKey {
-        return this.form.record.CompositeKey;
-    }
-
-    public SkipChatVisible: boolean = false;
     public ShowSkipChat(): void {
         this.SkipChatVisible = !this.SkipChatVisible;
         SharedService.Instance.InvokeManualResize();
-    }   
+    }
+
+    public toggleCreateDialog(show: boolean): void {
+        this.showCreateDialog = show;
+      }
+    
+    public toggleDeleteDialog(show: boolean): void {
+        this.showDeleteDialog = show;
+    }
+    
+    public async deleteRecord(): Promise<void> {
+        this.toggleDeleteDialog(false);
+        let dependencies: RecordDependency[] = await this.form.GetRecordDependencies();
+        if(dependencies.length > 0){
+            SharedService.Instance.CreateSimpleNotification(`This record cannot be deleted because it is being used by ${dependencies.length} other records.`, 'error', 2000);
+            return;
+        }
+
+        console.log(this.form.record.CompositeKey);
+        const deleteResult: boolean = await this.form.record.Delete();
+        if (deleteResult) {
+            SharedService.Instance.CreateSimpleNotification('Record deleted succesfully', 'success', 2000);
+            this.router.navigate(['/']);
+        }
+        else {
+            SharedService.Instance.CreateSimpleNotification('Error deleting record', 'error', 2000);
+        }
+    }
+
+    public async createNewRecord(): Promise<void> {
+        const md: Metadata = new Metadata();
+        this.newRecord = await md.GetEntityObject(this.form.record.EntityInfo.Name);
+        this.newRecord.NewRecord();
+    }
+    
+    public async saveNewRecord(): Promise<void> {
+        console.log('Create new record button pressed');
+        this.showLoader = true;
+        let saveResult: boolean = await this.newRecord.Save();
+        if(saveResult){
+            this.toggleCreateDialog(false);
+            SharedService.Instance.CreateSimpleNotification(`Successfully created new ${this.form.record.EntityInfo.Name} record`, 'success', 1000);
+            this.router.navigate(['resource', 'record', this.newRecord.CompositeKey.ToURLSegment()], { queryParams: { Entity: this.newRecord.EntityInfo.Name } });
+        }
+        else{
+            SharedService.Instance.CreateSimpleNotification(`Failed to create new ${this.form.record.EntityInfo.Name} record`, 'error', 1000);
+        }
+        this.showLoader = false;
+    }
 }

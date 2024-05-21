@@ -7,6 +7,8 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+import { DialogsModule } from '@progress/kendo-angular-dialog';
+import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
@@ -34,7 +36,9 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
     DateInputsModule,
     DropDownsModule,
     LinkDirectivesModule,
-    AskSkipModule
+    AskSkipModule,
+    DialogsModule,
+    IndicatorsModule
   ],
   exports: [
     SectionLoaderComponent,
