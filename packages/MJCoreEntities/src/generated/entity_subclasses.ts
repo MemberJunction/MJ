@@ -2016,7 +2016,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
@@ -2025,7 +2025,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
@@ -2070,7 +2070,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
@@ -2079,7 +2079,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
@@ -2611,7 +2611,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CodeName
         * * Display Name: Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get CodeName(): string | null {  
             return this.Get('CodeName');
@@ -2620,7 +2620,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ClassName
         * * Display Name: Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get ClassName(): string | null {  
             return this.Get('ClassName');
@@ -2629,7 +2629,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get BaseTableCodeName(): string | null {  
             return this.Get('BaseTableCodeName');
@@ -3184,7 +3184,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
@@ -3193,7 +3193,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
@@ -3202,7 +3202,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityBaseTableCodeName
         * * Display Name: Related Entity Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityBaseTableCodeName(): string | null {  
             return this.Get('RelatedEntityBaseTableCodeName');
@@ -3844,7 +3844,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');
@@ -4361,7 +4360,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
@@ -4370,7 +4369,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
@@ -4379,7 +4378,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityBaseTableCodeName
         * * Display Name: Entity Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityBaseTableCodeName(): string | null {  
             return this.Get('EntityBaseTableCodeName');
