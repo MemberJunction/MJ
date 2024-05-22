@@ -2,6 +2,59 @@
   "name": "@memberjunction/graphql-dataprovider",
   "entries": [
     {
+      "date": "Wed, 22 May 2024 02:26:03 GMT",
+      "version": "1.3.0",
+      "tag": "@memberjunction/graphql-dataprovider_v1.3.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "e4d25c08efc50ac9402455d5b8f4f9e7292a0d9e",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "409fbe149ec1aa7bcbebfdb31f509305b801a2a7",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ],
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "65f5f9cc0f59e669329c8803b97787f315d79d0b",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "667c69d6ef5ae87e235927124ec39afb9a80484b",
+            "comment": "Overhaul the way we vectorize records"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.3.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 02 May 2024 19:46:38 GMT",
       "version": "1.2.2",
       "tag": "@memberjunction/graphql-dataprovider_v1.2.2",

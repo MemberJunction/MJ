@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Applying package updates [skip ci]",
-  "packageName": "@memberjunction/ai-vector-sync",
-  "email": "155523863+JS-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}

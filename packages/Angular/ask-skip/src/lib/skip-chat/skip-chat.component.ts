@@ -242,9 +242,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       if (!entry.isIntersecting) {
         // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
         if (this._loaded) {
-          SkipChatComponent.__skipChatWindowsCurrentlyVisible--;
-          if (SkipChatComponent.__skipChatWindowsCurrentlyVisible < 0)
-            SkipChatComponent.__skipChatWindowsCurrentlyVisible = 0; // never let it go negative
+          // don't go below 0
+          SkipChatComponent.__skipChatWindowsCurrentlyVisible = Math.max(0, SkipChatComponent.__skipChatWindowsCurrentlyVisible - 1);
         }
       }
       else {
@@ -256,12 +255,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           this.sharedService.InvokeManualResize();
 
           // first do stuff if we're on "global" skip chat mode...
-          if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && this.CompositeKeyIsPopulated()) {
+          if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
             // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
             this.paramsSubscription = this.route.params.subscribe(params => {
               if (!this._loaded) {
                 this._loaded = true; // do this once
-        
                 const conversationId = params['conversationId'];
                 if (conversationId && !isNaN(conversationId)) {
                   this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
@@ -328,18 +326,22 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         cachedConversations = <ConversationEntity[]>result.Results;
       }
     }
+
     if (!cachedConversations) {
-      LogError('Error loading conversations from the database')
+      LogError('Error loading conversations from the database');
       return; // we couldn't load the conversations, so just return
     }
 
     // now setup the array we use to bind to the UI
-    if (this.IncludeLinkedConversationsInList)
+    if (this.IncludeLinkedConversationsInList){
       this.Conversations = cachedConversations; // dont filter out linked conversations  
-    else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.CompositeKeyIsPopulated())
+    }
+    else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.CompositeKeyIsPopulated()){
       this.Conversations = cachedConversations.filter((c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityCompositeKey.Values()); // ONLY include the linked conversations
-    else
+    }
+    else{
       this.Conversations = cachedConversations.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID && c.LinkedRecordID.length > 0)); // filter OUT linked conversations
+    }
 
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
@@ -369,10 +371,12 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     this._oldConvoName = conversation.Name ? conversation.Name : '';
     this.ConversationEditMode = true;
   }
+
   public cancelConvoEdit(conversation: ConversationEntity) {
     conversation.Name = this._oldConvoName;
     this.ConversationEditMode = false;
   }
+
   public async saveConvoName(conversation: ConversationEntity) {
     let newConvoObject: ConversationEntity;
     if (conversation.Save !== undefined) {
@@ -403,6 +407,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     else
       this.sharedService.CreateSimpleNotification('Error saving conversation name', 'error', 5000)
   }
+
   public async deleteConvo(conversation: ConversationEntity) {
     if (confirm('Are you sure you want to delete this conversation?')) {
       // delete the conversation - we might need to load the entity if the current object isn't a "real object"

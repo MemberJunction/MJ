@@ -34,7 +34,8 @@ export class FavoritesComponent {
     const results: EntityRecordNameResult[] = await md.GetEntityRecordNames(input);
     if (results) {
       results.forEach((result) => {
-        const fav = this.favorites.find(f => f.Entity == result.EntityName && f.RecordID == result.CompositeKey.GetValueByIndex(0))
+        let compositeKey: CompositeKey = new CompositeKey(result.CompositeKey.KeyValuePairs);
+        const fav = this.favorites.find(f => f.Entity == result.EntityName && f.RecordID == compositeKey.GetValueByIndex(0))
         if (fav) {
           // typecast fav to any so we can add the recordname into the object below
           (<any>fav).RecordName = result.Success ? result.RecordName : fav.Entity + ' ' + fav.RecordID
