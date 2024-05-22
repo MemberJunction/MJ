@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
-import { Metadata, PotentialDuplicateRequest, PrimaryKeyValue } from '@memberjunction/core';
+import { Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -13,7 +13,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 })
 export class SingleRecordComponent implements OnInit, AfterViewInit {
   @ViewChild(Container, {static: true}) formContainer!: Container;
-  @Input() public primaryKeyValues: PrimaryKeyValue[] = [];
+  @Input() public CompositeKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
@@ -30,14 +30,14 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    this.LoadForm(this.primaryKeyValues, <string>this.entityName)
+    this.LoadForm(this.CompositeKey, <string>this.entityName)
   }
 
-  async LoadForm(primaryKeyValues: PrimaryKeyValue[], entityName: string) {
+  async LoadForm(compositeKey: CompositeKey, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (primaryKeyValues && entityName) {
-      this.entityName = entityName
-      this.primaryKeyValues = primaryKeyValues
+    if (compositeKey.KeyValuePairs && entityName) {
+      this.entityName = entityName;
+      this.CompositeKey = compositeKey;
 
       const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
       const md = new Metadata();
@@ -49,7 +49,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
       if (formReg) {
         const record = await md.GetEntityObject(entityName);
         if (record) {
-          await record.InnerLoad(primaryKeyValues);
+          await record.InnerLoad(compositeKey);
 
           const viewContainerRef = this.formContainer.viewContainerRef;
           viewContainerRef.clear();
@@ -62,7 +62,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
           this.loadComplete.emit();
         }
         else
-          throw new Error(`Unable to load entity ${entityName} with primary key values: ${primaryKeyValues.map(p => p.FieldName + ': ' + p.Value).join(', ')}`)
+          throw new Error(`Unable to load entity ${entityName} with primary key values: ${compositeKey.ToString()}`);
       }
 
       this.loading = false;

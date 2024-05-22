@@ -1,5 +1,3 @@
-import { VectorDBBase } from "./VectorDBBase";
-
 /**
  * The IndexDescription describes the configuration of an index.
  * @export
@@ -40,6 +38,7 @@ export declare const IndexModelMetricEnum: {
     readonly Euclidean: "euclidean";
     readonly Dotproduct: "dotproduct";
 };
+
 export type IndexModelMetricEnum = typeof IndexModelMetricEnum[keyof typeof IndexModelMetricEnum];
 
 /**
@@ -61,8 +60,6 @@ export type RecordValues = Array<number>;
 
 /**
  * A sparse representation of vector values
- *
- * @see [Understanding hybrid search](https://docs.pinecone.io/docs/hybrid-search)
  */
 export type RecordSparseValues = {
     /** A list of indices where non-zero values are present in a vector. */
@@ -91,7 +88,7 @@ export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
     values: RecordValues;
     /**
      * Records can optionally include sparse and dense values when an index
-     * is used for hybrid search. See [Sparse-dense vectors](https://docs.pinecone.io/docs/sparse-dense-vectors)
+     * is used for hybrid search.
      */
     sparseValues?: RecordSparseValues;
     /**
@@ -112,7 +109,6 @@ export type CreateIndexParams= BaseRequestParams & {
 }
 
 export type EditIndexParams = BaseRequestParams & {
-
 }
 
 /**

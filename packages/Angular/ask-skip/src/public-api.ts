@@ -3,6 +3,8 @@
  */
 
 export * from './lib/skip-chat/skip-chat.component';
+export * from './lib/skip-chat-with-record/skip-chat-with-record.component';
+export * from './lib/skip-chat-with-record-window/skip-chat-with-record-window.component';
 export * from './lib/dynamic-report/skip-dynamic-report-wrapper';
 export * from './lib/dynamic-report/dynamic-chart';
 export * from './lib/dynamic-report/dynamic-grid';

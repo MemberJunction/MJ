@@ -1,6 +1,6 @@
 import { MJGlobal } from '@memberjunction/global';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo, PrimaryKeyValue } from './entityInfo';
-import { EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo, KeyValuePair } from './entityInfo';
+import { CompositeKey, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -243,6 +243,7 @@ export class EntityField {
 export class DataObjectRelatedEntityParam {
     relatedEntityName: string
     filter?: string
+    maxRecords?: number
 }
 export class DataObjectParams {
     oldValues: boolean = false
@@ -339,6 +340,12 @@ export abstract class BaseEntity {
      */
     get PrimaryKeys(): EntityField[] {
         return this.EntityInfo.PrimaryKeys.map(pk => this.GetFieldByName(pk.Name));
+    }
+
+    get CompositeKey(): CompositeKey {
+        const ck = new CompositeKey();
+        ck.LoadFromEntityFields(this.PrimaryKeys);
+        return ck;
     }
 
     /**
@@ -473,9 +480,22 @@ export abstract class BaseEntity {
                     // pre now has the param that matches the related entity (re) that we are looking at
                     // we are now here because either the caller didn't provide a list of entities to include 
                     // (which means to include all of 'em), or they did and this entity is in the list
-                    const reData = await this.GetRelatedEntityData(re, pre.filter);
-                    if (reData)
-                        obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object
+                    const reData = await this.GetRelatedEntityDataExt(re, pre.filter, pre.maxRecords);
+                    if (reData) {
+                        obj[re.RelatedEntity] = reData; // got some data (or an empty array) back, add it to the object                        
+                        if (pre.maxRecords > 0) {
+                            // add a note to the object to let the caller know that only the first X records are returned so
+                            // that a caller can know that there could be more records available if they want them
+                            let msg: string;
+                            if (pre.maxRecords < reData.TotalRowCount)
+                                msg = `Only the first ${pre.maxRecords} records are included in this response. There are ${reData.TotalRowCount} total records available.`;
+                            else  
+                                msg = `All ${reData.TotalRowCount} records are included in this response.`;
+
+                            obj[re.RelatedEntity].Note = msg; // add the message to the object as "Note"
+                            obj[re.RelatedEntity].MaxRecordsFilter = pre.maxRecords; // add the max records to the object as "MaxRecords"
+                        }
+                    }
                 }
             }
         }
@@ -483,13 +503,24 @@ export abstract class BaseEntity {
         return obj;
     }
 
-    public async GetRelatedEntityData(re: EntityRelationshipInfo, filter: string = null): Promise<any[]> {
+    public async GetRelatedEntityData(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<any[]> {
+        const ret = await this.GetRelatedEntityDataExt(re, filter, maxRecords);
+        return ret?.Data;
+    }
+
+    public async GetRelatedEntityDataExt(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<{Data: any[], TotalRowCount: number}> {
         // we need to query the database to get related entity info
-        const params = EntityInfo.BuildRelationshipViewParams(this, re, filter)
+        const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
         const rv = new RunView();
         const result = await rv.RunView(params, this._contextCurrentUser)
-        if (result && result.Success)
-            return result.Results
+        if (result && result.Success) {
+            return {
+                Data: result.Results, 
+                TotalRowCount: result.TotalRowCount
+            };
+        }
+        else    
+            return null;
     }
 
     private init() {
@@ -648,25 +679,31 @@ export abstract class BaseEntity {
      * * This method loads a single record from the database. Make sure you first get the correct BaseEntity sub-class for your entity by calling Metadata.GetEntityObject() first. From there, you can
      * call this method to load your records.
      * * NOTE: You should not be calling this method directly from outside of a sub-class in most cases. You will use the auto-generated sub-classes that have overriden versions of this method that blow out the primary keys into individual parameters. This is much easier to program against.
-     * @param PrimaryKeyValues An array of objects that contain the field name and value for the primary key of the record you want to load. For example, if you have a table called "Customers" with a primary key of "ID", you would pass in an array with a single object like this: {FieldName: "ID", Value: 1234}. 
+     * @param CompositeKey Wrapper that holds an array of objects that contain the field name and value for the primary key of the record you want to load. For example, if you have a table called "Customers" with a primary key of "ID", you would pass in an array with a single object like this: {FieldName: "ID", Value: 1234}. 
      * *If you had a composite primary key, you would pass in an array with multiple objects, one for each field in the primary key. You may ONLY pass in the primary key fields, no other fields are allowed.
      * @param EntityRelationshipsToLoad Optional, you can specify the names of the relationships to load up. This is an expensive operation as it loads up an array of the related entity objects for the main record, so use it sparingly.
      * @returns true if success, false otherwise
      */
-    public async InnerLoad(PrimaryKeyValues: PrimaryKeyValue[], EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+    public async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
         }
         else{
             const start = new Date().getTime();
-            this.ValidatePrimaryKeyArray(PrimaryKeyValues);
+            this.ValidateCompositeKey(CompositeKey);
 
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
-            if (!this.IsSaved) 
+            if (!this.IsSaved){
                 this.init(); // wipe out current data if we're loading on top of existing record
+            }
 
-            const data = await BaseEntity.Provider.Load(this, PrimaryKeyValues, EntityRelationshipsToLoad, this.ActiveUser);
+            const data = await BaseEntity.Provider.Load(this, CompositeKey, EntityRelationshipsToLoad, this.ActiveUser);
+            if (!data) {
+                LogError(`Error in BaseEntity.Load(${this.EntityInfo.Name}, Key: ${CompositeKey.ToString()}`);                
+                return false; // no data loaded, return false
+            }
+
             this.SetMany(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
@@ -686,24 +723,24 @@ export abstract class BaseEntity {
         }
     }
 
-    protected ValidatePrimaryKeyArray(PrimaryKeyValues: PrimaryKeyValue[]) {
-        // make sure that PrimaryKeyValues is an array of 1+ objects, and that each object has a FieldName and Value property and that the FieldName is a valid field on the entity that has IsPrimaryKey set to true
-        if (!PrimaryKeyValues || PrimaryKeyValues.length === 0)
-            throw new Error('PrimaryKeyValues cannot be null or empty');
+    protected ValidateCompositeKey(compositeKey: CompositeKey) {
+        // make sure that KeyValuePairs is an array of 1+ objects, and that each object has a FieldName and Value property and that the FieldName is a valid field on the entity that has IsPrimaryKey set to true
+        if (!compositeKey || !compositeKey.KeyValuePairs || compositeKey.KeyValuePairs.length === 0)
+            throw new Error('KeyValuePairs cannot be null or empty');
         else {
             // now loop through the array and make sure each object has a FieldName and Value property
             // and that the field name is a valid field on the entity that has IsPrimaryKey set to true
-            for (let i = 0; i < PrimaryKeyValues.length; i++) {
-                const pk = PrimaryKeyValues[i];
+            for (let i = 0; i < compositeKey.KeyValuePairs.length; i++) {
+                const pk = compositeKey.KeyValuePairs[i];
                 if (!pk.FieldName || pk.FieldName.trim().length === 0)
-                    throw new Error(`PrimaryKeyValues[${i}].FieldName cannot be null, empty, or whitespace`);
+                    throw new Error(`KeyValuePairs[${i}].FieldName cannot be null, empty, or whitespace`);
                 if (pk.Value === null || pk.Value === undefined)
-                    throw new Error(`PrimaryKeyValues[${i}].Value cannot be null or undefined`);
+                    throw new Error(`KeyValuePairs[${i}].Value cannot be null or undefined`);
                 const field = this.Fields.find(f => f.Name.trim().toLowerCase() === pk.FieldName.trim().toLowerCase());
                 if (!field)
-                    throw new Error(`PrimaryKeyValues[${i}].FieldName of ${pk.FieldName} does not exist on ${this.EntityInfo.Name}`);
+                    throw new Error(`KeyValuePairs[${i}].FieldName of ${pk.FieldName} does not exist on ${this.EntityInfo.Name}`);
                 if (!field.IsPrimaryKey)
-                    throw new Error(`PrimaryKeyValues[${i}].FieldName of ${pk.FieldName} is not a primary key field on ${this.EntityInfo.Name}`);
+                    throw new Error(`KeyValuePairs[${i}].FieldName of ${pk.FieldName} is not a primary key field on ${this.EntityInfo.Name}`);
             }
         }
     }
@@ -801,24 +838,26 @@ export abstract class BaseEntity {
      * Returns a list of changes made to this record, over time. Only works if TrackRecordChanges bit set to 1 on the entity you're working with.
      */
     public get RecordChanges(): Promise<RecordChange[]> {
-        if (this.IsSaved) 
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKeys.map(pk => { return { FieldName: pk.Name, Value: pk.Value }; }))
-        else
+        if (this.IsSaved){
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.CompositeKey);
+        }
+        else{
             throw new Error('Cannot get record changes for a record that has not been saved yet');
+        }
     }
 
     /**
-     * Static Utility method to get RecordChanges for a given entityName/PrimaryKeyValue combination
+     * Static Utility method to get RecordChanges for a given entityName/KeyValuePair combination
      * @param entityName 
-     * @param PrimaryKeyValue 
+     * @param KeyValuePair 
      * @returns 
      */
-    public static async GetRecordChanges(entityName: string, PrimaryKeyValues: PrimaryKeyValue[]): Promise<RecordChange[]> {
+    public static async GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]> {
         if (BaseEntity.Provider === null) {    
             throw new Error('No provider set');
         }
         else{
-            const results = await BaseEntity.Provider.GetRecordChanges(entityName, PrimaryKeyValues);
+            const results = await BaseEntity.Provider.GetRecordChanges(entityName, CompositeKey);
             if (results) {
                 const changes: RecordChange[] = [];
                 for (let result of results) 

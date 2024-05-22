@@ -80,6 +80,7 @@ export class ResolverBase {
         viewInput.ExcludeDataFromAllPriorViewRuns,
         viewInput.ForceAuditLog,
         viewInput.AuditLogDescription,
+        viewInput.ResultType,
         userPayload,
         pubSub
       );
@@ -106,6 +107,7 @@ export class ResolverBase {
         viewInput.ExcludeDataFromAllPriorViewRuns,
         viewInput.ForceAuditLog,
         viewInput.AuditLogDescription,
+        viewInput.ResultType,
         userPayload,
         pubSub
       );
@@ -142,6 +144,7 @@ export class ResolverBase {
         false,
         viewInput.ForceAuditLog,
         viewInput.AuditLogDescription,
+        viewInput.ResultType,
         userPayload,
         pubSub
       );
@@ -180,6 +183,7 @@ export class ResolverBase {
     excludeDataFromAllPriorViewRuns: boolean | undefined,
     forceAuditLog: boolean | undefined,
     auditLogDescription: string | undefined,
+    resultType: string | undefined,
     userPayload: UserPayload | null,
     pubSub: PubSubEngine
   ) {
@@ -193,6 +197,21 @@ export class ResolverBase {
         if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
 
         const rv = new RunView();
+
+        // figure out the result type from the input string (if provided)
+        let rt: 'simple' | 'entity_object' | 'count_only' = 'simple';
+        switch (resultType?.trim().toLowerCase()) {
+          case 'entity_object':
+            rt = 'entity_object';
+            break;
+          case 'count_only':
+            rt = 'count_only';
+            break;
+          default:
+            rt = 'simple';
+            break;
+        }
+
         const result = await rv.RunView(
           {
             ViewID: viewInfo.ID,
@@ -209,6 +228,7 @@ export class ResolverBase {
             IgnoreMaxRows: ignoreMaxRows,
             ForceAuditLog: forceAuditLog,
             AuditLogDescription: auditLogDescription,
+            ResultType: rt,
           },
           user
         );
