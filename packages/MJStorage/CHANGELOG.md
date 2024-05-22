@@ -1,8 +1,19 @@
 # Change Log - @memberjunction/storage
 
-This log was last generated on Thu, 02 May 2024 19:46:38 GMT and should not be manually modified.
+This log was last generated on Wed, 22 May 2024 02:26:03 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.3.0
+
+Wed, 22 May 2024 02:26:03 GMT
+
+### Minor changes
+
+- Applying package updates [skip ci] (craig.adam@bluecypress.io)
+- Bump @memberjunction/core to v1.3.0
+- Bump @memberjunction/core-entities to v1.3.0
+- Bump @memberjunction/global to v1.3.0
 
 ## 1.2.2
 

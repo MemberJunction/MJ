@@ -2,6 +2,35 @@
   "name": "@memberjunction/ai-gemini",
   "entries": [
     {
+      "date": "Wed, 22 May 2024 02:26:03 GMT",
+      "version": "1.3.0",
+      "tag": "@memberjunction/ai-gemini_v1.3.0",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ai-gemini",
+            "commit": "72e4d410d3ec663080c0ec854f300809a34fcf1b",
+            "comment": "Overhaul the way we vectorize records"
+          }
+        ],
+        "minor": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/ai to v1.3.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-gemini",
+            "comment": "Bump @memberjunction/global to v1.3.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 02 May 2024 19:46:38 GMT",
       "version": "1.2.2",
       "tag": "@memberjunction/ai-gemini_v1.2.2",

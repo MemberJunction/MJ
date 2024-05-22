@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Overhaul the way we vectorize records",
-  "packageName": "@memberjunction/ai-vector-dupe",
-  "email": "155523863+JS-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}
