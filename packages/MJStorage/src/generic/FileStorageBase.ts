@@ -84,6 +84,19 @@ export abstract class FileStorageBase {
   public abstract CreatePreAuthDownloadUrl(objectName: string): Promise<string>;
 
   /**
+   * This abstract method is designed to move an object or file from one location to another within a storage provider's system. Being abstract, it requires concrete implementation in subclasses that are tailored to interact with specific storage providers. The method aims to provide a unified interface for moving objects across different storage providers, simplifying the process regardless of the underlying provider's specifics.
+   *
+   * When invoking this method, you need to specify the name of the object you wish to move (`oldObjectName`) and the new name or location where you want to move the object (`newObjectName`). These names should match exactly as they are known to the storage provider, ensuring the correct object is targeted for the move operation.
+   *
+   * The method returns a Promise that, when resolved, indicates the success or failure of the move operation. A resolved value of `true` means the object was successfully moved, while `false` indicates a failure to move the object. It's important to handle both outcomes to ensure your application can respond appropriately to the move operation's result.
+   *
+   * @param oldObjectName - The name of the object or file to be moved. This is the identifier used by the storage provider to locate the object for moving.
+   * @param newObjectName - The new name or location where you want to move the object. This name should match exactly as it is known to the storage provider.
+   * @returns A Promise that resolves to a boolean value. `true` indicates that the object was successfully moved, while `false` indicates a failure in the move process.
+   */
+  public abstract MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean>;
+
+  /**
    * This abstract method is designed for deleting an object or file from a storage provider's system. Being abstract, it requires concrete implementation in
    * subclasses that are tailored to interact with specific storage providers. The method aims to provide a unified interface for object deletion across
    * different storage providers, simplifying the deletion process regardless of the underlying provider's specifics.

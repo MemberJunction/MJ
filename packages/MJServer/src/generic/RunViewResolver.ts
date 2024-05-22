@@ -92,6 +92,13 @@ export class RunViewByIDInput {
       "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
   })
   AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
 }
 
 @InputType()
@@ -174,6 +181,13 @@ export class RunViewByNameInput {
       "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
   })
   AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
 }
 @InputType()
 export class RunDynamicViewInput {
@@ -241,6 +255,13 @@ export class RunDynamicViewInput {
       "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
   })
   AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
 }
 
 @ObjectType()

@@ -347,6 +347,14 @@ type Company_ {
   WorkflowsArray: [Workflow_!]!
 }
 
+input CompositeKeyInputType {
+  KeyValuePairs: [KeyValuePairInputType!]! = []
+}
+
+type CompositeKeyOutputType {
+  KeyValuePairs: [KeyValuePairOutputType!]!
+}
+
 type ContactLevel_ {
   ContactsArray: [Contact_!]!
   CreatedAt: Timestamp!
@@ -694,6 +702,7 @@ input CreateDuplicateRunDetailMatchInput {
   DuplicateRunDetailID: Int!
   MatchProbability: Float!
   MatchRecordID: String!
+  MatchSource: String!
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
@@ -817,6 +826,7 @@ input CreateEntityInput {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -892,6 +902,7 @@ input CreateFileInput {
 
 type CreateFilePayload {
   File: File_!
+  NameExists: Boolean!
   UploadUrl: String!
 }
 
@@ -1447,6 +1458,9 @@ type DuplicateRunDetailMatch_ {
   """Value between 0 and 1 designating the computed probability of a match"""
   MatchProbability: Float!
   MatchRecordID: String!
+
+  """Either Vector or SP"""
+  MatchSource: String!
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
@@ -1750,13 +1764,13 @@ type EntityRecordDocument_ {
 }
 
 input EntityRecordNameInput {
+  CompositeKey: CompositeKeyInputType!
   EntityName: String!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
 }
 
 type EntityRecordNameResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityName: String!
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   RecordName: String
   Status: String!
   Success: Boolean!
@@ -1860,6 +1874,10 @@ type Entity_ {
 
   """When set to 0, CodeGen no longer generates a base view for the entity."""
   BaseViewGenerated: Boolean!
+
+  """
+  When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
+  """
   CascadeDeletes: Boolean!
   ClassName: String
   CodeName: String
@@ -1931,6 +1949,11 @@ type Entity_ {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+
+  """
+  When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
+  """
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -2085,6 +2108,16 @@ type Invoice_ {
   UpdatedAt: Timestamp!
 }
 
+input KeyValuePairInputType {
+  FieldName: String!
+  Value: String!
+}
+
+type KeyValuePairOutputType {
+  FieldName: String!
+  Value: String!
+}
+
 """Tracks the records within each list."""
 type ListDetail_ {
   ID: Int!
@@ -2196,6 +2229,8 @@ type Mutation {
   DeleteConversationDetail(ID: Int!): ConversationDetail_!
   DeleteDashboard(ID: Int!): Dashboard_!
   DeleteDashboardCategory(ID: Int!): DashboardCategory_!
+  DeleteDataContext(ID: Int!): DataContext_!
+  DeleteDataContextItem(ID: Int!): DataContextItem_!
   DeleteDealForecastCategory(ID: Int!): DealForecastCategory_!
   DeleteEmployee(ID: Int!): Employee_!
   DeleteEntity(ID: Int!): Entity_!
@@ -2353,31 +2388,29 @@ type PaymentTermsType_ {
 }
 
 input PotentialDuplicateRequestType {
-  EntitiyID: Int
-  EntityDocumentID: Int!
-  EntityName: String
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  EntityDocumentID: Int
+  EntityID: Int!
+  ListID: Int!
   ProbabilityScore: Int
+  RecordIDs: [CompositeKeyInputType!]!
 }
 
 type PotentialDuplicateResponseType {
+  ErrorMessage: String
+  PotentialDuplicateResult: [PotentialDuplicateResultType!]!
+  Status: String!
+}
+
+type PotentialDuplicateResultType {
+  DuplicateRunDetailMatchRecordIDs: [Int!]!
   Duplicates: [PotentialDuplicateType!]!
-  EntityID: Int!
+  EntityID: Int
+  RecordPrimaryKeys: CompositeKeyOutputType!
 }
 
 type PotentialDuplicateType {
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  KeyValuePairs: [KeyValuePairOutputType!]!
   ProbabilityScore: Float!
-}
-
-input PrimaryKeyValueInputType {
-  FieldName: String!
-  Value: String!
-}
-
-type PrimaryKeyValueOutputType {
-  FieldName: String!
-  Value: String!
 }
 
 type PushStatusNotification {
@@ -2471,7 +2504,7 @@ type Query {
   EntitySetting(ID: Int!): EntitySetting_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
-  ExecuteAskSkipRecordChat(ConversationId: Int!, EntityName: String!, PrimaryKeys: [PrimaryKeyValueInputType!]!, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRecordChat(CompositeKey: CompositeKeyInputType!, ConversationId: Int!, EntityName: String!, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   File(ID: Int!): File_
   FileCategory(ID: Int!): FileCategory_
@@ -2480,10 +2513,10 @@ type Query {
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
-  GetEntityRecordName(EntityName: String!, PrimaryKeyValues: [PrimaryKeyValueInputType!]!): EntityRecordNameResult!
+  GetEntityRecordName(CompositeKey: CompositeKeyInputType!, EntityName: String!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
-  GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
+  GetRecordDependencies(CompositeKey: CompositeKeyInputType!, entityName: String!): [RecordDependencyResult!]!
   GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
@@ -3013,9 +3046,9 @@ type RecordChange_ {
 }
 
 type RecordDependencyResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityName: String!
   FieldName: String!
-  PrimaryKeyValue: String!
   RelatedEntityName: String!
 }
 
@@ -3030,8 +3063,8 @@ type RecordMergeDeletionLog_ {
 }
 
 type RecordMergeDetailResult {
+  CompositeKey: CompositeKeyOutputType!
   Message: String
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   RecordMergeDeletionLogID: Int
   Success: Boolean!
 }
@@ -3059,8 +3092,8 @@ type RecordMergeLog_ {
 input RecordMergeRequest {
   EntityName: String!
   FieldMap: [FieldMapping!]
-  RecordsToMerge: [[PrimaryKeyValueInputType!]!]!
-  SurvivingRecordPrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  RecordsToMerge: [CompositeKeyInputType!]!
+  SurvivingRecordCompositeKey: CompositeKeyInputType!
 }
 
 type RecordMergeRequestOutput {
@@ -3588,6 +3621,11 @@ input RunDynamicViewInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -3596,6 +3634,11 @@ input RunDynamicViewInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
   UserSearchString: String
 }
 
@@ -4314,6 +4357,11 @@ input RunViewByIDInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4322,6 +4370,11 @@ input RunViewByIDInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
 
   """
   If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.
@@ -4368,6 +4421,11 @@ input RunViewByNameInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4376,6 +4434,11 @@ input RunViewByNameInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
 
   """
   If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.
@@ -4879,6 +4942,7 @@ input UpdateDuplicateRunDetailMatchInput {
   ID: Int!
   MatchProbability: Float!
   MatchRecordID: String!
+  MatchSource: String!
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
@@ -5045,6 +5109,7 @@ input UpdateEntityInput {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -5572,23 +5637,23 @@ type UserApplication_ {
 }
 
 type UserFavoriteResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   Success: Boolean!
   UserID: Int!
 }
 
 input UserFavoriteSearchParams {
+  CompositeKey: CompositeKeyInputType!
   EntityID: Int!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
+  CompositeKey: CompositeKeyInputType!
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
   UserID: Int!
 }
 

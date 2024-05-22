@@ -1,11 +1,5 @@
-import {Injectable, NgModule} from '@angular/core';
-import {
-  Routes,
-  RouterModule,
-  Resolve,
-  ActivatedRouteSnapshot,
-  RouterStateSnapshot
-} from '@angular/router';
+import { Injectable, NgModule } from '@angular/core';
+import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import {
   SingleApplicationComponent,
   SingleEntityComponent,
@@ -17,14 +11,13 @@ import {
   DashboardBrowserComponent,
   AuthGuardService as AuthGuard,
   FilesComponent,
-} from '@memberjunction/ng-explorer-core';
+  QueryBrowserComponent,
+} from './public-api';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { LogError} from "@memberjunction/core";
+import { LogError } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
-import { QueryBrowserComponent } from '@memberjunction/ng-explorer-core';
-import { SkipChatComponent} from '@memberjunction/ng-ask-skip'
-import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared'
-
+import { SkipChatComponent } from '@memberjunction/ng-ask-skip';
+import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared';
 
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 
@@ -34,7 +27,7 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   // Determines if a route should be detached and stored
   shouldDetach(route: ActivatedRouteSnapshot): boolean {
     // Store the route if it's an "askskip" route
-    return (route.routeConfig && route.routeConfig.path?.includes('askskip')) ? true : false;
+    return route.routeConfig && route.routeConfig.path?.includes('askskip') ? true : false;
   }
 
   // Stores the detached route
@@ -47,21 +40,16 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   // Determines if a stored route should be reattached
   shouldAttach(route: ActivatedRouteSnapshot): boolean {
     // Reattach if we have a stored route for the incoming route
-    if (route.routeConfig?.path)
-      return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
-    else
-      return false;
+    if (route.routeConfig?.path) return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
+    else return false;
   }
 
   // Retrieves the stored route; null means no stored route for this path
   retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
     if (!route.routeConfig || (route.routeConfig.path && !this.storedRoutes[route.routeConfig.path])) {
       return null;
-    }
-    else if (route.routeConfig.path)
-      return this.storedRoutes[route.routeConfig.path];
-    else
-      return null;
+    } else if (route.routeConfig.path) return this.storedRoutes[route.routeConfig.path];
+    else return null;
   }
 
   // Determines if the route should be reused
@@ -70,25 +58,23 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   }
 }
 
-
-
 @Injectable({
   providedIn: 'root',
 })
 export class ResourceResolver implements Resolve<void> {
-  constructor(private sharedService: SharedService) {}  
+  constructor(private sharedService: SharedService) {}
 
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
     let resourceType = route.params['resourceType'];
     const resourceRecordId = route.params['resourceRecordId'];
     if (resourceType !== undefined && resourceRecordId !== undefined) {
-      resourceType = this.sharedService.mapResourceTypeRouteSegmentToName(resourceType); 
+      resourceType = this.sharedService.mapResourceTypeRouteSegmentToName(resourceType);
 
-      const data: ResourceData = new ResourceData( {
+      const data: ResourceData = new ResourceData({
         Name: '',
         ResourceRecordID: resourceRecordId,
         ResourceTypeID: this.sharedService.ResourceTypeByName(resourceType)?.ID,
-        Configuration: {}
+        Configuration: {},
       });
 
       let code: EventCodes = EventCodes.AddDashboard;
@@ -120,7 +106,7 @@ export class ResourceResolver implements Resolve<void> {
           data.Configuration.SearchInput = resourceRecordId;
           data.ResourceRecordID = 0; /*tell nav to create new tab*/
           break;
-        default: 
+        default:
           // unsupported resource type
           return; // should handle the error better - TO-DO
       }
@@ -128,10 +114,9 @@ export class ResourceResolver implements Resolve<void> {
         component: this,
         event: MJEventType.ComponentEvent,
         eventCode: code,
-        args: data
-      })
-    }
-    else {
+        args: data,
+      });
+    } else {
       // to-do - handle error
     }
   }
@@ -139,52 +124,52 @@ export class ResourceResolver implements Resolve<void> {
 
 const routes: Routes = [
   { path: '', component: HomeComponent, canActivate: [AuthGuard] },
-  { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },  
+  { path: 'home', component: HomeComponent, canActivate: [AuthGuard] },
   { path: 'askskip', component: SkipChatComponent, canActivate: [AuthGuard] },
   { path: 'askskip/:conversationId', component: SkipChatComponent, canActivate: [AuthGuard] },
-  { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'reports/:folderID', component: ReportBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },  
-  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },  
-  { path: 'settings', 
-    component: SettingsComponent, 
-    canActivate: [AuthGuard],  
+  { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'dashboards/:folderID', component: DashboardBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'reports', component: ReportBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'reports/:folderID', component: ReportBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'queries', component: QueryBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'queries/:folderID', component: QueryBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'data', component: DataBrowserComponent, canActivate: [AuthGuard] },
+  { path: 'files', component: FilesComponent, canActivate: [AuthGuard] },
+  {
+    path: 'settings',
+    component: SettingsComponent,
+    canActivate: [AuthGuard],
     children: [
       {
         path: '',
         component: SettingsComponent,
-        pathMatch: 'full'
+        pathMatch: 'full',
       },
       {
         path: '**',
-        component: SettingsComponent
-      }
-    ]
-  },  
+        component: SettingsComponent,
+      },
+    ],
+  },
   { path: 'notifications', component: UserNotificationsComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName/:entityName', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'app/:appName/:entityName/:folderID', component: SingleApplicationComponent, canActivate: [AuthGuard] },
   { path: 'entity/:entityName', component: SingleEntityComponent, canActivate: [AuthGuard] },
-  { 
-    path: 'resource/:resourceType/:resourceRecordId', 
+  {
+    path: 'resource/:resourceType/:resourceRecordId',
     resolve: { data: ResourceResolver },
-    canActivate: [AuthGuard] ,
-    component: SingleRecordComponent
+    canActivate: [AuthGuard],
+    component: SingleRecordComponent,
   },
   {
-    path: '**', redirectTo: 'home'
-  } 
+    path: '**',
+    redirectTo: 'home',
+  },
 ];
-
 
 @NgModule({
   imports: [RouterModule.forRoot(routes, { initialNavigation: 'disabled' })],
-  exports: [RouterModule]
+  exports: [RouterModule],
 })
-export class AppRoutingModule { }
-
+export class AppRoutingModule {}

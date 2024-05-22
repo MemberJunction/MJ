@@ -34,6 +34,7 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
     }
 
     private loadComponent() { 
+      console.log("loading component?", `${this.Entity}.${this.Section}`);
       const sectionInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent,`${this.Entity}.${this.Section}`); 
       if (sectionInfo) {
         const componentRef = this.container.createComponent(sectionInfo.SubClass); 
@@ -42,6 +43,9 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
         this._sectionObj.record = this.record;
         this._sectionObj.EditMode = this.EditMode;
         this.cdr.detectChanges(); // Manually trigger change detection so that the call below to LoadComplete.emit() will occur after DOM is updated
+      }
+      else{
+        console.log("no section info");
       }
       this.LoadComplete.emit();
     }

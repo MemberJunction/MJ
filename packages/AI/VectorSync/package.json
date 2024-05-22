@@ -18,11 +18,9 @@
     "@memberjunction/ai": "~1.2.2",
     "@memberjunction/ai-vectordb": "~1.2.2",
     "@memberjunction/ai-vectors": "~1.2.2",
-    "@memberjunction/ai-vectors-pinecone": "~1.2.2",
     "@memberjunction/aiengine": "~1.2.2",
     "@memberjunction/core": "~1.2.2",
     "@memberjunction/global": "~1.2.2",
-    "@memberjunction/sqlserver-dataprovider": "~1.2.2",
     "dotenv": "^16.0.3",
     "typeorm": "^0.3.20"
   },

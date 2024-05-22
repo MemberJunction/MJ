@@ -18,6 +18,12 @@ import { DuplicateRunDetailMatchEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="MatchSource"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="MatchRecordID"
             Type="textarea"
             [EditMode]="EditMode"

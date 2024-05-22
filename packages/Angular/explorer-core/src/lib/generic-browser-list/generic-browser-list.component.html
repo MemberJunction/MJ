@@ -8,7 +8,7 @@
         }
         <h4>{{title}}</h4>
       </div>
-      <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="data" themeColor="info">
+      <kendo-dropdownbutton class="custom-dropdwn" (itemClick)="onDropdownItemClick($event)" [data]="createButtonDropdownData" themeColor="info">
         <span class="fa-solid fa-plus"></span>
         Create New
       </kendo-dropdownbutton>
@@ -59,11 +59,11 @@
                 <div class="grid-wrapper">
                   @if(disableEditButton){
                     <button class="list-btn" (click)="editItem(dataItem)">
-                      <i class="fa-regular fa-pen-to-square"></i>
+                      <span class="fa-regular fa-pen-to-square"></span>
                     </button>
                   }
                   <button class="list-btn" (click)="deleteItem(dataItem)">
-                    <i class="fa-regular fa-trash-can"></i>
+                    <span class="fa-regular fa-trash-can"></span>
                   </button>
                 </div>
               </ng-template>

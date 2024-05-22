@@ -42,7 +42,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   }
 
   private async initialLoad() {
-    const md = new Metadata()
+    const md = new Metadata();
     if (this.viewId || this.viewName) {
       let view: UserViewEntity | null = null;
       if (this.viewId)
@@ -77,7 +77,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
 
   public async handleRowClick(args: GridRowClickedEvent) {
       // tell the router to navigate instead of raising an event directly. router will in turn handle raising the event as required
-      this.router.navigate(['resource', 'record', SharedService.GeneratePrimaryKeyValueString(args.primaryKeyValues)], { queryParams: { Entity: args.entityName } })
+      this.router.navigate(['resource', 'record', args.CompositeKey.ToURLSegment()], { queryParams: { Entity: args.entityName } })
   }
 
   public async LoadView(viewInfo: UserViewEntity) {

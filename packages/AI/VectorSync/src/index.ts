@@ -1,4 +1,4 @@
-export * from './generic/entity.types';
-export * from './models/vectorSyncBase';
+export * from './generic/vectorSync.types';
 export * from './generic/entitySyncConfig.types';
 export * from './models/entityVectorSync';
+export * from './generic/EntityDocumentTemplateParser';

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { EntityInfo, LogError, Metadata, PrimaryKeyValue, RunView } from '@memberjunction/core';
+import { EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -123,17 +123,21 @@ export class SharedService {
     SharedService.RefreshUserNotifications(); // also call this initially when refreshing the dataset...
   }
 
-  public static GeneratePrimaryKeyValueString(pkVals: PrimaryKeyValue[]): string {
+  /*
+  public static GenerateKeyValuePairString(pkVals: KeyValuePair[]): string {
     return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
   }
-  public static ParsePrimaryKeys(entity: EntityInfo, routeSegment: string): PrimaryKeyValue[] {
+  */
+
+  /*
+  public static ParsePrimaryKeys(entity: EntityInfo, routeSegment: string): KeyValuePair[] {
     if (!routeSegment.includes('|')) {
       // If not, return a single element array with a default field name
       return [{ FieldName: entity.PrimaryKey.Name, Value: routeSegment }];
     }
     else {
       const parts = routeSegment.split('||');
-      const pkVals: PrimaryKeyValue[] = [];
+      const pkVals: KeyValuePair[] = [];
       for (let p of parts) {
         const kv = p.split('|');
         pkVals.push({ FieldName: kv[0], Value: kv[1] });
@@ -141,6 +145,7 @@ export class SharedService {
       return pkVals;
     }
   }
+  */
 
   FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {
     if (value === null || value === undefined)

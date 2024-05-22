@@ -1,1 +1,1 @@
-export { PineconeDatabase } from "./models/PineconeDatabase";
+export * from "./models/PineconeDatabase";

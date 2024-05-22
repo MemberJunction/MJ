@@ -1,7 +1,7 @@
   import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { LogError, Metadata, PrimaryKeyValue, RunQuery, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, RunQuery, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
@@ -31,7 +31,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   @Input() public Title: string = "Ask Skip"
   @Input() public DataContextID: number = 0;
   @Input() public LinkedEntity: string = '';
-  @Input() public LinkedEntityPrimaryKeys: PrimaryKeyValue[] = [];
+  @Input() public LinkedEntityCompositeKey: CompositeKey = new CompositeKey();
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
  
@@ -242,9 +242,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       if (!entry.isIntersecting) {
         // we are NOT visible, so decrement the count of visible instances, but only if we were ever visible, meaning sometimes we get this situation before we are ever shown
         if (this._loaded) {
-          SkipChatComponent.__skipChatWindowsCurrentlyVisible--;
-          if (SkipChatComponent.__skipChatWindowsCurrentlyVisible < 0)
-            SkipChatComponent.__skipChatWindowsCurrentlyVisible = 0; // never let it go negative
+          // don't go below 0
+          SkipChatComponent.__skipChatWindowsCurrentlyVisible = Math.max(0, SkipChatComponent.__skipChatWindowsCurrentlyVisible - 1);
         }
       }
       else {
@@ -256,12 +255,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           this.sharedService.InvokeManualResize();
 
           // first do stuff if we're on "global" skip chat mode...
-          if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && this.LinkedEntityPrimaryKeys.length === 0) {
+          if (this.ShowConversationList && !this.LinkedEntity && this.LinkedEntity.trim().length === 0 && !this.CompositeKeyIsPopulated()) {
             // only subscribe to the route params if we don't have a linked entity and record id, meaning we're in the context of the top level Skip Chat UI, not embedded somewhere
             this.paramsSubscription = this.route.params.subscribe(params => {
               if (!this._loaded) {
                 this._loaded = true; // do this once
-        
                 const conversationId = params['conversationId'];
                 if (conversationId && !isNaN(conversationId)) {
                   this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
@@ -271,7 +269,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
               }
             });
           }
-          else if (this.LinkedEntity && this.LinkedEntityPrimaryKeys.length > 0) {
+          else if (this.LinkedEntity && this.CompositeKeyIsPopulated()) {
             // now, do stuff if we are embedded in another component with a LinkedEntity/LinkedEntityRecordID
             if (!this._loaded) {
               this._loaded = true; // do this once
@@ -328,18 +326,22 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         cachedConversations = <ConversationEntity[]>result.Results;
       }
     }
+
     if (!cachedConversations) {
-      LogError('Error loading conversations from the database')
+      LogError('Error loading conversations from the database');
       return; // we couldn't load the conversations, so just return
     }
 
     // now setup the array we use to bind to the UI
-    if (this.IncludeLinkedConversationsInList)
+    if (this.IncludeLinkedConversationsInList){
       this.Conversations = cachedConversations; // dont filter out linked conversations  
-    else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.LinkedEntityPrimaryKeys.length > 0)
-      this.Conversations = cachedConversations.filter((c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityPrimaryKeys.map(pk => pk.Value).join(',')); // ONLY include the linked conversations
-    else
+    }
+    else if (this.LinkedEntity && this.LinkedEntity.length > 0 && this.CompositeKeyIsPopulated()){
+      this.Conversations = cachedConversations.filter((c: ConversationEntity) => c.LinkedEntity === this.LinkedEntity && c.LinkedRecordID === this.LinkedEntityCompositeKey.Values()); // ONLY include the linked conversations
+    }
+    else{
       this.Conversations = cachedConversations.filter((c: ConversationEntity) => !(c.LinkedEntity && c.LinkedEntity.length > 0 && c.LinkedRecordID && c.LinkedRecordID.length > 0)); // filter OUT linked conversations
+    }
 
     if (this.Conversations.length === 0) {
       // no conversations, so create a new one
@@ -369,10 +371,12 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     this._oldConvoName = conversation.Name ? conversation.Name : '';
     this.ConversationEditMode = true;
   }
+
   public cancelConvoEdit(conversation: ConversationEntity) {
     conversation.Name = this._oldConvoName;
     this.ConversationEditMode = false;
   }
+
   public async saveConvoName(conversation: ConversationEntity) {
     let newConvoObject: ConversationEntity;
     if (conversation.Save !== undefined) {
@@ -403,6 +407,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     else
       this.sharedService.CreateSimpleNotification('Error saving conversation name', 'error', 5000)
   }
+
   public async deleteConvo(conversation: ConversationEntity) {
     if (confirm('Are you sure you want to delete this conversation?')) {
       // delete the conversation - we might need to load the entity if the current object isn't a "real object"
@@ -442,9 +447,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     convo.Name = 'New Chat'; // default value
     convo.UserID = md.CurrentUser.ID;
     const linkedEntityID = this.LinkedEntityID;
-    if (linkedEntityID && linkedEntityID > 0 && this.LinkedEntityPrimaryKeys.length > 0) {
+    if (linkedEntityID && linkedEntityID > 0 && this.CompositeKeyIsPopulated()) {
       convo.LinkedEntityID = linkedEntityID;
-      convo.LinkedRecordID = this.LinkedEntityPrimaryKeys.map(pk => pk.Value).join(',');
+      convo.LinkedRecordID = this.LinkedEntityCompositeKey.Values();
     }
     // next, create a new data context for this conversation
     const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
@@ -453,21 +458,21 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     dc.UserID = md.CurrentUser.ID;
     if (await dc.Save()) {
       // now create a data context item for the linked record if we have one
-      if (this.LinkedEntityID && this.LinkedEntityID > 0 && this.LinkedEntityPrimaryKeys.length > 0) {
+      if (this.LinkedEntityID && this.LinkedEntityID > 0 && this.CompositeKeyIsPopulated()) {
         const dci = await md.GetEntityObject<DataContextItemEntity>('Data Context Items');
         dci.NewRecord();
         dci.DataContextID = dc.ID;
         if (this.LinkedEntity === 'User Views') {
           dci.Type = 'view';
-          dci.ViewID = this.LinkedEntityPrimaryKeys[0].Value;
+          dci.ViewID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
         }
         else if (this.LinkedEntity === 'Queries') {
           dci.Type='query';
-          dci.QueryID = this.LinkedEntityPrimaryKeys[0].Value;
+          dci.QueryID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
         }
         else {
           dci.Type = 'single_record';
-          dci.RecordID = this.LinkedEntityPrimaryKeys.map(pk => pk.Value).join(',');
+          dci.RecordID = this.LinkedEntityCompositeKey.Values();
           dci.EntityID = this.LinkedEntityID;
         }
         await dci.Save();
@@ -856,7 +861,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       const dc = await md.GetEntityObject<DataContextEntity>('Data Contexts');
       dc.NewRecord();
       const e = md.Entities.find(e => e.Name === this.LinkedEntity);
-      dc.Name = "Data Context for Skip Conversation " + (e ? ' for ' + e.Name + " - Record ID: " + this.LinkedEntityPrimaryKeys.map(pk => pk.Value).join(', ') : '');
+      dc.Name = "Data Context for Skip Conversation " + (e ? ' for ' + e.Name + " - Record ID: " + this.LinkedEntityCompositeKey.Values() : '');
       dc.UserID = md.CurrentUser.ID;
       if (await dc.Save()) {
         this.DataContextID = dc.ID;
@@ -867,7 +872,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         await convo.Save(); // save to the database
         this.SelectedConversation.DataContextID = dc.ID; // update the in-memory object
 
-        if (this.LinkedEntity && this.LinkedEntityPrimaryKeys.length > 0 && e) {
+        if (this.LinkedEntity && this.CompositeKeyIsPopulated() && e) {
           // now create a single data context item for the new data context 
           let type: "view" | "sql" | "query" | "single_record" | "full_entity";
           switch (e.Name.trim().toLowerCase()) {
@@ -878,7 +883,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
               type='query';
               break;
             default: 
-              if (this.LinkedEntityPrimaryKeys.length > 0) {
+              if (this.CompositeKeyIsPopulated()) {
                 type='single_record'
               }
               else
@@ -890,11 +895,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           dci.DataContextID = dc.ID;
           dci.Type = type;
           if (type==='view')
-            dci.ViewID = this.LinkedEntityPrimaryKeys[0].Value;
+            dci.ViewID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
           else if (type==='query')
-            dci.QueryID = this.LinkedEntityPrimaryKeys[0].Value;
+            dci.QueryID = this.LinkedEntityCompositeKey.GetValueByIndex(0);
           else if (type==='single_record') {
-            dci.RecordID = this.LinkedEntityPrimaryKeys.map(pk => pk.Value).join(',');
+            dci.RecordID = this.LinkedEntityCompositeKey.Values();
             dci.EntityID = e.ID;
           }
           else if (type==='full_entity')
@@ -974,5 +979,9 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
   public closeDataContextDialog() {
     this.isDataContextDialogVisible = false;
+  }
+
+  private CompositeKeyIsPopulated(): boolean { 
+    return this.LinkedEntityCompositeKey.KeyValuePairs && this.LinkedEntityCompositeKey.KeyValuePairs.length > 0;
   }
 }
