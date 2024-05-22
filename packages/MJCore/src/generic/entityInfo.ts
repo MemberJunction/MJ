@@ -369,14 +369,15 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
+     * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. 
+     * This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
      */
     private _codeName: string = null
     get CodeName(): string {
-        // the code below replaces characters invalid for SQL identifiers with _ and stashes the result in a private variable so we only do this once
-        if (this._codeName == null)
-            this._codeName = this.Name.replace(/[\s-]/g, "_");
-    
+        if (this._codeName === null) {
+            this._codeName = CodeNameFromString(this.Name);
+        }
+
         return this._codeName;
     }
 
@@ -478,6 +479,19 @@ export class EntityFieldInfo extends BaseInfo {
             }
         }
     }
+}
+
+
+export function CodeNameFromString(input: string): string {
+    // the code below replaces characters invalid for SQL or TypeScript identifiers with _ and stashes the result in a private variable so we only do this once
+    // Replace all invalid characters with _
+    let codeName = input.replace(/[^a-zA-Z0-9_]/g, "_");
+
+    // Prepend an underscore if the first character is a number
+    if (/^[0-9]/.test(codeName)) {
+        codeName = "_" + codeName;
+    }
+    return codeName;
 }
 
 /**
