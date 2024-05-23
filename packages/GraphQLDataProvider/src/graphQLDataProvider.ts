@@ -129,7 +129,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async GetCurrentUser(): Promise<UserInfo> {
         const d = await GraphQLDataProvider.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
-            return new UserInfo(this, {...d.CurrentUser, UserRoles: d.CurrentUser.User_RolesArray}) // need to pass in the UserRoles as a separate property that is what is expected here
+            return new UserInfo(this, {...d.CurrentUser, UserRoles: d.CurrentUser.UserRolesArray}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
 
@@ -1053,7 +1053,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     // `
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        User_RolesArray {
+        UserRolesArray {
             ${this.userRoleInfoString()}
         }
     }

@@ -776,11 +776,11 @@ export class EntityInfo extends BaseInfo {
         }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many
-            params.ExtraFilter = relationship.RelatedEntityJoinField + ' = ' + quotes + keyValue + quotes;
+            params.ExtraFilter = `[${relationship.RelatedEntityJoinField}] = ${quotes}${keyValue}${quotes}`;
         }
         else {
             // many to many
-            params.ExtraFilter = `${relationship.RelatedEntityJoinField} IN (SELECT ${relationship.JoinEntityInverseJoinField} FROM ${relationship.JoinView} WHERE ${relationship.JoinEntityJoinField} = ${quotes}${keyValue}${quotes})`;
+            params.ExtraFilter = `[${relationship.RelatedEntityJoinField}] IN (SELECT [${relationship.JoinEntityInverseJoinField}] FROM [${relationship.JoinView}] WHERE [${relationship.JoinEntityJoinField}] = ${quotes}${keyValue}${quotes})`;
         }
 
         if (filter && filter.length > 0) 
