@@ -126,11 +126,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return true; // this provider doesn't have any issues with allowing refreshes at any time
     }
 
-npm 
     protected async GetCurrentUser(): Promise<UserInfo> {
         const d = await GraphQLDataProvider.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
-            return new UserInfo(this, {...d.CurrentUser, UserRoles: d.CurrentUser.UserRolesArray}) // need to pass in the UserRoles as a separate property that is what is expected here
+            return new UserInfo(this, {...d.CurrentUser, UserRoles: d.CurrentUser.User_RolesArray}) // need to pass in the UserRoles as a separate property that is what is expected here
         }
     }
 
@@ -1054,7 +1053,7 @@ npm
     // `
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        UserRolesArray {
+        User_RolesArray {
             ${this.userRoleInfoString()}
         }
     }
