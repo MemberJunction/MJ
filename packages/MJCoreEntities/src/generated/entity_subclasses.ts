@@ -15161,16 +15161,16 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ApplicationID
-        * * Display Name: Application ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Applications (vwApplications.ID)
+        * * Field Name: ApplicationName
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(50)
+        * * Related Entity/Foreign Key: Applications (vwApplications.Name)
         */
-        get ApplicationID(): number {  
-            return this.Get('ApplicationID');
+        get ApplicationName(): string {  
+            return this.Get('ApplicationName');
         }
-        set ApplicationID(value: number) {
-            this.Set('ApplicationID', value);
+        set ApplicationName(value: string) {
+            this.Set('ApplicationName', value);
         }
         /**
         * * Field Name: Name
@@ -15223,15 +15223,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: Application
-        * * Display Name: Application
-        * * SQL Data Type: nvarchar(50)
-        */
-        get Application(): string {  
-            return this.Get('Application');
         }
         
 

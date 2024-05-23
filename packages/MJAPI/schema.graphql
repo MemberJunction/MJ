@@ -5,13 +5,13 @@
 
 """List of all actions that are possible across all AI Models"""
 type AIAction_ {
-  AI_Model_ActionsArray: [AIModelAction_!]!
+  AIModelActionsArray: [AIModelAction_!]!
   CreatedAt: Timestamp!
   DefaultModel: String
   DefaultModelID: Int
   DefaultPrompt: String
   Description: String
-  Entity_AI_ActionsArray: [EntityAIAction_!]!
+  EntityAIActionsArray: [EntityAIAction_!]!
   ID: Int!
   IsActive: Boolean!
   Name: String!
@@ -32,7 +32,7 @@ type AIModelAction_ {
 
 """Types of AI Models"""
 type AIModelType_ {
-  AI_ModelsArray: [AIModel_!]!
+  AIModelsArray: [AIModel_!]!
   Description: String
   ID: Int!
   Name: String!
@@ -40,10 +40,10 @@ type AIModelType_ {
 
 """Catalog of all AI Models configured in the system"""
 type AIModel_ {
+  AIActionsArray: [AIAction_!]!
+  AIModelActionsArray: [AIModelAction_!]!
   AIModelType: String!
   AIModelTypeID: Int!
-  AI_ActionsArray: [AIAction_!]!
-  AI_Model_ActionsArray: [AIModelAction_!]!
 
   """
   The name of the model to use with API calls which might differ from the Name, if APIName is not provided, Name will be used for API calls
@@ -53,8 +53,8 @@ type AIModel_ {
   Description: String
   DriverClass: String
   DriverImportPath: String
-  Entity_AI_ActionsArray: [EntityAIAction_!]!
-  Entity_DocumentsArray: [EntityDocument_!]!
+  EntityAIActionsArray: [EntityAIAction_!]!
+  EntityDocumentsArray: [EntityDocument_!]!
   ID: Int!
   IsActive: Boolean!
   Name: String!
@@ -64,7 +64,7 @@ type AIModel_ {
   """
   PowerRank: Int
   UpdatedAt: Timestamp!
-  Vector_IndexesArray: [VectorIndex_!]!
+  VectorIndexesArray: [VectorIndex_!]!
   Vendor: String
 }
 
@@ -162,8 +162,7 @@ type ApplicationEntity_ {
 }
 
 type ApplicationSetting_ {
-  Application: String!
-  ApplicationID: Int!
+  ApplicationName: String!
   Comments: String
   CreatedAt: Timestamp!
   ID: Int!
@@ -176,14 +175,14 @@ type ApplicationSetting_ {
 Applications are used to group entities in the user interface for ease of user access
 """
 type Application_ {
-  Application_EntitiesArray: [ApplicationEntity_!]!
-  Application_SettingsArray: [ApplicationSetting_!]!
+  ApplicationEntitiesArray: [ApplicationEntity_!]!
+  ApplicationSettingsArray: [ApplicationSetting_!]!
   CreatedAt: Timestamp!
   Description: String
   ID: Int!
   Name: String!
   UpdatedAt: Timestamp!
-  User_ApplicationsArray: [UserApplication_!]!
+  UserApplicationsArray: [UserApplication_!]!
 }
 
 type AskSkipResultType {
@@ -197,8 +196,8 @@ type AskSkipResultType {
 }
 
 type AuditLogType_ {
-  Audit_Log_TypesArray: [AuditLogType_!]!
-  Audit_LogsArray: [AuditLog_!]!
+  AuditLogTypesArray: [AuditLogType_!]!
+  AuditLogsArray: [AuditLog_!]!
   AuthorizationName: String
   CreatedAt: Timestamp!
   Description: String
@@ -235,9 +234,9 @@ type AuthorizationRole_ {
 }
 
 type Authorization_ {
-  Audit_Log_TypesArray: [AuditLogType_!]!
-  Audit_LogsArray: [AuditLog_!]!
-  Authorization_RolesArray: [AuthorizationRole_!]!
+  AuditLogTypesArray: [AuditLogType_!]!
+  AuditLogsArray: [AuditLog_!]!
+  AuthorizationRolesArray: [AuthorizationRole_!]!
   AuthorizationsArray: [Authorization_!]!
   CreatedAt: Timestamp!
   Description: String
@@ -287,7 +286,7 @@ type CompanyIntegrationRunDetail_ {
   CompanyIntegrationRunID: Int!
   Entity: String!
   EntityID: Int!
-  Error_LogsArray: [ErrorLog_!]!
+  ErrorLogsArray: [ErrorLog_!]!
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
@@ -299,10 +298,10 @@ type CompanyIntegrationRunDetail_ {
 type CompanyIntegrationRun_ {
   Comments: String
   CompanyIntegrationID: Int!
-  Company_Integration_Run_API_LogsArray: [CompanyIntegrationRunAPILog_!]!
-  Company_Integration_Run_DetailsArray: [CompanyIntegrationRunDetail_!]!
+  CompanyIntegrationRunAPILogsArray: [CompanyIntegrationRunAPILog_!]!
+  CompanyIntegrationRunDetailsArray: [CompanyIntegrationRunDetail_!]!
   EndedAt: Timestamp
-  Error_LogsArray: [ErrorLog_!]!
+  ErrorLogsArray: [ErrorLog_!]!
   ID: Int!
   RunByUser: String!
   RunByUserID: Int!
@@ -318,14 +317,14 @@ type CompanyIntegration_ {
   ClientSecret: String
   Company: String!
   CompanyID: Int!
+  CompanyIntegrationRecordMapsArray: [CompanyIntegrationRecordMap_!]!
+  CompanyIntegrationRunsArray: [CompanyIntegrationRun_!]!
   CompanyName: String!
-  Company_Integration_Record_MapsArray: [CompanyIntegrationRecordMap_!]!
-  Company_Integration_RunsArray: [CompanyIntegrationRun_!]!
   CreatedAt: Timestamp!
   CustomAttribute1: String
   DriverClassName: String
   DriverImportPath: String
-  Employee_Company_IntegrationsArray: [EmployeeCompanyIntegration_!]!
+  EmployeeCompanyIntegrationsArray: [EmployeeCompanyIntegration_!]!
   ExternalSystemID: String
   ID: Int!
   Integration: String!
@@ -346,7 +345,7 @@ type CompanyIntegration_ {
 A list of organizational units within your business. These can be subsidiaries or divisions or other units. Companies are used to organizae employee records and also for separating integrations if you have multiple integrations of the same type of system.
 """
 type Company_ {
-  Company_IntegrationsArray: [CompanyIntegration_!]!
+  CompanyIntegrationsArray: [CompanyIntegration_!]!
   CreatedAt: Timestamp!
   Description: String!
   Domain: String
@@ -442,7 +441,7 @@ type ConversationDetail_ {
 }
 
 type Conversation_ {
-  Conversation_DetailsArray: [ConversationDetail_!]!
+  ConversationDetailsArray: [ConversationDetail_!]!
   CreatedAt: Timestamp!
   DataContextID: Int
   Description: String
@@ -530,7 +529,7 @@ input CreateApplicationInput {
 }
 
 input CreateApplicationSettingInput {
-  ApplicationID: Int!
+  ApplicationName: String!
   Comments: String
   Name: String!
   Value: String!
@@ -1279,7 +1278,7 @@ input CreateWorkspaceItemInput {
 
 type DashboardCategory_ {
   CreatedAt: Timestamp!
-  Dashboard_CategoriesArray: [DashboardCategory_!]!
+  DashboardCategoriesArray: [DashboardCategory_!]!
   DashboardsArray: [Dashboard_!]!
   Description: String
   ID: Int!
@@ -1358,7 +1357,7 @@ Data Contexts are a primitive within the MemberJunction architecture. They store
 """
 type DataContext_ {
   CreatedAt: Timestamp!
-  Data_Context_ItemsArray: [DataContextItem_!]!
+  DataContextItemsArray: [DataContextItem_!]!
   Description: String
   ID: Int!
   LastRefreshedAt: Timestamp
@@ -1410,7 +1409,7 @@ type DatasetStatusResultType {
 """Cacheable sets of data that can span one or more items"""
 type Dataset_ {
   CreatedAt: Timestamp!
-  Dataset_ItemsArray: [DatasetItem_!]!
+  DatasetItemsArray: [DatasetItem_!]!
   Description: String
   ID: Int!
   Name: String!
@@ -1504,8 +1503,8 @@ type DuplicateRunDetailMatch_ {
 
 type DuplicateRunDetail_ {
   CreatedAt: Timestamp!
+  DuplicateRunDetailMatchesArray: [DuplicateRunDetailMatch_!]!
   DuplicateRunID: Int!
-  Duplicate_Run_Detail_MatchesArray: [DuplicateRunDetailMatch_!]!
   ID: Int!
 
   """
@@ -1530,7 +1529,7 @@ type DuplicateRun_ {
   ApprovedByUser: String
   ApprovedByUserID: Int
   CreatedAt: Timestamp!
-  Duplicate_Run_DetailsArray: [DuplicateRunDetail_!]!
+  DuplicateRunDetailsArray: [DuplicateRunDetail_!]!
   EndedAt: Timestamp
   Entity: String!
   EntityID: Int!
@@ -1580,9 +1579,9 @@ type Employee_ {
   CompanyID: Int!
   CreatedAt: Timestamp!
   Email: String!
-  Employee_Company_IntegrationsArray: [EmployeeCompanyIntegration_!]!
-  Employee_RolesArray: [EmployeeRole_!]!
-  Employee_SkillsArray: [EmployeeSkill_!]!
+  EmployeeCompanyIntegrationsArray: [EmployeeCompanyIntegration_!]!
+  EmployeeRolesArray: [EmployeeRole_!]!
+  EmployeeSkillsArray: [EmployeeSkill_!]!
   EmployeesArray: [Employee_!]!
   FirstLast: String
   FirstName: String!
@@ -1628,7 +1627,7 @@ This table stores the list of possible behavior types to use in the Entity Behav
 type EntityBehaviorType_ {
   CreatedAt: Timestamp!
   Description: String
-  Entity_BehaviorsArray: [EntityBehavior_!]!
+  EntityBehaviorsArray: [EntityBehavior_!]!
   ID: Int!
 
   """The name of the behavior, a unique column for the table. """
@@ -1702,7 +1701,7 @@ type EntityDocumentSetting_ {
 type EntityDocumentType_ {
   CreatedAt: Timestamp!
   Description: String
-  Entity_DocumentsArray: [EntityDocument_!]!
+  EntityDocumentsArray: [EntityDocument_!]!
   ID: Int!
   Name: String!
   UpdatedAt: Timestamp!
@@ -1717,9 +1716,9 @@ type EntityDocument_ {
   AbsoluteMatchThreshold: Float!
   CreatedAt: Timestamp!
   Entity: String!
+  EntityDocumentRunsArray: [EntityDocumentRun_!]!
+  EntityDocumentSettingsArray: [EntityDocumentSetting_!]!
   EntityID: Int!
-  Entity_Document_RunsArray: [EntityDocumentRun_!]!
-  Entity_Document_SettingsArray: [EntityDocumentSetting_!]!
   ID: Int!
   Name: String!
 
@@ -1772,8 +1771,8 @@ type EntityField_ {
   Entity: String!
   EntityClassName: String
   EntityCodeName: String
+  EntityFieldValuesArray: [EntityFieldValue_!]!
   EntityID: Int!
-  Entity_Field_ValuesArray: [EntityFieldValue_!]!
   ExtendedType: String
   FullTextSearchEnabled: Boolean!
   GeneratedFormSection: String!
@@ -1932,7 +1931,8 @@ type Entity_ {
   Enabling this bit will result in search being possible at the API and UI layers
   """
   AllowUserSearchAPI: Boolean!
-  Application_EntitiesArray: [ApplicationEntity_!]!
+  ApplicationEntitiesArray: [ApplicationEntity_!]!
+  AuditLogsArray: [AuditLog_!]!
 
   """
   When set to 1, accessing a record by an end-user will result in an Audit Log record being created
@@ -1943,7 +1943,6 @@ type Entity_ {
   When set to 1, users running a view against this entity will result in an Audit Log record being created.
   """
   AuditViewRuns: Boolean!
-  Audit_LogsArray: [AuditLog_!]!
 
   """
   When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
@@ -1962,29 +1961,29 @@ type Entity_ {
   CascadeDeletes: Boolean!
   ClassName: String
   CodeName: String
-  Company_Integration_Record_MapsArray: [CompanyIntegrationRecordMap_!]!
-  Company_Integration_Run_DetailsArray: [CompanyIntegrationRunDetail_!]!
+  CompanyIntegrationRecordMapsArray: [CompanyIntegrationRecordMap_!]!
+  CompanyIntegrationRunDetailsArray: [CompanyIntegrationRunDetail_!]!
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
 
   """Set to 1 if a custom resolver has been created for the entity."""
   CustomResolverAPI: Boolean!
-  Data_Context_ItemsArray: [DataContextItem_!]!
-  Dataset_ItemsArray: [DatasetItem_!]!
+  DataContextItemsArray: [DataContextItem_!]!
+  DatasetItemsArray: [DatasetItem_!]!
   Description: String
-  Duplicate_RunsArray: [DuplicateRun_!]!
+  DuplicateRunsArray: [DuplicateRun_!]!
   EntitiesArray: [Entity_!]!
+  EntityAIActionsArray: [EntityAIAction_!]!
+  EntityBehaviorsArray: [EntityBehavior_!]!
+  EntityDocumentsArray: [EntityDocument_!]!
+  EntityFieldsArray: [EntityField_!]!
   EntityObjectSubclassImport: String
   EntityObjectSubclassName: String
-  Entity_AI_ActionsArray: [EntityAIAction_!]!
-  Entity_BehaviorsArray: [EntityBehavior_!]!
-  Entity_DocumentsArray: [EntityDocument_!]!
-  Entity_FieldsArray: [EntityField_!]!
-  Entity_PermissionsArray: [EntityPermission_!]!
-  Entity_Record_DocumentsArray: [EntityRecordDocument_!]!
-  Entity_RelationshipsArray: [EntityRelationship_!]!
-  Entity_SettingsArray: [EntitySetting_!]!
-  File_Entity_Record_LinksArray: [FileEntityRecordLink_!]!
+  EntityPermissionsArray: [EntityPermission_!]!
+  EntityRecordDocumentsArray: [EntityRecordDocument_!]!
+  EntityRelationshipsArray: [EntityRelationship_!]!
+  EntitySettingsArray: [EntitySetting_!]!
+  FileEntityRecordLinksArray: [FileEntityRecordLink_!]!
   FullTextCatalog: String
   FullTextCatalogGenerated: Boolean!
   FullTextIndex: String
@@ -1998,7 +1997,7 @@ type Entity_ {
   If set to 0, the entity will not be available at all in the GraphQL API or the object model.
   """
   IncludeInAPI: Boolean!
-  Integration_URL_FormatsArray: [IntegrationURLFormat_!]!
+  IntegrationURLFormatsArray: [IntegrationURLFormat_!]!
   ListsArray: [List_!]!
   Name: String!
   NameSuffix: String
@@ -2006,25 +2005,25 @@ type Entity_ {
   ParentBaseView: String
   ParentEntity: String
   ParentID: Int
-  Query_FieldsArray: [QueryField_!]!
-  Record_ChangesArray: [RecordChange_!]!
-  Record_Merge_LogsArray: [RecordMergeLog_!]!
-  Resource_TypesArray: [ResourceType_!]!
+  QueryFieldsArray: [QueryField_!]!
+  RecordChangesArray: [RecordChange_!]!
+  RecordMergeLogsArray: [RecordMergeLog_!]!
+  ResourceTypesArray: [ResourceType_!]!
   SchemaName: String!
-  Tagged_ItemsArray: [TaggedItem_!]!
+  TaggedItemsArray: [TaggedItem_!]!
 
   """
   When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table
   """
   TrackRecordChanges: Boolean!
   UpdatedAt: Timestamp!
+  UserApplicationEntitiesArray: [UserApplicationEntity_!]!
+  UserFavoritesArray: [UserFavorite_!]!
   UserFormGenerated: Boolean!
+  UserRecordLogsArray: [UserRecordLog_!]!
+  UserViewCategoriesArray: [UserViewCategory_!]!
   UserViewMaxRows: Int
-  User_Application_EntitiesArray: [UserApplicationEntity_!]!
-  User_FavoritesArray: [UserFavorite_!]!
-  User_Record_LogsArray: [UserRecordLog_!]!
-  User_View_CategoriesArray: [UserViewCategory_!]!
-  User_ViewsArray: [UserView_!]!
+  UserViewsArray: [UserView_!]!
   UsersArray: [User_!]!
   VirtualEntity: Boolean!
   spCreate: String
@@ -2066,7 +2065,7 @@ type FieldMappingOutput {
 type FileCategory_ {
   CreatedAt: Timestamp!
   Description: String
-  File_CategoriesArray: [FileCategory_!]!
+  FileCategoriesArray: [FileCategory_!]!
   FilesArray: [File_!]!
   ID: Int!
   Name: String!
@@ -2106,7 +2105,7 @@ type File_ {
   CreatedAt: Timestamp!
   Description: String
   DownloadUrl: String!
-  File_Entity_Record_LinksArray: [FileEntityRecordLink_!]!
+  FileEntityRecordLinksArray: [FileEntityRecordLink_!]!
   ID: Int!
   Name: String!
   Provider: String!
@@ -2147,12 +2146,12 @@ type Integration_ {
   BatchMaxRequestCount: Int!
   BatchRequestWaitTime: Int!
   ClassName: String
-  Company_IntegrationsArray: [CompanyIntegration_!]!
+  CompanyIntegrationsArray: [CompanyIntegration_!]!
   CreatedAt: Timestamp!
   Description: String
   ID: Int!
   ImportPath: String
-  Integration_URL_FormatsArray: [IntegrationURLFormat_!]!
+  IntegrationURLFormatsArray: [IntegrationURLFormat_!]!
   Name: String!
   NavigationBaseURL: String
   UpdatedAt: Timestamp!
@@ -2216,12 +2215,12 @@ type List_ {
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
-  Duplicate_RunsArray: [DuplicateRun_!]!
+  DuplicateRunsArray: [DuplicateRun_!]!
   Entity: String
   EntityID: Int
   ExternalSystemRecordID: String
   ID: Int!
-  List_DetailsArray: [ListDetail_!]!
+  ListDetailsArray: [ListDetail_!]!
   Name: String!
   UpdatedAt: Timestamp!
   User: String!
@@ -2518,29 +2517,29 @@ type Query {
   Account(ID: Int!): Account_
   Activity(ID: Int!): Activity_
   ActivityAttachment(ID: Int!): ActivityAttachment_
-  AllAI_Actions: [AIAction_!]!
-  AllAI_Model_Actions: [AIModelAction_!]!
-  AllAI_Model_Types: [AIModelType_!]!
-  AllAI_Models: [AIModel_!]!
+  AllAIActions: [AIAction_!]!
+  AllAIModelActions: [AIModelAction_!]!
+  AllAIModelTypes: [AIModelType_!]!
+  AllAIModels: [AIModel_!]!
   AllApplications: [Application_!]!
-  AllAudit_Log_Types: [AuditLogType_!]!
-  AllAuthorization_Roles: [AuthorizationRole_!]!
+  AllAuditLogTypes: [AuditLogType_!]!
+  AllAuthorizationRoles: [AuthorizationRole_!]!
   AllAuthorizations: [Authorization_!]!
   AllCompanies: [Company_!]!
   AllEmployees: [Employee_!]!
   AllEntities: [Entity_!]!
-  AllEntity_AI_Actions: [EntityAIAction_!]!
-  AllEntity_Field_Values: [EntityFieldValue_!]!
-  AllEntity_Fields: [EntityField_!]!
-  AllEntity_Permissions: [EntityPermission_!]!
-  AllEntity_Relationships: [EntityRelationship_!]!
-  AllIntegration_URL_Formats: [IntegrationURLFormat_!]!
+  AllEntityAIActions: [EntityAIAction_!]!
+  AllEntityFieldValues: [EntityFieldValue_!]!
+  AllEntityFields: [EntityField_!]!
+  AllEntityPermissions: [EntityPermission_!]!
+  AllEntityRelationships: [EntityRelationship_!]!
+  AllIntegrationURLFormats: [IntegrationURLFormat_!]!
   AllIntegrations: [Integration_!]!
   AllRoles: [Role_!]!
-  AllRow_Level_Security_Filters: [RowLevelSecurityFilter_!]!
+  AllRowLevelSecurityFilters: [RowLevelSecurityFilter_!]!
   AllSkills: [Skill_!]!
-  AllUser_Roles: [UserRole_!]!
-  AllUser_Views: [UserView_!]!
+  AllUserRoles: [UserRole_!]!
+  AllUserViews: [UserView_!]!
   AllUsers: [User_!]!
   Application(ID: Int!): Application_
   ApplicationEntity(ID: Int!): ApplicationEntity_
@@ -3018,7 +3017,7 @@ type QueryCategory_ {
   Parent: String
   ParentID: Int
   QueriesArray: [Query_!]!
-  Query_CategoriesArray: [QueryCategory_!]!
+  QueryCategoriesArray: [QueryCategory_!]!
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -3067,15 +3066,15 @@ type Query_ {
   Category: String
   CategoryID: Int
   CreatedAt: Timestamp!
-  Data_Context_ItemsArray: [DataContextItem_!]!
+  DataContextItemsArray: [DataContextItem_!]!
   Description: String
   Feedback: String
   ID: Int!
   Name: String!
   OriginalSQL: String
   QualityRank: Int
-  Query_FieldsArray: [QueryField_!]!
-  Query_PermissionsArray: [QueryPermission_!]!
+  QueryFieldsArray: [QueryField_!]!
+  QueryPermissionsArray: [QueryPermission_!]!
   SQL: String
   Status: String!
   UpdatedAt: Timestamp!
@@ -3124,9 +3123,9 @@ type Queue_ {
   ProcessUserID: String
   ProcessUserName: String
   ProcessVersion: String
+  QueueTasksArray: [QueueTask_!]!
   QueueType: String!
   QueueTypeID: Int!
-  Queue_TasksArray: [QueueTask_!]!
   UpdatedAt: Timestamp!
 }
 
@@ -3177,7 +3176,7 @@ type RecordMergeLog_ {
   ApprovedByUserID: Int
   Comments: String
   CreatedAt: Timestamp!
-  Duplicate_Run_Detail_MatchesArray: [DuplicateRunDetailMatch_!]!
+  DuplicateRunDetailMatchesArray: [DuplicateRunDetailMatch_!]!
   Entity: String!
   EntityID: Int!
   ID: Int!
@@ -3187,7 +3186,7 @@ type RecordMergeLog_ {
   ProcessingLog: String
   ProcessingStartedAt: Timestamp!
   ProcessingStatus: String!
-  Record_Merge_Deletion_LogsArray: [RecordMergeDeletionLog_!]!
+  RecordMergeDeletionLogsArray: [RecordMergeDeletionLog_!]!
   SurvivingRecordID: String!
   UpdatedAt: Timestamp
 }
@@ -3221,7 +3220,7 @@ type ReportCategory_ {
   Name: String!
   Parent: String
   ParentID: Int
-  Report_CategoriesArray: [ReportCategory_!]!
+  ReportCategoriesArray: [ReportCategory_!]!
   ReportsArray: [Report_!]!
   UpdatedAt: Timestamp!
   User: String!
@@ -3263,7 +3262,7 @@ type Report_ {
   OutputTriggerTypeID: Int
   OutputWorkflow: String
   OutputWorkflowID: Int
-  Report_SnapshotsArray: [ReportSnapshot_!]!
+  ReportSnapshotsArray: [ReportSnapshot_!]!
   SharingScope: String!
   UpdatedAt: Timestamp!
   User: String!
@@ -3280,14 +3279,14 @@ type ResourceType_ {
   Icon: String
   Name: String!
   UpdatedAt: Timestamp!
-  Workspace_ItemsArray: [WorkspaceItem_!]!
+  WorkspaceItemsArray: [WorkspaceItem_!]!
 }
 
 """
 Roles are used for security administration and can have zero to many Users as members
 """
 type Role_ {
-  Authorization_RolesArray: [AuthorizationRole_!]!
+  AuthorizationRolesArray: [AuthorizationRole_!]!
   CreatedAt: Timestamp!
 
   """Description of the role"""
@@ -3297,24 +3296,24 @@ type Role_ {
   The unique ID of the role in the directory being used for authentication, for example an ID in Azure.
   """
   DirectoryID: String
-  Employee_RolesArray: [EmployeeRole_!]!
-  Entity_PermissionsArray: [EntityPermission_!]!
+  EmployeeRolesArray: [EmployeeRole_!]!
+  EntityPermissionsArray: [EntityPermission_!]!
   ID: Int!
   Name: String!
-  Query_PermissionsArray: [QueryPermission_!]!
+  QueryPermissionsArray: [QueryPermission_!]!
 
   """
   The name of the role in the database, this is used for auto-generating permission statements by CodeGen
   """
   SQLName: String
   UpdatedAt: Timestamp!
-  User_RolesArray: [UserRole_!]!
+  UserRolesArray: [UserRole_!]!
 }
 
 type RowLevelSecurityFilter_ {
   CreatedAt: Timestamp!
   Description: String
-  Entity_PermissionsArray: [EntityPermission_!]!
+  EntityPermissionsArray: [EntityPermission_!]!
   FilterText: String
   ID: Int!
   Name: String!
@@ -4665,7 +4664,7 @@ A hierarchical list of possible skills that are linked to Employees and can also
 """
 type Skill_ {
   CreatedAt: Timestamp!
-  Employee_SkillsArray: [EmployeeSkill_!]!
+  EmployeeSkillsArray: [EmployeeSkill_!]!
   ID: Int!
   Name: String!
   Parent: String
@@ -4698,7 +4697,7 @@ type Tag_ {
   Name: String!
   Parent: String
   ParentID: Int
-  Tagged_ItemsArray: [TaggedItem_!]!
+  TaggedItemsArray: [TaggedItem_!]!
   TagsArray: [Tag_!]!
 }
 
@@ -4827,7 +4826,7 @@ input UpdateApplicationInput {
 }
 
 input UpdateApplicationSettingInput {
-  ApplicationID: Int!
+  ApplicationName: String!
   Comments: String
   ID: Int!
   Name: String!
@@ -5790,8 +5789,8 @@ type UserApplication_ {
   IsActive: Boolean!
   Sequence: Int!
   User: String!
+  UserApplicationEntitiesArray: [UserApplicationEntity_!]!
   UserID: Int!
-  User_Application_EntitiesArray: [UserApplicationEntity_!]!
 }
 
 type UserFavoriteResult {
@@ -5879,8 +5878,8 @@ type UserViewCategory_ {
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
-  User_View_CategoriesArray: [UserViewCategory_!]!
-  User_ViewsArray: [UserView_!]!
+  UserViewCategoriesArray: [UserViewCategory_!]!
+  UserViewsArray: [UserView_!]!
 }
 
 """
@@ -5904,7 +5903,7 @@ type UserViewRun_ {
   RunByUserID: Int!
   UserView: String!
   UserViewID: Int!
-  User_View_Run_DetailsArray: [UserViewRunDetail_!]!
+  UserViewRunDetailsArray: [UserViewRunDetail_!]!
 }
 
 """
@@ -5915,12 +5914,12 @@ type UserView_ {
   CreatedAt: Timestamp
   CustomFilterState: Boolean!
   CustomWhereClause: Boolean!
-  Data_Context_ItemsArray: [DataContextItem_!]!
+  DataContextItemsArray: [DataContextItem_!]!
   Description: String
   Entity: String!
   EntityBaseView: String!
   EntityID: Int!
-  Entity_RelationshipsArray: [EntityRelationship_!]!
+  EntityRelationshipsArray: [EntityRelationship_!]!
   FilterState: String
   GUID: String!
   GridState: String
@@ -5939,20 +5938,20 @@ type UserView_ {
   UserID: Int!
   UserName: String!
   UserType: String!
-  User_View_RunsArray: [UserViewRun_!]!
+  UserViewRunsArray: [UserViewRun_!]!
   WhereClause: String
 }
 
 """A list of all users who have or had access to the system"""
 type User_ {
-  Audit_LogsArray: [AuditLog_!]!
-  Company_Integration_RunsArray: [CompanyIntegrationRun_!]!
+  AuditLogsArray: [AuditLog_!]!
+  CompanyIntegrationRunsArray: [CompanyIntegrationRun_!]!
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!
-  Dashboard_CategoriesArray: [DashboardCategory_!]!
+  DashboardCategoriesArray: [DashboardCategory_!]!
   DashboardsArray: [Dashboard_!]!
-  Data_ContextsArray: [DataContext_!]!
-  Duplicate_RunsArray: [DuplicateRun_!]!
+  DataContextsArray: [DataContext_!]!
+  DuplicateRunsArray: [DuplicateRun_!]!
   Email: String!
   EmployeeEmail: String
   EmployeeFirstLast: String
@@ -5970,23 +5969,23 @@ type User_ {
   LinkedRecordType: String!
   ListsArray: [List_!]!
   Name: String!
-  Query_CategoriesArray: [QueryCategory_!]!
-  Record_ChangesArray: [RecordChange_!]!
-  Record_Merge_LogsArray: [RecordMergeLog_!]!
-  Report_CategoriesArray: [ReportCategory_!]!
-  Report_SnapshotsArray: [ReportSnapshot_!]!
+  QueryCategoriesArray: [QueryCategory_!]!
+  RecordChangesArray: [RecordChange_!]!
+  RecordMergeLogsArray: [RecordMergeLog_!]!
+  ReportCategoriesArray: [ReportCategory_!]!
+  ReportSnapshotsArray: [ReportSnapshot_!]!
   ReportsArray: [Report_!]!
   Title: String
   Type: String!
   UpdatedAt: Timestamp!
-  User_ApplicationsArray: [UserApplication_!]!
-  User_FavoritesArray: [UserFavorite_!]!
-  User_NotificationsArray: [UserNotification_!]!
-  User_Record_LogsArray: [UserRecordLog_!]!
-  User_RolesArray: [UserRole_!]!
-  User_View_CategoriesArray: [UserViewCategory_!]!
-  User_View_RunsArray: [UserViewRun_!]!
-  User_ViewsArray: [UserView_!]!
+  UserApplicationsArray: [UserApplication_!]!
+  UserFavoritesArray: [UserFavorite_!]!
+  UserNotificationsArray: [UserNotification_!]!
+  UserRecordLogsArray: [UserRecordLog_!]!
+  UserRolesArray: [UserRole_!]!
+  UserViewCategoriesArray: [UserViewCategory_!]!
+  UserViewRunsArray: [UserViewRun_!]!
+  UserViewsArray: [UserView_!]!
   WorkspacesArray: [Workspace_!]!
 }
 
@@ -5995,11 +5994,11 @@ type VectorDatabase_ {
   CreatedAt: Timestamp!
   DefaultURL: String
   Description: String
-  Entity_DocumentsArray: [EntityDocument_!]!
+  EntityDocumentsArray: [EntityDocument_!]!
   ID: Int!
   Name: String!
   UpdatedAt: Timestamp!
-  Vector_IndexesArray: [VectorIndex_!]!
+  VectorIndexesArray: [VectorIndex_!]!
 }
 
 type VectorIndex_ {
@@ -6089,7 +6088,7 @@ type Workflow_ {
   SubclassName: String
   UpdatedAt: Timestamp!
   WorkflowEngineName: String!
-  Workflow_RunsArray: [WorkflowRun_!]!
+  WorkflowRunsArray: [WorkflowRun_!]!
 }
 
 """Tracks the resources that are active within a given worksapce"""
@@ -6113,5 +6112,5 @@ type Workspace_ {
   Name: String!
   User: String!
   UserID: Int!
-  Workspace_ItemsArray: [WorkspaceItem_!]!
+  WorkspaceItemsArray: [WorkspaceItem_!]!
 }

@@ -11,8 +11,8 @@ import { ApplicationSettingEntity } from '@memberjunction/core-entities';
     <div class="record-form">
         <mj-form-field
             [record]="record"
-            FieldName="ApplicationID"
-            Type="numerictextbox"
+            FieldName="ApplicationName"
+            Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
@@ -43,12 +43,6 @@ import { ApplicationSettingEntity } from '@memberjunction/core-entities';
         <mj-form-field
             [record]="record"
             FieldName="UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Application"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
