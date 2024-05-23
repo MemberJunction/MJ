@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/22/2024, 1:01:09 PM
+* GENERATED: 5/22/2024, 7:50:46 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2979,6 +2979,9 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
     Duplicate_RunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to Duplicate_Runs
     
+    @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
+    Entity_BehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to Entity_Behaviors
+    
 }
         
 //****************************************************************************
@@ -3519,6 +3522,14 @@ export class EntityResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityBehavior_])
+    async Entity_BehaviorsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Behaviors', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviors] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Behaviors', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL));
         return result;
     }
         
@@ -5611,7 +5622,6 @@ export class Application_ {
     Name: string;
           
     @Field({nullable: true}) 
-    @MaxLength(1000)
     Description?: string;
           
     @Field() 
@@ -5627,6 +5637,9 @@ export class Application_ {
     
     @Field(() => [mj_core_schema_server_object_types.UserApplication_])
     User_ApplicationsArray: mj_core_schema_server_object_types.UserApplication_[]; // Link to User_Applications
+    
+    @Field(() => [mj_core_schema_server_object_types.ApplicationSetting_])
+    Application_SettingsArray: mj_core_schema_server_object_types.ApplicationSetting_[]; // Link to Application_Settings
     
 }
         
@@ -5731,6 +5744,14 @@ export class ApplicationResolver extends ResolverBase {
         this.CheckUserReadPermissions('User Applications', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwUserApplications] WHERE [ApplicationID]=${application_.ID} ` + this.getRowLevelSecurityWhereClause('User Applications', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('User Applications', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ApplicationSetting_])
+    async Application_SettingsArray(@Root() application_: Application_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Application Settings', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ApplicationID]=${application_.ID} ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Application Settings', await dataSource.query(sSQL));
         return result;
     }
         
@@ -20141,6 +20162,669 @@ export class DuplicateRunDetailResolver extends ResolverBase {
     }
     protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput) {
         const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Behaviors
+//****************************************************************************
+@ObjectType({ description: 'Stores the behaviors for each entity and is used for code generation and injection of behavior code into various areas of the system.' })
+export class EntityBehavior_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityID: number;
+          
+    @Field(() => Int) 
+    BehaviorTypeID: number;
+          
+    @Field({description: 'This field will be used by the AI system to generate code that corresponds to the requested behavior and inject the code into the appropriate part(s) of the system.'}) 
+    Description: string;
+          
+    @Field(() => Boolean, {description: 'This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.'}) 
+    RegenerateCode: boolean;
+          
+    @Field({nullable: true, description: 'This is the code that implements the desired behavior. If the CodeGenerated bit is set to 1, each time CodeGen runs, it will use the Code specified here in the appropriate place(s). To override the generated code and prevent it from being changed in the future, set CodeGenerated = 0'}) 
+    Code?: string;
+          
+    @Field({nullable: true, description: 'When an AI model generates code this will be populated with the AI\'s explanation of how the code works to meet the requirements of the behavior. For a non-generated piece of code a developer could manually place an explanation in this field.'}) 
+    CodeExplanation?: string;
+          
+    @Field(() => Boolean) 
+    CodeGenerated: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Behaviors   
+//****************************************************************************
+@InputType()
+export class CreateEntityBehaviorInput {
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field(() => Int)
+    BehaviorTypeID: number;
+    
+    @Field()
+    Description: string;
+    
+    @Field(() => Boolean)
+    RegenerateCode: boolean;
+    
+    @Field({ nullable: true })
+    Code: string;
+    
+    @Field({ nullable: true })
+    CodeExplanation: string;
+    
+    @Field(() => Boolean)
+    CodeGenerated: boolean;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Behaviors   
+//****************************************************************************
+@InputType()
+export class UpdateEntityBehaviorInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field(() => Int)
+    BehaviorTypeID: number;
+    
+    @Field()
+    Description: string;
+    
+    @Field(() => Boolean)
+    RegenerateCode: boolean;
+    
+    @Field({ nullable: true })
+    Code: string;
+    
+    @Field({ nullable: true })
+    CodeExplanation: string;
+    
+    @Field(() => Boolean)
+    CodeGenerated: boolean;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Behaviors
+//****************************************************************************
+@ObjectType()
+export class RunEntityBehaviorViewResult {
+    @Field(() => [EntityBehavior_])
+    Results: EntityBehavior_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityBehavior_)
+export class EntityBehaviorResolver extends ResolverBase {
+    @Query(() => RunEntityBehaviorViewResult)
+    async RunEntityBehaviorViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityBehaviorViewResult)
+    async RunEntityBehaviorViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityBehaviorViewResult)
+    async RunEntityBehaviorDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Behaviors';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityBehavior_, { nullable: true })
+    async EntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityBehavior_ | null> {
+        this.CheckUserReadPermissions('Entity Behaviors', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviors] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Behaviors', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityBehavior_)
+    async CreateEntityBehavior(
+        @Arg('input', () => CreateEntityBehaviorInput) input: CreateEntityBehaviorInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityBehaviorInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityBehaviorInput) {
+    }
+        
+    @Mutation(() => EntityBehavior_)
+    async UpdateEntityBehavior(
+        @Arg('input', () => UpdateEntityBehaviorInput) input: UpdateEntityBehaviorInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Behaviors
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityBehaviorInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityBehaviorInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+    @Mutation(() => EntityBehavior_)
+    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Behavior Types
+//****************************************************************************
+@ObjectType({ description: 'This table stores the list of possible behavior types to use in the Entity Behavior Types entity. ' })
+export class EntityBehaviorType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'The name of the behavior, a unique column for the table. '}) 
+    @MaxLength(200)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
+    Entity_BehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to Entity_Behaviors
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Behavior Types   
+//****************************************************************************
+@InputType()
+export class CreateEntityBehaviorTypeInput {
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Behavior Types   
+//****************************************************************************
+@InputType()
+export class UpdateEntityBehaviorTypeInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Behavior Types
+//****************************************************************************
+@ObjectType()
+export class RunEntityBehaviorTypeViewResult {
+    @Field(() => [EntityBehaviorType_])
+    Results: EntityBehaviorType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityBehaviorType_)
+export class EntityBehaviorTypeResolver extends ResolverBase {
+    @Query(() => RunEntityBehaviorTypeViewResult)
+    async RunEntityBehaviorTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityBehaviorTypeViewResult)
+    async RunEntityBehaviorTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityBehaviorTypeViewResult)
+    async RunEntityBehaviorTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Behavior Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityBehaviorType_, { nullable: true })
+    async EntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityBehaviorType_ | null> {
+        this.CheckUserReadPermissions('Entity Behavior Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviorTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Behavior Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Behavior Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityBehavior_])
+    async Entity_BehaviorsArray(@Root() entitybehaviortype_: EntityBehaviorType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Behaviors', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityBehaviors] WHERE [BehaviorTypeID]=${entitybehaviortype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Behaviors', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityBehaviorType_)
+    async CreateEntityBehaviorType(
+        @Arg('input', () => CreateEntityBehaviorTypeInput) input: CreateEntityBehaviorTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityBehaviorTypeInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityBehaviorTypeInput) {
+    }
+        
+    @Mutation(() => EntityBehaviorType_)
+    async UpdateEntityBehaviorType(
+        @Arg('input', () => UpdateEntityBehaviorTypeInput) input: UpdateEntityBehaviorTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Behavior Types
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityBehaviorTypeInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityBehaviorTypeInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+    @Mutation(() => EntityBehaviorType_)
+    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Application Settings
+//****************************************************************************
+@ObjectType()
+export class ApplicationSetting_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ApplicationID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    Name: string;
+          
+    @Field() 
+    Value: string;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(100)
+    Application: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Application Settings   
+//****************************************************************************
+@InputType()
+export class CreateApplicationSettingInput {
+    @Field(() => Int)
+    ApplicationID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field()
+    Value: string;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Application Settings   
+//****************************************************************************
+@InputType()
+export class UpdateApplicationSettingInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ApplicationID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field()
+    Value: string;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Application Settings
+//****************************************************************************
+@ObjectType()
+export class RunApplicationSettingViewResult {
+    @Field(() => [ApplicationSetting_])
+    Results: ApplicationSetting_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ApplicationSetting_)
+export class ApplicationSettingResolver extends ResolverBase {
+    @Query(() => RunApplicationSettingViewResult)
+    async RunApplicationSettingViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunApplicationSettingViewResult)
+    async RunApplicationSettingViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunApplicationSettingViewResult)
+    async RunApplicationSettingDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Application Settings';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ApplicationSetting_, { nullable: true })
+    async ApplicationSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ApplicationSetting_ | null> {
+        this.CheckUserReadPermissions('Application Settings', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwApplicationSettings] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Application Settings', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Application Settings', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ApplicationSetting_)
+    async CreateApplicationSetting(
+        @Arg('input', () => CreateApplicationSettingInput) input: CreateApplicationSettingInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationSettingInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationSettingInput) {
+    }
+        
+    @Mutation(() => ApplicationSetting_)
+    async UpdateApplicationSetting(
+        @Arg('input', () => UpdateApplicationSettingInput) input: UpdateApplicationSettingInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Application Settings
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationSettingInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationSettingInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+    @Mutation(() => ApplicationSetting_)
+    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
+            await entityObject.Load(ID);
+            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+            if (await entityObject.Delete()) {
+                await this.AfterDelete(dataSource, ID); // fire event
+                return returnValue;
+            }
+            else 
+                return null; // delete failed, this will cause an exception
+        }
+        else
+            return null; // BeforeDelete canceled the operation, this will cause an exception
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
+        const i = ID, d = dataSource; // prevent error;
+        return true;
+    }
+    protected async AfterDelete(dataSource: DataSource, ID: number) {
+        const i = ID, d = dataSource; // prevent error
     }
     
 }

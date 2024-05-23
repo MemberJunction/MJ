@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ApplicationEntity } from '@memberjunction/core-entities';
+import { EntityBehaviorTypeEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Applications.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Entity Behavior Types.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-application-form-details',
+    selector: 'gen-entitybehaviortype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -38,12 +38,12 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ApplicationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ApplicationEntity;
+export class EntityBehaviorTypeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: EntityBehaviorTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadApplicationDetailsComponent() {
+export function LoadEntityBehaviorTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
