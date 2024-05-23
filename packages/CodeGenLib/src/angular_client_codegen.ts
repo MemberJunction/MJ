@@ -493,6 +493,7 @@ ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
       protected generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections): string {
           const htmlCode: string =  `<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
 ${this.innerTopAreaHTML(topArea)}
 ${this.innerTabStripHTML(additionalSections, relatedEntitySections)}
     </form>

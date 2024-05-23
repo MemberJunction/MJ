@@ -72,6 +72,13 @@ export class RunViewByIDInput {
   })
   IgnoreMaxRows?: boolean;
 
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
+
   @Field(() => Boolean, {
     nullable: true,
     description:
@@ -85,6 +92,13 @@ export class RunViewByIDInput {
       "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
   })
   AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
 }
 
 @InputType()
@@ -147,6 +161,13 @@ export class RunViewByNameInput {
   })
   IgnoreMaxRows?: boolean;
 
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
+
   @Field(() => Boolean, {
     nullable: true,
     description:
@@ -160,6 +181,13 @@ export class RunViewByNameInput {
       "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
   })
   AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
 }
 @InputType()
 export class RunDynamicViewInput {
@@ -207,6 +235,13 @@ export class RunDynamicViewInput {
   })
   IgnoreMaxRows?: boolean;
 
+  @Field(() => Int, {
+    nullable: true,
+    description:
+      'if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.',  
+  })
+  MaxRows?: number
+
   @Field(() => Boolean, {
     nullable: true,
     description:
@@ -220,6 +255,13 @@ export class RunDynamicViewInput {
       "if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.",
   })
   AuditLogDescription?: string;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided',
+  })
+  ResultType?: string;
 }
 
 @ObjectType()

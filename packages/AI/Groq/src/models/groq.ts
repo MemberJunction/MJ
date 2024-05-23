@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, EmbedParams, EmbedResult, ModelUsage, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import Groq from 'groq-sdk';
 
@@ -65,7 +65,6 @@ export class GroqLLM extends BaseLLM {
             errorMessage: "",
             exception: null,
         }
-        throw new Error("Method not implemented.");
     }
  
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {

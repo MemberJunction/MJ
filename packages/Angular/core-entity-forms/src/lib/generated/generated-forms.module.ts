@@ -114,6 +114,11 @@ import { FileFormComponent, LoadFileFormComponent } from "./Entities/File/file.f
 import { FileCategoryFormComponent, LoadFileCategoryFormComponent } from "./Entities/FileCategory/filecategory.form.component";
 import { FileEntityRecordLinkFormComponent, LoadFileEntityRecordLinkFormComponent } from "./Entities/FileEntityRecordLink/fileentityrecordlink.form.component";
 import { VersionInstallationFormComponent, LoadVersionInstallationFormComponent } from "./Entities/VersionInstallation/versioninstallation.form.component";
+import { DuplicateRunDetailMatchFormComponent, LoadDuplicateRunDetailMatchFormComponent } from "./Entities/DuplicateRunDetailMatch/duplicaterundetailmatch.form.component";
+import { EntityDocumentSettingFormComponent, LoadEntityDocumentSettingFormComponent } from "./Entities/EntityDocumentSetting/entitydocumentsetting.form.component";
+import { EntitySettingFormComponent, LoadEntitySettingFormComponent } from "./Entities/EntitySetting/entitysetting.form.component";
+import { DuplicateRunFormComponent, LoadDuplicateRunFormComponent } from "./Entities/DuplicateRun/duplicaterun.form.component";
+import { DuplicateRunDetailFormComponent, LoadDuplicateRunDetailFormComponent } from "./Entities/DuplicateRunDetail/duplicaterundetail.form.component";
 import { CompanyDetailsComponent, LoadCompanyDetailsComponent } from "./Entities/Company/sections/details.component"
 import { EmployeeDetailsComponent, LoadEmployeeDetailsComponent } from "./Entities/Employee/sections/details.component"
 import { UserFavoriteDetailsComponent, LoadUserFavoriteDetailsComponent } from "./Entities/UserFavorite/sections/details.component"
@@ -208,6 +213,11 @@ import { FileDetailsComponent, LoadFileDetailsComponent } from "./Entities/File/
 import { FileCategoryDetailsComponent, LoadFileCategoryDetailsComponent } from "./Entities/FileCategory/sections/details.component"
 import { FileEntityRecordLinkDetailsComponent, LoadFileEntityRecordLinkDetailsComponent } from "./Entities/FileEntityRecordLink/sections/details.component"
 import { VersionInstallationDetailsComponent, LoadVersionInstallationDetailsComponent } from "./Entities/VersionInstallation/sections/details.component"
+import { DuplicateRunDetailMatchDetailsComponent, LoadDuplicateRunDetailMatchDetailsComponent } from "./Entities/DuplicateRunDetailMatch/sections/details.component"
+import { EntityDocumentSettingDetailsComponent, LoadEntityDocumentSettingDetailsComponent } from "./Entities/EntityDocumentSetting/sections/details.component"
+import { EntitySettingDetailsComponent, LoadEntitySettingDetailsComponent } from "./Entities/EntitySetting/sections/details.component"
+import { DuplicateRunDetailsComponent, LoadDuplicateRunDetailsComponent } from "./Entities/DuplicateRun/sections/details.component"
+import { DuplicateRunDetailDetailsComponent, LoadDuplicateRunDetailDetailsComponent } from "./Entities/DuplicateRunDetail/sections/details.component"
     
 
 @NgModule({
@@ -397,17 +407,17 @@ declarations: [
     FileCategoryFormComponent,
     FileEntityRecordLinkFormComponent,
     VersionInstallationFormComponent,
+    DuplicateRunDetailMatchFormComponent,
+    EntityDocumentSettingFormComponent,
+    EntitySettingFormComponent,
+    DuplicateRunFormComponent,
+    DuplicateRunDetailFormComponent,
     CompanyDetailsComponent,
     EmployeeDetailsComponent,
     UserFavoriteDetailsComponent,
     EmployeeCompanyIntegrationDetailsComponent,
     EmployeeRoleDetailsComponent,
-    EmployeeSkillDetailsComponent,
-    RoleDetailsComponent,
-    SkillDetailsComponent,
-    IntegrationURLFormatDetailsComponent,
-    IntegrationDetailsComponent,
-    CompanyIntegrationDetailsComponent],
+    EmployeeSkillDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -432,6 +442,11 @@ export class GeneratedForms_SubModule_4 { }
 
 @NgModule({
 declarations: [
+    RoleDetailsComponent,
+    SkillDetailsComponent,
+    IntegrationURLFormatDetailsComponent,
+    IntegrationDetailsComponent,
+    CompanyIntegrationDetailsComponent,
     EntityFieldDetailsComponent,
     EntityDetailsComponent,
     EntityTopComponent,
@@ -446,12 +461,7 @@ declarations: [
     CompanyIntegrationRunDetailsComponent,
     CompanyIntegrationRunDetailDetailsComponent,
     ErrorLogDetailsComponent,
-    ApplicationDetailsComponent,
-    ApplicationEntityDetailsComponent,
-    EntityPermissionDetailsComponent,
-    UserApplicationEntityDetailsComponent,
-    UserApplicationDetailsComponent,
-    CompanyIntegrationRunAPILogDetailsComponent],
+    ApplicationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -476,6 +486,11 @@ export class GeneratedForms_SubModule_5 { }
 
 @NgModule({
 declarations: [
+    ApplicationEntityDetailsComponent,
+    EntityPermissionDetailsComponent,
+    UserApplicationEntityDetailsComponent,
+    UserApplicationDetailsComponent,
+    CompanyIntegrationRunAPILogDetailsComponent,
     ListDetailsComponent,
     ListDetailDetailsComponent,
     UserViewRunDetailsComponent,
@@ -490,12 +505,7 @@ declarations: [
     AuthorizationDetailsComponent,
     AuthorizationRoleDetailsComponent,
     AuditLogTypeDetailsComponent,
-    EntityFieldValueDetailsComponent,
-    AIModelDetailsComponent,
-    AIActionDetailsComponent,
-    AIModelActionDetailsComponent,
-    EntityAIActionDetailsComponent,
-    AIModelTypeDetailsComponent],
+    EntityFieldValueDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -520,6 +530,11 @@ export class GeneratedForms_SubModule_6 { }
 
 @NgModule({
 declarations: [
+    AIModelDetailsComponent,
+    AIActionDetailsComponent,
+    AIModelActionDetailsComponent,
+    EntityAIActionDetailsComponent,
+    AIModelTypeDetailsComponent,
     QueueTypeDetailsComponent,
     QueueDetailsComponent,
     QueueTaskDetailsComponent,
@@ -534,12 +549,7 @@ declarations: [
     TaggedItemDetailsComponent,
     WorkspaceDetailsComponent,
     WorkspaceItemDetailsComponent,
-    DatasetDetailsComponent,
-    DatasetItemDetailsComponent,
-    ConversationDetailDetailsComponent,
-    ConversationDetailsComponent,
-    UserNotificationDetailsComponent,
-    SchemaInfoDetailsComponent],
+    DatasetDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -564,6 +574,11 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    DatasetItemDetailsComponent,
+    ConversationDetailDetailsComponent,
+    ConversationDetailsComponent,
+    UserNotificationDetailsComponent,
+    SchemaInfoDetailsComponent,
     CompanyIntegrationRecordMapDetailsComponent,
     RecordMergeLogDetailsComponent,
     RecordMergeDeletionLogDetailsComponent,
@@ -578,12 +593,7 @@ declarations: [
     EntityRecordDocumentDetailsComponent,
     EntityDocumentDetailsComponent,
     DataContextItemDetailsComponent,
-    DataContextDetailsComponent,
-    UserViewCategoryDetailsComponent,
-    DashboardCategoryDetailsComponent,
-    ReportCategoryDetailsComponent,
-    FileStorageProviderDetailsComponent,
-    FileDetailsComponent],
+    DataContextDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -608,9 +618,19 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    UserViewCategoryDetailsComponent,
+    DashboardCategoryDetailsComponent,
+    ReportCategoryDetailsComponent,
+    FileStorageProviderDetailsComponent,
+    FileDetailsComponent,
     FileCategoryDetailsComponent,
     FileEntityRecordLinkDetailsComponent,
-    VersionInstallationDetailsComponent],
+    VersionInstallationDetailsComponent,
+    DuplicateRunDetailMatchDetailsComponent,
+    EntityDocumentSettingDetailsComponent,
+    EntitySettingDetailsComponent,
+    DuplicateRunDetailsComponent,
+    DuplicateRunDetailDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -746,6 +766,11 @@ export function LoadCoreGeneratedForms() {
     LoadFileCategoryFormComponent();
     LoadFileEntityRecordLinkFormComponent();
     LoadVersionInstallationFormComponent();
+    LoadDuplicateRunDetailMatchFormComponent();
+    LoadEntityDocumentSettingFormComponent();
+    LoadEntitySettingFormComponent();
+    LoadDuplicateRunFormComponent();
+    LoadDuplicateRunDetailFormComponent();
     LoadCompanyDetailsComponent();
     LoadEmployeeDetailsComponent();
     LoadUserFavoriteDetailsComponent();
@@ -840,5 +865,10 @@ export function LoadCoreGeneratedForms() {
     LoadFileCategoryDetailsComponent();
     LoadFileEntityRecordLinkDetailsComponent();
     LoadVersionInstallationDetailsComponent();
+    LoadDuplicateRunDetailMatchDetailsComponent();
+    LoadEntityDocumentSettingDetailsComponent();
+    LoadEntitySettingDetailsComponent();
+    LoadDuplicateRunDetailsComponent();
+    LoadDuplicateRunDetailDetailsComponent();
 }
     

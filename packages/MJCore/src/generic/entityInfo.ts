@@ -5,6 +5,7 @@ import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue } from "./util"
 import { LogError } from "./logging"
+import { CompositeKey } from "./interfaces"
 
 /**
  * The possible status values for a record change
@@ -368,14 +369,15 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * For fields in the database that have spaces in them, we need to replace the spaces with _ in order to create variables for stored procedures. This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
+     * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. 
+     * This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
      */
     private _codeName: string = null
     get CodeName(): string {
-        // the code below replaces spaces with _ and stashes the result in a private variable so we only do this once
-        if (this._codeName == null)
-            this._codeName = this.Name.replace(/\s/g, "_");
-    
+        if (this._codeName === null) {
+            this._codeName = CodeNameFromString(this.Name);
+        }
+
         return this._codeName;
     }
 
@@ -479,29 +481,25 @@ export class EntityFieldInfo extends BaseInfo {
     }
 }
 
+
+export function CodeNameFromString(input: string): string {
+    // the code below replaces characters invalid for SQL or TypeScript identifiers with _ and stashes the result in a private variable so we only do this once
+    // Replace all invalid characters with _
+    let codeName = input.replace(/[^a-zA-Z0-9_]/g, "_");
+
+    // Prepend an underscore if the first character is a number
+    if (/^[0-9]/.test(codeName)) {
+        codeName = "_" + codeName;
+    }
+    return codeName;
+}
+
 /**
  * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
  */
-export class PrimaryKeyValue {
+export class KeyValuePair {
     FieldName: string
     Value: any
-}
-/**
- * Utility function to compare two primary key sets to see if they are the same or not
- * @param pkeyValues1 
- * @param pkeyValues2 
- * @returns true if the primary key values are the same, false if they are different
- */
-export function ComparePrimaryKeys(pkeyValues1: PrimaryKeyValue[], pkeyValues2: PrimaryKeyValue[]): boolean {
-    if (pkeyValues1.length !== pkeyValues2.length)
-    return false;
-
-    for (let i = 0; i < pkeyValues1.length; i++) {
-    if ( pkeyValues1[i].Value !== pkeyValues2[i].Value)
-        return false;
-    }
-
-    return true;
 }
 
 /**
@@ -764,7 +762,7 @@ export class EntityInfo extends BaseInfo {
      * @param filter 
      * @returns 
      */
-    public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string): RunViewParams {
+    public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string, maxRecords?: number): RunViewParams {
         const params: RunViewParams = {}
         let quotes: string = '';
         let keyValue: string = '';
@@ -778,11 +776,11 @@ export class EntityInfo extends BaseInfo {
         }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many
-            params.ExtraFilter = relationship.RelatedEntityJoinField + ' = ' + quotes + keyValue + quotes;
+            params.ExtraFilter = `[${relationship.RelatedEntityJoinField}] = ${quotes}${keyValue}${quotes}`;
         }
         else {
             // many to many
-            params.ExtraFilter = `${relationship.RelatedEntityJoinField} IN (SELECT ${relationship.JoinEntityInverseJoinField} FROM ${relationship.JoinView} WHERE ${relationship.JoinEntityJoinField} = ${quotes}${keyValue}${quotes})`;
+            params.ExtraFilter = `[${relationship.RelatedEntityJoinField}] IN (SELECT [${relationship.JoinEntityInverseJoinField}] FROM [${relationship.JoinView}] WHERE [${relationship.JoinEntityJoinField}] = ${quotes}${keyValue}${quotes})`;
         }
 
         if (filter && filter.length > 0) 
@@ -796,6 +794,9 @@ export class EntityInfo extends BaseInfo {
             // no view specified, so specify the entity instead
             params.EntityName = relationship.RelatedEntity;
         }
+
+        if (maxRecords && maxRecords > 0)   
+            params.MaxRows = maxRecords;
 
         return params;
     }
@@ -968,7 +969,7 @@ export class RecordDependency {
     /**
      * The value of the primary key field in the parent record. At present, MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
      */
-    PrimaryKeyValue: any
+    CompositeKey: CompositeKey
 }
 
 /**
@@ -980,13 +981,13 @@ export class RecordMergeRequest {
      */
     EntityName: string
     /**
-     * The primary key value(s) for the surviving record - if the entity in question has a single-valued primary key this will be an array with a single element, otherwise it will be an array with multiple elements
+     * The composite key for the surviving record
      */
-    SurvivingRecordPrimaryKeyValues: PrimaryKeyValue[]
+    SurvivingRecordCompositeKey: CompositeKey;
     /**
-     * The primary key value(s) for the record(s) to merge into the surviving record - if the entity in question has a single-valued primary key, each item in the top level array will be an array with a single element, otherwise each item in the top level array will be an array with multiple elements
+     * The composite key(s) for the record(s) to merge into the surviving record
      */
-    RecordsToMerge: PrimaryKeyValue[][] // array of arrays of primary key values
+    RecordsToMerge: CompositeKey[];
     /**
      * If you want to keep the values in the fields of the surviving record as they are, leave this blank. If you want to override the values in the surviving record with other values, specify the values you would like for each field in this array of objects. Each object has two properties, FieldName and Value. The FieldName is the name of the field to set and the Value is the value to set in it.
      */
@@ -1000,7 +1001,7 @@ export class RecordMergeDetailResult {
     /**
      * The primary key value(s) for a record that was merged
      */
-    PrimaryKeyValues: PrimaryKeyValue[]
+    CompositeKey: CompositeKey
     /**
      * True if the merge for this specific record was successful, false if not
      */

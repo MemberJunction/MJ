@@ -1,4 +1,4 @@
-import { BaseEntity, PrimaryKeyValue, EntitySaveOptions } from "@memberjunction/core";
+import { BaseEntity, KeyValuePair, EntitySaveOptions, CompositeKey } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
     
     /**
@@ -26,9 +26,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -139,9 +139,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -342,9 +342,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -463,9 +463,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -582,9 +582,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -688,9 +688,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -795,9 +795,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -900,9 +900,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1016,9 +1016,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1139,9 +1139,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1289,9 +1289,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -1575,9 +1575,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -2016,7 +2016,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
@@ -2025,7 +2025,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
@@ -2070,7 +2070,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
@@ -2079,7 +2079,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
@@ -2113,9 +2113,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -2534,12 +2534,25 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Cascade Deletes
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
         */
         get CascadeDeletes(): boolean {  
             return this.Get('CascadeDeletes');
         }
         set CascadeDeletes(value: boolean) {
             this.Set('CascadeDeletes', value);
+        }
+        /**
+        * * Field Name: spMatch
+        * * Display Name: sp Match
+        * * SQL Data Type: nvarchar(255)
+        * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
+        */
+        get spMatch(): string | null {  
+            return this.Get('spMatch');
+        }
+        set spMatch(value: string | null) {
+            this.Set('spMatch', value);
         }
         /**
         * * Field Name: UserFormGenerated
@@ -2598,7 +2611,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CodeName
         * * Display Name: Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get CodeName(): string | null {  
             return this.Get('CodeName');
@@ -2607,7 +2620,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ClassName
         * * Display Name: Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get ClassName(): string | null {  
             return this.Get('ClassName');
@@ -2616,7 +2629,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get BaseTableCodeName(): string | null {  
             return this.Get('BaseTableCodeName');
@@ -2677,9 +2690,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -2918,9 +2931,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -3171,7 +3184,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
@@ -3180,7 +3193,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
@@ -3189,7 +3202,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityBaseTableCodeName
         * * Display Name: Related Entity Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityBaseTableCodeName(): string | null {  
             return this.Get('RelatedEntityBaseTableCodeName');
@@ -3240,9 +3253,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -3418,9 +3431,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -3735,9 +3748,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -3863,9 +3876,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -4010,9 +4023,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -4159,9 +4172,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4240,9 +4253,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4347,7 +4360,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
@@ -4356,7 +4369,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
@@ -4365,7 +4378,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityBaseTableCodeName
         * * Display Name: Entity Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityBaseTableCodeName(): string | null {  
             return this.Get('EntityBaseTableCodeName');
@@ -4399,9 +4412,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4632,9 +4645,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4734,9 +4747,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -4839,9 +4852,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -4968,9 +4981,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -5114,9 +5127,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -5198,9 +5211,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5304,9 +5317,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5397,9 +5410,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5539,9 +5552,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5732,9 +5745,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -5847,9 +5860,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6022,9 +6035,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -6116,9 +6129,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6234,9 +6247,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6422,9 +6435,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6574,9 +6587,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6699,9 +6712,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6839,9 +6852,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -6991,7 +7004,7 @@ import { RegisterClass } from "@memberjunction/global";
      * * Schema: __mj
      * * Base Table: AIModel
      * * Base View: vwAIModels
-     * * @description Catalog of all AI Models configured in the system.
+     * * @description Catalog of all AI Models configured in the system
      * * Primary Key: ID
      * @extends {BaseEntity}
      * @class
@@ -7011,9 +7024,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7197,9 +7210,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7337,9 +7350,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7465,9 +7478,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7702,9 +7715,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7777,9 +7790,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -7899,9 +7912,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8160,9 +8173,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8329,9 +8342,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -8445,9 +8458,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8532,9 +8545,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8630,9 +8643,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -8717,9 +8730,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9051,9 +9064,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9155,9 +9168,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9306,9 +9319,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9426,9 +9439,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9533,9 +9546,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9618,9 +9631,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -9757,9 +9770,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -9865,9 +9878,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10039,9 +10052,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -10183,9 +10196,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -10281,12 +10294,12 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: LinkedRecordID
         * * Display Name: Linked Record ID
-        * * SQL Data Type: int
+        * * SQL Data Type: nvarchar(500)
         */
-        get LinkedRecordID(): number | null {  
+        get LinkedRecordID(): string | null {  
             return this.Get('LinkedRecordID');
         }
-        set LinkedRecordID(value: number | null) {
+        set LinkedRecordID(value: string | null) {
             this.Set('LinkedRecordID', value);
         }
         /**
@@ -10365,9 +10378,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -10526,9 +10539,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10643,9 +10656,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10771,9 +10784,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -10987,9 +11000,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11111,9 +11124,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11340,9 +11353,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -11466,9 +11479,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11645,9 +11658,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11742,9 +11755,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11879,9 +11892,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -11974,9 +11987,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12108,9 +12121,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12225,9 +12238,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12387,9 +12400,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -12452,7 +12465,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Pending'
+        * * Default Value: N'Active'
         * * Value List Type: List
         * * Possible Values 
         *   * Active
@@ -12476,6 +12489,56 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Template', value);
         }
         /**
+        * * Field Name: VectorDatabaseID
+        * * Display Name: Vector Database ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Vector Databases (vwVectorDatabases.ID)
+        */
+        get VectorDatabaseID(): number {  
+            return this.Get('VectorDatabaseID');
+        }
+        set VectorDatabaseID(value: number) {
+            this.Set('VectorDatabaseID', value);
+        }
+        /**
+        * * Field Name: AIModelID
+        * * Display Name: AIModel ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        */
+        get AIModelID(): number {  
+            return this.Get('AIModelID');
+        }
+        set AIModelID(value: number) {
+            this.Set('AIModelID', value);
+        }
+        /**
+        * * Field Name: PotentialMatchThreshold
+        * * Display Name: Potential Match Threshold
+        * * SQL Data Type: numeric(12, 11)
+        * * Default Value: 1
+        * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
+        */
+        get PotentialMatchThreshold(): number {  
+            return this.Get('PotentialMatchThreshold');
+        }
+        set PotentialMatchThreshold(value: number) {
+            this.Set('PotentialMatchThreshold', value);
+        }
+        /**
+        * * Field Name: AbsoluteMatchThreshold
+        * * Display Name: Absolute Match Threshold
+        * * SQL Data Type: numeric(12, 11)
+        * * Default Value: 1
+        * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
+        */
+        get AbsoluteMatchThreshold(): number {  
+            return this.Get('AbsoluteMatchThreshold');
+        }
+        set AbsoluteMatchThreshold(value: number) {
+            this.Set('AbsoluteMatchThreshold', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
@@ -12495,28 +12558,6 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
         
-        /**
-        * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
-        * * SQL Data Type: int
-        */
-        get VectorDatabaseID(): number {  
-            return this.Get('VectorDatabaseID');
-        }
-        set VectorDatabaseID(value: number) {
-            this.Set('VectorDatabaseID', value);
-        }
-        /**
-        * * Field Name: AIModelID
-        * * Display Name: AIModel ID
-        * * SQL Data Type: int
-        */
-        get AIModelID(): number {  
-            return this.Get('AIModelID');
-        }
-        set AIModelID(value: number) {
-            this.Set('AIModelID', value);
-        }
         /**
         * * Field Name: Entity
         * * Display Name: Entity
@@ -12563,23 +12604,11 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Data Context Items - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof DataContextItemEntity
-        * @throws {Error} - Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Data Context Items, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12792,23 +12821,11 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Data Contexts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof DataContextEntity
-        * @throws {Error} - Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Data Contexts, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -12919,9 +12936,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13056,9 +13073,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13181,9 +13198,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13306,9 +13323,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -13447,9 +13464,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13607,9 +13624,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
         
             /**
@@ -13711,9 +13728,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -13837,9 +13854,9 @@ import { RegisterClass } from "@memberjunction/global";
         * @override
         */      
         public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const pkeyValues: PrimaryKeyValue[] = [];
-            pkeyValues.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(pkeyValues, EntityRelationshipsToLoad);
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
             
         /**
@@ -13994,6 +14011,872 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get CompleteVersion(): string | null {  
             return this.Get('CompleteVersion');
+        }
+        
+
+    }
+        
+    /**
+     * Duplicate Run Detail Matches - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: DuplicateRunDetailMatch
+     * * Base View: vwDuplicateRunDetailMatches
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Duplicate Run Detail Matches')
+    export class DuplicateRunDetailMatchEntity extends BaseEntity {
+        /**
+        * Loads the Duplicate Run Detail Matches record from the database
+        * @param ID: number - primary key value to load the Duplicate Run Detail Matches record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof DuplicateRunDetailMatchEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Duplicate Run Detail Matches - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof DuplicateRunDetailMatchEntity
+        * @throws {Error} - Delete is not allowed for Duplicate Run Detail Matches, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Duplicate Run Detail Matches, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: DuplicateRunDetailID
+        * * Display Name: Duplicate Run Detail ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Duplicate Run Details (vwDuplicateRunDetails.ID)
+        */
+        get DuplicateRunDetailID(): number {  
+            return this.Get('DuplicateRunDetailID');
+        }
+        set DuplicateRunDetailID(value: number) {
+            this.Set('DuplicateRunDetailID', value);
+        }
+        /**
+        * * Field Name: MatchSource
+        * * Display Name: Match Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Vector'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * SP
+        *   * Vector
+        * * Description: Either Vector or SP
+        */
+        get MatchSource(): 'SP' | 'Vector' {  
+            return this.Get('MatchSource');
+        }
+        set MatchSource(value: 'SP' | 'Vector') {
+            this.Set('MatchSource', value);
+        }
+        /**
+        * * Field Name: MatchRecordID
+        * * Display Name: Match Record ID
+        * * SQL Data Type: nvarchar(500)
+        */
+        get MatchRecordID(): string {  
+            return this.Get('MatchRecordID');
+        }
+        set MatchRecordID(value: string) {
+            this.Set('MatchRecordID', value);
+        }
+        /**
+        * * Field Name: MatchProbability
+        * * Display Name: Match Probability
+        * * SQL Data Type: numeric(12, 11)
+        * * Default Value: 0
+        * * Description: Value between 0 and 1 designating the computed probability of a match
+        */
+        get MatchProbability(): number {  
+            return this.Get('MatchProbability');
+        }
+        set MatchProbability(value: number) {
+            this.Set('MatchProbability', value);
+        }
+        /**
+        * * Field Name: MatchedAt
+        * * Display Name: Matched At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get MatchedAt(): Date {  
+            return this.Get('MatchedAt');
+        }
+        set MatchedAt(value: Date) {
+            this.Set('MatchedAt', value);
+        }
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Ignore'
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        set Action(value: string) {
+            this.Set('Action', value);
+        }
+        /**
+        * * Field Name: ApprovalStatus
+        * * Display Name: Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Rejected
+        *   * Approved
+        *   * Pending
+        */
+        get ApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+            return this.Get('ApprovalStatus');
+        }
+        set ApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
+            this.Set('ApprovalStatus', value);
+        }
+        /**
+        * * Field Name: MergeStatus
+        * * Display Name: Merge Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Error
+        *   * Complete
+        *   * Pending
+        */
+        get MergeStatus(): 'Error' | 'Complete' | 'Pending' {  
+            return this.Get('MergeStatus');
+        }
+        set MergeStatus(value: 'Error' | 'Complete' | 'Pending') {
+            this.Set('MergeStatus', value);
+        }
+        /**
+        * * Field Name: MergedAt
+        * * Display Name: Merged At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get MergedAt(): Date {  
+            return this.Get('MergedAt');
+        }
+        set MergedAt(value: Date) {
+            this.Set('MergedAt', value);
+        }
+        /**
+        * * Field Name: RecordMergeLogID
+        * * Display Name: Record Merge Log ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Record Merge Logs (vwRecordMergeLogs.ID)
+        */
+        get RecordMergeLogID(): number | null {  
+            return this.Get('RecordMergeLogID');
+        }
+        set RecordMergeLogID(value: number | null) {
+            this.Set('RecordMergeLogID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Document Settings - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityDocumentSetting
+     * * Base View: vwEntityDocumentSettings
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Document Settings')
+    export class EntityDocumentSettingEntity extends BaseEntity {
+        /**
+        * Loads the Entity Document Settings record from the database
+        * @param ID: number - primary key value to load the Entity Document Settings record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityDocumentSettingEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Document Settings - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityDocumentSettingEntity
+        * @throws {Error} - Delete is not allowed for Entity Document Settings, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Document Settings, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityDocumentID
+        * * Display Name: Entity Document ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Documents (vwEntityDocuments.ID)
+        */
+        get EntityDocumentID(): number {  
+            return this.Get('EntityDocumentID');
+        }
+        set EntityDocumentID(value: number) {
+            this.Set('EntityDocumentID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Value(): string {  
+            return this.Get('Value');
+        }
+        set Value(value: string) {
+            this.Set('Value', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: EntityDocument
+        * * Display Name: Entity Document
+        * * SQL Data Type: nvarchar(250)
+        */
+        get EntityDocument(): string {  
+            return this.Get('EntityDocument');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Settings - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntitySetting
+     * * Base View: vwEntitySettings
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Settings')
+    export class EntitySettingEntity extends BaseEntity {
+        /**
+        * Loads the Entity Settings record from the database
+        * @param ID: number - primary key value to load the Entity Settings record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntitySettingEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Settings - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntitySettingEntity
+        * @throws {Error} - Delete is not allowed for Entity Settings, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Settings, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Value(): string {  
+            return this.Get('Value');
+        }
+        set Value(value: string) {
+            this.Set('Value', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+
+    }
+        
+    /**
+     * Duplicate Runs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: DuplicateRun
+     * * Base View: vwDuplicateRuns
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Duplicate Runs')
+    export class DuplicateRunEntity extends BaseEntity {
+        /**
+        * Loads the Duplicate Runs record from the database
+        * @param ID: number - primary key value to load the Duplicate Runs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof DuplicateRunEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Duplicate Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof DuplicateRunEntity
+        * @throws {Error} - Delete is not allowed for Duplicate Runs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Duplicate Runs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: StartedByUserID
+        * * Display Name: Started By User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get StartedByUserID(): number {  
+            return this.Get('StartedByUserID');
+        }
+        set StartedByUserID(value: number) {
+            this.Set('StartedByUserID', value);
+        }
+        /**
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get StartedAt(): Date {  
+            return this.Get('StartedAt');
+        }
+        set StartedAt(value: Date) {
+            this.Set('StartedAt', value);
+        }
+        /**
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        */
+        get EndedAt(): Date | null {  
+            return this.Get('EndedAt');
+        }
+        set EndedAt(value: Date | null) {
+            this.Set('EndedAt', value);
+        }
+        /**
+        * * Field Name: ApprovalStatus
+        * * Display Name: Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Rejected
+        *   * Approved
+        *   * Pending
+        */
+        get ApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+            return this.Get('ApprovalStatus');
+        }
+        set ApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
+            this.Set('ApprovalStatus', value);
+        }
+        /**
+        * * Field Name: ApprovalComments
+        * * Display Name: Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get ApprovalComments(): string | null {  
+            return this.Get('ApprovalComments');
+        }
+        set ApprovalComments(value: string | null) {
+            this.Set('ApprovalComments', value);
+        }
+        /**
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get ApprovedByUserID(): number | null {  
+            return this.Get('ApprovedByUserID');
+        }
+        set ApprovedByUserID(value: number | null) {
+            this.Set('ApprovedByUserID', value);
+        }
+        /**
+        * * Field Name: ProcessingStatus
+        * * Display Name: Processing Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Failed
+        *   * Complete
+        *   * In Progress
+        *   * Pending
+        */
+        get ProcessingStatus(): 'Failed' | 'Complete' | 'In Progress' | 'Pending' {  
+            return this.Get('ProcessingStatus');
+        }
+        set ProcessingStatus(value: 'Failed' | 'Complete' | 'In Progress' | 'Pending') {
+            this.Set('ProcessingStatus', value);
+        }
+        /**
+        * * Field Name: ProcessingErrorMessage
+        * * Display Name: Processing Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get ProcessingErrorMessage(): string | null {  
+            return this.Get('ProcessingErrorMessage');
+        }
+        set ProcessingErrorMessage(value: string | null) {
+            this.Set('ProcessingErrorMessage', value);
+        }
+        /**
+        * * Field Name: SourceListID
+        * * Display Name: Source List ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Lists (vwLists.ID)
+        */
+        get SourceListID(): number {  
+            return this.Get('SourceListID');
+        }
+        set SourceListID(value: number) {
+            this.Set('SourceListID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: StartedByUser
+        * * Display Name: Started By User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get StartedByUser(): string {  
+            return this.Get('StartedByUser');
+        }
+        
+        /**
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get ApprovedByUser(): string | null {  
+            return this.Get('ApprovedByUser');
+        }
+        
+        /**
+        * * Field Name: SourceList
+        * * Display Name: Source List
+        * * SQL Data Type: nvarchar(100)
+        */
+        get SourceList(): string {  
+            return this.Get('SourceList');
+        }
+        
+
+    }
+        
+    /**
+     * Duplicate Run Details - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: DuplicateRunDetail
+     * * Base View: vwDuplicateRunDetails
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Duplicate Run Details')
+    export class DuplicateRunDetailEntity extends BaseEntity {
+        /**
+        * Loads the Duplicate Run Details record from the database
+        * @param ID: number - primary key value to load the Duplicate Run Details record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof DuplicateRunDetailEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Duplicate Run Details - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof DuplicateRunDetailEntity
+        * @throws {Error} - Delete is not allowed for Duplicate Run Details, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Duplicate Run Details, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: DuplicateRunID
+        * * Display Name: Duplicate Run ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Duplicate Runs (vwDuplicateRuns.ID)
+        */
+        get DuplicateRunID(): number {  
+            return this.Get('DuplicateRunID');
+        }
+        set DuplicateRunID(value: number) {
+            this.Set('DuplicateRunID', value);
+        }
+        /**
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(500)
+        */
+        get RecordID(): string {  
+            return this.Get('RecordID');
+        }
+        set RecordID(value: string) {
+            this.Set('RecordID', value);
+        }
+        /**
+        * * Field Name: MatchStatus
+        * * Display Name: Match Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Error
+        *   * Skipped
+        *   * Complete
+        *   * Pending
+        */
+        get MatchStatus(): 'Error' | 'Skipped' | 'Complete' | 'Pending' {  
+            return this.Get('MatchStatus');
+        }
+        set MatchStatus(value: 'Error' | 'Skipped' | 'Complete' | 'Pending') {
+            this.Set('MatchStatus', value);
+        }
+        /**
+        * * Field Name: SkippedReason
+        * * Display Name: Skipped Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped
+        */
+        get SkippedReason(): string | null {  
+            return this.Get('SkippedReason');
+        }
+        set SkippedReason(value: string | null) {
+            this.Set('SkippedReason', value);
+        }
+        /**
+        * * Field Name: MatchErrorMessage
+        * * Display Name: Match Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: If MatchStatus='Error' this field can be used to track the error from that phase of the process for logging/diagnostics.
+        */
+        get MatchErrorMessage(): string | null {  
+            return this.Get('MatchErrorMessage');
+        }
+        set MatchErrorMessage(value: string | null) {
+            this.Set('MatchErrorMessage', value);
+        }
+        /**
+        * * Field Name: MergeStatus
+        * * Display Name: Merge Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: N'Not Applicable'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Error
+        *   * Complete
+        *   * Pending
+        *   * Not Applicable
+        */
+        get MergeStatus(): 'Error' | 'Complete' | 'Pending' | 'Not Applicable' {  
+            return this.Get('MergeStatus');
+        }
+        set MergeStatus(value: 'Error' | 'Complete' | 'Pending' | 'Not Applicable') {
+            this.Set('MergeStatus', value);
+        }
+        /**
+        * * Field Name: MergeErrorMessage
+        * * Display Name: Merge Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get MergeErrorMessage(): string | null {  
+            return this.Get('MergeErrorMessage');
+        }
+        set MergeErrorMessage(value: string | null) {
+            this.Set('MergeErrorMessage', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
         }
         
 

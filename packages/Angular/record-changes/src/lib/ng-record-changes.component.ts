@@ -48,11 +48,11 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       this.renderer.removeChild(document.body, this.wrapper.nativeElement);
   }
 
-  async LoadRecordChanges(primaryKeyValue: any, appName: string, entityName: string) {
+  async LoadRecordChanges(KeyValuePair: any, appName: string, entityName: string) {
     // Perform any necessary actions with the ViewID, such as fetching data
-    if (primaryKeyValue && entityName) {
+    if (KeyValuePair && entityName) {
       const rv = new RunView();
-      const response = await rv.RunView({ EntityName: "Record Changes", ExtraFilter: `Entity='${entityName}' AND RecordID='${primaryKeyValue}'`});
+      const response = await rv.RunView({ EntityName: "Record Changes", ExtraFilter: `Entity='${entityName}' AND RecordID='${KeyValuePair}'`});
       if(response.Success){
         this.viewData = response.Results;
         this.showloader = false;

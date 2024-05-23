@@ -80,13 +80,16 @@
             "Name": "Angular/shared"
         },
         {
+            "Name": "Angular/container-directives"
+        },
+        {
             "Name": "Angular/tab-strip"
         },
         {
-            "Name": "Angular/auth-services"
+            "Name": "Angular/chat"
         },
         {
-            "Name": "Angular/container-directives"
+            "Name": "Angular/auth-services"
         },
         {
             "Name": "Angular/link-directives"

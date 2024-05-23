@@ -82,6 +82,11 @@ export type RunViewParams = {
      * want to programmatically run a view and get ALL the data back, regardless of the MaxRows setting on the entity.
      */
     IgnoreMaxRows?: boolean
+
+    /**
+     * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
+     */
+    MaxRows?: number
     /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
@@ -92,11 +97,11 @@ export type RunViewParams = {
     AuditLogDescription?: string
 
     /**
-     * Result Type is either 'simple' or 'entity_object' and defaults to 'Plain'. If 'EntityObject' is specified, the Results[] array will contain
-     * BaseEntity-derived objects instead of plain objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
-     * if you plan to do any update/delete operations on the data.
+     * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
+     * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or 
+     * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
      */
-    ResultType?: 'simple' | 'entity_object';
+    ResultType?: 'simple' | 'entity_object' | 'count_only';
 } 
 
 /**

@@ -2,7 +2,8 @@ import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, E
 
 import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
 import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType, 
-         EntityRelationshipInfo, Metadata, RunViewParams, LogError } from '@memberjunction/core';
+         EntityRelationshipInfo, Metadata, RunViewParams, LogError, 
+         RecordDependency} from '@memberjunction/core';
 import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
 import { BaseRecordComponent } from './base-record-component';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -26,10 +27,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public GridBottomMargin: number = 100;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
+  public showDeleteDialog: boolean = false;
+  public showCreateDialog: boolean = false;
   private splitterLayoutChangeSubject = new Subject<void>();
 
   private _pendingRecords: BaseEntity[] = [];
   private _updatingBrowserUrl: boolean = false;
+
+
+  private __debug: boolean = false;
 
   constructor(protected elementRef: ElementRef, protected sharedService: SharedService, protected router: Router, protected route: ActivatedRoute) {
     super();
@@ -41,8 +47,29 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const md: Metadata = new Metadata();
    
-      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKeys.map(pk => {return {FieldName: pk.Name, Value: pk.Value}}))
+      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.CompositeKey);
       this.FavoriteInitDone = true;
+
+      // DEBUG ONLY output to console our full record info for debugging
+      if (this.__debug) {
+        const start = new Date().getTime();
+        console.log('Full Record Info: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
+        const dataObject = await this.record.GetDataObject({
+          includeRelatedEntityData: true,
+          oldValues: false,
+          omitEmptyStrings: false,
+          omitNullValues: false,
+          excludeFields: [],
+          relatedEntityList: this.record.EntityInfo.RelatedEntities.map(x => {
+            return {
+              relatedEntityName: x.RelatedEntity
+            }
+          })
+        })
+        const end = new Date().getTime();
+        console.log(dataObject);
+        console.log('Time to get full record info: ' + (end - start) + 'ms');  
+      }
     }
   }
 
@@ -133,6 +160,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     this.isHistoryDialogOpen = !this.isHistoryDialogOpen;
   }
 
+  public ShowChanges(): void {
+    if (this.record) {
+      const changes = this.record.GetAll(false, true);
+      const oldValues = this.record.GetAll(true, true);
+      console.log('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value)
+      console.log(changes);
+      console.log('Old Values');
+      console.log(oldValues);
+      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
+    }
+  }
+
   public async RemoveFavorite(): Promise<void> {
     return this.SetFavoriteStatus(false)
   }
@@ -143,7 +182,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SetFavoriteStatus(isFavorite: boolean) {
     const md: Metadata = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKeys.map(pk => {return {FieldName: pk.Name, Value: pk.Value}}), isFavorite)
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.CompositeKey, isFavorite)
     this._isFavorite = isFavorite;
   }
 
@@ -401,8 +440,6 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         return false;
   }
 
-
-
   protected GetTabTopPosition(): number {
     if (this.elementRef && this.elementRef.nativeElement) {
       const tabs = this.elementRef.nativeElement.getElementsByClassName('k-tabstrip');
@@ -475,7 +512,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public async ShowDependencies() {
     // for now dump to console
     const md = new Metadata();
-    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey.Value)
+    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey)
     console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
     console.log(dep);
 
@@ -487,6 +524,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     //   })
     //   console.log(mergeResult);
     // }
+  }
+
+  public async GetRecordDependencies(): Promise<RecordDependency[]> {
+    const md = new Metadata();
+    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey);
+    return dependencies;
   }
 
   public get EntityInfo(): EntityInfo | undefined {

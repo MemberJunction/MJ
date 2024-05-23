@@ -1,7 +1,0 @@
-{
-  "type": "patch",
-  "comment": "Added documentation (JSDoc) for the new BaseFieldComponent (mj-form-field selector)",
-  "packageName": "@memberjunction/ng-base-forms",
-  "email": "97354817+AN-BC@users.noreply.github.com",
-  "dependentChangeType": "patch"
-}

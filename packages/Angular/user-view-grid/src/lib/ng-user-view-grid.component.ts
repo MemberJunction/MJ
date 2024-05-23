@@ -2,8 +2,8 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, PrimaryKeyValue, ComparePrimaryKeys } from '@memberjunction/core';
-import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended } from '@memberjunction/core-entities';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
          ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
@@ -20,7 +20,7 @@ import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 export type GridRowClickedEvent = {
   entityId: number;
   entityName: string;
-  primaryKeyValues: PrimaryKeyValue[];
+  CompositeKey: CompositeKey;
 }
 
 export type GridRowEditedEvent = {
@@ -83,9 +83,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   private editModeEnded = new Subject<void>();
 
   public recordsToCompare: any[] = [];
-  public compareMode: boolean = false;
 
+  public compareMode: boolean = false;
   public mergeMode: boolean = false;
+  public duplicateMode: boolean = false;
 
   public selectableSettings: SelectableSettings = {
     enabled: false
@@ -366,14 +367,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     if(this.compareMode || this.mergeMode ) return;
     
     if (this._entityInfo) {
-      const pkeyVals: PrimaryKeyValue[] = [];
-      this._entityInfo.PrimaryKeys.forEach((pkey: EntityFieldInfo) => {
-        pkeyVals.push({FieldName: pkey.Name, Value: this.viewData[args.rowIndex][pkey.Name]})
-      })
+      const compositeKey: CompositeKey = new CompositeKey();
+      compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        primaryKeyValues: pkeyVals
+        CompositeKey: compositeKey
       })
 
       if (this._entityInfo.AllowUpdateAPI && 
@@ -387,15 +386,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
       if (this.EditMode==='None' && this.AutoNavigate) {
         // tell app router to go to this record
-        const pkVals: string =  this.GeneratePrimaryKeyValueString(pkeyVals);
-        this.router.navigate(['resource', 'record', pkVals], { queryParams: { Entity: this._entityInfo.Name } })
+        this.router.navigate(['resource', 'record', compositeKey.ToURLSegment()], { queryParams: { Entity: this._entityInfo.Name } })
       }
     } 
   } 
-
-  public GeneratePrimaryKeyValueString(pkVals: PrimaryKeyValue[]): string {
-    return pkVals.map(pk => pk.FieldName + '|' + pk.Value).join('||');
-  }
 
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
@@ -445,13 +439,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
+            let compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
             record = await md.GetEntityObject(this._entityInfo.Name);
-            await record.InnerLoad(this._entityInfo.PrimaryKeys.map(pk => {
-              return {
-                FieldName: pk.Name,
-                Value: dataItem[pk.Name]
-              };
-            }));
+            await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
             if (!bSaved)
@@ -461,12 +452,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
-              await record.InnerLoad(this._entityInfo.PrimaryKeys.map(pk => {
-                return {
-                  FieldName: pk.Name,
-                  Value: dataItem[pk.Name]
-                };
-              }));
+              let compositeKey: CompositeKey = new CompositeKey();
+              compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
+              await record.InnerLoad(compositeKey);
               this._pendingRecords.push({record, 
                                          row: args.rowIndex, 
                                          dataItem}); // don't save - put the changed record on a queue for saving later by our container
@@ -725,6 +713,34 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
+  enableCheckbox(cancel: boolean = false, type: 'merge' | 'compare' | 'duplicate' | ''){
+    if(!cancel && this.recordsToCompare.length >= 2){
+      // this scenario occurs when we've already started the merge/compare/duplicate and the user has selected records, then clicked the merge/compare button again
+      this.isCompareDialogOpened = true;
+      this.moveDialogToBody();
+    }
+    else if (cancel) {
+      // the user clicked cancel in our toolbar
+      this.mergeMode = false;
+      this.compareMode = false;
+      this.duplicateMode = false;
+      this.selectedKeys = [];
+      this.recordsToCompare = [];
+    }
+    else {
+      // just turning on the checkbox from the merge/compare/duplicate button, so just turn it on and let the user select records
+      if(type === 'merge'){
+        this.mergeMode = true;
+      }
+      else if(type === 'compare'){
+        this.compareMode = true;
+      }
+      else if(type === 'duplicate'){
+        this.duplicateMode = true;
+      }
+    }
+  }
+
   async closeConfirmMergeDialog(event: 'cancel' | 'yes' | 'no') {
     if (event === 'yes') {
       if (this._entityInfo && this.recordCompareComponent) {
@@ -733,20 +749,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
-            // return an array of primary key values for each record to merge
-            return pkeys.map((pkey: EntityFieldInfo) => {
-              return {
-                FieldName: pkey.Name,
-                Value: r.Get(pkey.Name)
-              } as PrimaryKeyValue
-            })
-          }).filter((pkeyVals: PrimaryKeyValue[]) => {
-            if (!this.recordCompareComponent)
+            return r.CompositeKey;
+          }).filter((compositeKey: CompositeKey) => {
+            if (!this.recordCompareComponent){
               return false;
-            else
-              return !ComparePrimaryKeys(pkeyVals, this.recordCompareComponent.selectedRecordPKeyVal)
+            }
+
+            return this.recordCompareComponent.selectedRecordCompositeKey.Equals(compositeKey);
           }),
-          SurvivingRecordPrimaryKeyValues: this.recordCompareComponent.selectedRecordPKeyVal,
+          SurvivingRecordCompositeKey: this.recordCompareComponent.selectedRecordCompositeKey,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,
@@ -781,8 +792,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  async closeCompareDialog(event: 'close' | 'cancel' | 'merge'){
-    console.log(event)
+  async closeCompareDialog(event: 'close' | 'cancel' | 'merge' | 'duplicate') {
+    console.log(event);
     switch (event) {
       case 'merge':
         // user has requested to merge the records and retain the selected record from the compare records component, so run the merge
@@ -794,10 +805,54 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         this.recordsToCompare = [];
         this.mergeMode = false;
         this.compareMode = false;
-
+        this.duplicateMode = false;
         this.isCompareDialogOpened = false;
         break;
     }
+  }
+
+  public async findDuplicateRecords(): Promise<void> 
+  {
+    if(!this._entityInfo){
+      console.error("Entity Info is not available");
+      this.closeCompareDialog('duplicate');
+      return;
+    }
+
+    const md: Metadata = new Metadata();
+    const list: ListEntity = await md.GetEntityObject<ListEntity>('Lists');
+    list.NewRecord();
+    list.Name = `Potential Duplicate Run`;
+    list.Description = `Potential Duplicate Run for ${this._entityInfo.Name} Entity`;
+    list.EntityID = this._entityInfo.ID;
+    list.UserID = md.CurrentUser.ID;
+
+    const saveResult = await list.Save();
+    if(!saveResult){
+        console.error(`Failed to save list for Potential Duplicate Run`);
+        return;
+    }
+
+    let params: PotentialDuplicateRequest = new PotentialDuplicateRequest();
+    params.EntityID = this._entityInfo?.ID;
+    params.ListID = list.ID;
+    params.RecordIDs = [];
+
+    for(const index of this.selectedKeys){
+      const viewData = this.viewData[index];
+      const idField: number = viewData.ID;
+      const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
+      listDetail.NewRecord();
+      listDetail.ListID = list.ID;
+      listDetail.RecordID = idField.toString();
+      await listDetail.Save();
+    }
+
+    this.closeCompareDialog('duplicate');
+    this.CreateSimpleNotification("Working on finding duplicates, will notify you when it is complete...", 'info', 2000);
+
+    let response = await md.GetRecordDuplicates(params, md.CurrentUser);
+    console.log(response);
   }
 
 
@@ -809,7 +864,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       throw new Error("kendoExcelExport is null, cannot export data");
 
     try {
-      this.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000)
+      this.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000);
       const data = await this.getExportData();
       // we have the data.
       const cols =  this.viewColumns.filter((vc: ViewColumnInfo) => vc.hidden === false) 
@@ -824,7 +879,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     catch (e) {
       this.CreateSimpleNotification("Error exporting data", 'error', 5000)
-      LogError(e)
+      LogError(e);
     }
   } 
 

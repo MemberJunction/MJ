@@ -7,6 +7,9 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: "publish"
   cancel-in-progress: false
@@ -16,6 +19,8 @@ jobs:
     name: Build and publish new versions of NPM packages
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
     env:
       BRANCH: ${{ github.base_ref || github.ref_name }}
     steps:
@@ -59,6 +64,17 @@ jobs:
         run: npm run release -- --no-push --branch origin/next --prerelease-prefix beta --tag beta --token "$NPM_TOKEN"
         env:
           NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
+
+      - name: Get version string
+        if: ${{ env.BRANCH == 'main' }}
+        id: version
+        run: |
+          git checkout main
+          git pull
+          git log -n1
+          VERSION="v"$(jq -r .version packages/MJGlobal/package.json)
+          echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT          
  
   merge-main-to-next:
     runs-on: ubuntu-latest
@@ -69,14 +85,16 @@ jobs:
       uses: actions/checkout@v3
       with:
         ref: 'next'
+        persist-credentials: false
+        token: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
-    - name: Configure Git
+    - name: Set up git credentials
       run: |
-        git config user.name "GitHub Action"
-        git config user.email "action@github.com"
-
-    - name: Pull latest next branch
-      run: git pull origin next
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "GitHub Actions"
+        git remote set-url origin "https://$REPO_PAT@github.com/MemberJunction/MJ"
+      env:
+        REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
 
     - name: Merge main into next
       run: |
@@ -87,24 +105,53 @@ jobs:
       run: |
         conflicts=$(git diff --name-only --diff-filter=U)
         if [ -n "$conflicts" ]; then
-          cat <<-EOT >> $GITHUB_STEP_SUMMARY
-            Conflicts detected in the following files:
-            
-            \`\`\`
-            $conflicts
-            \`\`\`
-          EOT
-          echo "Conflict details:" >>
+          echo "Conflicts detected in the following files: $conflicts \n" >> $GITHUB_STEP_SUMMARY
+  
+          echo "Conflict details:" >> $GITHUB_STEP_SUMMARY
           for file in $conflicts; do
               echo "Conflicts in $file:" >> $GITHUB_STEP_SUMMARY
               git diff $file >> $GITHUB_STEP_SUMMARY
-              echo >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
           done
           git checkout --theirs $conflicts
           git add $conflicts
           echo "Conflicts resolved using 'theirs'." >> $GITHUB_STEP_SUMMARY
         fi
-        git commit -m "Merged main into next resolving conflicts using 'theirs'"
+        git commit -m "Updating package versions [skip ci]"
 
     - name: Push changes
-      run: git push
+      run: |
+        git push
+ 
+  create-distribution:
+    runs-on: ubuntu-latest
+    if: ${{ (github.base_ref || github.ref_name) == 'main' }}
+    needs: build-and-publish
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+        cache-dependency-path: 'package-lock.json'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Create distribution artifact
+      id: zip
+      run: |
+        node CreateMJDistribution.js
+        ARTIFACT=$(cat CreateMJDistribution.log)
+        echo "ARTIFACT=$ARTIFACT" >> $GITHUB_OUTPUT
+
+    - name: Create release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: ${{ needs.build-and-publish.outputs.version }}
+        tag_name: ${{ needs.build-and-publish.outputs.version }}
+        files: ${{ steps.zip.outputs.ARTIFACT }}
+        token: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}

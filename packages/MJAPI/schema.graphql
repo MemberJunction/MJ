@@ -38,7 +38,7 @@ type AIModelType_ {
   Name: String!
 }
 
-"""Catalog of all AI Models configured in the system."""
+"""Catalog of all AI Models configured in the system"""
 type AIModel_ {
   AIActionsArray: [AIAction_!]!
   AIModelActionsArray: [AIModelAction_!]!
@@ -54,6 +54,7 @@ type AIModel_ {
   DriverClass: String
   DriverImportPath: String
   EntityAIActionsArray: [EntityAIAction_!]!
+  EntityDocumentsArray: [EntityDocument_!]!
   ID: Int!
   IsActive: Boolean!
   Name: String!
@@ -346,6 +347,14 @@ type Company_ {
   WorkflowsArray: [Workflow_!]!
 }
 
+input CompositeKeyInputType {
+  KeyValuePairs: [KeyValuePairInputType!]! = []
+}
+
+type CompositeKeyOutputType {
+  KeyValuePairs: [KeyValuePairOutputType!]!
+}
+
 type ContactLevel_ {
   ContactsArray: [Contact_!]!
   CreatedAt: Timestamp!
@@ -430,7 +439,7 @@ type Conversation_ {
   IsArchived: Boolean!
   LinkedEntity: String
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   ReportsArray: [Report_!]!
   Type: String!
@@ -593,7 +602,7 @@ input CreateConversationInput {
   ExternalID: String
   IsArchived: Boolean!
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   Type: String!
   UserID: Int!
@@ -677,6 +686,42 @@ input CreateDealTypeInput {
   Name: String
 }
 
+input CreateDuplicateRunDetailInput {
+  DuplicateRunID: Int!
+  MatchErrorMessage: String
+  MatchStatus: String!
+  MergeErrorMessage: String
+  MergeStatus: String!
+  RecordID: String!
+  SkippedReason: String
+}
+
+input CreateDuplicateRunDetailMatchInput {
+  Action: String!
+  ApprovalStatus: String!
+  DuplicateRunDetailID: Int!
+  MatchProbability: Float!
+  MatchRecordID: String!
+  MatchSource: String!
+  MatchedAt: Timestamp!
+  MergeStatus: String!
+  MergedAt: Timestamp!
+  RecordMergeLogID: Int
+}
+
+input CreateDuplicateRunInput {
+  ApprovalComments: String
+  ApprovalStatus: String!
+  ApprovedByUserID: Int
+  EndedAt: Timestamp
+  EntityID: Int!
+  ProcessingErrorMessage: String
+  ProcessingStatus: String!
+  SourceListID: Int!
+  StartedAt: Timestamp!
+  StartedByUserID: Int!
+}
+
 input CreateEmployeeInput {
   Active: Boolean!
   CompanyID: Int!
@@ -690,8 +735,10 @@ input CreateEmployeeInput {
 
 input CreateEntityDocumentInput {
   AIModelID: Int!
+  AbsoluteMatchThreshold: Float!
   EntityID: Int!
   Name: String!
+  PotentialMatchThreshold: Float!
   Status: String!
   Template: String
   TypeID: Int!
@@ -703,6 +750,13 @@ input CreateEntityDocumentRunInput {
   EntityDocumentID: Int!
   StartedAt: Timestamp
   Status: String!
+}
+
+input CreateEntityDocumentSettingInput {
+  Comments: String
+  EntityDocumentID: Int!
+  Name: String!
+  Value: String!
 }
 
 input CreateEntityDocumentTypeInput {
@@ -772,6 +826,7 @@ input CreateEntityInput {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -816,6 +871,13 @@ input CreateEntityRelationshipInput {
   Type: String!
 }
 
+input CreateEntitySettingInput {
+  Comments: String
+  EntityID: Int!
+  Name: String!
+  Value: String!
+}
+
 input CreateFileCategoryInput {
   Description: String
   Name: String!
@@ -840,6 +902,7 @@ input CreateFileInput {
 
 type CreateFilePayload {
   File: File_!
+  NameExists: Boolean!
   UploadUrl: String!
 }
 
@@ -1385,6 +1448,69 @@ type Deal_ {
   Value: Float
 }
 
+type DuplicateRunDetailMatch_ {
+  Action: String!
+  ApprovalStatus: String!
+  CreatedAt: Timestamp!
+  DuplicateRunDetailID: Int!
+  ID: Int!
+
+  """Value between 0 and 1 designating the computed probability of a match"""
+  MatchProbability: Float!
+  MatchRecordID: String!
+
+  """Either Vector or SP"""
+  MatchSource: String!
+  MatchedAt: Timestamp!
+  MergeStatus: String!
+  MergedAt: Timestamp!
+  RecordMergeLogID: Int
+  UpdatedAt: Timestamp!
+}
+
+type DuplicateRunDetail_ {
+  CreatedAt: Timestamp!
+  DuplicateRunDetailMatchesArray: [DuplicateRunDetailMatch_!]!
+  DuplicateRunID: Int!
+  ID: Int!
+
+  """
+  If MatchStatus='Error' this field can be used to track the error from that phase of the process for logging/diagnostics.
+  """
+  MatchErrorMessage: String
+  MatchStatus: String!
+  MergeErrorMessage: String
+  MergeStatus: String!
+  RecordID: String!
+
+  """
+  If MatchStatus=Skipped, this field can be used to store the reason why the record was skipped
+  """
+  SkippedReason: String
+  UpdatedAt: Timestamp!
+}
+
+type DuplicateRun_ {
+  ApprovalComments: String
+  ApprovalStatus: String!
+  ApprovedByUser: String
+  ApprovedByUserID: Int
+  CreatedAt: Timestamp!
+  DuplicateRunDetailsArray: [DuplicateRunDetail_!]!
+  EndedAt: Timestamp
+  Entity: String!
+  EntityID: Int!
+  ID: Int!
+  ProcessingErrorMessage: String
+  ProcessingStatus: String!
+  SourceList: String!
+  SourceListID: Int!
+  StartedAt: Timestamp!
+  StartedByUser: String!
+  StartedByUserID: Int!
+  UpdatedAt: Timestamp!
+}
+
 type EmployeeCompanyIntegration_ {
   CompanyIntegrationID: Int!
   CreatedAt: Timestamp!
@@ -1481,6 +1607,17 @@ type EntityDocumentRun_ {
   UpdatedAt: Timestamp!
 }
 
+type EntityDocumentSetting_ {
+  Comments: String
+  CreatedAt: Timestamp!
+  EntityDocument: String!
+  EntityDocumentID: Int!
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+  Value: String!
+}
+
 type EntityDocumentType_ {
   CreatedAt: Timestamp!
   Description: String
@@ -1492,12 +1629,23 @@ type EntityDocumentType_ {
 
 type EntityDocument_ {
   AIModelID: Int!
+
+  """
+  Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
+  """
+  AbsoluteMatchThreshold: Float!
   CreatedAt: Timestamp!
   Entity: String!
   EntityDocumentRunsArray: [EntityDocumentRun_!]!
+  EntityDocumentSettingsArray: [EntityDocumentSetting_!]!
   EntityID: Int!
   ID: Int!
   Name: String!
+
+  """
+  Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
+  """
+  PotentialMatchThreshold: Float!
   Status: String!
   Template: String
   Type: String!
@@ -1616,13 +1764,13 @@ type EntityRecordDocument_ {
 }
 
 input EntityRecordNameInput {
+  CompositeKey: CompositeKeyInputType!
   EntityName: String!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
 }
 
 type EntityRecordNameResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityName: String!
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   RecordName: String
   Status: String!
   Success: Boolean!
@@ -1664,6 +1812,17 @@ type EntityRelationship_ {
   Sequence: Int!
   Type: String!
   UpdatedAt: Timestamp!
+}
+
+type EntitySetting_ {
+  Comments: String
+  CreatedAt: Timestamp!
+  Entity: String!
+  EntityID: Int!
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+  Value: String!
 }
 
 """Catalog of all entities across all schemas"""
@@ -1715,6 +1874,10 @@ type Entity_ {
 
   """When set to 0, CodeGen no longer generates a base view for the entity."""
   BaseViewGenerated: Boolean!
+
+  """
+  When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
+  """
   CascadeDeletes: Boolean!
   ClassName: String
   CodeName: String
@@ -1728,6 +1891,7 @@ type Entity_ {
   DataContextItemsArray: [DataContextItem_!]!
   DatasetItemsArray: [DatasetItem_!]!
   Description: String
+  DuplicateRunsArray: [DuplicateRun_!]!
   EntitiesArray: [Entity_!]!
   EntityAIActionsArray: [EntityAIAction_!]!
   EntityDocumentsArray: [EntityDocument_!]!
@@ -1737,6 +1901,7 @@ type Entity_ {
   EntityPermissionsArray: [EntityPermission_!]!
   EntityRecordDocumentsArray: [EntityRecordDocument_!]!
   EntityRelationshipsArray: [EntityRelationship_!]!
+  EntitySettingsArray: [EntitySetting_!]!
   FileEntityRecordLinksArray: [FileEntityRecordLink_!]!
   FullTextCatalog: String
   FullTextCatalogGenerated: Boolean!
@@ -1784,6 +1949,11 @@ type Entity_ {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+
+  """
+  When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
+  """
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -1938,6 +2108,16 @@ type Invoice_ {
   UpdatedAt: Timestamp!
 }
 
+input KeyValuePairInputType {
+  FieldName: String!
+  Value: String!
+}
+
+type KeyValuePairOutputType {
+  FieldName: String!
+  Value: String!
+}
+
 """Tracks the records within each list."""
 type ListDetail_ {
   ID: Int!
@@ -1954,6 +2134,7 @@ type List_ {
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
+  DuplicateRunsArray: [DuplicateRun_!]!
   Entity: String
   EntityID: Int
   ExternalSystemRecordID: String
@@ -1987,15 +2168,20 @@ type Mutation {
   CreateDealForecastCategory(input: CreateDealForecastCategoryInput!): DealForecastCategory_!
   CreateDealStage(input: CreateDealStageInput!): DealStage_!
   CreateDealType(input: CreateDealTypeInput!): DealType_!
+  CreateDuplicateRun(input: CreateDuplicateRunInput!): DuplicateRun_!
+  CreateDuplicateRunDetail(input: CreateDuplicateRunDetailInput!): DuplicateRunDetail_!
+  CreateDuplicateRunDetailMatch(input: CreateDuplicateRunDetailMatchInput!): DuplicateRunDetailMatch_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
   CreateEntityDocument(input: CreateEntityDocumentInput!): EntityDocument_!
   CreateEntityDocumentRun(input: CreateEntityDocumentRunInput!): EntityDocumentRun_!
+  CreateEntityDocumentSetting(input: CreateEntityDocumentSettingInput!): EntityDocumentSetting_!
   CreateEntityDocumentType(input: CreateEntityDocumentTypeInput!): EntityDocumentType_!
   CreateEntityField(input: CreateEntityFieldInput!): EntityField_!
   CreateEntityPermission(input: CreateEntityPermissionInput!): EntityPermission_!
   CreateEntityRecordDocument(input: CreateEntityRecordDocumentInput!): EntityRecordDocument_!
   CreateEntityRelationship(input: CreateEntityRelationshipInput!): EntityRelationship_!
+  CreateEntitySetting(input: CreateEntitySettingInput!): EntitySetting_!
   CreateFile(input: CreateFileInput!): CreateFilePayload!
   CreateFileCategory(input: CreateFileCategoryInput!): FileCategory_!
   CreateFileEntityRecordLink(input: CreateFileEntityRecordLinkInput!): FileEntityRecordLink_!
@@ -2043,6 +2229,8 @@ type Mutation {
   DeleteConversationDetail(ID: Int!): ConversationDetail_!
   DeleteDashboard(ID: Int!): Dashboard_!
   DeleteDashboardCategory(ID: Int!): DashboardCategory_!
+  DeleteDataContext(ID: Int!): DataContext_!
+  DeleteDataContextItem(ID: Int!): DataContextItem_!
   DeleteDealForecastCategory(ID: Int!): DealForecastCategory_!
   DeleteEmployee(ID: Int!): Employee_!
   DeleteEntity(ID: Int!): Entity_!
@@ -2099,6 +2287,9 @@ type Mutation {
   UpdateDealForecastCategory(input: UpdateDealForecastCategoryInput!): DealForecastCategory_!
   UpdateDealStage(input: UpdateDealStageInput!): DealStage_!
   UpdateDealType(input: UpdateDealTypeInput!): DealType_!
+  UpdateDuplicateRun(input: UpdateDuplicateRunInput!): DuplicateRun_!
+  UpdateDuplicateRunDetail(input: UpdateDuplicateRunDetailInput!): DuplicateRunDetail_!
+  UpdateDuplicateRunDetailMatch(input: UpdateDuplicateRunDetailMatchInput!): DuplicateRunDetailMatch_!
   UpdateEmployee(input: UpdateEmployeeInput!): Employee_!
   UpdateEmployeeCompanyIntegration(input: UpdateEmployeeCompanyIntegrationInput!): EmployeeCompanyIntegration_!
   UpdateEmployeeRole(input: UpdateEmployeeRoleInput!): EmployeeRole_!
@@ -2107,11 +2298,13 @@ type Mutation {
   UpdateEntityAIAction(input: UpdateEntityAIActionInput!): EntityAIAction_!
   UpdateEntityDocument(input: UpdateEntityDocumentInput!): EntityDocument_!
   UpdateEntityDocumentRun(input: UpdateEntityDocumentRunInput!): EntityDocumentRun_!
+  UpdateEntityDocumentSetting(input: UpdateEntityDocumentSettingInput!): EntityDocumentSetting_!
   UpdateEntityDocumentType(input: UpdateEntityDocumentTypeInput!): EntityDocumentType_!
   UpdateEntityField(input: UpdateEntityFieldInput!): EntityField_!
   UpdateEntityPermission(input: UpdateEntityPermissionInput!): EntityPermission_!
   UpdateEntityRecordDocument(input: UpdateEntityRecordDocumentInput!): EntityRecordDocument_!
   UpdateEntityRelationship(input: UpdateEntityRelationshipInput!): EntityRelationship_!
+  UpdateEntitySetting(input: UpdateEntitySettingInput!): EntitySetting_!
   UpdateErrorLog(input: UpdateErrorLogInput!): ErrorLog_!
   UpdateFile(input: UpdateFileInput!): File_!
   UpdateFileCategory(input: UpdateFileCategoryInput!): FileCategory_!
@@ -2195,31 +2388,29 @@ type PaymentTermsType_ {
 }
 
 input PotentialDuplicateRequestType {
-  EntitiyID: Int
-  EntityDocumentID: Int!
-  EntityName: String
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  EntityDocumentID: Int
+  EntityID: Int!
+  ListID: Int!
   ProbabilityScore: Int
+  RecordIDs: [CompositeKeyInputType!]!
 }
 
 type PotentialDuplicateResponseType {
+  ErrorMessage: String
+  PotentialDuplicateResult: [PotentialDuplicateResultType!]!
+  Status: String!
+}
+
+type PotentialDuplicateResultType {
+  DuplicateRunDetailMatchRecordIDs: [Int!]!
   Duplicates: [PotentialDuplicateType!]!
-  EntityID: Int!
+  EntityID: Int
+  RecordPrimaryKeys: CompositeKeyOutputType!
 }
 
 type PotentialDuplicateType {
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
+  KeyValuePairs: [KeyValuePairOutputType!]!
   ProbabilityScore: Float!
-}
-
-input PrimaryKeyValueInputType {
-  FieldName: String!
-  Value: String!
-}
-
-type PrimaryKeyValueOutputType {
-  FieldName: String!
-  Value: String!
 }
 
 type PushStatusNotification {
@@ -2291,6 +2482,9 @@ type Query {
   DealStage(ID: Int!): DealStage_
   DealType(ID: Int!): DealType_
   DefaultViewByUserAndEntity(EntityID: Int!, UserID: Int!): [UserView_!]!
+  DuplicateRun(ID: Int!): DuplicateRun_
+  DuplicateRunDetail(ID: Int!): DuplicateRunDetail_
+  DuplicateRunDetailMatch(ID: Int!): DuplicateRunDetailMatch_
   Employee(ID: Int!): Employee_
   EmployeeCompanyIntegration(ID: Int!): EmployeeCompanyIntegration_
   EmployeeRole(ID: Int!): EmployeeRole_
@@ -2300,14 +2494,17 @@ type Query {
   EntityAIAction(ID: Int!): EntityAIAction_
   EntityDocument(ID: Int!): EntityDocument_
   EntityDocumentRun(ID: Int!): EntityDocumentRun_
+  EntityDocumentSetting(ID: Int!): EntityDocumentSetting_
   EntityDocumentType(ID: Int!): EntityDocumentType_
   EntityField(ID: Int!): EntityField_
   EntityFieldValue(ID: Int!): EntityFieldValue_
   EntityPermission(ID: Int!): EntityPermission_
   EntityRecordDocument(ID: Int!): EntityRecordDocument_
   EntityRelationship(ID: Int!): EntityRelationship_
+  EntitySetting(ID: Int!): EntitySetting_
   ErrorLog(ID: Int!): ErrorLog_
   ExecuteAskSkipAnalysisQuery(ConversationId: Int!, DataContextId: Int, UserQuestion: String!): AskSkipResultType!
+  ExecuteAskSkipRecordChat(CompositeKey: CompositeKeyInputType!, ConversationId: Int!, EntityName: String!, UserQuestion: String!): AskSkipResultType!
   ExecuteAskSkipRunScript(DataContextId: Int!, ScriptText: String!): AskSkipResultType!
   File(ID: Int!): File_
   FileCategory(ID: Int!): FileCategory_
@@ -2316,10 +2513,10 @@ type Query {
   GetDatasetByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetResultType!
   GetDatasetStatusByName(DatasetName: String!, ItemFilters: [DatasetItemFilterTypeGQL]): DatasetStatusResultType!
   GetEntityDependencies(entityName: String!): [EntityDependencyResult!]!
-  GetEntityRecordName(EntityName: String!, PrimaryKeyValues: [PrimaryKeyValueInputType!]!): EntityRecordNameResult!
+  GetEntityRecordName(CompositeKey: CompositeKeyInputType!, EntityName: String!): EntityRecordNameResult!
   GetEntityRecordNames(info: [EntityRecordNameInput!]!): [EntityRecordNameResult!]!
   GetQueryData(QueryID: Int!): RunQueryResultType!
-  GetRecordDependencies(entityName: String!, primaryKeyValues: [PrimaryKeyValueInputType!]!): [RecordDependencyResult!]!
+  GetRecordDependencies(CompositeKey: CompositeKeyInputType!, entityName: String!): [RecordDependencyResult!]!
   GetRecordDuplicates(params: PotentialDuplicateRequestType!): PotentialDuplicateResponseType!
   GetRecordFavoriteStatus(params: UserFavoriteSearchParams!): UserFavoriteResult!
   GetReportData(ReportID: Int!): RunReportResultType!
@@ -2452,6 +2649,15 @@ type Query {
   RunDealTypeViewByName(input: RunViewByNameInput!): RunDealTypeViewResult!
   RunDealViewByID(input: RunViewByIDInput!): RunDealViewResult!
   RunDealViewByName(input: RunViewByNameInput!): RunDealViewResult!
+  RunDuplicateRunDetailDynamicView(input: RunDynamicViewInput!): RunDuplicateRunDetailViewResult!
+  RunDuplicateRunDetailMatchDynamicView(input: RunDynamicViewInput!): RunDuplicateRunDetailMatchViewResult!
+  RunDuplicateRunDetailMatchViewByID(input: RunViewByIDInput!): RunDuplicateRunDetailMatchViewResult!
+  RunDuplicateRunDetailMatchViewByName(input: RunViewByNameInput!): RunDuplicateRunDetailMatchViewResult!
+  RunDuplicateRunDetailViewByID(input: RunViewByIDInput!): RunDuplicateRunDetailViewResult!
+  RunDuplicateRunDetailViewByName(input: RunViewByNameInput!): RunDuplicateRunDetailViewResult!
+  RunDuplicateRunDynamicView(input: RunDynamicViewInput!): RunDuplicateRunViewResult!
+  RunDuplicateRunViewByID(input: RunViewByIDInput!): RunDuplicateRunViewResult!
+  RunDuplicateRunViewByName(input: RunViewByNameInput!): RunDuplicateRunViewResult!
   RunDynamicView(input: RunDynamicViewInput!): RunViewResult!
   RunEmployeeCompanyIntegrationDynamicView(input: RunDynamicViewInput!): RunEmployeeCompanyIntegrationViewResult!
   RunEmployeeCompanyIntegrationViewByID(input: RunViewByIDInput!): RunEmployeeCompanyIntegrationViewResult!
@@ -2472,6 +2678,9 @@ type Query {
   RunEntityDocumentRunDynamicView(input: RunDynamicViewInput!): RunEntityDocumentRunViewResult!
   RunEntityDocumentRunViewByID(input: RunViewByIDInput!): RunEntityDocumentRunViewResult!
   RunEntityDocumentRunViewByName(input: RunViewByNameInput!): RunEntityDocumentRunViewResult!
+  RunEntityDocumentSettingDynamicView(input: RunDynamicViewInput!): RunEntityDocumentSettingViewResult!
+  RunEntityDocumentSettingViewByID(input: RunViewByIDInput!): RunEntityDocumentSettingViewResult!
+  RunEntityDocumentSettingViewByName(input: RunViewByNameInput!): RunEntityDocumentSettingViewResult!
   RunEntityDocumentTypeDynamicView(input: RunDynamicViewInput!): RunEntityDocumentTypeViewResult!
   RunEntityDocumentTypeViewByID(input: RunViewByIDInput!): RunEntityDocumentTypeViewResult!
   RunEntityDocumentTypeViewByName(input: RunViewByNameInput!): RunEntityDocumentTypeViewResult!
@@ -2493,6 +2702,9 @@ type Query {
   RunEntityRelationshipDynamicView(input: RunDynamicViewInput!): RunEntityRelationshipViewResult!
   RunEntityRelationshipViewByID(input: RunViewByIDInput!): RunEntityRelationshipViewResult!
   RunEntityRelationshipViewByName(input: RunViewByNameInput!): RunEntityRelationshipViewResult!
+  RunEntitySettingDynamicView(input: RunDynamicViewInput!): RunEntitySettingViewResult!
+  RunEntitySettingViewByID(input: RunViewByIDInput!): RunEntitySettingViewResult!
+  RunEntitySettingViewByName(input: RunViewByNameInput!): RunEntitySettingViewResult!
   RunEntityViewByID(input: RunViewByIDInput!): RunEntityViewResult!
   RunEntityViewByName(input: RunViewByNameInput!): RunEntityViewResult!
   RunErrorLogDynamicView(input: RunDynamicViewInput!): RunErrorLogViewResult!
@@ -2834,9 +3046,9 @@ type RecordChange_ {
 }
 
 type RecordDependencyResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityName: String!
   FieldName: String!
-  PrimaryKeyValue: String!
   RelatedEntityName: String!
 }
 
@@ -2851,8 +3063,8 @@ type RecordMergeDeletionLog_ {
 }
 
 type RecordMergeDetailResult {
+  CompositeKey: CompositeKeyOutputType!
   Message: String
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   RecordMergeDeletionLogID: Int
   Success: Boolean!
 }
@@ -2862,6 +3074,7 @@ type RecordMergeLog_ {
   ApprovedByUserID: Int
   Comments: String
   CreatedAt: Timestamp!
+  DuplicateRunDetailMatchesArray: [DuplicateRunDetailMatch_!]!
   Entity: String!
   EntityID: Int!
   ID: Int!
@@ -2879,8 +3092,8 @@ type RecordMergeLog_ {
 input RecordMergeRequest {
   EntityName: String!
   FieldMap: [FieldMapping!]
-  RecordsToMerge: [[PrimaryKeyValueInputType!]!]!
-  SurvivingRecordPrimaryKeyValues: [PrimaryKeyValueInputType!]!
+  RecordsToMerge: [CompositeKeyInputType!]!
+  SurvivingRecordCompositeKey: CompositeKeyInputType!
 }
 
 type RecordMergeRequestOutput {
@@ -3345,6 +3558,36 @@ type RunDealViewResult {
   UserViewRunID: Int
 }
 
+type RunDuplicateRunDetailMatchViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DuplicateRunDetailMatch_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDuplicateRunDetailViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DuplicateRunDetail_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunDuplicateRunViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [DuplicateRun_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 input RunDynamicViewInput {
   """
   if provided and either ForceAuditLog is set, or the entity's property settings for logging view runs are set to true, this will be used as the Audit Log Description.
@@ -3378,6 +3621,11 @@ input RunDynamicViewInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -3386,6 +3634,11 @@ input RunDynamicViewInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
   UserSearchString: String
 }
 
@@ -3443,6 +3696,16 @@ type RunEntityDocumentRunViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [EntityDocumentRun_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityDocumentSettingViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityDocumentSetting_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -3513,6 +3776,16 @@ type RunEntityRelationshipViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [EntityRelationship_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntitySettingViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntitySetting_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -4084,6 +4357,11 @@ input RunViewByIDInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4092,6 +4370,11 @@ input RunViewByIDInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
 
   """
   If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.
@@ -4138,6 +4421,11 @@ input RunViewByNameInput {
   IgnoreMaxRows: Boolean
 
   """
+  if a value > 0 is provided, and IgnoreMaxRows is set to false, this value is used for the max rows to be returned by the view.
+  """
+  MaxRows: Int
+
+  """
   Optional, pass in a valid order by clause sort the results on the server. For example, CreatedAt DESC to order by row creation date in reverse order. Any Valid SQL Order By clause is okay - if not provided, no server-side sorting is applied
   """
   OrderBy: String
@@ -4146,6 +4434,11 @@ input RunViewByNameInput {
   Pass in a valid condition to append to the view WHERE clause to override the Exclude List. For example, UpdatedAt >= Some Date
   """
   OverrideExcludeFilter: String
+
+  """
+  Optional, pass in entity_object, simple, or count_only as options to specify the type of result you want back. Defaults to simple if not provided
+  """
+  ResultType: String
 
   """
   If set to True, the results of this view are saved into a new UserViewRun record and the UserViewRun.ID is passed back in the results.
@@ -4539,7 +4832,7 @@ input UpdateConversationInput {
   ID: Int!
   IsArchived: Boolean!
   LinkedEntityID: Int
-  LinkedRecordID: Int
+  LinkedRecordID: String
   Name: String
   Type: String!
   UserID: Int!
@@ -4631,6 +4924,45 @@ input UpdateDealTypeInput {
   Name: String
 }
 
+input UpdateDuplicateRunDetailInput {
+  DuplicateRunID: Int!
+  ID: Int!
+  MatchErrorMessage: String
+  MatchStatus: String!
+  MergeErrorMessage: String
+  MergeStatus: String!
+  RecordID: String!
+  SkippedReason: String
+}
+
+input UpdateDuplicateRunDetailMatchInput {
+  Action: String!
+  ApprovalStatus: String!
+  DuplicateRunDetailID: Int!
+  ID: Int!
+  MatchProbability: Float!
+  MatchRecordID: String!
+  MatchSource: String!
+  MatchedAt: Timestamp!
+  MergeStatus: String!
+  MergedAt: Timestamp!
+  RecordMergeLogID: Int
+}
+
+input UpdateDuplicateRunInput {
+  ApprovalComments: String
+  ApprovalStatus: String!
+  ApprovedByUserID: Int
+  EndedAt: Timestamp
+  EntityID: Int!
+  ID: Int!
+  ProcessingErrorMessage: String
+  ProcessingStatus: String!
+  SourceListID: Int!
+  StartedAt: Timestamp!
+  StartedByUserID: Int!
+}
+
 input UpdateEmployeeCompanyIntegrationInput {
   CompanyIntegrationID: Int!
   EmployeeID: Int!
@@ -4681,9 +5013,11 @@ input UpdateEntityAIActionInput {
 
 input UpdateEntityDocumentInput {
   AIModelID: Int!
+  AbsoluteMatchThreshold: Float!
   EntityID: Int!
   ID: Int!
   Name: String!
+  PotentialMatchThreshold: Float!
   Status: String!
   Template: String
   TypeID: Int!
@@ -4696,6 +5030,14 @@ input UpdateEntityDocumentRunInput {
   ID: Int!
   StartedAt: Timestamp
   Status: String!
+}
+
+input UpdateEntityDocumentSettingInput {
+  Comments: String
+  EntityDocumentID: Int!
+  ID: Int!
+  Name: String!
+  Value: String!
 }
 
 input UpdateEntityDocumentTypeInput {
@@ -4767,6 +5109,7 @@ input UpdateEntityInput {
   spCreateGenerated: Boolean!
   spDelete: String
   spDeleteGenerated: Boolean!
+  spMatch: String
   spUpdate: String
   spUpdateGenerated: Boolean!
 }
@@ -4812,6 +5155,14 @@ input UpdateEntityRelationshipInput {
   RelatedEntityJoinField: String!
   Sequence: Int!
   Type: String!
+}
+
+input UpdateEntitySettingInput {
+  Comments: String
+  EntityID: Int!
+  ID: Int!
+  Name: String!
+  Value: String!
 }
 
 input UpdateErrorLogInput {
@@ -5286,23 +5637,23 @@ type UserApplication_ {
 }
 
 type UserFavoriteResult {
+  CompositeKey: CompositeKeyOutputType!
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValues: [PrimaryKeyValueOutputType!]!
   Success: Boolean!
   UserID: Int!
 }
 
 input UserFavoriteSearchParams {
+  CompositeKey: CompositeKeyInputType!
   EntityID: Int!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
   UserID: Int!
 }
 
 input UserFavoriteSetParams {
+  CompositeKey: CompositeKeyInputType!
   EntityID: Int!
   IsFavorite: Boolean!
-  PrimaryKeyValues: [PrimaryKeyValueInputType!]!
   UserID: Int!
 }
 
@@ -5443,6 +5794,7 @@ type User_ {
   DashboardCategoriesArray: [DashboardCategory_!]!
   DashboardsArray: [Dashboard_!]!
   DataContextsArray: [DataContext_!]!
+  DuplicateRunsArray: [DuplicateRun_!]!
   Email: String!
   EmployeeEmail: String
   EmployeeFirstLast: String

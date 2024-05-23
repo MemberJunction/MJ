@@ -1,3 +1,53 @@
+
+
+DROP FUNCTION IF EXISTS __mj.GetProgrammaticName
+GO
+CREATE FUNCTION __mj.GetProgrammaticName(@input NVARCHAR(MAX))
+RETURNS NVARCHAR(MAX)
+AS
+BEGIN
+    DECLARE @output NVARCHAR(MAX) = '';
+    DECLARE @i INT = 1;
+    DECLARE @currentChar NCHAR(1);
+    DECLARE @isValid BIT;
+    
+    -- Loop through each character in the input string
+    WHILE @i <= LEN(@input)
+    BEGIN
+        SET @currentChar = SUBSTRING(@input, @i, 1);
+        
+        -- Check if the character is alphanumeric or underscore
+        SET @isValid = CASE
+            WHEN @currentChar LIKE '[A-Za-z0-9_]' THEN 1
+            ELSE 0
+        END;
+        
+        -- Append the character or an underscore to the output
+        IF @isValid = 1
+        BEGIN
+            SET @output = @output + @currentChar;
+        END
+        ELSE
+        BEGIN
+            SET @output = @output + '_';
+        END;
+        
+        SET @i = @i + 1;
+    END;
+    
+    -- Prepend an underscore if the first character is a number
+    IF @output LIKE '[0-9]%'
+    BEGIN
+        SET @output = '_' + @output;
+    END;
+    
+    RETURN @output;
+END;
+GO
+GRANT EXEC ON __mj.GetProgrammaticName to public
+
+GO
+
 DROP VIEW IF EXISTS [__mj].[vwTablePrimaryKeys] 
 GO 
 CREATE VIEW [__mj].[vwTablePrimaryKeys] AS
@@ -112,9 +162,9 @@ CREATE VIEW [__mj].vwEntities
 AS
 SELECT 
 	e.*,
-	IIF(1 = ISNUMERIC(LEFT(e.Name, 1)),'_','') + REPLACE(e.Name, ' ', '') CodeName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) ClassName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) BaseTableCodeName,
+	__mj.GetProgrammaticName(REPLACE(e.Name,' ','')) AS CodeName, /*For just the CodeName for the entity, we remove spaces before we convert to a programmatic name as many entity names have spaces automatically added to them and it is not needed to make those into _ characters*/
+	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS ClassName,
+	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
 	par.Name ParentEntity,
 	par.BaseTable ParentBaseTable,
 	par.BaseView ParentBaseView
@@ -819,7 +869,7 @@ SELECT
 	c.precision Precision,
 	c.scale Scale,
 	c.is_nullable AllowsNull,
-	IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity) AutoIncrement,
+	IIF(COALESCE(bt.name, t.name) IN ('timestamp', 'rowversion'), 1, IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity)) AutoIncrement,
 	c.column_id,
 	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
 	basetable_columns.object_id,
@@ -1416,3 +1466,4 @@ INNER JOIN
 	e.SchemaName = sch.Name AND
 	e.BaseTable = obj.name
 GO
+
