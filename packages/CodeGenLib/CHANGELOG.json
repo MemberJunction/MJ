@@ -2,6 +2,51 @@
   "name": "@memberjunction/codegen-lib",
   "entries": [
     {
+      "date": "Thu, 23 May 2024 18:35:52 GMT",
+      "version": "1.3.3",
+      "tag": "@memberjunction/codegen-lib_v1.3.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/codegen-lib",
+            "commit": "c60c215ee2491ffc3b446a35aa64c9210bf50372",
+            "comment": "Bug fix for CodeGen relationships in MJAPI"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/ai to v1.3.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core to v1.3.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/core-entities to v1.3.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/global to v1.3.3",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/codegen-lib",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v1.3.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 May 2024 14:19:50 GMT",
       "version": "1.3.2",
       "tag": "@memberjunction/codegen-lib_v1.3.2",
