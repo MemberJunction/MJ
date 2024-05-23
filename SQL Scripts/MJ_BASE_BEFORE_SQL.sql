@@ -162,7 +162,7 @@ CREATE VIEW [__mj].vwEntities
 AS
 SELECT 
 	e.*,
-	__mj.GetProgrammaticName(e.Name) AS CodeName,
+	__mj.GetProgrammaticName(REPLACE(e.Name,' ','')) AS CodeName, /*For just the CodeName for the entity, we remove spaces before we convert to a programmatic name as many entity names have spaces automatically added to them and it is not needed to make those into _ characters*/
 	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS ClassName,
 	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
 	par.Name ParentEntity,
