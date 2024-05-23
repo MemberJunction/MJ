@@ -153,3 +153,4 @@ jobs:
         name: ${{ needs.build-and-publish.outputs.version }}
         tag_name: ${{ needs.build-and-publish.outputs.version }}
         files: ${{ steps.zip.outputs.ARTIFACT }}
+        token: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
