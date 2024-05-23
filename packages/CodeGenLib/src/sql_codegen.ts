@@ -748,7 +748,7 @@ GO${permissions}
             for (let k of entity.PrimaryKeys) {
                 if (!isFirst) 
                     selectInsertedRecord += ' AND ';
-                selectInsertedRecord += `[${k.CodeName}] = @${k.CodeName}`;            
+                selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;            
                 isFirst = false;
             }
         }
@@ -787,14 +787,13 @@ GO${permissions}
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
     
-        let selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
-        let isFirst = true;
-        for (let k of entity.PrimaryKeys) {
-            if (!isFirst) 
-                selectInsertedRecord += ' AND ';
-            selectInsertedRecord += `[${k.CodeName}] = @${k.CodeName}`;            
-            isFirst = false;
-        }
+        let selectInsertedRecord = `SELECT 
+                                        * 
+                                    FROM 
+                                        [${entity.SchemaName}].[${entity.BaseView}] 
+                                    WHERE
+                                        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+                                    `;
     
         return `
 ------------------------------------------------------------
@@ -812,8 +811,8 @@ BEGIN
         [${entity.SchemaName}].[${entity.BaseTable}]
     SET 
         ${this.createEntityFieldsUpdateString(entity.Fields)}
-    WHERE 
-        [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.CodeName}
+    WHERE
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
 
     -- return the updated record so the caller can see the updated values and any calculated fields
     ${selectInsertedRecord}
@@ -918,7 +917,7 @@ GO${permissions}
     
             if (sSelect !== '')
                 sSelect += ', ';
-            sSelect += `@${k.CodeName} AS [${k.CodeName}]`;        
+            sSelect += `@${k.CodeName} AS [${k.Name}]`;        
         }
     
         return `
@@ -937,7 +936,7 @@ BEGIN
     DELETE FROM 
         [${entity.SchemaName}].[${entity.BaseTable}]
     WHERE 
-        [${entity.PrimaryKey.Name}] = @${entity.PrimaryKey.CodeName}
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
 
     SELECT ${sSelect} -- Return the primary key to indicate we successfully deleted the record
 END
