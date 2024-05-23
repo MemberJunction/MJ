@@ -1,3 +1,53 @@
+
+
+DROP FUNCTION IF EXISTS __mj.GetProgrammaticName
+GO
+CREATE FUNCTION __mj.GetProgrammaticName(@input NVARCHAR(MAX))
+RETURNS NVARCHAR(MAX)
+AS
+BEGIN
+    DECLARE @output NVARCHAR(MAX) = '';
+    DECLARE @i INT = 1;
+    DECLARE @currentChar NCHAR(1);
+    DECLARE @isValid BIT;
+    
+    -- Loop through each character in the input string
+    WHILE @i <= LEN(@input)
+    BEGIN
+        SET @currentChar = SUBSTRING(@input, @i, 1);
+        
+        -- Check if the character is alphanumeric or underscore
+        SET @isValid = CASE
+            WHEN @currentChar LIKE '[A-Za-z0-9_]' THEN 1
+            ELSE 0
+        END;
+        
+        -- Append the character or an underscore to the output
+        IF @isValid = 1
+        BEGIN
+            SET @output = @output + @currentChar;
+        END
+        ELSE
+        BEGIN
+            SET @output = @output + '_';
+        END;
+        
+        SET @i = @i + 1;
+    END;
+    
+    -- Prepend an underscore if the first character is a number
+    IF @output LIKE '[0-9]%'
+    BEGIN
+        SET @output = '_' + @output;
+    END;
+    
+    RETURN @output;
+END;
+GO
+GRANT EXEC ON __mj.GetProgrammaticName to public
+
+GO
+
 DROP VIEW IF EXISTS [__mj].[vwTablePrimaryKeys] 
 GO 
 CREATE VIEW [__mj].[vwTablePrimaryKeys] AS
@@ -112,9 +162,9 @@ CREATE VIEW [__mj].vwEntities
 AS
 SELECT 
 	e.*,
-	IIF(1 = ISNUMERIC(LEFT(e.Name, 1)),'_','') + REPLACE(e.Name, ' ', '') CodeName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) ClassName,
-	IIF(1 = ISNUMERIC(LEFT(e.BaseTable, 1)),'_','') + REPLACE(e.BaseTable, ' ', '_') + IIF(e.NameSuffix IS NULL, '', e.NameSuffix) BaseTableCodeName,
+	__mj.GetProgrammaticName(e.Name) AS CodeName,
+	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS ClassName,
+	__mj.GetProgrammaticName(e.BaseTable + ISNULL(e.NameSuffix, '')) AS BaseTableCodeName,
 	par.Name ParentEntity,
 	par.BaseTable ParentBaseTable,
 	par.BaseView ParentBaseView
@@ -1416,3 +1466,4 @@ INNER JOIN
 	e.SchemaName = sch.Name AND
 	e.BaseTable = obj.name
 GO
+
