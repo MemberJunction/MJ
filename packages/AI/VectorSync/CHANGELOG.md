@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/ai-vector-sync
 
-This log was last generated on Wed, 22 May 2024 02:26:03 GMT and should not be manually modified.
+This log was last generated on Thu, 23 May 2024 02:29:25 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.3.1
+
+Thu, 23 May 2024 02:29:25 GMT
+
+### Patches
+
+- Bump @memberjunction/ai to v1.3.1
+- Bump @memberjunction/ai-vectordb to v1.3.1
+- Bump @memberjunction/ai-vectors to v1.3.1
+- Bump @memberjunction/aiengine to v1.3.1
+- Bump @memberjunction/core to v1.3.1
+- Bump @memberjunction/global to v1.3.1
 
 ## 1.3.0
 

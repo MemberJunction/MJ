@@ -2,6 +2,39 @@
   "name": "@memberjunction/ng-record-changes",
   "entries": [
     {
+      "date": "Thu, 23 May 2024 02:29:25 GMT",
+      "version": "1.3.1",
+      "tag": "@memberjunction/ng-record-changes_v1.3.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-changes",
+            "comment": "Bump @memberjunction/core to v1.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-changes",
+            "comment": "Bump @memberjunction/global to v1.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-changes",
+            "comment": "Bump @memberjunction/ng-compare-records to v1.3.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-record-changes",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.3.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 22 May 2024 02:26:03 GMT",
       "version": "1.3.0",
       "tag": "@memberjunction/ng-record-changes_v1.3.0",

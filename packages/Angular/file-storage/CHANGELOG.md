@@ -1,8 +1,20 @@
 # Change Log - @memberjunction/ng-file-storage
 
-This log was last generated on Wed, 22 May 2024 02:26:03 GMT and should not be manually modified.
+This log was last generated on Thu, 23 May 2024 02:29:25 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.3.1
+
+Thu, 23 May 2024 02:29:25 GMT
+
+### Patches
+
+- Bump @memberjunction/core to v1.3.1
+- Bump @memberjunction/core-entities to v1.3.1
+- Bump @memberjunction/global to v1.3.1
+- Bump @memberjunction/ng-container-directives to v1.3.1
+- Bump @memberjunction/ng-shared to v1.3.1
 
 ## 1.3.0
 

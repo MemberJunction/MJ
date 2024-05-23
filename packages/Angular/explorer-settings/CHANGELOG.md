@@ -1,8 +1,26 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
-This log was last generated on Wed, 22 May 2024 02:26:03 GMT and should not be manually modified.
+This log was last generated on Thu, 23 May 2024 02:29:25 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.3.1
+
+Thu, 23 May 2024 02:29:25 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v1.3.1
+- Bump @memberjunction/global to v1.3.1
+- Bump @memberjunction/core to v1.3.1
+- Bump @memberjunction/ng-container-directives to v1.3.1
+- Bump @memberjunction/ng-shared to v1.3.1
+- Bump @memberjunction/ng-entity-permissions to v1.3.1
+- Bump @memberjunction/ng-base-forms to v1.3.1
+- Bump @memberjunction/ng-entity-form-dialog to v1.3.1
+- Bump @memberjunction/ng-user-view-grid to v1.3.1
+- Bump @memberjunction/ng-simple-record-list to v1.3.1
+- Bump @memberjunction/ng-tabstrip to v1.3.1
 
 ## 1.3.0
 
