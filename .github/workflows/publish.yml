@@ -120,8 +120,9 @@ jobs:
         git commit -m "Updating package versions [skip ci]"
 
     - name: Push changes
-      run: |
-        git push
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
  
   create-distribution:
     runs-on: ubuntu-latest

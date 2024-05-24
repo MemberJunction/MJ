@@ -1,8 +1,17 @@
 # Change Log - @memberjunction/ng-chat
 
-This log was last generated on Thu, 23 May 2024 14:19:50 GMT and should not be manually modified.
+This log was last generated on Thu, 23 May 2024 18:35:52 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.3.3
+
+Thu, 23 May 2024 18:35:52 GMT
+
+### Patches
+
+- Bump @memberjunction/codegen-lib to v1.3.3
+- Bump @memberjunction/ng-container-directives to v1.3.3
 
 ## 1.3.2
 

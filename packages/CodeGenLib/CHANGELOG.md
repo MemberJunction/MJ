@@ -1,8 +1,21 @@
 # Change Log - @memberjunction/codegen-lib
 
-This log was last generated on Thu, 23 May 2024 14:19:50 GMT and should not be manually modified.
+This log was last generated on Thu, 23 May 2024 18:35:52 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.3.3
+
+Thu, 23 May 2024 18:35:52 GMT
+
+### Patches
+
+- Bug fix for CodeGen relationships in MJAPI (97354817+AN-BC@users.noreply.github.com)
+- Bump @memberjunction/ai to v1.3.3
+- Bump @memberjunction/core to v1.3.3
+- Bump @memberjunction/core-entities to v1.3.3
+- Bump @memberjunction/global to v1.3.3
+- Bump @memberjunction/sqlserver-dataprovider to v1.3.3
 
 ## 1.3.2
 

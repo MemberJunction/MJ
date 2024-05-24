@@ -2,6 +2,21 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Thu, 23 May 2024 18:35:52 GMT",
+      "version": "1.3.3",
+      "tag": "@memberjunction/core_v1.3.3",
+      "comments": {
+        "patch": [
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v1.3.3",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 May 2024 14:19:50 GMT",
       "version": "1.3.2",
       "tag": "@memberjunction/core_v1.3.2",
