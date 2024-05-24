@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityBehaviorTypeInfo, EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, CompositeKey, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
@@ -23,6 +23,8 @@ export type AllMetadata = {
     AllQueries: QueryInfo[];
     AllQueryFields: QueryFieldInfo[];
     AllQueryPermissions: QueryPermissionInfo[];
+    AllEntityDocumentTypes: EntityDocumentTypeInfo[];
+    AllEntityBehaviorTypes: EntityBehaviorTypeInfo[];
 }
 
 export abstract class ProviderBase implements IMetadataProvider {
@@ -40,6 +42,8 @@ export abstract class ProviderBase implements IMetadataProvider {
     private _queryCategories: QueryCategoryInfo[] = [];
     private _queryFields: QueryFieldInfo[] = [];
     private _queryPermissions: QueryPermissionInfo[] = [];
+    private _entityBehaviorTypes: EntityBehaviorTypeInfo[] = [];
+    private _entityDocumentTypes: EntityDocumentTypeInfo[] = [];
 
     private _refresh = false;
 
@@ -144,10 +148,11 @@ export abstract class ProviderBase implements IMetadataProvider {
                     allMetadata[r.Code] = r.Results
                 }
                 // update the entities to include the fields, permissions and relationships
-                allMetadata.AllEntities = this.PostProcessEntityMetadata(allMetadata.Entities, allMetadata.EntityFields, allMetadata.EntityFieldValues, allMetadata.EntityPermissions, allMetadata.EntityRelationships);
-                // update the applications to include applicationentities
+                allMetadata.AllEntities = this.PostProcessEntityMetadata(allMetadata.Entities, allMetadata.EntityFields, allMetadata.EntityFieldValues, allMetadata.EntityPermissions, allMetadata.EntityRelationships, allMetadata.EntityBehaviors, allMetadata.EntitySettings);
+                // update the applications to include applicationentities/ApplicationSettings
                 allMetadata.AllApplications = allMetadata.Applications.map((a: any) => {
                     a.ApplicationEntities = allMetadata.ApplicationEntities.filter((ae: any) => ae.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
+                    a.ApplicationSettings = allMetadata.ApplicationSettings.filter((as: any) => as.ApplicationName.trim().toLowerCase() === a.Name.trim().toLowerCase())
                     return new ApplicationInfo(this, a);
                 });
 
@@ -162,7 +167,9 @@ export abstract class ProviderBase implements IMetadataProvider {
                     AllQueries: allMetadata.Queries ? allMetadata.Queries.map((q: any) => new QueryInfo(q)) : [],
                     AllQueryFields: allMetadata.QueryFields ? allMetadata.QueryFields.map((qf: any) => new QueryFieldInfo(qf)) : [],
                     AllQueryPermissions: allMetadata.QueryPermissions ? allMetadata.QueryPermissions.map((qp: any) => new QueryPermissionInfo(qp)) : [],
-                    AllQueryCategories: allMetadata.QueryCategories ? allMetadata.QueryCategories.map((qc: any) => new QueryCategoryInfo(qc)) : []
+                    AllQueryCategories: allMetadata.QueryCategories ? allMetadata.QueryCategories.map((qc: any) => new QueryCategoryInfo(qc)) : [],
+                    AllEntityBehaviorTypes: allMetadata.EntityBehaviorTypes ? allMetadata.EntityBehaviorTypes.map((eb: any) => new EntityBehaviorTypeInfo(eb)) : [],
+                    AllEntityDocumentTypes: allMetadata.EntityDocumentTypes ? allMetadata.EntityDocumentTypes.map((ed: any) => new EntityDocumentTypeInfo(ed)) : []
                 }
             }
             else {
@@ -177,7 +184,7 @@ export abstract class ProviderBase implements IMetadataProvider {
 
     protected abstract GetCurrentUser(): Promise<UserInfo> 
 
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[]): any[] {
+    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], behaviors: any[], settings: any[]): any[] {
         const result: any[] = [];
         if (fieldValues && fieldValues.length > 0)
             for (let f of fields) {
@@ -189,6 +196,8 @@ export abstract class ProviderBase implements IMetadataProvider {
             e.EntityFields = fields.filter(f => f.EntityID === e.ID).sort((a, b) => a.Sequence - b.Sequence);
             e.EntityPermissions = permissions.filter(p => p.EntityID === e.ID);
             e.EntityRelationships = relationships.filter(r => r.EntityID === e.ID);
+            e.EntityBehaviors = behaviors.filter(b => b.EntityID === e.ID);
+            e.EntitySettings = settings.filter(s => s.EntityID === e.ID);
             result.push(new EntityInfo(e));
         }
         return result;
@@ -676,6 +685,14 @@ export abstract class ProviderBase implements IMetadataProvider {
             }
         }
 
+        if (res.AllEntityBehaviorTypes) {
+            this._entityBehaviorTypes = res.AllEntityBehaviorTypes.map(ebt => new EntityBehaviorTypeInfo(ebt)); 
+        }
+
+        if (res.AllEntityDocumentTypes) {
+            this._entityDocumentTypes = res.AllEntityDocumentTypes.map(edt => new EntityDocumentTypeInfo(edt)); 
+        }
+
         if (res.CurrentUser)
             this._currentUser = new UserInfo(this, res.CurrentUser);
 
@@ -700,6 +717,8 @@ export abstract class ProviderBase implements IMetadataProvider {
                 const qcs = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryCategoriesKey))
                 const qf = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryFieldsKey))
                 const qp = JSON.parse(await ls.getItem(ProviderBase.localStorageQueryPermissionsKey))
+                const ebt = JSON.parse(await ls.getItem(ProviderBase.localStorageEntityBehaviorTypesKey))
+                const edt = JSON.parse(await ls.getItem(ProviderBase.localStorageEntityDocumentTypesKey))
                 this.UpdateLocalMetadata({ 
                                             AllEntities: e, 
                                             AllApplications: a, 
@@ -711,7 +730,9 @@ export abstract class ProviderBase implements IMetadataProvider {
                                             AllQueries: queries,
                                             AllQueryCategories: qcs,
                                             AllQueryFields: qf,
-                                            AllQueryPermissions: qp
+                                            AllQueryPermissions: qp,
+                                            AllEntityBehaviorTypes: ebt,
+                                            AllEntityDocumentTypes: edt
                                         })
             }
         }
@@ -733,6 +754,8 @@ export abstract class ProviderBase implements IMetadataProvider {
     private static localStorageQueryCategoriesKey = this.localStorageRootKey + '_QueryCategories'
     private static localStorageQueryFieldsKey = this.localStorageRootKey + '_QueryFields'
     private static localStorageQueryPermissionsKey = this.localStorageRootKey + '_QueryPermissions'
+    private static localStorageEntityBehaviorTypesKey = this.localStorageRootKey + '_EntityBehaviorTypes'
+    private static localStorageEntityDocumentTypesKey = this.localStorageRootKey + '_EntityDocumentTypes'
 
     private static localStorageKeys = [
         ProviderBase.localStorageTimestampsKey,
@@ -746,7 +769,9 @@ export abstract class ProviderBase implements IMetadataProvider {
         ProviderBase.localStorageQueriesKey,
         ProviderBase.localStorageQueryCategoriesKey,
         ProviderBase.localStorageQueryFieldsKey,
-        ProviderBase.localStorageQueryPermissionsKey
+        ProviderBase.localStorageQueryPermissionsKey,
+        ProviderBase.localStorageEntityBehaviorTypesKey,
+        ProviderBase.localStorageEntityDocumentTypesKey
     ];
     public async SaveLocalMetadataToStorage() {
         try {
@@ -765,6 +790,8 @@ export abstract class ProviderBase implements IMetadataProvider {
                 await ls.setItem(ProviderBase.localStorageQueryCategoriesKey, JSON.stringify(this._queryCategories))
                 await ls.setItem(ProviderBase.localStorageQueryFieldsKey, JSON.stringify(this._queryFields))
                 await ls.setItem(ProviderBase.localStorageQueryPermissionsKey, JSON.stringify(this._queryPermissions))
+                await ls.setItem(ProviderBase.localStorageEntityBehaviorTypesKey, JSON.stringify(this._entityBehaviorTypes))
+                await ls.setItem(ProviderBase.localStorageEntityDocumentTypesKey, JSON.stringify(this._entityDocumentTypes))
             }
         }
         catch (e) {

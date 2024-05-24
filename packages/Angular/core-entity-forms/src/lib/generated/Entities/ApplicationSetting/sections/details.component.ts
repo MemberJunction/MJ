@@ -1,14 +1,21 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ApplicationEntity } from '@memberjunction/core-entities';
+import { ApplicationSettingEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Applications.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Application Settings.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-application-form-details',
+    selector: 'gen-applicationsetting-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
+        <mj-form-field
+            [record]="record"
+            FieldName="ApplicationName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+        ></mj-form-field>
         <mj-form-field
             [record]="record"
             FieldName="Name"
@@ -17,7 +24,13 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Description"
+            FieldName="Value"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Comments"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -38,12 +51,12 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ApplicationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ApplicationEntity;
+export class ApplicationSettingDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ApplicationSettingEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadApplicationDetailsComponent() {
+export function LoadApplicationSettingDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

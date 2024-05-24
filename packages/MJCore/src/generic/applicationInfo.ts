@@ -2,6 +2,20 @@ import { BaseInfo } from './baseInfo'
 import { EntityInfo } from './entityInfo'
 import { IMetadataProvider } from './interfaces';
 
+export class ApplicationSettingInfo extends BaseInfo {
+    ApplicationName: string = null
+    Name: string = null
+    Value: string = null
+    Comments: string = null
+    CreatedAt: Date = null
+    UpdatedAt: Date = null
+
+    constructor (initData: any = null) {
+        super()
+        this.copyInitData(initData)
+    }
+}
+
 export class ApplicationEntityInfo extends BaseInfo {
     ApplicationName: string = null
     EntityID: number = null
@@ -29,6 +43,9 @@ export class ApplicationEntityInfo extends BaseInfo {
     }
 }
 
+/**
+ * Information about an application
+ */
 export class ApplicationInfo extends BaseInfo {
     Name: string = null
     Description: string = null
@@ -37,6 +54,11 @@ export class ApplicationInfo extends BaseInfo {
     public get ApplicationEntities(): ApplicationEntityInfo[] {
         return this._ApplicationEntities;
     } 
+
+    private _ApplicationSettings: ApplicationSettingInfo[] = []
+    public get ApplicationSettings(): ApplicationSettingInfo[] {
+        return this._ApplicationSettings;
+    }
 
     constructor (md: IMetadataProvider, initData: any = null) {
         super()
@@ -56,6 +78,10 @@ export class ApplicationInfo extends BaseInfo {
                         aei._setEntity(match)
                 }
             }
+
+            let as = initData.ApplicationSettings || initData._ApplicationSettings;
+            if (as) 
+                this._ApplicationSettings = as.map(s => new ApplicationSettingInfo(s));
         }
     }
 

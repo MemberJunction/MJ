@@ -161,11 +161,22 @@ type ApplicationEntity_ {
   UpdatedAt: Timestamp!
 }
 
+type ApplicationSetting_ {
+  ApplicationName: String!
+  Comments: String
+  CreatedAt: Timestamp!
+  ID: Int!
+  Name: String!
+  UpdatedAt: Timestamp!
+  Value: String!
+}
+
 """
 Applications are used to group entities in the user interface for ease of user access
 """
 type Application_ {
   ApplicationEntitiesArray: [ApplicationEntity_!]!
+  ApplicationSettingsArray: [ApplicationSetting_!]!
   CreatedAt: Timestamp!
   Description: String
   ID: Int!
@@ -517,6 +528,13 @@ input CreateApplicationInput {
   Name: String!
 }
 
+input CreateApplicationSettingInput {
+  ApplicationName: String!
+  Comments: String
+  Name: String!
+  Value: String!
+}
+
 input CreateAuditLogInput {
   AuditLogTypeName: String
   AuthorizationName: String
@@ -731,6 +749,21 @@ input CreateEmployeeInput {
   Phone: String
   SupervisorID: Int
   Title: String
+}
+
+input CreateEntityBehaviorInput {
+  BehaviorTypeID: Int!
+  Code: String
+  CodeExplanation: String
+  CodeGenerated: Boolean!
+  Description: String!
+  EntityID: Int!
+  RegenerateCode: Boolean!
+}
+
+input CreateEntityBehaviorTypeInput {
+  Description: String
+  Name: String!
 }
 
 input CreateEntityDocumentInput {
@@ -1588,6 +1621,53 @@ type EntityAIAction_ {
   UserMessage: String!
 }
 
+"""
+This table stores the list of possible behavior types to use in the Entity Behavior Types entity. 
+"""
+type EntityBehaviorType_ {
+  CreatedAt: Timestamp!
+  Description: String
+  EntityBehaviorsArray: [EntityBehavior_!]!
+  ID: Int!
+
+  """The name of the behavior, a unique column for the table. """
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Stores the behaviors for each entity and is used for code generation and injection of behavior code into various areas of the system.
+"""
+type EntityBehavior_ {
+  BehaviorTypeID: Int!
+
+  """
+  This is the code that implements the desired behavior. If the CodeGenerated bit is set to 1, each time CodeGen runs, it will use the Code specified here in the appropriate place(s). To override the generated code and prevent it from being changed in the future, set CodeGenerated = 0
+  """
+  Code: String
+
+  """
+  When an AI model generates code this will be populated with the AI's explanation of how the code works to meet the requirements of the behavior. For a non-generated piece of code a developer could manually place an explanation in this field.
+  """
+  CodeExplanation: String
+  CodeGenerated: Boolean!
+  CreatedAt: Timestamp!
+
+  """
+  This field will be used by the AI system to generate code that corresponds to the requested behavior and inject the code into the appropriate part(s) of the system.
+  """
+  Description: String!
+  Entity: String!
+  EntityID: Int!
+  ID: Int!
+
+  """
+  This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.
+  """
+  RegenerateCode: Boolean!
+  UpdatedAt: Timestamp!
+}
+
 type EntityDependencyResult {
   EntityName: String!
   FieldName: String!
@@ -1894,6 +1974,7 @@ type Entity_ {
   DuplicateRunsArray: [DuplicateRun_!]!
   EntitiesArray: [Entity_!]!
   EntityAIActionsArray: [EntityAIAction_!]!
+  EntityBehaviorsArray: [EntityBehavior_!]!
   EntityDocumentsArray: [EntityDocument_!]!
   EntityFieldsArray: [EntityField_!]!
   EntityObjectSubclassImport: String
@@ -2152,6 +2233,7 @@ type Mutation {
   CreateActivityAttachment(input: CreateActivityAttachmentInput!): ActivityAttachment_!
   CreateApplication(input: CreateApplicationInput!): Application_!
   CreateApplicationEntity(input: CreateApplicationEntityInput!): ApplicationEntity_!
+  CreateApplicationSetting(input: CreateApplicationSettingInput!): ApplicationSetting_!
   CreateAuditLog(input: CreateAuditLogInput!): AuditLog_!
   CreateCompany(input: CreateCompanyInput!): Company_!
   CreateCompanyIntegrationRecordMap(input: CreateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
@@ -2173,6 +2255,8 @@ type Mutation {
   CreateDuplicateRunDetailMatch(input: CreateDuplicateRunDetailMatchInput!): DuplicateRunDetailMatch_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
+  CreateEntityBehavior(input: CreateEntityBehaviorInput!): EntityBehavior_!
+  CreateEntityBehaviorType(input: CreateEntityBehaviorTypeInput!): EntityBehaviorType_!
   CreateEntityDocument(input: CreateEntityDocumentInput!): EntityDocument_!
   CreateEntityDocumentRun(input: CreateEntityDocumentRunInput!): EntityDocumentRun_!
   CreateEntityDocumentSetting(input: CreateEntityDocumentSettingInput!): EntityDocumentSetting_!
@@ -2224,6 +2308,7 @@ type Mutation {
   DeleteAccount(ID: Int!): Account_!
   DeleteApplication(ID: Int!): Application_!
   DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
+  DeleteApplicationSetting(ID: Int!): ApplicationSetting_!
   DeleteCompany(ID: Int!): Company_!
   DeleteConversation(ID: Int!): Conversation_!
   DeleteConversationDetail(ID: Int!): ConversationDetail_!
@@ -2234,6 +2319,8 @@ type Mutation {
   DeleteDealForecastCategory(ID: Int!): DealForecastCategory_!
   DeleteEmployee(ID: Int!): Employee_!
   DeleteEntity(ID: Int!): Entity_!
+  DeleteEntityBehavior(ID: Int!): EntityBehavior_!
+  DeleteEntityBehaviorType(ID: Int!): EntityBehaviorType_!
   DeleteEntityField(ID: Int!): EntityField_!
   DeleteEntityPermission(ID: Int!): EntityPermission_!
   DeleteEntityRelationship(ID: Int!): EntityRelationship_!
@@ -2267,6 +2354,7 @@ type Mutation {
   UpdateActivityAttachment(input: UpdateActivityAttachmentInput!): ActivityAttachment_!
   UpdateApplication(input: UpdateApplicationInput!): Application_!
   UpdateApplicationEntity(input: UpdateApplicationEntityInput!): ApplicationEntity_!
+  UpdateApplicationSetting(input: UpdateApplicationSettingInput!): ApplicationSetting_!
   UpdateAuditLog(input: UpdateAuditLogInput!): AuditLog_!
   UpdateCompany(input: UpdateCompanyInput!): Company_!
   UpdateCompanyIntegration(input: UpdateCompanyIntegrationInput!): CompanyIntegration_!
@@ -2296,6 +2384,8 @@ type Mutation {
   UpdateEmployeeSkill(input: UpdateEmployeeSkillInput!): EmployeeSkill_!
   UpdateEntity(input: UpdateEntityInput!): Entity_!
   UpdateEntityAIAction(input: UpdateEntityAIActionInput!): EntityAIAction_!
+  UpdateEntityBehavior(input: UpdateEntityBehaviorInput!): EntityBehavior_!
+  UpdateEntityBehaviorType(input: UpdateEntityBehaviorTypeInput!): EntityBehaviorType_!
   UpdateEntityDocument(input: UpdateEntityDocumentInput!): EntityDocument_!
   UpdateEntityDocumentRun(input: UpdateEntityDocumentRunInput!): EntityDocumentRun_!
   UpdateEntityDocumentSetting(input: UpdateEntityDocumentSettingInput!): EntityDocumentSetting_!
@@ -2453,6 +2543,7 @@ type Query {
   AllUsers: [User_!]!
   Application(ID: Int!): Application_
   ApplicationEntity(ID: Int!): ApplicationEntity_
+  ApplicationSetting(ID: Int!): ApplicationSetting_
   AuditLog(ID: Int!): AuditLog_
   AuditLogType(ID: Int!): AuditLogType_
   Authorization(ID: Int!): Authorization_
@@ -2492,6 +2583,8 @@ type Query {
   EntitiesBySchemas(ExcludeSchemas: [String!], IncludeSchemas: [String!]): [Entity_!]!
   Entity(ID: Int!): Entity_
   EntityAIAction(ID: Int!): EntityAIAction_
+  EntityBehavior(ID: Int!): EntityBehavior_
+  EntityBehaviorType(ID: Int!): EntityBehaviorType_
   EntityDocument(ID: Int!): EntityDocument_
   EntityDocumentRun(ID: Int!): EntityDocumentRun_
   EntityDocumentSetting(ID: Int!): EntityDocumentSetting_
@@ -2572,6 +2665,9 @@ type Query {
   RunApplicationEntityDynamicView(input: RunDynamicViewInput!): RunApplicationEntityViewResult!
   RunApplicationEntityViewByID(input: RunViewByIDInput!): RunApplicationEntityViewResult!
   RunApplicationEntityViewByName(input: RunViewByNameInput!): RunApplicationEntityViewResult!
+  RunApplicationSettingDynamicView(input: RunDynamicViewInput!): RunApplicationSettingViewResult!
+  RunApplicationSettingViewByID(input: RunViewByIDInput!): RunApplicationSettingViewResult!
+  RunApplicationSettingViewByName(input: RunViewByNameInput!): RunApplicationSettingViewResult!
   RunApplicationViewByID(input: RunViewByIDInput!): RunApplicationViewResult!
   RunApplicationViewByName(input: RunViewByNameInput!): RunApplicationViewResult!
   RunAuditLogDynamicView(input: RunDynamicViewInput!): RunAuditLogViewResult!
@@ -2674,6 +2770,12 @@ type Query {
   RunEntityAIActionDynamicView(input: RunDynamicViewInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByID(input: RunViewByIDInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByName(input: RunViewByNameInput!): RunEntityAIActionViewResult!
+  RunEntityBehaviorDynamicView(input: RunDynamicViewInput!): RunEntityBehaviorViewResult!
+  RunEntityBehaviorTypeDynamicView(input: RunDynamicViewInput!): RunEntityBehaviorTypeViewResult!
+  RunEntityBehaviorTypeViewByID(input: RunViewByIDInput!): RunEntityBehaviorTypeViewResult!
+  RunEntityBehaviorTypeViewByName(input: RunViewByNameInput!): RunEntityBehaviorTypeViewResult!
+  RunEntityBehaviorViewByID(input: RunViewByIDInput!): RunEntityBehaviorViewResult!
+  RunEntityBehaviorViewByName(input: RunViewByNameInput!): RunEntityBehaviorViewResult!
   RunEntityDocumentDynamicView(input: RunDynamicViewInput!): RunEntityDocumentViewResult!
   RunEntityDocumentRunDynamicView(input: RunDynamicViewInput!): RunEntityDocumentRunViewResult!
   RunEntityDocumentRunViewByID(input: RunViewByIDInput!): RunEntityDocumentRunViewResult!
@@ -3298,6 +3400,16 @@ type RunApplicationEntityViewResult {
   UserViewRunID: Int
 }
 
+type RunApplicationSettingViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ApplicationSetting_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunApplicationViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -3686,6 +3798,26 @@ type RunEntityAIActionViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [EntityAIAction_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityBehaviorTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityBehaviorType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityBehaviorViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityBehavior_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -4693,6 +4825,14 @@ input UpdateApplicationInput {
   Name: String!
 }
 
+input UpdateApplicationSettingInput {
+  ApplicationName: String!
+  Comments: String
+  ID: Int!
+  Name: String!
+  Value: String!
+}
+
 input UpdateAuditLogInput {
   AuditLogTypeName: String
   AuthorizationName: String
@@ -5009,6 +5149,23 @@ input UpdateEntityAIActionInput {
   SkipIfOutputFieldNotEmpty: Boolean!
   TriggerEvent: String!
   UserMessage: String!
+}
+
+input UpdateEntityBehaviorInput {
+  BehaviorTypeID: Int!
+  Code: String
+  CodeExplanation: String
+  CodeGenerated: Boolean!
+  Description: String!
+  EntityID: Int!
+  ID: Int!
+  RegenerateCode: Boolean!
+}
+
+input UpdateEntityBehaviorTypeInput {
+  Description: String
+  ID: Int!
+  Name: String!
 }
 
 input UpdateEntityDocumentInput {
