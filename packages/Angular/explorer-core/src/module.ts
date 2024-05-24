@@ -45,6 +45,7 @@ import { ResourceContainerComponent } from './lib/generic/resource-container-com
 import { SectionLoaderComponent } from './lib/generic/section-loader-component';
 import { HeaderComponent } from './lib/header/header.component';
 import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
+import { CreateRecordComponent } from './lib/create-record-component/create-record.component';
 import { HomeComponent } from './lib/home-component/home.component';
 import { JoinGridComponent } from './lib/join-grid/join-grid.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
@@ -84,6 +85,7 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
     DataBrowserComponent,
     GenericBrowseListComponent,
     GenericBrowserListComponent,
+    CreateRecordComponent,
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,
@@ -166,6 +168,7 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
     DataBrowserComponent,
     GenericBrowseListComponent,
     GenericBrowserListComponent,
+    CreateRecordComponent,
     HomeComponent,
     NavigationComponent,
     ReportBrowserComponent,

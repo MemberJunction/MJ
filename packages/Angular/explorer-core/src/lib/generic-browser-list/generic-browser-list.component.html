@@ -118,6 +118,7 @@
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>
+
   <kendo-dialog 
     title="Create new Folder" 
     *ngIf="createFolderDialogOpened" 
@@ -138,4 +139,5 @@
       </button>
     </kendo-dialog-actions>
   </kendo-dialog>
+  <create-record-dialog #createRecordDialog [EntityObjectName]=entityObjectName>
 </div>

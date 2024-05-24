@@ -173,7 +173,7 @@ export class FormToolbarComponent implements OnInit {
 
     public toggleCreateDialog(show: boolean): void {
         this.showCreateDialog = show;
-      }
+    }
     
     public toggleDeleteDialog(show: boolean): void {
         this.showDeleteDialog = show;
