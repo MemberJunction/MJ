@@ -126,7 +126,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return true; // this provider doesn't have any issues with allowing refreshes at any time
     }
 
-npm 
     protected async GetCurrentUser(): Promise<UserInfo> {
         const d = await GraphQLDataProvider.ExecuteGQL(this._currentUserQuery, null);
         if (d) {

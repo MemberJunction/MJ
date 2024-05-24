@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-forms",
-  "version": "1.3.0",
+  "version": "1.3.3",
   "description": "MemberJunction: Angular Base Form Components",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/global": "~1.3.0",
-    "@memberjunction/core": "~1.3.0",
-    "@memberjunction/ng-ask-skip": "~1.3.0",
-    "@memberjunction/ng-record-changes": "~1.3.0",
-    "@memberjunction/ng-tabstrip": "~1.3.0",
-    "@memberjunction/ng-link-directives": "~1.3.0",
+    "@memberjunction/global": "~1.3.3",
+    "@memberjunction/core": "~1.3.3",
+    "@memberjunction/ng-ask-skip": "~1.3.3",
+    "@memberjunction/ng-record-changes": "~1.3.3",
+    "@memberjunction/ng-tabstrip": "~1.3.3",
+    "@memberjunction/ng-link-directives": "~1.3.3",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-inputs": "~15.1.0",

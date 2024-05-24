@@ -2016,7 +2016,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
@@ -2025,7 +2025,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
@@ -2070,7 +2070,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
@@ -2079,7 +2079,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
@@ -2611,7 +2611,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: CodeName
         * * Display Name: Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get CodeName(): string | null {  
             return this.Get('CodeName');
@@ -2620,7 +2620,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ClassName
         * * Display Name: Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get ClassName(): string | null {  
             return this.Get('ClassName');
@@ -2629,7 +2629,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get BaseTableCodeName(): string | null {  
             return this.Get('BaseTableCodeName');
@@ -3184,7 +3184,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityClassName
         * * Display Name: Related Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityClassName(): string | null {  
             return this.Get('RelatedEntityClassName');
@@ -3193,7 +3193,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityCodeName
         * * Display Name: Related Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityCodeName(): string | null {  
             return this.Get('RelatedEntityCodeName');
@@ -3202,7 +3202,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: RelatedEntityBaseTableCodeName
         * * Display Name: Related Entity Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get RelatedEntityBaseTableCodeName(): string | null {  
             return this.Get('RelatedEntityBaseTableCodeName');
@@ -3844,7 +3844,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RunByUser
         * * Display Name: Run By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get RunByUser(): string {  
             return this.Get('RunByUser');
@@ -4198,7 +4197,7 @@ import { RegisterClass } from "@memberjunction/global";
         }
         /**
         * * Field Name: Description
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get Description(): string | null {  
             return this.Get('Description');
@@ -4361,7 +4360,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityCodeName
         * * Display Name: Entity Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityCodeName(): string | null {  
             return this.Get('EntityCodeName');
@@ -4370,7 +4369,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityClassName
         * * Display Name: Entity Class Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityClassName(): string | null {  
             return this.Get('EntityClassName');
@@ -4379,7 +4378,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: EntityBaseTableCodeName
         * * Display Name: Entity Base Table Code Name
-        * * SQL Data Type: nvarchar(4000)
+        * * SQL Data Type: nvarchar(MAX)
         */
         get EntityBaseTableCodeName(): string | null {  
             return this.Get('EntityBaseTableCodeName');
@@ -14859,6 +14858,352 @@ import { RegisterClass } from "@memberjunction/global";
         }
         set MergeErrorMessage(value: string | null) {
             this.Set('MergeErrorMessage', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Behaviors - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityBehavior
+     * * Base View: vwEntityBehaviors
+     * * @description Stores the behaviors for each entity and is used for code generation and injection of behavior code into various areas of the system.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Behaviors')
+    export class EntityBehaviorEntity extends BaseEntity {
+        /**
+        * Loads the Entity Behaviors record from the database
+        * @param ID: number - primary key value to load the Entity Behaviors record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityBehaviorEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: BehaviorTypeID
+        * * Display Name: Behavior Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Behavior Types (vwEntityBehaviorTypes.ID)
+        */
+        get BehaviorTypeID(): number {  
+            return this.Get('BehaviorTypeID');
+        }
+        set BehaviorTypeID(value: number) {
+            this.Set('BehaviorTypeID', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: This field will be used by the AI system to generate code that corresponds to the requested behavior and inject the code into the appropriate part(s) of the system.
+        */
+        get Description(): string {  
+            return this.Get('Description');
+        }
+        set Description(value: string) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: RegenerateCode
+        * * Display Name: Regenerate Code
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.
+        */
+        get RegenerateCode(): boolean {  
+            return this.Get('RegenerateCode');
+        }
+        set RegenerateCode(value: boolean) {
+            this.Set('RegenerateCode', value);
+        }
+        /**
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: This is the code that implements the desired behavior. If the CodeGenerated bit is set to 1, each time CodeGen runs, it will use the Code specified here in the appropriate place(s). To override the generated code and prevent it from being changed in the future, set CodeGenerated = 0
+        */
+        get Code(): string | null {  
+            return this.Get('Code');
+        }
+        set Code(value: string | null) {
+            this.Set('Code', value);
+        }
+        /**
+        * * Field Name: CodeExplanation
+        * * Display Name: Code Explanation
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: When an AI model generates code this will be populated with the AI's explanation of how the code works to meet the requirements of the behavior. For a non-generated piece of code a developer could manually place an explanation in this field.
+        */
+        get CodeExplanation(): string | null {  
+            return this.Get('CodeExplanation');
+        }
+        set CodeExplanation(value: string | null) {
+            this.Set('CodeExplanation', value);
+        }
+        /**
+        * * Field Name: CodeGenerated
+        * * Display Name: Code Generated
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        */
+        get CodeGenerated(): boolean {  
+            return this.Get('CodeGenerated');
+        }
+        set CodeGenerated(value: boolean) {
+            this.Set('CodeGenerated', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Behavior Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityBehaviorType
+     * * Base View: vwEntityBehaviorTypes
+     * * @description This table stores the list of possible behavior types to use in the Entity Behavior Types entity. 
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Behavior Types')
+    export class EntityBehaviorTypeEntity extends BaseEntity {
+        /**
+        * Loads the Entity Behavior Types record from the database
+        * @param ID: number - primary key value to load the Entity Behavior Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityBehaviorTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: The name of the behavior, a unique column for the table. 
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Application Settings - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ApplicationSetting
+     * * Base View: vwApplicationSettings
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Application Settings')
+    export class ApplicationSettingEntity extends BaseEntity {
+        /**
+        * Loads the Application Settings record from the database
+        * @param ID: number - primary key value to load the Application Settings record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ApplicationSettingEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+        
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ApplicationName
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(50)
+        * * Related Entity/Foreign Key: Applications (vwApplications.Name)
+        */
+        get ApplicationName(): string {  
+            return this.Get('ApplicationName');
+        }
+        set ApplicationName(value: string) {
+            this.Set('ApplicationName', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Value(): string {  
+            return this.Get('Value');
+        }
+        set Value(value: string) {
+            this.Set('Value', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
         }
         /**
         * * Field Name: CreatedAt

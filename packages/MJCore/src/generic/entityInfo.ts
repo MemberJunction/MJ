@@ -369,14 +369,15 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
-     * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
+     * For fields in the database that have characters invalid for SQL identifiers in them, we need to replace those characters with _ in order to create variables for stored procedures. 
+     * This property returns a consistent CodeName you can use everywhere to refer to the field when generated variable names
      */
     private _codeName: string = null
     get CodeName(): string {
-        // the code below replaces characters invalid for SQL identifiers with _ and stashes the result in a private variable so we only do this once
-        if (this._codeName == null)
-            this._codeName = this.Name.replace(/[\s-]/g, "_");
-    
+        if (this._codeName === null) {
+            this._codeName = CodeNameFromString(this.Name);
+        }
+
         return this._codeName;
     }
 
@@ -480,6 +481,19 @@ export class EntityFieldInfo extends BaseInfo {
     }
 }
 
+
+export function CodeNameFromString(input: string): string {
+    // the code below replaces characters invalid for SQL or TypeScript identifiers with _ and stashes the result in a private variable so we only do this once
+    // Replace all invalid characters with _
+    let codeName = input.replace(/[^a-zA-Z0-9_]/g, "_");
+
+    // Prepend an underscore if the first character is a number
+    if (/^[0-9]/.test(codeName)) {
+        codeName = "_" + codeName;
+    }
+    return codeName;
+}
+
 /**
  * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
  */
@@ -487,6 +501,76 @@ export class KeyValuePair {
     FieldName: string
     Value: any
 }
+
+
+/**
+ * Entity Document Type Info object has information about the document types that exist across all entities. When Entity Documents are created they are associated with a document type.
+ */
+export class EntityDocumentTypeInfo extends BaseInfo {
+    Name: string = null
+    Description: string = null  
+    CreatedAt: Date = null
+    UpdatedAt: Date = null
+
+    constructor (initData: any = null) {
+        super()
+        this.copyInitData(initData)
+    }
+}
+
+/**
+ * Entity Behavior Type Info object has information about the behavior types that can be applied to an entity
+ */
+export class EntityBehaviorTypeInfo extends BaseInfo {
+    Name: string = null
+    Description: string = null  
+    CreatedAt: Date = null
+    UpdatedAt: Date = null
+
+    constructor (initData: any = null) {
+        super()
+        this.copyInitData(initData)
+    }
+}
+
+/**
+ * Contains information about a specific behavior that has been applied to an entity
+ */
+export class EntityBehaviorInfo extends BaseInfo {
+    EntityID: number = null
+    BehaviorTypeID: number = null
+    Description: string = null
+    RegenerateCode: boolean = null
+    Code: string = null
+    CodeExplanation: string = null
+    CodeGenerated: boolean = null
+    CreatedAt: Date = null
+    UpdatedAt: Date = null
+
+    constructor (initData: any = null) {
+        super()
+        this.copyInitData(initData)
+    }
+}
+
+/**
+ * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
+ */
+export class EntitySettingInfo extends BaseInfo {   
+    EntityID: number = null
+    Name: string = null
+    Value: string = null
+    Comments: string = null
+    CreatedAt: Date = null
+    UpdatedAt: Date = null
+
+    constructor (initData: any = null) {
+        super()
+        this.copyInitData(initData)
+    }
+
+}
+
 
 /**
  * Metadata about an entity
@@ -552,6 +636,8 @@ export class EntityInfo extends BaseInfo {
     private _Fields: EntityFieldInfo[] 
     private _RelatedEntities: EntityRelationshipInfo[]
     private _Permissions: EntityPermissionInfo[]
+    private _Behaviors: EntityBehaviorInfo[]
+    private _Settings: EntitySettingInfo[]
     _hasIdField: boolean = false
     _virtualCount: number = 0 
     _manyToManyCount: number = 0 
@@ -589,6 +675,12 @@ export class EntityInfo extends BaseInfo {
     }
     get Permissions(): EntityPermissionInfo[] {
         return this._Permissions;
+    }
+    get Behaviors(): EntityBehaviorInfo[] {
+        return this._Behaviors;
+    }
+    get Settings(): EntitySettingInfo[] {
+        return this._Settings;
     }
 
     /**
@@ -762,11 +854,11 @@ export class EntityInfo extends BaseInfo {
         }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many
-            params.ExtraFilter = relationship.RelatedEntityJoinField + ' = ' + quotes + keyValue + quotes;
+            params.ExtraFilter = `[${relationship.RelatedEntityJoinField}] = ${quotes}${keyValue}${quotes}`;
         }
         else {
             // many to many
-            params.ExtraFilter = `${relationship.RelatedEntityJoinField} IN (SELECT ${relationship.JoinEntityInverseJoinField} FROM ${relationship.JoinView} WHERE ${relationship.JoinEntityJoinField} = ${quotes}${keyValue}${quotes})`;
+            params.ExtraFilter = `[${relationship.RelatedEntityJoinField}] IN (SELECT [${relationship.JoinEntityInverseJoinField}] FROM [${relationship.JoinView}] WHERE [${relationship.JoinEntityJoinField}] = ${quotes}${keyValue}${quotes})`;
         }
 
         if (filter && filter.length > 0) 
@@ -811,6 +903,20 @@ export class EntityInfo extends BaseInfo {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
                 }
+            }
+
+            // copy the Entity Behaviors
+            this._Behaviors = [];
+            const eb = initData.EntityBehaviors || initData._Behaviors;
+            if (eb) {
+                eb.map((b) => this._Behaviors.push(new EntityBehaviorInfo(b)));
+            }
+
+            // copy the Entity settings
+            this._Settings = [];
+            const es = initData.EntitySettings || initData._Settings;
+            if (es) {
+                es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }
 
             // copy the Related Entities
