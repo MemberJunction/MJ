@@ -1599,60 +1599,63 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 d.Name = @0`;
 
         const items = await this.ExecuteSQL(sSQL, [datasetName]);
-        // now we have the dataset and the items, we need to get the update date from the items underlying entities
 
+        // now we have the dataset and the items, we need to get the update date from the items underlying entities
         if (items && items.length > 0) {
-            // loop through each of the items and get the update date from the underlying entity
+            // loop through each of the items and get the update date from the underlying entity by building a combined UNION ALL SQL statement
+            let combinedSQL = '';
             const updateDates: DatasetStatusEntityUpdateDateType[] = [];
-            // fire off all of the item queries in parallel
-            const promises = items.map(async (item) => {
+
+            items.forEach((item, index) => {
                 let filterSQL = '';
                 if (itemFilters && itemFilters.length > 0) {
                     const filter = itemFilters.find(f => f.ItemCode === item.Code);
                     if (filter) 
                         filterSQL = ' WHERE ' + filter.Filter;
                 }
-                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
-                const itemUpdateDate = await this.ExecuteSQL(itemSQL);
-            
-                if (itemUpdateDate && itemUpdateDate.length > 0) {
-                    const updateDate = new Date(itemUpdateDate[0].UpdateDate);
+                const itemSQL = `SELECT MAX(${item.DateFieldToCheck}) AS UpdateDate, ${item.EntityID} AS EntityID, '${item.Entity}' AS EntityName FROM [${item.EntitySchemaName}].[${item.EntityBaseView}]${filterSQL}`;
+                combinedSQL += itemSQL;
+                if (index < items.length - 1) {
+                    combinedSQL += ' UNION ALL ';
+                }
+            });
+            const itemUpdateDates = await this.ExecuteSQL(combinedSQL);
+
+            if (itemUpdateDates && itemUpdateDates.length > 0) {
+                let latestUpdateDate = new Date(1900, 1, 1);
+
+                itemUpdateDates.forEach(itemUpdate => {
+                    const updateDate = new Date(itemUpdate.UpdateDate);
                     updateDates.push({
-                        EntityID: item.EntityID, 
-                        EntityName: item.Entity, 
+                        EntityID: itemUpdate.EntityID, 
+                        EntityName: itemUpdate.EntityName, 
                         UpdateDate: updateDate
                     });
-            
-                    return updateDate;
-                }
-            
-                return null;
-            });
-
-            // execute all promises in parallel
-            const updateDateResults = await Promise.all(promises);
-
-            // determine overall success
-            const bSuccess = updateDateResults.every(result => result !== null);
-
-            let latestUpdateDate = new Date(1900, 1, 1);
-            updateDateResults
-                .filter(updateDate => updateDate instanceof Date) // filter out null values and ensure valid Date objects
-                .forEach(updateDate => {
+    
                     if (updateDate > latestUpdateDate) {
                         latestUpdateDate = updateDate;
                     }
                 });
-            
-            // at the end of the loop we have the latest update date for the dataset, package it up with the individual entity update dates
-            return {
-                DatasetID: items[0].DatasetID,
-                DatasetName: items[0].DatasetName,
-                Success: bSuccess,
-                Status: '',
-                LatestUpdateDate: latestUpdateDate,
-                EntityUpdateDates: updateDates
+    
+                return {
+                    DatasetID: items[0].DatasetID,
+                    DatasetName: items[0].DatasetName,
+                    Success: true,
+                    Status: '',
+                    LatestUpdateDate: latestUpdateDate,
+                    EntityUpdateDates: updateDates
+                };
             }
+            else {
+                return {
+                    DatasetID: items[0].DatasetID,
+                    DatasetName: items[0].DatasetName,
+                    Success: false,
+                    Status: 'No update dates found for DatasetName: ' + datasetName,
+                    LatestUpdateDate: null,
+                    EntityUpdateDates: null
+                };
+            } 
         }
         else {
             return { 
