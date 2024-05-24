@@ -1,4 +1,4 @@
-import { Injectable, NgModule } from '@angular/core';
+import { ComponentRef, Injectable, NgModule } from '@angular/core';
 import { Routes, RouterModule, Resolve, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import {
   SingleApplicationComponent,
@@ -18,11 +18,10 @@ import { LogError } from '@memberjunction/core';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { SkipChatComponent } from '@memberjunction/ng-ask-skip';
 import { EventCodes, SharedService, ResourceData } from '@memberjunction/ng-shared';
-
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 
 export class CustomReuseStrategy implements RouteReuseStrategy {
-  storedRoutes: { [key: string]: DetachedRouteHandle } = {};
+  storedRoutes: { [key: string]: DetachedRouteHandleExt | null } = {};
 
   // Determines if a route should be detached and stored
   shouldDetach(route: ActivatedRouteSnapshot): boolean {
@@ -31,16 +30,24 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   }
 
   // Stores the detached route
-  store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandle): void {
+  store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandleExt | null): void {
+    if(!handle){
+      return;
+    }
+
     if (route.routeConfig && route.routeConfig.path) {
       this.storedRoutes[route.routeConfig.path] = handle;
+      this.callHook(handle, 'ngOnDetach');
     }
   }
 
   // Determines if a stored route should be reattached
   shouldAttach(route: ActivatedRouteSnapshot): boolean {
     // Reattach if we have a stored route for the incoming route
-    if (route.routeConfig?.path) return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
+    if (route.routeConfig?.path) {
+      return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
+    }
+
     else return false;
   }
 
@@ -48,13 +55,32 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
     if (!route.routeConfig || (route.routeConfig.path && !this.storedRoutes[route.routeConfig.path])) {
       return null;
-    } else if (route.routeConfig.path) return this.storedRoutes[route.routeConfig.path];
-    else return null;
+    } 
+    else if (route.routeConfig.path) {
+      const path = this.storedRoutes[route.routeConfig.path];
+      if(path){
+        this.callHook(path, 'ngOnAttach');
+        return path;
+      }
+    }
+
+    return null;
   }
 
   // Determines if the route should be reused
   shouldReuseRoute(future: ActivatedRouteSnapshot, curr: ActivatedRouteSnapshot): boolean {
     return future.routeConfig === curr.routeConfig;
+  }
+
+  private callHook(detachedTree: DetachedRouteHandleExt, hookName: 'ngOnDetach' | 'ngOnAttach'): void {
+    if(!detachedTree || !hookName){
+      return;
+    }
+
+    const componentRef = detachedTree.componentRef;
+    if (componentRef && componentRef.instance && typeof componentRef.instance[hookName] === 'function') {
+      componentRef.instance[hookName]();
+    }
   }
 }
 
@@ -168,8 +194,13 @@ const routes: Routes = [
   },
 ];
 
+interface DetachedRouteHandleExt extends DetachedRouteHandle {
+  componentRef: ComponentRef<any>;
+}
+
 @NgModule({
   imports: [RouterModule.forRoot(routes, { initialNavigation: 'disabled' })],
   exports: [RouterModule],
 })
+
 export class AppRoutingModule {}

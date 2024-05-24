@@ -235,11 +235,9 @@ export class UserNotificationsComponent implements AfterViewInit {
         const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
         this.router.navigateByUrl(fullUrl);
       }
-      else  
+      else{
         this.router.navigate(info.urlParts);
-
+      }
     }
-  }
-
-  
+  } 
 }
