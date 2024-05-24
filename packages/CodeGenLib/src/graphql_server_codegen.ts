@@ -582,7 +582,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
         const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
         const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.CodeName : entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase()).CodeName;
-        const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
+        const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
         if (!filterField)
             throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
     
@@ -604,7 +604,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
         const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
         const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.CodeName : entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase()).CodeName;
-        const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
+        const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
         if (!filterField)
             throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
         
