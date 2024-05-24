@@ -120,7 +120,7 @@ export class AskSkipResolver {
   }
 
   protected async handleSimpleSkipPostRequest(input: SkipAPIRequest, conversationID: number = 0, UserMessageConversationDetailId: number = 0, createAIMessageConversationDetail: boolean = false, user: UserInfo = null): Promise<AskSkipResultType> {
-    LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
+    LogStatus(`   >>> HandleSimpleSkipPostRequest Sending request to Skip API: ${___skipAPIurl}`);
 
     const response = await sendPostRequest(___skipAPIurl, input, true, null);
 
@@ -222,7 +222,11 @@ export class AskSkipResolver {
       {
         vendorDriverName: 'GroqLLM',
         apiKey: GetAIAPIKey('GroqLLM')
-      }
+      },
+      {
+        vendorDriverName: 'MistralLLM',
+        apiKey: GetAIAPIKey('MistralLLM')
+      },
     ];
   }
 
@@ -527,18 +531,34 @@ export class AskSkipResolver {
                                     ConversationId: number, userPayload: UserPayload, pubSub: PubSubEngine, md: Metadata, 
                                     convoEntity: ConversationEntity, convoDetailEntity: ConversationDetailEntity,
                                     dataContext: DataContext, dataContextEntity: DataContextEntity): Promise<AskSkipResultType> {
-    LogStatus(`   >>> Sending request to Skip API: ${___skipAPIurl}`)
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${___skipAPIurl}`);
 
-    const response = await sendPostRequest(___skipAPIurl, input, true, null, (message) => {
-      if (message.type==='status_update')
+    const response = await sendPostRequest(___skipAPIurl, input, true, null, (message: 
+      {
+        type: string, 
+        value: {
+          success: boolean, 
+          error: string, 
+          responsePhase: string, 
+          messages: {
+            role: string, 
+            content: string
+          }[]
+        }
+      }) => {
+      LogStatus(JSON.stringify(message, null, 4));
+      if (message.type ==='status_update'){
         pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
           message: JSON.stringify({
             type: 'AskSkip',
             status: 'OK',
+            conversationID: ConversationId,
+            ResponsePhase: message.value.responsePhase,
             message: message.value.messages[0].content
           }),
-          sessionId: userPayload.sessionId,
+          sessionId: userPayload.sessionId
         });
+      }
     });
 
     if (response && response.length > 0) { // response.status === 200) {
@@ -546,7 +566,7 @@ export class AskSkipResolver {
       const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
       //const apiResponse = <SkipAPIResponse>response.data;
       LogStatus(`  Skip API response: ${apiResponse.responsePhase}`)
-      this.PublishApiResponseUserUpdateMessage(apiResponse, userPayload, pubSub);
+      this.PublishApiResponseUserUpdateMessage(apiResponse, userPayload, ConversationId, pubSub);
 
       // now, based on the result type, we will either wait for the next phase or we will process the results
       if (apiResponse.responsePhase === 'data_request') {
@@ -569,9 +589,10 @@ export class AskSkipResolver {
         message: JSON.stringify({
           type: 'AskSkip',
           status: 'Error',
+          conversationID: ConversationId,
           message: 'Analysis failed to run, please try again later and if this continues, contact your support desk.',
         }),
-        sessionId: userPayload.sessionId,
+        sessionId: userPayload.sessionId
       });
 
       return {
@@ -586,7 +607,7 @@ export class AskSkipResolver {
     }
   }
 
-  protected async PublishApiResponseUserUpdateMessage(apiResponse: SkipAPIResponse, userPayload: UserPayload, pubSub: PubSubEngine) {
+  protected async PublishApiResponseUserUpdateMessage(apiResponse: SkipAPIResponse, userPayload: UserPayload, conversationID: number, pubSub: PubSubEngine) {
     let sUserMessage: string = '';
     switch (apiResponse.responsePhase) {
       case 'data_request':
@@ -606,9 +627,10 @@ export class AskSkipResolver {
       message: JSON.stringify({
         type: 'AskSkip',
         status: 'OK',
+        conversationID,
         message: sUserMessage,
       }),
-      sessionId: userPayload.sessionId,
+      sessionId: userPayload.sessionId
     });
   }
 
@@ -837,10 +859,11 @@ export class AskSkipResolver {
       message: JSON.stringify({
         type: 'UserNotifications',
         status: 'OK',
+        conversationID: convoEntity.ID,
         details: {
           action: 'create',
           recordId: userNotification.ID,
-        },
+        }
       }),
       sessionId: userPayload.sessionId,
     });

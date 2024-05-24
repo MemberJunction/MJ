@@ -1,13 +1,14 @@
   import { AfterViewInit, AfterViewChecked, Component, OnInit, ViewChild, ViewContainerRef, Renderer2, ElementRef, Injector, ComponentRef, OnDestroy, Input, ChangeDetectorRef, ComponentFactoryResolver } from '@angular/core';
 import { Location } from '@angular/common';
-import { ActivatedRoute } from '@angular/router';
-import { LogError, Metadata, RunQuery, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
+import { ActivatedRoute, ActivationEnd, Router } from '@angular/router';
+import { LogError, Metadata, RunQuery, RunView, UserInfo, CompositeKey, LogStatus } from '@memberjunction/core';
 import { ConversationDetailEntity, ConversationEntity, DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Container } from '@memberjunction/ng-container-directives';
 import { SharedService } from '@memberjunction/ng-shared';
 
 import { Subscription } from 'rxjs';
+import { take, filter } from 'rxjs/operators';
 import { ListViewComponent } from '@progress/kendo-angular-listview';
 import { MJAPISkipResult, SkipAPIAnalysisCompleteResponse, SkipAPIClarifyingQuestionResponse, SkipAPIResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
@@ -54,10 +55,14 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   public _showScrollToBottomIcon = false;
 
   private _messageInProgress: boolean = false;
+  private refreshOnAttach: boolean = false;
+  private _conversationsInProgress: { [key: number]: any } = {};
+  private _conversationsToReload: { [key: number]: boolean } = {};
   public _conversationLoadComplete: boolean = false;
   private _temporaryMessage: ConversationDetailEntity | undefined;
   private _intersectionObserver: IntersectionObserver | undefined;
   private static __skipChatWindowsCurrentlyVisible: number = 0;
+  private sub?: Subscription;
 
   public WelcomeQuestions = [
     { 
@@ -87,6 +92,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     public sharedService: SharedService,
     private renderer: Renderer2,
     private route: ActivatedRoute,
+    private router: Router,
     private location: Location,
     private cdRef: ChangeDetectorRef,
   ) {}
@@ -104,11 +110,15 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     try {
       MJGlobal.Instance.GetEventListener().subscribe( (event: MJEvent) => {
         if (event.event === MJEventType.ComponentEvent) {
-          const obj = event.args;
+          const obj: {type?: string, status?: string, conversationID?: number, message?: string} = event.args;
           if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
-            if (this._messageInProgress) {
-              // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
-              this.SetSkipStatusMessage(obj.message, 0);
+            if(obj.conversationID && this._conversationsInProgress[obj.conversationID]){
+              if(obj.conversationID === this.SelectedConversation?.ID) {
+                if(obj.message && obj.message.length > 0) {
+                  // we are in the midst of a possibly long running process for Skip, and we got a message here, so go ahead and display it in the temporary message
+                  this.SetSkipStatusMessage(obj.message, 0);
+                }
+              }
             }
           }
         }
@@ -249,7 +259,6 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
       else {
         // we are now visible, increment the count of visible instances
         SkipChatComponent.__skipChatWindowsCurrentlyVisible++;
-
         if (!this._loaded) {
           // we are now visible, for the first time, first fire off an InvokeManualResize to ensure the parent container is resized properly
           this.sharedService.InvokeManualResize();
@@ -260,8 +269,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
             this.paramsSubscription = this.route.params.subscribe(params => {
               if (!this._loaded) {
                 this._loaded = true; // do this once
-                const conversationId = params['conversationId'];
-                if (conversationId && !isNaN(conversationId)) {
+                const conversationId = params.conversationId;
+                if (conversationId) {
                   this.loadConversations(parseInt(conversationId, 10)); // Load the conversation based on the conversationId
                 } else {
                   this.loadConversations();
@@ -530,25 +539,30 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         convoAny._DataContext = this.DataContext;  
       }
 
-      if (convoAny._Messages) {
+      const convoShouldReload = this._conversationsToReload[conversation.ID];
+      if (convoAny._Messages && !convoShouldReload) {
         // we have cached messages, so just use them, but don't point directly to the array, create new array with the same objects
         this.Messages = [...convoAny._Messages];
       }
       else {
+        this._conversationsToReload[conversation.ID] = true;
+
         const rv = new RunView();
         const result = await rv.RunView({
           EntityName: 'Conversation Details',
           ExtraFilter: 'ConversationID=' + conversation.ID,
           OrderBy: 'CreatedAt ASC' // show messages in order of creation
-        })
+        });
+
         if (result && result.Success) {
           // copy the results into NEW objects into the array, we don't want to modify the original objects
-          this.Messages = <ConversationDetailEntity[]>result.Results;
+          this.Messages = [...result.Results as ConversationDetailEntity[]];
 
           // also, cache the messages within the conversation, but create new array with the same objects
           convoAny._Messages = [...this.Messages];
         }  
       }
+
       if (this.Messages && this.Messages.length > 0) {
         //this.Messages = <ConversationDetailEntity[]>result.Results;
         this.cdRef.detach(); // temporarily stop change detection to improve performance
@@ -559,6 +573,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         this._scrollToBottom = true; // this results in the angular after Viewchecked scrolling to bottom when it's done
         this.cdRef.reattach(); // resume change detection
       }
+
       this._processingStatus[conversation.ID] = oldStatus; // set back to old status as it might have been processing
       this.sharedService.InvokeManualResize(500);
 
@@ -634,13 +649,19 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
   }
 
   async sendPrompt(val: string) {
-    if (this._messageInProgress)
-      return; // don't allow sending another message if we're in the midst of sending one
+
+    const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
+    if(this._conversationsInProgress[convoID]){
+      // don't allow sending another message if we're in the midst of sending one 
+      return;
+    }
+
+    if (this.SelectedConversation){
+      this._processingStatus[this.SelectedConversation?.ID] = true;
+    }
     
     if (val && val.length > 0) {
-      const convoID: number = this.SelectedConversation ? this.SelectedConversation.ID : -1;
-      if (this.SelectedConversation)
-        this._processingStatus[this.SelectedConversation?.ID] = true;
+      this._conversationsInProgress[convoID] = true;
       this._messageInProgress = true;
       this.AllowSend = false;
       const md = new Metadata();
@@ -667,10 +688,13 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
           // this scenario arises when we have a selected convo change after we submitted our request to skip
           // so we do nothing here other than update the status. 
           this._processingStatus[convoID] = false;
+          //the next time the user selects this convo, we will fetch messages
+          //from the server rather than using the ones in cache
+          this._conversationsToReload[convoID] = true;
         }
         else {
           this._processingStatus[convoID] = false; 
-          const innerResult = <SkipAPIResponse>JSON.parse(skipResult.Result)
+          const innerResult: SkipAPIResponse = JSON.parse(skipResult.Result)
 
           if (!this.SelectedConversation) {
             const convo = <ConversationEntity>await md.GetEntityObject('Conversations');
@@ -680,7 +704,7 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
             this.SelectedConversation = convo;
             this.SetSelectedConversationUser();
           }
-          else if (this.Messages.length === 1 && skipResult.ResponsePhase === SkipResponsePhase.analysis_complete) {
+          else if (innerResult.responsePhase === SkipResponsePhase.analysis_complete) {
             // we are on the first message so skip renamed the convo, use that 
             this.SelectedConversation.Name = (<SkipAPIAnalysisCompleteResponse>innerResult).reportTitle!; // this will update the UI
 
@@ -690,8 +714,11 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
             if (idx >= 0) {
               // update our this.Conversations array to reflect the new name. First find the index of the conversation and then get that item and update it
               this.Conversations[idx].Name = this.SelectedConversation.Name;
+              //reredner the list box
+              this.Conversations = [...this.Conversations];
             }
           }
+
           await convoDetail.Load(skipResult.UserMessageConversationDetailId); // update the object to load from DB
           const aiDetail = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details');
           await aiDetail.Load(skipResult.AIMessageConversationDetailId) // get record from the database
@@ -705,7 +732,8 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
         this._processingStatus[this.SelectedConversation?.ID] = false;
 
       this.AllowSend = true;
-      this._messageInProgress =false;
+      this._conversationsInProgress[convoID] = false;
+      this._messageInProgress = false;
 
       // now tell Angular to resume its change detection
       this.cdRef.reattach();
@@ -983,5 +1011,34 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
 
   private CompositeKeyIsPopulated(): boolean { 
     return this.LinkedEntityCompositeKey.KeyValuePairs && this.LinkedEntityCompositeKey.KeyValuePairs.length > 0;
+  }
+
+  public ngOnDetach(){
+    if(this.sub){
+      this.sub.unsubscribe();
+    }
+  }
+
+  public ngOnAttach(){
+    if (this.sub && !this.sub.closed){
+      return;
+    }
+
+    this.sub = this.router.events.pipe(filter(e => e instanceof ActivationEnd), take(1))
+      .subscribe(e => {
+        this.onNavBackToCachedComponent();
+      });
+  }
+
+  private onNavBackToCachedComponent(): void {
+    if(this.paramsSubscription){
+      this.paramsSubscription.unsubscribe();
+    }
+    
+    this.paramsSubscription = this.route.params.subscribe(params => {
+      const convoIDParam = params.conversationId;
+      const conversationID: number | undefined = convoIDParam ? parseInt(convoIDParam) : undefined;
+      this.loadConversations(conversationID);
+    });
   }
 }
