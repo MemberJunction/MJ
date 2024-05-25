@@ -2,6 +2,39 @@
   "name": "@memberjunction/graphql-dataprovider",
   "entries": [
     {
+      "date": "Sat, 25 May 2024 15:30:17 GMT",
+      "version": "1.4.0",
+      "tag": "@memberjunction/graphql-dataprovider_v1.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/graphql-dataprovider",
+            "commit": "2f37a63012267eebb751ad11dccacc35e459a7c9",
+            "comment": "Updates to SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/graphql-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.4.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 May 2024 18:35:52 GMT",
       "version": "1.3.3",
       "tag": "@memberjunction/graphql-dataprovider_v1.3.3",

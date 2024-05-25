@@ -1,8 +1,16 @@
 # Change Log - @memberjunction/global
 
-This log was last generated on Wed, 24 Apr 2024 20:57:41 GMT and should not be manually modified.
+This log was last generated on Sat, 25 May 2024 15:30:17 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.4.0
+
+Sat, 25 May 2024 15:30:17 GMT
+
+### Minor changes
+
+- Updates to SQL scripts (craig.adam@bluecypress.io)
 
 ## 1.0.11
 

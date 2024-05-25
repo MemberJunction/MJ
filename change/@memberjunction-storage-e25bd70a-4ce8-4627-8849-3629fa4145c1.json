@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Updates to SQL scripts",
-  "packageName": "@memberjunction/storage",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}

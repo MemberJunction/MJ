@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Updates to SQL scripts",
-  "packageName": "@memberjunction/ng-compare-records",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}

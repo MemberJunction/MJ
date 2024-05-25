@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Updates to SQL scripts",
-  "packageName": "@memberjunction/ai-vectors-pinecone",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}

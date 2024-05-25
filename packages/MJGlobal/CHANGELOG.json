@@ -2,6 +2,21 @@
   "name": "@memberjunction/global",
   "entries": [
     {
+      "date": "Sat, 25 May 2024 15:30:17 GMT",
+      "version": "1.4.0",
+      "tag": "@memberjunction/global_v1.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/global",
+            "commit": "2f37a63012267eebb751ad11dccacc35e459a7c9",
+            "comment": "Updates to SQL scripts"
+          }
+        ]
+      }
+    },
+    {
       "date": "Wed, 24 Apr 2024 20:57:41 GMT",
       "version": "1.0.11",
       "tag": "@memberjunction/global_v1.0.11",
