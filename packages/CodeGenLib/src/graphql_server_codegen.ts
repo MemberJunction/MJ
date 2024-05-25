@@ -582,7 +582,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
         const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
         const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.CodeName : entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase()).CodeName;
-        const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
+        const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
         if (!filterField)
             throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
     
@@ -593,7 +593,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
     @FieldResolver(() => [${serverClassName}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix }, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.[${filterFieldName}]}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${r.RelatedEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
         return result;
     }
@@ -604,7 +604,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
         const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
         const filterFieldName = !r.EntityKeyField ? entity.PrimaryKey.CodeName : entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase()).CodeName;
-        const filterField = entity.Fields.find(f => f.Name.toLowerCase() == filterFieldName.toLowerCase());
+        const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
         if (!filterField)
             throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
         
@@ -616,7 +616,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
     @FieldResolver(() => [${serverClassName}])
     async ${r.RelatedEntityCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix }, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.PrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.[${filterFieldName}]}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = \`SELECT * FROM [${this.schemaName(re)}].[${r.RelatedEntityBaseView}]\ WHERE [${re.PrimaryKey.Name}] IN (SELECT [${r.JoinEntityInverseJoinField}] FROM [${this.schemaName(re)}].[${r.JoinView}] WHERE [${r.JoinEntityJoinField}]=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause('${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', await dataSource.query(sSQL));
         return result;
     }

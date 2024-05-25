@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Updates to SQL scripts",
+  "packageName": "@memberjunction/ng-entity-form-dialog",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}

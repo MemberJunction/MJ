@@ -18,7 +18,7 @@ import { ApplicationEntity } from '@memberjunction/core-entities';
         <mj-form-field
             [record]="record"
             FieldName="Description"
-            Type="textarea"
+            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field

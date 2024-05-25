@@ -695,10 +695,16 @@ export class DataContext {
                 throw new Error(`Data Context ID not set or invalid`);
 
             let bSuccess: boolean = true;
-            for (const item of this.Items) {
-                if (!await item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser))
+            let promises: Promise<boolean>[] = this.Items.map(async (item) => {
+                return await item.LoadData(dataSource, forceRefresh, loadRelatedDataOnSingleRecords, maxRecordsPerRelationship, contextUser);
+            });
+            const results: boolean[] = await Promise.all(promises);
+            for(const result of results){
+                if (!result){
                     bSuccess = false;
+                }
             }
+
             return bSuccess;
         }
         catch (e) {
