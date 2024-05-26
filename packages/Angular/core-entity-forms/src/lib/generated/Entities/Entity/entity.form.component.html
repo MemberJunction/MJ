@@ -385,6 +385,17 @@
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Entity Actions')">
+                        Entity Actions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Entity Actions')"  
+                            [AllowLoad]="this.IsCurrentTab('Entity Actions')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
             </kendo-splitter-pane>
         </kendo-splitter>

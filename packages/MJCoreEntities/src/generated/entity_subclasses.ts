@@ -15228,3 +15228,1874 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
         
+    /**
+     * Action Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionCategory
+     * * Base View: vwActionCategories
+     * * @description Organizes actions into categories, including name, description, and optional parent category for hierarchy.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Categories')
+    export class ActionCategoryEntity extends BaseEntity {
+        /**
+        * Loads the Action Categories record from the database
+        * @param ID: number - primary key value to load the Action Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionCategoryEntity
+        * @throws {Error} - Delete is not allowed for Action Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the action category.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the action category.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
+        * * Description: Parent category ID for hierarchical organization.
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the action category (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+        
+
+    }
+        
+    /**
+     * Action Outputs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionOutput
+     * * Base View: vwActionOutputs
+     * * @description Tracks outputs, which are optional, from an action, including names, values, and descriptions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Outputs')
+    export class ActionOutputEntity extends BaseEntity {
+        /**
+        * Loads the Action Outputs record from the database
+        * @param ID: number - primary key value to load the Action Outputs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionOutputEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Outputs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionOutputEntity
+        * @throws {Error} - Delete is not allowed for Action Outputs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Outputs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the output variable the action will produce.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default value of the output.
+        */
+        get DefaultValue(): string | null {  
+            return this.Get('DefaultValue');
+        }
+        set DefaultValue(value: string | null) {
+            this.Set('DefaultValue', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the output.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get IsRequired(): boolean {  
+            return this.Get('IsRequired');
+        }
+        set IsRequired(value: boolean) {
+            this.Set('IsRequired', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Actions - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityAction
+     * * Base View: vwEntityActions
+     * * @description Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Actions')
+    export class EntityActionEntity extends BaseEntity {
+        /**
+        * Loads the Entity Actions record from the database
+        * @param ID: number - primary key value to load the Entity Actions record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityActionEntity
+        * @throws {Error} - Delete is not allowed for Entity Actions, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Actions, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        */
+        get EntityID(): number {  
+            return this.Get('EntityID');
+        }
+        set EntityID(value: number) {
+            this.Set('EntityID', value);
+        }
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the entity action (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Entity(): string {  
+            return this.Get('Entity');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Action Invocations - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionInvocation
+     * * Base View: vwEntityActionInvocations
+     * * @description Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Invocations')
+    export class EntityActionInvocationEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Invocations record from the database
+        * @param ID: number - primary key value to load the Entity Action Invocations record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionInvocationEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Action Invocations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityActionInvocationEntity
+        * @throws {Error} - Delete is not allowed for Entity Action Invocations, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Action Invocations, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityActionID
+        * * Display Name: Entity Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
+        */
+        get EntityActionID(): number {  
+            return this.Get('EntityActionID');
+        }
+        set EntityActionID(value: number) {
+            this.Set('EntityActionID', value);
+        }
+        /**
+        * * Field Name: InvocationTypeID
+        * * Display Name: Invocation Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
+        */
+        get InvocationTypeID(): number {  
+            return this.Get('InvocationTypeID');
+        }
+        set InvocationTypeID(value: number) {
+            this.Set('InvocationTypeID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the entity action invocation (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: InvocationType
+        * * Display Name: Invocation Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get InvocationType(): string {  
+            return this.Get('InvocationType');
+        }
+        
+
+    }
+        
+    /**
+     * Action Authorizations - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionAuthorization
+     * * Base View: vwActionAuthorizations
+     * * @description Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Authorizations')
+    export class ActionAuthorizationEntity extends BaseEntity {
+        /**
+        * Loads the Action Authorizations record from the database
+        * @param ID: number - primary key value to load the Action Authorizations record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionAuthorizationEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Authorizations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionAuthorizationEntity
+        * @throws {Error} - Delete is not allowed for Action Authorizations, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Authorizations, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: AuthorizationID
+        * * Display Name: Authorization ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
+        */
+        get AuthorizationID(): number {  
+            return this.Get('AuthorizationID');
+        }
+        set AuthorizationID(value: number) {
+            this.Set('AuthorizationID', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Authorization
+        * * Display Name: Authorization
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get Authorization(): string {  
+            return this.Get('Authorization');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Action Invocation Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionInvocationType
+     * * Base View: vwEntityActionInvocationTypes
+     * * @description Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Invocation Types')
+    export class EntityActionInvocationTypeEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Invocation Types record from the database
+        * @param ID: number - primary key value to load the Entity Action Invocation Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionInvocationTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Action Invocation Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityActionInvocationTypeEntity
+        * @throws {Error} - Delete is not allowed for Entity Action Invocation Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Action Invocation Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the invocation type such as Record Created/Updated/etc.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the invocation type.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Actions - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: Action
+     * * Base View: vwActions
+     * * @description Stores action definitions, including prompts, generated code, user comments, and status.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Actions')
+    export class ActionEntity extends BaseEntity {
+        /**
+        * Loads the Actions record from the database
+        * @param ID: number - primary key value to load the Actions record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionEntity
+        * @throws {Error} - Delete is not allowed for Actions, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Actions, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Categories (vwActionCategories.ID)
+        */
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
+        * * Field Name: UserPrompt
+        * * Display Name: User Prompt
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserPrompt(): string {  
+            return this.Get('UserPrompt');
+        }
+        set UserPrompt(value: string) {
+            this.Set('UserPrompt', value);
+        }
+        /**
+        * * Field Name: UserComments
+        * * Display Name: User Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User's comments not shared with the LLM.
+        */
+        get UserComments(): string | null {  
+            return this.Get('UserComments');
+        }
+        set UserComments(value: string | null) {
+            this.Set('UserComments', value);
+        }
+        /**
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Code(): string | null {  
+            return this.Get('Code');
+        }
+        set Code(value: string | null) {
+            this.Set('Code', value);
+        }
+        /**
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: AI's explanation of the code.
+        */
+        get CodeComments(): string | null {  
+            return this.Get('CodeComments');
+        }
+        set CodeComments(value: string | null) {
+            this.Set('CodeComments', value);
+        }
+        /**
+        * * Field Name: CodeApprovalStatus
+        * * Display Name: Code Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Rejected
+        *   * Approved
+        *   * Pending
+        * * Description: An action won't be usable until the code is approved.
+        */
+        get CodeApprovalStatus(): 'Rejected' | 'Approved' | 'Pending' {  
+            return this.Get('CodeApprovalStatus');
+        }
+        set CodeApprovalStatus(value: 'Rejected' | 'Approved' | 'Pending') {
+            this.Set('CodeApprovalStatus', value);
+        }
+        /**
+        * * Field Name: CodeApprovalComments
+        * * Display Name: Code Approval Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional comments when an individual (or an AI) reviews and approves the code.
+        */
+        get CodeApprovalComments(): string | null {  
+            return this.Get('CodeApprovalComments');
+        }
+        set CodeApprovalComments(value: string | null) {
+            this.Set('CodeApprovalComments', value);
+        }
+        /**
+        * * Field Name: CodeApprovedByUserID
+        * * Display Name: Code Approved By User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: UserID who approved the code.
+        */
+        get CodeApprovedByUserID(): number | null {  
+            return this.Get('CodeApprovedByUserID');
+        }
+        set CodeApprovedByUserID(value: number | null) {
+            this.Set('CodeApprovedByUserID', value);
+        }
+        /**
+        * * Field Name: CodeApprovedAt
+        * * Display Name: Code Approved At
+        * * SQL Data Type: datetime
+        * * Description: When the code was approved.
+        */
+        get CodeApprovedAt(): Date | null {  
+            return this.Get('CodeApprovedAt');
+        }
+        set CodeApprovedAt(value: Date | null) {
+            this.Set('CodeApprovedAt', value);
+        }
+        /**
+        * * Field Name: RetentionPeriod
+        * * Display Name: Retention Period
+        * * SQL Data Type: int
+        * * Description: Number of days to retain execution logs; NULL for indefinite.
+        */
+        get RetentionPeriod(): number | null {  
+            return this.Get('RetentionPeriod');
+        }
+        set RetentionPeriod(value: number | null) {
+            this.Set('RetentionPeriod', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the action (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get Category(): string | null {  
+            return this.Get('Category');
+        }
+        
+        /**
+        * * Field Name: CodeApprovedByUser
+        * * Display Name: Code Approved By User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get CodeApprovedByUser(): string | null {  
+            return this.Get('CodeApprovedByUser');
+        }
+        
+
+    }
+        
+    /**
+     * Entity Action Filters - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: EntityActionFilter
+     * * Base View: vwEntityActionFilters
+     * * @description Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Entity Action Filters')
+    export class EntityActionFilterEntity extends BaseEntity {
+        /**
+        * Loads the Entity Action Filters record from the database
+        * @param ID: number - primary key value to load the Entity Action Filters record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof EntityActionFilterEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Entity Action Filters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof EntityActionFilterEntity
+        * @throws {Error} - Delete is not allowed for Entity Action Filters, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Entity Action Filters, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: EntityActionID
+        * * Display Name: Entity Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Entity Actions (vwEntityActions.ID)
+        */
+        get EntityActionID(): number {  
+            return this.Get('EntityActionID');
+        }
+        set EntityActionID(value: number) {
+            this.Set('EntityActionID', value);
+        }
+        /**
+        * * Field Name: ActionFilterID
+        * * Display Name: Action Filter ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Filters (vwActionFilters.ID)
+        */
+        get ActionFilterID(): number {  
+            return this.Get('ActionFilterID');
+        }
+        set ActionFilterID(value: number) {
+            this.Set('ActionFilterID', value);
+        }
+        /**
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Order of filter execution.
+        */
+        get Sequence(): number {  
+            return this.Get('Sequence');
+        }
+        set Sequence(value: number) {
+            this.Set('Sequence', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the entity action filter (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Inputs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionInput
+     * * Base View: vwActionInputs
+     * * @description Defines the expected input properties for an action to execute.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Inputs')
+    export class ActionInputEntity extends BaseEntity {
+        /**
+        * Loads the Action Inputs record from the database
+        * @param ID: number - primary key value to load the Action Inputs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionInputEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Inputs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionInputEntity
+        * @throws {Error} - Delete is not allowed for Action Inputs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Inputs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Key for the input.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default value for the action, can be overriden at run time by the caller of the action.
+        */
+        get DefaultValue(): string | null {  
+            return this.Get('DefaultValue');
+        }
+        set DefaultValue(value: string | null) {
+            this.Set('DefaultValue', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the input.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Specifies if the input property is required when executing the action or not.
+        */
+        get IsRequired(): boolean {  
+            return this.Get('IsRequired');
+        }
+        set IsRequired(value: boolean) {
+            this.Set('IsRequired', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Filters - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionFilter
+     * * Base View: vwActionFilters
+     * * @description Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Filters')
+    export class ActionFilterEntity extends BaseEntity {
+        /**
+        * Loads the Action Filters record from the database
+        * @param ID: number - primary key value to load the Action Filters record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionFilterEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Filters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionFilterEntity
+        * @throws {Error} - Delete is not allowed for Action Filters, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Filters, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: UserDescription
+        * * Display Name: User Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserDescription(): string {  
+            return this.Get('UserDescription');
+        }
+        set UserDescription(value: string) {
+            this.Set('UserDescription', value);
+        }
+        /**
+        * * Field Name: UserComments
+        * * Display Name: User Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get UserComments(): string | null {  
+            return this.Get('UserComments');
+        }
+        set UserComments(value: string | null) {
+            this.Set('UserComments', value);
+        }
+        /**
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Code(): string {  
+            return this.Get('Code');
+        }
+        set Code(value: string) {
+            this.Set('Code', value);
+        }
+        /**
+        * * Field Name: CodeExplanation
+        * * Display Name: Code Explanation
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get CodeExplanation(): string | null {  
+            return this.Get('CodeExplanation');
+        }
+        set CodeExplanation(value: string | null) {
+            this.Set('CodeExplanation', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Context Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionContextType
+     * * Base View: vwActionContextTypes
+     * * @description Lists possible contexts for action execution with optional descriptions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Context Types')
+    export class ActionContextTypeEntity extends BaseEntity {
+        /**
+        * Loads the Action Context Types record from the database
+        * @param ID: number - primary key value to load the Action Context Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionContextTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Context Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionContextTypeEntity
+        * @throws {Error} - Delete is not allowed for Action Context Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Context Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the context type.
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the context type.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Result Codes - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionResultCode
+     * * Base View: vwActionResultCodes
+     * * @description Defines the possible result codes for each action.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Result Codes')
+    export class ActionResultCodeEntity extends BaseEntity {
+        /**
+        * Loads the Action Result Codes record from the database
+        * @param ID: number - primary key value to load the Action Result Codes record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionResultCodeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Result Codes - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionResultCodeEntity
+        * @throws {Error} - Delete is not allowed for Action Result Codes, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Result Codes, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: ResultCode
+        * * Display Name: Result Code
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ResultCode(): string {  
+            return this.Get('ResultCode');
+        }
+        set ResultCode(value: string) {
+            this.Set('ResultCode', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of the result code.
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Action Contexts - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionContext
+     * * Base View: vwActionContexts
+     * * @description Links actions to their supported context types enabling a given action to be executable in more than one context.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Contexts')
+    export class ActionContextEntity extends BaseEntity {
+        /**
+        * Loads the Action Contexts record from the database
+        * @param ID: number - primary key value to load the Action Contexts record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionContextEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Contexts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionContextEntity
+        * @throws {Error} - Delete is not allowed for Action Contexts, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Contexts, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: ContextTypeID
+        * * Display Name: Context Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Action Context Types (vwActionContextTypes.ID)
+        */
+        get ContextTypeID(): number {  
+            return this.Get('ContextTypeID');
+        }
+        set ContextTypeID(value: number) {
+            this.Set('ContextTypeID', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        *   * Pending
+        * * Description: Status of the action context (Pending, Active, Disabled).
+        */
+        get Status(): 'Disabled' | 'Active' | 'Pending' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active' | 'Pending') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: ContextType
+        * * Display Name: Context Type
+        * * SQL Data Type: nvarchar(255)
+        * * Default Value: null
+        */
+        get ContextType(): string {  
+            return this.Get('ContextType');
+        }
+        
+
+    }
+        
+    /**
+     * Action Execution Logs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionExecutionLog
+     * * Base View: vwActionExecutionLogs
+     * * @description Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Execution Logs')
+    export class ActionExecutionLogEntity extends BaseEntity {
+        /**
+        * Loads the Action Execution Logs record from the database
+        * @param ID: number - primary key value to load the Action Execution Logs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionExecutionLogEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Execution Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionExecutionLogEntity
+        * @throws {Error} - Delete is not allowed for Action Execution Logs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Execution Logs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        * * Description: Timestamp of when the action started execution.
+        */
+        get StartedAt(): Date {  
+            return this.Get('StartedAt');
+        }
+        set StartedAt(value: Date) {
+            this.Set('StartedAt', value);
+        }
+        /**
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetime
+        * * Description: Timestamp of when the action ended execution.
+        */
+        get EndedAt(): Date | null {  
+            return this.Get('EndedAt');
+        }
+        set EndedAt(value: Date | null) {
+            this.Set('EndedAt', value);
+        }
+        /**
+        * * Field Name: Inputs
+        * * Display Name: Inputs
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Inputs(): string | null {  
+            return this.Get('Inputs');
+        }
+        set Inputs(value: string | null) {
+            this.Set('Inputs', value);
+        }
+        /**
+        * * Field Name: Outputs
+        * * Display Name: Outputs
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Outputs(): string | null {  
+            return this.Get('Outputs');
+        }
+        set Outputs(value: string | null) {
+            this.Set('Outputs', value);
+        }
+        /**
+        * * Field Name: ResultCode
+        * * Display Name: Result Code
+        * * SQL Data Type: nvarchar(255)
+        */
+        get ResultCode(): string | null {  
+            return this.Get('ResultCode');
+        }
+        set ResultCode(value: string | null) {
+            this.Set('ResultCode', value);
+        }
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: RetentionPeriod
+        * * Display Name: Retention Period
+        * * SQL Data Type: int
+        * * Description: Number of days to retain the log; NULL for indefinite retention.
+        */
+        get RetentionPeriod(): number | null {  
+            return this.Get('RetentionPeriod');
+        }
+        set RetentionPeriod(value: number | null) {
+            this.Set('RetentionPeriod', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: null
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+
+    }
+        

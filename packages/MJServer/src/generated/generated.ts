@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/24/2024, 2:19:58 PM
+* GENERATED: 5/25/2024, 5:54:20 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, ActionOutputEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionInputEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2982,6 +2982,9 @@ export class Entity_ {
     @Field(() => [mj_core_schema_server_object_types.EntityBehavior_])
     EntityBehaviorsArray: mj_core_schema_server_object_types.EntityBehavior_[]; // Link to EntityBehaviors
     
+    @Field(() => [mj_core_schema_server_object_types.EntityAction_])
+    EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
+    
 }
         
 //****************************************************************************
@@ -3532,6 +3535,14 @@ export class EntityResolverBase extends ResolverBase {
         const result = this.ArrayMapFieldNamesToCodeNames('Entity Behaviors', await dataSource.query(sSQL));
         return result;
     }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
+    async EntityActionsArray(@Root() entity_: Entity_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [EntityID]=${entity_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
+        return result;
+    }
         
     @Mutation(() => Entity_)
     async CreateEntity(
@@ -3770,6 +3781,12 @@ export class User_ {
     
     @Field(() => [mj_core_schema_server_object_types.DuplicateRun_])
     DuplicateRunsArray: mj_core_schema_server_object_types.DuplicateRun_[]; // Link to DuplicateRuns
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    
+    @Field(() => [mj_core_schema_server_object_types.Action_])
+    ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
     
 }
         
@@ -4096,6 +4113,22 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Duplicate Runs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDuplicateRuns] WHERE [StartedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Duplicate Runs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Duplicate Runs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    async ActionExecutionLogsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
+    async ActionsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
         return result;
     }
         
@@ -8915,6 +8948,9 @@ export class Authorization_ {
     @Field(() => [mj_core_schema_server_object_types.AuditLog_])
     AuditLogsArray: mj_core_schema_server_object_types.AuditLog_[]; // Link to AuditLogs
     
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
+    
 }
 //****************************************************************************
 // RESOLVER for Authorizations
@@ -9005,6 +9041,14 @@ export class AuthorizationResolver extends ResolverBase {
         this.CheckUserReadPermissions('Audit Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAuditLogs] WHERE [AuthorizationName]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Audit Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() authorization_: Authorization_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [AuthorizationID]=${authorization_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
         return result;
     }
         
@@ -20822,6 +20866,2835 @@ export class ApplicationSettingResolver extends ResolverBase {
     }
     protected async AfterDelete(dataSource: DataSource, ID: number) {
         const i = ID, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Categories
+//****************************************************************************
+@ObjectType({ description: 'Organizes actions into categories, including name, description, and optional parent category for hierarchy.' })
+export class ActionCategory_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the action category.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the action category.'}) 
+    Description?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'Parent category ID for hierarchical organization.'}) 
+    ParentID?: number;
+          
+    @Field({description: 'Status of the action category (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionCategory_])
+    ActionCategoriesArray: mj_core_schema_server_object_types.ActionCategory_[]; // Link to ActionCategories
+    
+    @Field(() => [mj_core_schema_server_object_types.Action_])
+    ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Categories   
+//****************************************************************************
+@InputType()
+export class CreateActionCategoryInput {
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Categories   
+//****************************************************************************
+@InputType()
+export class UpdateActionCategoryInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    
+    @Field(() => Int, { nullable: true })
+    ParentID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Categories
+//****************************************************************************
+@ObjectType()
+export class RunActionCategoryViewResult {
+    @Field(() => [ActionCategory_])
+    Results: ActionCategory_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionCategory_)
+export class ActionCategoryResolver extends ResolverBase {
+    @Query(() => RunActionCategoryViewResult)
+    async RunActionCategoryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionCategoryViewResult)
+    async RunActionCategoryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionCategoryViewResult)
+    async RunActionCategoryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Categories';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionCategory_, { nullable: true })
+    async ActionCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionCategory_ | null> {
+        this.CheckUserReadPermissions('Action Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionCategory_])
+    async ActionCategoriesArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Categories', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionCategories] WHERE [ParentID]=${actioncategory_.ID} ` + this.getRowLevelSecurityWhereClause('Action Categories', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Categories', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.Action_])
+    async ActionsArray(@Root() actioncategory_: ActionCategory_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CategoryID]=${actioncategory_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ActionCategory_)
+    async CreateActionCategory(
+        @Arg('input', () => CreateActionCategoryInput) input: CreateActionCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionCategoryEntity>await new Metadata().GetEntityObject('Action Categories', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionCategoryInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionCategoryInput) {
+    }
+        
+    @Mutation(() => ActionCategory_)
+    async UpdateActionCategory(
+        @Arg('input', () => UpdateActionCategoryInput) input: UpdateActionCategoryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionCategoryEntity>await new Metadata().GetEntityObject('Action Categories', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Categories
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionCategoryInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionCategoryInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Outputs
+//****************************************************************************
+@ObjectType({ description: 'Tracks outputs, which are optional, from an action, including names, values, and descriptions.' })
+export class ActionOutput_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field({description: 'Name of the output variable the action will produce.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Default value of the output.'}) 
+    DefaultValue?: string;
+          
+    @Field({nullable: true, description: 'Description of the output.'}) 
+    Description?: string;
+          
+    @Field(() => Boolean) 
+    IsRequired: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Outputs   
+//****************************************************************************
+@InputType()
+export class CreateActionOutputInput {
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    DefaultValue: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    
+    @Field(() => Boolean)
+    IsRequired: boolean;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Outputs   
+//****************************************************************************
+@InputType()
+export class UpdateActionOutputInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    DefaultValue: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    
+    @Field(() => Boolean)
+    IsRequired: boolean;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Outputs
+//****************************************************************************
+@ObjectType()
+export class RunActionOutputViewResult {
+    @Field(() => [ActionOutput_])
+    Results: ActionOutput_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionOutput_)
+export class ActionOutputResolver extends ResolverBase {
+    @Query(() => RunActionOutputViewResult)
+    async RunActionOutputViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionOutputViewResult)
+    async RunActionOutputViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionOutputViewResult)
+    async RunActionOutputDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Outputs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionOutput_, { nullable: true })
+    async ActionOutput(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionOutput_ | null> {
+        this.CheckUserReadPermissions('Action Outputs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionOutputs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Outputs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Outputs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionOutput_)
+    async CreateActionOutput(
+        @Arg('input', () => CreateActionOutputInput) input: CreateActionOutputInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionOutputEntity>await new Metadata().GetEntityObject('Action Outputs', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionOutputInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionOutputInput) {
+    }
+        
+    @Mutation(() => ActionOutput_)
+    async UpdateActionOutput(
+        @Arg('input', () => UpdateActionOutputInput) input: UpdateActionOutputInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionOutputEntity>await new Metadata().GetEntityObject('Action Outputs', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Outputs
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionOutputInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionOutputInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Actions
+//****************************************************************************
+@ObjectType({ description: 'Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.' })
+export class EntityAction_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field({description: 'Status of the entity action (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Actions   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionInput {
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Actions   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Actions
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionViewResult {
+    @Field(() => [EntityAction_])
+    Results: EntityAction_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityAction_)
+export class EntityActionResolver extends ResolverBase {
+    @Query(() => RunEntityActionViewResult)
+    async RunEntityActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionViewResult)
+    async RunEntityActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionViewResult)
+    async RunEntityActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Actions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityAction_, { nullable: true })
+    async EntityAction(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityAction_ | null> {
+        this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    async EntityActionInvocationsArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    async EntityActionFiltersArray(@Root() entityaction_: EntityAction_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [EntityActionID]=${entityaction_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityAction_)
+    async CreateEntityAction(
+        @Arg('input', () => CreateEntityActionInput) input: CreateEntityActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionEntity>await new Metadata().GetEntityObject('Entity Actions', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionInput) {
+    }
+        
+    @Mutation(() => EntityAction_)
+    async UpdateEntityAction(
+        @Arg('input', () => UpdateEntityActionInput) input: UpdateEntityActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionEntity>await new Metadata().GetEntityObject('Entity Actions', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Actions
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Invocations
+//****************************************************************************
+@ObjectType({ description: 'Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.' })
+export class EntityActionInvocation_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityActionID: number;
+          
+    @Field(() => Int) 
+    InvocationTypeID: number;
+          
+    @Field({description: 'Status of the entity action invocation (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    InvocationType: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocations   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionInvocationInput {
+    @Field(() => Int)
+    EntityActionID: number;
+    
+    @Field(() => Int)
+    InvocationTypeID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocations   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionInvocationInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityActionID: number;
+    
+    @Field(() => Int)
+    InvocationTypeID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Action Invocations
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionInvocationViewResult {
+    @Field(() => [EntityActionInvocation_])
+    Results: EntityActionInvocation_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionInvocation_)
+export class EntityActionInvocationResolver extends ResolverBase {
+    @Query(() => RunEntityActionInvocationViewResult)
+    async RunEntityActionInvocationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationViewResult)
+    async RunEntityActionInvocationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationViewResult)
+    async RunEntityActionInvocationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Invocations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionInvocation_, { nullable: true })
+    async EntityActionInvocation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocation_ | null> {
+        this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityActionInvocation_)
+    async CreateEntityActionInvocation(
+        @Arg('input', () => CreateEntityActionInvocationInput) input: CreateEntityActionInvocationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionInvocationEntity>await new Metadata().GetEntityObject('Entity Action Invocations', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionInvocationInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionInvocationInput) {
+    }
+        
+    @Mutation(() => EntityActionInvocation_)
+    async UpdateEntityActionInvocation(
+        @Arg('input', () => UpdateEntityActionInvocationInput) input: UpdateEntityActionInvocationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionInvocationEntity>await new Metadata().GetEntityObject('Entity Action Invocations', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Action Invocations
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Authorizations
+//****************************************************************************
+@ObjectType({ description: 'Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.' })
+export class ActionAuthorization_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field(() => Int) 
+    AuthorizationID: number;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(200)
+    Authorization: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Authorizations   
+//****************************************************************************
+@InputType()
+export class CreateActionAuthorizationInput {
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field(() => Int)
+    AuthorizationID: number;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Authorizations   
+//****************************************************************************
+@InputType()
+export class UpdateActionAuthorizationInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field(() => Int)
+    AuthorizationID: number;
+    
+    @Field({ nullable: true })
+    Comments: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Authorizations
+//****************************************************************************
+@ObjectType()
+export class RunActionAuthorizationViewResult {
+    @Field(() => [ActionAuthorization_])
+    Results: ActionAuthorization_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionAuthorization_)
+export class ActionAuthorizationResolver extends ResolverBase {
+    @Query(() => RunActionAuthorizationViewResult)
+    async RunActionAuthorizationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionAuthorizationViewResult)
+    async RunActionAuthorizationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionAuthorizationViewResult)
+    async RunActionAuthorizationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Authorizations';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionAuthorization_, { nullable: true })
+    async ActionAuthorization(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionAuthorization_ | null> {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionAuthorization_)
+    async CreateActionAuthorization(
+        @Arg('input', () => CreateActionAuthorizationInput) input: CreateActionAuthorizationInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionAuthorizationEntity>await new Metadata().GetEntityObject('Action Authorizations', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionAuthorizationInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionAuthorizationInput) {
+    }
+        
+    @Mutation(() => ActionAuthorization_)
+    async UpdateActionAuthorization(
+        @Arg('input', () => UpdateActionAuthorizationInput) input: UpdateActionAuthorizationInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionAuthorizationEntity>await new Metadata().GetEntityObject('Action Authorizations', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Authorizations
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionAuthorizationInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionAuthorizationInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Invocation Types
+//****************************************************************************
+@ObjectType({ description: 'Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.' })
+export class EntityActionInvocationType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the invocation type such as Record Created/Updated/etc.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the invocation type.'}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocation Types   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionInvocationTypeInput {
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Invocation Types   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionInvocationTypeInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Action Invocation Types
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionInvocationTypeViewResult {
+    @Field(() => [EntityActionInvocationType_])
+    Results: EntityActionInvocationType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionInvocationType_)
+export class EntityActionInvocationTypeResolver extends ResolverBase {
+    @Query(() => RunEntityActionInvocationTypeViewResult)
+    async RunEntityActionInvocationTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationTypeViewResult)
+    async RunEntityActionInvocationTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionInvocationTypeViewResult)
+    async RunEntityActionInvocationTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Invocation Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionInvocationType_, { nullable: true })
+    async EntityActionInvocationType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionInvocationType_ | null> {
+        this.CheckUserReadPermissions('Entity Action Invocation Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocationTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocation Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Invocation Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
+    async EntityActionInvocationsArray(@Root() entityactioninvocationtype_: EntityActionInvocationType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Invocations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionInvocations] WHERE [InvocationTypeID]=${entityactioninvocationtype_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Invocations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Invocations', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => EntityActionInvocationType_)
+    async CreateEntityActionInvocationType(
+        @Arg('input', () => CreateEntityActionInvocationTypeInput) input: CreateEntityActionInvocationTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionInvocationTypeEntity>await new Metadata().GetEntityObject('Entity Action Invocation Types', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionInvocationTypeInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionInvocationTypeInput) {
+    }
+        
+    @Mutation(() => EntityActionInvocationType_)
+    async UpdateEntityActionInvocationType(
+        @Arg('input', () => UpdateEntityActionInvocationTypeInput) input: UpdateEntityActionInvocationTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionInvocationTypeEntity>await new Metadata().GetEntityObject('Entity Action Invocation Types', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Action Invocation Types
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationTypeInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationTypeInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Actions
+//****************************************************************************
+@ObjectType({ description: 'Stores action definitions, including prompts, generated code, user comments, and status.' })
+export class Action_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int, {nullable: true}) 
+    CategoryID?: number;
+          
+    @Field() 
+    UserPrompt: string;
+          
+    @Field({nullable: true, description: 'User\'s comments not shared with the LLM.'}) 
+    UserComments?: string;
+          
+    @Field({nullable: true}) 
+    Code?: string;
+          
+    @Field({nullable: true, description: 'AI\'s explanation of the code.'}) 
+    CodeComments?: string;
+          
+    @Field({description: 'An action won\'t be usable until the code is approved.'}) 
+    @MaxLength(40)
+    CodeApprovalStatus: string;
+          
+    @Field({nullable: true, description: 'Optional comments when an individual (or an AI) reviews and approves the code.'}) 
+    CodeApprovalComments?: string;
+          
+    @Field(() => Int, {nullable: true, description: 'UserID who approved the code.'}) 
+    CodeApprovedByUserID?: number;
+          
+    @Field({nullable: true, description: 'When the code was approved.'}) 
+    @MaxLength(8)
+    CodeApprovedAt?: Date;
+          
+    @Field(() => Int, {nullable: true, description: 'Number of days to retain execution logs; NULL for indefinite.'}) 
+    RetentionPeriod?: number;
+          
+    @Field({description: 'Status of the action (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Category?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    CodeApprovedByUser?: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionInput_])
+    ActionInputsArray: mj_core_schema_server_object_types.ActionInput_[]; // Link to ActionInputs
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
+    ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionContext_])
+    ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionOutput_])
+    ActionOutputsArray: mj_core_schema_server_object_types.ActionOutput_[]; // Link to ActionOutputs
+    
+    @Field(() => [mj_core_schema_server_object_types.EntityAction_])
+    EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Actions   
+//****************************************************************************
+@InputType()
+export class CreateActionInput {
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+    
+    @Field()
+    UserPrompt: string;
+    
+    @Field({ nullable: true })
+    UserComments: string;
+    
+    @Field({ nullable: true })
+    Code: string;
+    
+    @Field({ nullable: true })
+    CodeComments: string;
+    
+    @Field()
+    CodeApprovalStatus: string;
+    
+    @Field({ nullable: true })
+    CodeApprovalComments: string;
+    
+    @Field(() => Int, { nullable: true })
+    CodeApprovedByUserID: number;
+    
+    @Field({ nullable: true })
+    CodeApprovedAt: Date;
+    
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Actions   
+//****************************************************************************
+@InputType()
+export class UpdateActionInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int, { nullable: true })
+    CategoryID: number;
+    
+    @Field()
+    UserPrompt: string;
+    
+    @Field({ nullable: true })
+    UserComments: string;
+    
+    @Field({ nullable: true })
+    Code: string;
+    
+    @Field({ nullable: true })
+    CodeComments: string;
+    
+    @Field()
+    CodeApprovalStatus: string;
+    
+    @Field({ nullable: true })
+    CodeApprovalComments: string;
+    
+    @Field(() => Int, { nullable: true })
+    CodeApprovedByUserID: number;
+    
+    @Field({ nullable: true })
+    CodeApprovedAt: Date;
+    
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Actions
+//****************************************************************************
+@ObjectType()
+export class RunActionViewResult {
+    @Field(() => [Action_])
+    Results: Action_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Action_)
+export class ActionResolver extends ResolverBase {
+    @Query(() => RunActionViewResult)
+    async RunActionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionViewResult)
+    async RunActionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionViewResult)
+    async RunActionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Actions';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Action_, { nullable: true })
+    async Action(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Action_ | null> {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionAuthorization_])
+    async ActionAuthorizationsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Authorizations', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionAuthorizations] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Authorizations', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Authorizations', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionInput_])
+    async ActionInputsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Inputs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionInputs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Inputs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Inputs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionResultCode_])
+    async ActionResultCodesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Result Codes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
+    async ActionContextsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionOutput_])
+    async ActionOutputsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Outputs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionOutputs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Outputs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Outputs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
+    async EntityActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Actions', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActions] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Actions', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
+    async ActionExecutionLogsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Action_)
+    async CreateAction(
+        @Arg('input', () => CreateActionInput) input: CreateActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionEntity>await new Metadata().GetEntityObject('Actions', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionInput) {
+    }
+        
+    @Mutation(() => Action_)
+    async UpdateAction(
+        @Arg('input', () => UpdateActionInput) input: UpdateActionInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionEntity>await new Metadata().GetEntityObject('Actions', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Actions
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Entity Action Filters
+//****************************************************************************
+@ObjectType({ description: 'Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.' })
+export class EntityActionFilter_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    EntityActionID: number;
+          
+    @Field(() => Int) 
+    ActionFilterID: number;
+          
+    @Field(() => Int, {description: 'Order of filter execution.'}) 
+    Sequence: number;
+          
+    @Field({description: 'Status of the entity action filter (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Filters   
+//****************************************************************************
+@InputType()
+export class CreateEntityActionFilterInput {
+    @Field(() => Int)
+    EntityActionID: number;
+    
+    @Field(() => Int)
+    ActionFilterID: number;
+    
+    @Field(() => Int)
+    Sequence: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Entity Action Filters   
+//****************************************************************************
+@InputType()
+export class UpdateEntityActionFilterInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    EntityActionID: number;
+    
+    @Field(() => Int)
+    ActionFilterID: number;
+    
+    @Field(() => Int)
+    Sequence: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Entity Action Filters
+//****************************************************************************
+@ObjectType()
+export class RunEntityActionFilterViewResult {
+    @Field(() => [EntityActionFilter_])
+    Results: EntityActionFilter_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(EntityActionFilter_)
+export class EntityActionFilterResolver extends ResolverBase {
+    @Query(() => RunEntityActionFilterViewResult)
+    async RunEntityActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionFilterViewResult)
+    async RunEntityActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunEntityActionFilterViewResult)
+    async RunEntityActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Entity Action Filters';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => EntityActionFilter_, { nullable: true })
+    async EntityActionFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<EntityActionFilter_ | null> {
+        this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => EntityActionFilter_)
+    async CreateEntityActionFilter(
+        @Arg('input', () => CreateEntityActionFilterInput) input: CreateEntityActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionFilterEntity>await new Metadata().GetEntityObject('Entity Action Filters', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionFilterInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionFilterInput) {
+    }
+        
+    @Mutation(() => EntityActionFilter_)
+    async UpdateEntityActionFilter(
+        @Arg('input', () => UpdateEntityActionFilterInput) input: UpdateEntityActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <EntityActionFilterEntity>await new Metadata().GetEntityObject('Entity Action Filters', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Action Filters
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionFilterInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionFilterInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Inputs
+//****************************************************************************
+@ObjectType({ description: 'Defines the expected input properties for an action to execute.' })
+export class ActionInput_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field({description: 'Key for the input.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Default value for the action, can be overriden at run time by the caller of the action.'}) 
+    DefaultValue?: string;
+          
+    @Field({nullable: true, description: 'Description of the input.'}) 
+    Description?: string;
+          
+    @Field(() => Boolean, {description: 'Specifies if the input property is required when executing the action or not.'}) 
+    IsRequired: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Inputs   
+//****************************************************************************
+@InputType()
+export class CreateActionInputInput {
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    DefaultValue: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    
+    @Field(() => Boolean)
+    IsRequired: boolean;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Inputs   
+//****************************************************************************
+@InputType()
+export class UpdateActionInputInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    DefaultValue: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    
+    @Field(() => Boolean)
+    IsRequired: boolean;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Inputs
+//****************************************************************************
+@ObjectType()
+export class RunActionInputViewResult {
+    @Field(() => [ActionInput_])
+    Results: ActionInput_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionInput_)
+export class ActionInputResolver extends ResolverBase {
+    @Query(() => RunActionInputViewResult)
+    async RunActionInputViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionInputViewResult)
+    async RunActionInputViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionInputViewResult)
+    async RunActionInputDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Inputs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionInput_, { nullable: true })
+    async ActionInput(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionInput_ | null> {
+        this.CheckUserReadPermissions('Action Inputs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionInputs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Inputs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Inputs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionInput_)
+    async CreateActionInput(
+        @Arg('input', () => CreateActionInputInput) input: CreateActionInputInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionInputEntity>await new Metadata().GetEntityObject('Action Inputs', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionInputInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionInputInput) {
+    }
+        
+    @Mutation(() => ActionInput_)
+    async UpdateActionInput(
+        @Arg('input', () => UpdateActionInputInput) input: UpdateActionInputInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionInputEntity>await new Metadata().GetEntityObject('Action Inputs', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Inputs
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionInputInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionInputInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Filters
+//****************************************************************************
+@ObjectType({ description: 'Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.' })
+export class ActionFilter_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    UserDescription: string;
+          
+    @Field({nullable: true}) 
+    UserComments?: string;
+          
+    @Field() 
+    Code: string;
+          
+    @Field({nullable: true}) 
+    CodeExplanation?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    EntityActionFiltersArray: mj_core_schema_server_object_types.EntityActionFilter_[]; // Link to EntityActionFilters
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Filters   
+//****************************************************************************
+@InputType()
+export class CreateActionFilterInput {
+    @Field()
+    UserDescription: string;
+    
+    @Field({ nullable: true })
+    UserComments: string;
+    
+    @Field()
+    Code: string;
+    
+    @Field({ nullable: true })
+    CodeExplanation: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Filters   
+//****************************************************************************
+@InputType()
+export class UpdateActionFilterInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field()
+    UserDescription: string;
+    
+    @Field({ nullable: true })
+    UserComments: string;
+    
+    @Field()
+    Code: string;
+    
+    @Field({ nullable: true })
+    CodeExplanation: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Filters
+//****************************************************************************
+@ObjectType()
+export class RunActionFilterViewResult {
+    @Field(() => [ActionFilter_])
+    Results: ActionFilter_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionFilter_)
+export class ActionFilterResolver extends ResolverBase {
+    @Query(() => RunActionFilterViewResult)
+    async RunActionFilterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionFilterViewResult)
+    async RunActionFilterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionFilterViewResult)
+    async RunActionFilterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Filters';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionFilter_, { nullable: true })
+    async ActionFilter(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionFilter_ | null> {
+        this.CheckUserReadPermissions('Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionFilters] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Filters', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.EntityActionFilter_])
+    async EntityActionFiltersArray(@Root() actionfilter_: ActionFilter_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Entity Action Filters', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwEntityActionFilters] WHERE [ActionFilterID]=${actionfilter_.ID} ` + this.getRowLevelSecurityWhereClause('Entity Action Filters', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Entity Action Filters', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ActionFilter_)
+    async CreateActionFilter(
+        @Arg('input', () => CreateActionFilterInput) input: CreateActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionFilterEntity>await new Metadata().GetEntityObject('Action Filters', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionFilterInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionFilterInput) {
+    }
+        
+    @Mutation(() => ActionFilter_)
+    async UpdateActionFilter(
+        @Arg('input', () => UpdateActionFilterInput) input: UpdateActionFilterInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionFilterEntity>await new Metadata().GetEntityObject('Action Filters', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Filters
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionFilterInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionFilterInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Context Types
+//****************************************************************************
+@ObjectType({ description: 'Lists possible contexts for action execution with optional descriptions.' })
+export class ActionContextType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field({description: 'Name of the context type.'}) 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true, description: 'Description of the context type.'}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionContext_])
+    ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Context Types   
+//****************************************************************************
+@InputType()
+export class CreateActionContextTypeInput {
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Context Types   
+//****************************************************************************
+@InputType()
+export class UpdateActionContextTypeInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field()
+    Name: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Context Types
+//****************************************************************************
+@ObjectType()
+export class RunActionContextTypeViewResult {
+    @Field(() => [ActionContextType_])
+    Results: ActionContextType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionContextType_)
+export class ActionContextTypeResolver extends ResolverBase {
+    @Query(() => RunActionContextTypeViewResult)
+    async RunActionContextTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextTypeViewResult)
+    async RunActionContextTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextTypeViewResult)
+    async RunActionContextTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Context Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionContextType_, { nullable: true })
+    async ActionContextType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContextType_ | null> {
+        this.CheckUserReadPermissions('Action Context Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContextTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Context Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Context Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionContext_])
+    async ActionContextsArray(@Root() actioncontexttype_: ActionContextType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ContextTypeID]=${actioncontexttype_.ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => ActionContextType_)
+    async CreateActionContextType(
+        @Arg('input', () => CreateActionContextTypeInput) input: CreateActionContextTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionContextTypeEntity>await new Metadata().GetEntityObject('Action Context Types', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionContextTypeInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionContextTypeInput) {
+    }
+        
+    @Mutation(() => ActionContextType_)
+    async UpdateActionContextType(
+        @Arg('input', () => UpdateActionContextTypeInput) input: UpdateActionContextTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionContextTypeEntity>await new Metadata().GetEntityObject('Action Context Types', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Context Types
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionContextTypeInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionContextTypeInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Result Codes
+//****************************************************************************
+@ObjectType({ description: 'Defines the possible result codes for each action.' })
+export class ActionResultCode_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    ResultCode: string;
+          
+    @Field({nullable: true, description: 'Description of the result code.'}) 
+    Description?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Result Codes   
+//****************************************************************************
+@InputType()
+export class CreateActionResultCodeInput {
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    ResultCode: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Result Codes   
+//****************************************************************************
+@InputType()
+export class UpdateActionResultCodeInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    ResultCode: string;
+    
+    @Field({ nullable: true })
+    Description: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Result Codes
+//****************************************************************************
+@ObjectType()
+export class RunActionResultCodeViewResult {
+    @Field(() => [ActionResultCode_])
+    Results: ActionResultCode_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionResultCode_)
+export class ActionResultCodeResolver extends ResolverBase {
+    @Query(() => RunActionResultCodeViewResult)
+    async RunActionResultCodeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionResultCodeViewResult)
+    async RunActionResultCodeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionResultCodeViewResult)
+    async RunActionResultCodeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Result Codes';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionResultCode_, { nullable: true })
+    async ActionResultCode(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionResultCode_ | null> {
+        this.CheckUserReadPermissions('Action Result Codes', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionResultCodes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Result Codes', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Result Codes', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionResultCode_)
+    async CreateActionResultCode(
+        @Arg('input', () => CreateActionResultCodeInput) input: CreateActionResultCodeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionResultCodeEntity>await new Metadata().GetEntityObject('Action Result Codes', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionResultCodeInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionResultCodeInput) {
+    }
+        
+    @Mutation(() => ActionResultCode_)
+    async UpdateActionResultCode(
+        @Arg('input', () => UpdateActionResultCodeInput) input: UpdateActionResultCodeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionResultCodeEntity>await new Metadata().GetEntityObject('Action Result Codes', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Result Codes
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionResultCodeInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionResultCodeInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Contexts
+//****************************************************************************
+@ObjectType({ description: 'Links actions to their supported context types enabling a given action to be executable in more than one context.' })
+export class ActionContext_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field(() => Int) 
+    ContextTypeID: number;
+          
+    @Field({description: 'Status of the action context (Pending, Active, Disabled).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    ContextType: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Contexts   
+//****************************************************************************
+@InputType()
+export class CreateActionContextInput {
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field(() => Int)
+    ContextTypeID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Contexts   
+//****************************************************************************
+@InputType()
+export class UpdateActionContextInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field(() => Int)
+    ContextTypeID: number;
+    
+    @Field()
+    Status: string;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Contexts
+//****************************************************************************
+@ObjectType()
+export class RunActionContextViewResult {
+    @Field(() => [ActionContext_])
+    Results: ActionContext_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionContext_)
+export class ActionContextResolver extends ResolverBase {
+    @Query(() => RunActionContextViewResult)
+    async RunActionContextViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextViewResult)
+    async RunActionContextViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionContextViewResult)
+    async RunActionContextDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Contexts';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionContext_, { nullable: true })
+    async ActionContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionContext_ | null> {
+        this.CheckUserReadPermissions('Action Contexts', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionContexts] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Contexts', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Contexts', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionContext_)
+    async CreateActionContext(
+        @Arg('input', () => CreateActionContextInput) input: CreateActionContextInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionContextEntity>await new Metadata().GetEntityObject('Action Contexts', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionContextInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionContextInput) {
+    }
+        
+    @Mutation(() => ActionContext_)
+    async UpdateActionContext(
+        @Arg('input', () => UpdateActionContextInput) input: UpdateActionContextInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionContextEntity>await new Metadata().GetEntityObject('Action Contexts', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Contexts
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionContextInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionContextInput) {
+        const i = input, d = dataSource; // prevent error
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Execution Logs
+//****************************************************************************
+@ObjectType({ description: 'Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.' })
+export class ActionExecutionLog_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field({description: 'Timestamp of when the action started execution.'}) 
+    @MaxLength(8)
+    StartedAt: Date;
+          
+    @Field({nullable: true, description: 'Timestamp of when the action ended execution.'}) 
+    @MaxLength(8)
+    EndedAt?: Date;
+          
+    @Field({nullable: true}) 
+    Inputs?: string;
+          
+    @Field({nullable: true}) 
+    Outputs?: string;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ResultCode?: string;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field(() => Int, {nullable: true, description: 'Number of days to retain the log; NULL for indefinite retention.'}) 
+    RetentionPeriod?: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Execution Logs   
+//****************************************************************************
+@InputType()
+export class CreateActionExecutionLogInput {
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    StartedAt: Date;
+    
+    @Field({ nullable: true })
+    EndedAt: Date;
+    
+    @Field({ nullable: true })
+    Inputs: string;
+    
+    @Field({ nullable: true })
+    Outputs: string;
+    
+    @Field({ nullable: true })
+    ResultCode: string;
+    
+    @Field(() => Int)
+    UserID: number;
+    
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod: number;
+    }
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Execution Logs   
+//****************************************************************************
+@InputType()
+export class UpdateActionExecutionLogInput {
+    @Field(() => Int)
+    ID: number;
+    
+    @Field(() => Int)
+    ActionID: number;
+    
+    @Field()
+    StartedAt: Date;
+    
+    @Field({ nullable: true })
+    EndedAt: Date;
+    
+    @Field({ nullable: true })
+    Inputs: string;
+    
+    @Field({ nullable: true })
+    Outputs: string;
+    
+    @Field({ nullable: true })
+    ResultCode: string;
+    
+    @Field(() => Int)
+    UserID: number;
+    
+    @Field(() => Int, { nullable: true })
+    RetentionPeriod: number;
+    }
+    
+//****************************************************************************
+// RESOLVER for Action Execution Logs
+//****************************************************************************
+@ObjectType()
+export class RunActionExecutionLogViewResult {
+    @Field(() => [ActionExecutionLog_])
+    Results: ActionExecutionLog_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionExecutionLog_)
+export class ActionExecutionLogResolver extends ResolverBase {
+    @Query(() => RunActionExecutionLogViewResult)
+    async RunActionExecutionLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionExecutionLogViewResult)
+    async RunActionExecutionLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionExecutionLogViewResult)
+    async RunActionExecutionLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Execution Logs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionExecutionLog_, { nullable: true })
+    async ActionExecutionLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionExecutionLog_ | null> {
+        this.CheckUserReadPermissions('Action Execution Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionExecutionLog_)
+    async CreateActionExecutionLog(
+        @Arg('input', () => CreateActionExecutionLogInput) input: CreateActionExecutionLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionExecutionLogEntity>await new Metadata().GetEntityObject('Action Execution Logs', this.GetUserFromPayload(userPayload));
+            await entityObject.NewRecord();
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
+                // save worked, fire the AfterCreate event and then return all the data
+                await this.AfterCreate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else 
+                // save failed, return null
+                return null;
+        }
+        else    
+            return null;
+    }
+
+    // Before/After CREATE Event Hooks for Sub-Classes to Override
+    protected async BeforeCreate(dataSource: DataSource, input: CreateActionExecutionLogInput): Promise<boolean> {
+        return true;
+    }
+    protected async AfterCreate(dataSource: DataSource, input: CreateActionExecutionLogInput) {
+    }
+        
+    @Mutation(() => ActionExecutionLog_)
+    async UpdateActionExecutionLog(
+        @Arg('input', () => UpdateActionExecutionLogInput) input: UpdateActionExecutionLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+            const entityObject = <ActionExecutionLogEntity>await new Metadata().GetEntityObject('Action Execution Logs', this.GetUserFromPayload(userPayload));
+            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Execution Logs
+            
+            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+                // save worked, fire afterevent and return all the data
+                await this.AfterUpdate(dataSource, input); // fire event
+                return entityObject.GetAll();
+            }
+            else
+                return null; // save failed, return null
+        }
+        else
+            return null;
+    }
+
+    // Before/After UPDATE Event Hooks for Sub-Classes to Override
+    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionExecutionLogInput): Promise<boolean> {
+        const i = input, d = dataSource; // prevent error
+        return true;
+    }
+    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionExecutionLogInput) {
+        const i = input, d = dataSource; // prevent error
     }
     
 }

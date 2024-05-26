@@ -415,6 +415,215 @@ type Account__client_crm_ {
   new_c360sisiteurl: String
 }
 
+"""
+Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.
+"""
+type ActionAuthorization_ {
+  ActionID: Int!
+  Authorization: String!
+  AuthorizationID: Int!
+  Comments: String
+  CreatedAt: Timestamp!
+  ID: Int!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Organizes actions into categories, including name, description, and optional parent category for hierarchy.
+"""
+type ActionCategory_ {
+  ActionCategoriesArray: [ActionCategory_!]!
+  ActionsArray: [Action_!]!
+  CreatedAt: Timestamp!
+
+  """Description of the action category."""
+  Description: String
+  ID: Int!
+
+  """Name of the action category."""
+  Name: String!
+  Parent: String
+
+  """Parent category ID for hierarchical organization."""
+  ParentID: Int
+
+  """Status of the action category (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Lists possible contexts for action execution with optional descriptions.
+"""
+type ActionContextType_ {
+  ActionContextsArray: [ActionContext_!]!
+  CreatedAt: Timestamp!
+
+  """Description of the context type."""
+  Description: String
+  ID: Int!
+
+  """Name of the context type."""
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Links actions to their supported context types enabling a given action to be executable in more than one context.
+"""
+type ActionContext_ {
+  ActionID: Int!
+  ContextType: String!
+  ContextTypeID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """Status of the action context (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.
+"""
+type ActionExecutionLog_ {
+  ActionID: Int!
+  CreatedAt: Timestamp!
+
+  """Timestamp of when the action ended execution."""
+  EndedAt: Timestamp
+  ID: Int!
+  Inputs: String
+  Outputs: String
+  ResultCode: String
+
+  """Number of days to retain the log; NULL for indefinite retention."""
+  RetentionPeriod: Int
+
+  """Timestamp of when the action started execution."""
+  StartedAt: Timestamp!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
+}
+
+"""
+Defines filters that can be evaluated ahead of executing an action. Action Filters are usable in any code pipeline you can execute them with the same context as the action itself and use the outcome to determine if the action should execute or not.
+"""
+type ActionFilter_ {
+  Code: String!
+  CodeExplanation: String
+  CreatedAt: Timestamp!
+  EntityActionFiltersArray: [EntityActionFilter_!]!
+  ID: Int!
+  UpdatedAt: Timestamp!
+  UserComments: String
+  UserDescription: String!
+}
+
+"""Defines the expected input properties for an action to execute."""
+type ActionInput_ {
+  ActionID: Int!
+  CreatedAt: Timestamp!
+
+  """
+  Default value for the action, can be overriden at run time by the caller of the action.
+  """
+  DefaultValue: String
+
+  """Description of the input."""
+  Description: String
+  ID: Int!
+
+  """
+  Specifies if the input property is required when executing the action or not.
+  """
+  IsRequired: Boolean!
+
+  """Key for the input."""
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Tracks outputs, which are optional, from an action, including names, values, and descriptions.
+"""
+type ActionOutput_ {
+  ActionID: Int!
+  CreatedAt: Timestamp!
+
+  """Default value of the output."""
+  DefaultValue: String
+
+  """Description of the output."""
+  Description: String
+  ID: Int!
+  IsRequired: Boolean!
+
+  """Name of the output variable the action will produce."""
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""Defines the possible result codes for each action."""
+type ActionResultCode_ {
+  ActionID: Int!
+  CreatedAt: Timestamp!
+
+  """Description of the result code."""
+  Description: String
+  ID: Int!
+  ResultCode: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Stores action definitions, including prompts, generated code, user comments, and status.
+"""
+type Action_ {
+  ActionAuthorizationsArray: [ActionAuthorization_!]!
+  ActionContextsArray: [ActionContext_!]!
+  ActionExecutionLogsArray: [ActionExecutionLog_!]!
+  ActionInputsArray: [ActionInput_!]!
+  ActionOutputsArray: [ActionOutput_!]!
+  ActionResultCodesArray: [ActionResultCode_!]!
+  Category: String
+  CategoryID: Int
+  Code: String
+
+  """
+  Optional comments when an individual (or an AI) reviews and approves the code.
+  """
+  CodeApprovalComments: String
+
+  """An action won't be usable until the code is approved."""
+  CodeApprovalStatus: String!
+
+  """When the code was approved."""
+  CodeApprovedAt: Timestamp
+  CodeApprovedByUser: String
+
+  """UserID who approved the code."""
+  CodeApprovedByUserID: Int
+
+  """AI's explanation of the code."""
+  CodeComments: String
+  CreatedAt: Timestamp!
+  EntityActionsArray: [EntityAction_!]!
+  ID: Int!
+
+  """Number of days to retain execution logs; NULL for indefinite."""
+  RetentionPeriod: Int
+
+  """Status of the action (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+
+  """User's comments not shared with the LLM."""
+  UserComments: String
+  UserPrompt: String!
+}
+
 type ActivityAttachment_ {
   ActivitiesArray: [Activity_!]!
   Attachments: String
@@ -540,6 +749,7 @@ type AuthorizationRole_ {
 }
 
 type Authorization_ {
+  ActionAuthorizationsArray: [ActionAuthorization_!]!
   AuditLogTypesArray: [AuditLogType_!]!
   AuditLogsArray: [AuditLog_!]!
   AuthorizationRolesArray: [AuthorizationRole_!]!
@@ -1542,6 +1752,84 @@ input CreateAccount__client_crmInput {
   msa_managingpartneridName: String
   msa_managingpartneridYomiName: String
   new_c360sisiteurl: String
+}
+
+input CreateActionAuthorizationInput {
+  ActionID: Int!
+  AuthorizationID: Int!
+  Comments: String
+}
+
+input CreateActionCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+  Status: String!
+}
+
+input CreateActionContextInput {
+  ActionID: Int!
+  ContextTypeID: Int!
+  Status: String!
+}
+
+input CreateActionContextTypeInput {
+  Description: String
+  Name: String!
+}
+
+input CreateActionExecutionLogInput {
+  ActionID: Int!
+  EndedAt: Timestamp
+  Inputs: String
+  Outputs: String
+  ResultCode: String
+  RetentionPeriod: Int
+  StartedAt: Timestamp!
+  UserID: Int!
+}
+
+input CreateActionFilterInput {
+  Code: String!
+  CodeExplanation: String
+  UserComments: String
+  UserDescription: String!
+}
+
+input CreateActionInput {
+  CategoryID: Int
+  Code: String
+  CodeApprovalComments: String
+  CodeApprovalStatus: String!
+  CodeApprovedAt: Timestamp
+  CodeApprovedByUserID: Int
+  CodeComments: String
+  RetentionPeriod: Int
+  Status: String!
+  UserComments: String
+  UserPrompt: String!
+}
+
+input CreateActionInputInput {
+  ActionID: Int!
+  DefaultValue: String
+  Description: String
+  IsRequired: Boolean!
+  Name: String!
+}
+
+input CreateActionOutputInput {
+  ActionID: Int!
+  DefaultValue: String
+  Description: String
+  IsRequired: Boolean!
+  Name: String!
+}
+
+input CreateActionResultCodeInput {
+  ActionID: Int!
+  Description: String
+  ResultCode: String!
 }
 
 input CreateActivityAttachmentInput {
@@ -2852,6 +3140,30 @@ input CreateEmployeeInput {
   Phone: String
   SupervisorID: Int
   Title: String
+}
+
+input CreateEntityActionFilterInput {
+  ActionFilterID: Int!
+  EntityActionID: Int!
+  Sequence: Int!
+  Status: String!
+}
+
+input CreateEntityActionInput {
+  ActionID: Int!
+  EntityID: Int!
+  Status: String!
+}
+
+input CreateEntityActionInvocationInput {
+  EntityActionID: Int!
+  InvocationTypeID: Int!
+  Status: String!
+}
+
+input CreateEntityActionInvocationTypeInput {
+  Description: String
+  Name: String!
 }
 
 input CreateEntityBehaviorInput {
@@ -6945,6 +7257,71 @@ type EntityAIAction_ {
 }
 
 """
+Optional use. Maps Action Filters to specific EntityAction instances, specifying execution order and status. This allows for “pre-processing” before an Action actually is fired off, to check for various state/dirty/value conditions.
+"""
+type EntityActionFilter_ {
+  ActionFilterID: Int!
+  CreatedAt: Timestamp!
+  EntityActionID: Int!
+  ID: Int!
+
+  """Order of filter execution."""
+  Sequence: Int!
+
+  """Status of the entity action filter (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Stores the possible invocation types of an action within the context of an entity. Examples would be: Record Created/Updated/Deleted/Accessed as well as things like “View” or “List” where you could run an EntityAction against an entire set of records in a view or list – either by user click or programmatically.
+"""
+type EntityActionInvocationType_ {
+  CreatedAt: Timestamp!
+
+  """Description of the invocation type."""
+  Description: String
+  EntityActionInvocationsArray: [EntityActionInvocation_!]!
+  ID: Int!
+
+  """Name of the invocation type such as Record Created/Updated/etc."""
+  Name: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Links invocation types to entity actions – for example you might link a particular EntityAction to just “Create Record” and you might also have a second item in this table allowing the same Entity Action to be invoked from a User View or List, on demand.
+"""
+type EntityActionInvocation_ {
+  CreatedAt: Timestamp!
+  EntityActionID: Int!
+  ID: Int!
+  InvocationType: String!
+  InvocationTypeID: Int!
+
+  """Status of the entity action invocation (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.
+"""
+type EntityAction_ {
+  ActionID: Int!
+  CreatedAt: Timestamp!
+  Entity: String!
+  EntityActionFiltersArray: [EntityActionFilter_!]!
+  EntityActionInvocationsArray: [EntityActionInvocation_!]!
+  EntityID: Int!
+  ID: Int!
+
+  """Status of the entity action (Pending, Active, Disabled)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
 This table stores the list of possible behavior types to use in the Entity Behavior Types entity. 
 """
 type EntityBehaviorType_ {
@@ -7297,6 +7674,7 @@ type Entity_ {
   DuplicateRunsArray: [DuplicateRun_!]!
   EntitiesArray: [Entity_!]!
   EntityAIActionsArray: [EntityAIAction_!]!
+  EntityActionsArray: [EntityAction_!]!
   EntityBehaviorsArray: [EntityBehavior_!]!
   EntityDocumentsArray: [EntityDocument_!]!
   EntityFieldsArray: [EntityField_!]!
@@ -7764,6 +8142,16 @@ type List_ {
 type Mutation {
   CreateAccount(input: CreateAccountInput!): Account_!
   CreateAccount__client_crm(input: CreateAccount__client_crmInput!): Account__client_crm_!
+  CreateAction(input: CreateActionInput!): Action_!
+  CreateActionAuthorization(input: CreateActionAuthorizationInput!): ActionAuthorization_!
+  CreateActionCategory(input: CreateActionCategoryInput!): ActionCategory_!
+  CreateActionContext(input: CreateActionContextInput!): ActionContext_!
+  CreateActionContextType(input: CreateActionContextTypeInput!): ActionContextType_!
+  CreateActionExecutionLog(input: CreateActionExecutionLogInput!): ActionExecutionLog_!
+  CreateActionFilter(input: CreateActionFilterInput!): ActionFilter_!
+  CreateActionInput(input: CreateActionInputInput!): ActionInput_!
+  CreateActionOutput(input: CreateActionOutputInput!): ActionOutput_!
+  CreateActionResultCode(input: CreateActionResultCodeInput!): ActionResultCode_!
   CreateActivity(input: CreateActivityInput!): Activity_!
   CreateActivityAttachment(input: CreateActivityAttachmentInput!): ActivityAttachment_!
   CreateApplication(input: CreateApplicationInput!): Application_!
@@ -7795,6 +8183,10 @@ type Mutation {
   CreateDuplicateRunDetailMatch(input: CreateDuplicateRunDetailMatchInput!): DuplicateRunDetailMatch_!
   CreateEmployee(input: CreateEmployeeInput!): Employee_!
   CreateEntity(input: CreateEntityInput!): Entity_!
+  CreateEntityAction(input: CreateEntityActionInput!): EntityAction_!
+  CreateEntityActionFilter(input: CreateEntityActionFilterInput!): EntityActionFilter_!
+  CreateEntityActionInvocation(input: CreateEntityActionInvocationInput!): EntityActionInvocation_!
+  CreateEntityActionInvocationType(input: CreateEntityActionInvocationTypeInput!): EntityActionInvocationType_!
   CreateEntityBehavior(input: CreateEntityBehaviorInput!): EntityBehavior_!
   CreateEntityBehaviorType(input: CreateEntityBehaviorTypeInput!): EntityBehaviorType_!
   CreateEntityDocument(input: CreateEntityDocumentInput!): EntityDocument_!
@@ -7906,6 +8298,16 @@ type Mutation {
   UpdateAIModelType(input: UpdateAIModelTypeInput!): AIModelType_!
   UpdateAccount(input: UpdateAccountInput!): Account_!
   UpdateAccount__client_crm(input: UpdateAccount__client_crmInput!): Account__client_crm_!
+  UpdateAction(input: UpdateActionInput!): Action_!
+  UpdateActionAuthorization(input: UpdateActionAuthorizationInput!): ActionAuthorization_!
+  UpdateActionCategory(input: UpdateActionCategoryInput!): ActionCategory_!
+  UpdateActionContext(input: UpdateActionContextInput!): ActionContext_!
+  UpdateActionContextType(input: UpdateActionContextTypeInput!): ActionContextType_!
+  UpdateActionExecutionLog(input: UpdateActionExecutionLogInput!): ActionExecutionLog_!
+  UpdateActionFilter(input: UpdateActionFilterInput!): ActionFilter_!
+  UpdateActionInput(input: UpdateActionInputInput!): ActionInput_!
+  UpdateActionOutput(input: UpdateActionOutputInput!): ActionOutput_!
+  UpdateActionResultCode(input: UpdateActionResultCodeInput!): ActionResultCode_!
   UpdateActivity(input: UpdateActivityInput!): Activity_!
   UpdateActivityAttachment(input: UpdateActivityAttachmentInput!): ActivityAttachment_!
   UpdateApplication(input: UpdateApplicationInput!): Application_!
@@ -7945,6 +8347,10 @@ type Mutation {
   UpdateEmployeeSkill(input: UpdateEmployeeSkillInput!): EmployeeSkill_!
   UpdateEntity(input: UpdateEntityInput!): Entity_!
   UpdateEntityAIAction(input: UpdateEntityAIActionInput!): EntityAIAction_!
+  UpdateEntityAction(input: UpdateEntityActionInput!): EntityAction_!
+  UpdateEntityActionFilter(input: UpdateEntityActionFilterInput!): EntityActionFilter_!
+  UpdateEntityActionInvocation(input: UpdateEntityActionInvocationInput!): EntityActionInvocation_!
+  UpdateEntityActionInvocationType(input: UpdateEntityActionInvocationTypeInput!): EntityActionInvocationType_!
   UpdateEntityBehavior(input: UpdateEntityBehaviorInput!): EntityBehavior_!
   UpdateEntityBehaviorType(input: UpdateEntityBehaviorTypeInput!): EntityBehaviorType_!
   UpdateEntityDocument(input: UpdateEntityDocumentInput!): EntityDocument_!
@@ -8346,6 +8752,16 @@ type Query {
   AIModelType(ID: Int!): AIModelType_
   Account(ID: Int!): Account_
   Account__client_crm(AccountId: String!): Account__client_crm_
+  Action(ID: Int!): Action_
+  ActionAuthorization(ID: Int!): ActionAuthorization_
+  ActionCategory(ID: Int!): ActionCategory_
+  ActionContext(ID: Int!): ActionContext_
+  ActionContextType(ID: Int!): ActionContextType_
+  ActionExecutionLog(ID: Int!): ActionExecutionLog_
+  ActionFilter(ID: Int!): ActionFilter_
+  ActionInput(ID: Int!): ActionInput_
+  ActionOutput(ID: Int!): ActionOutput_
+  ActionResultCode(ID: Int!): ActionResultCode_
   Activity(ID: Int!): Activity_
   ActivityAttachment(ID: Int!): ActivityAttachment_
   AllAIActions: [AIAction_!]!
@@ -8419,6 +8835,10 @@ type Query {
   EntitiesBySchemas(ExcludeSchemas: [String!], IncludeSchemas: [String!]): [Entity_!]!
   Entity(ID: Int!): Entity_
   EntityAIAction(ID: Int!): EntityAIAction_
+  EntityAction(ID: Int!): EntityAction_
+  EntityActionFilter(ID: Int!): EntityActionFilter_
+  EntityActionInvocation(ID: Int!): EntityActionInvocation_
+  EntityActionInvocationType(ID: Int!): EntityActionInvocationType_
   EntityBehavior(ID: Int!): EntityBehavior_
   EntityBehaviorType(ID: Int!): EntityBehaviorType_
   EntityDocument(ID: Int!): EntityDocument_
@@ -8500,6 +8920,36 @@ type Query {
   RunAccount__client_crmDynamicView(input: RunDynamicViewInput!): RunAccount__client_crmViewResult!
   RunAccount__client_crmViewByID(input: RunViewByIDInput!): RunAccount__client_crmViewResult!
   RunAccount__client_crmViewByName(input: RunViewByNameInput!): RunAccount__client_crmViewResult!
+  RunActionAuthorizationDynamicView(input: RunDynamicViewInput!): RunActionAuthorizationViewResult!
+  RunActionAuthorizationViewByID(input: RunViewByIDInput!): RunActionAuthorizationViewResult!
+  RunActionAuthorizationViewByName(input: RunViewByNameInput!): RunActionAuthorizationViewResult!
+  RunActionCategoryDynamicView(input: RunDynamicViewInput!): RunActionCategoryViewResult!
+  RunActionCategoryViewByID(input: RunViewByIDInput!): RunActionCategoryViewResult!
+  RunActionCategoryViewByName(input: RunViewByNameInput!): RunActionCategoryViewResult!
+  RunActionContextDynamicView(input: RunDynamicViewInput!): RunActionContextViewResult!
+  RunActionContextTypeDynamicView(input: RunDynamicViewInput!): RunActionContextTypeViewResult!
+  RunActionContextTypeViewByID(input: RunViewByIDInput!): RunActionContextTypeViewResult!
+  RunActionContextTypeViewByName(input: RunViewByNameInput!): RunActionContextTypeViewResult!
+  RunActionContextViewByID(input: RunViewByIDInput!): RunActionContextViewResult!
+  RunActionContextViewByName(input: RunViewByNameInput!): RunActionContextViewResult!
+  RunActionDynamicView(input: RunDynamicViewInput!): RunActionViewResult!
+  RunActionExecutionLogDynamicView(input: RunDynamicViewInput!): RunActionExecutionLogViewResult!
+  RunActionExecutionLogViewByID(input: RunViewByIDInput!): RunActionExecutionLogViewResult!
+  RunActionExecutionLogViewByName(input: RunViewByNameInput!): RunActionExecutionLogViewResult!
+  RunActionFilterDynamicView(input: RunDynamicViewInput!): RunActionFilterViewResult!
+  RunActionFilterViewByID(input: RunViewByIDInput!): RunActionFilterViewResult!
+  RunActionFilterViewByName(input: RunViewByNameInput!): RunActionFilterViewResult!
+  RunActionInputDynamicView(input: RunDynamicViewInput!): RunActionInputViewResult!
+  RunActionInputViewByID(input: RunViewByIDInput!): RunActionInputViewResult!
+  RunActionInputViewByName(input: RunViewByNameInput!): RunActionInputViewResult!
+  RunActionOutputDynamicView(input: RunDynamicViewInput!): RunActionOutputViewResult!
+  RunActionOutputViewByID(input: RunViewByIDInput!): RunActionOutputViewResult!
+  RunActionOutputViewByName(input: RunViewByNameInput!): RunActionOutputViewResult!
+  RunActionResultCodeDynamicView(input: RunDynamicViewInput!): RunActionResultCodeViewResult!
+  RunActionResultCodeViewByID(input: RunViewByIDInput!): RunActionResultCodeViewResult!
+  RunActionResultCodeViewByName(input: RunViewByNameInput!): RunActionResultCodeViewResult!
+  RunActionViewByID(input: RunViewByIDInput!): RunActionViewResult!
+  RunActionViewByName(input: RunViewByNameInput!): RunActionViewResult!
   RunActivityAttachmentDynamicView(input: RunDynamicViewInput!): RunActivityAttachmentViewResult!
   RunActivityAttachmentViewByID(input: RunViewByIDInput!): RunActivityAttachmentViewResult!
   RunActivityAttachmentViewByName(input: RunViewByNameInput!): RunActivityAttachmentViewResult!
@@ -8630,6 +9080,18 @@ type Query {
   RunEntityAIActionDynamicView(input: RunDynamicViewInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByID(input: RunViewByIDInput!): RunEntityAIActionViewResult!
   RunEntityAIActionViewByName(input: RunViewByNameInput!): RunEntityAIActionViewResult!
+  RunEntityActionDynamicView(input: RunDynamicViewInput!): RunEntityActionViewResult!
+  RunEntityActionFilterDynamicView(input: RunDynamicViewInput!): RunEntityActionFilterViewResult!
+  RunEntityActionFilterViewByID(input: RunViewByIDInput!): RunEntityActionFilterViewResult!
+  RunEntityActionFilterViewByName(input: RunViewByNameInput!): RunEntityActionFilterViewResult!
+  RunEntityActionInvocationDynamicView(input: RunDynamicViewInput!): RunEntityActionInvocationViewResult!
+  RunEntityActionInvocationTypeDynamicView(input: RunDynamicViewInput!): RunEntityActionInvocationTypeViewResult!
+  RunEntityActionInvocationTypeViewByID(input: RunViewByIDInput!): RunEntityActionInvocationTypeViewResult!
+  RunEntityActionInvocationTypeViewByName(input: RunViewByNameInput!): RunEntityActionInvocationTypeViewResult!
+  RunEntityActionInvocationViewByID(input: RunViewByIDInput!): RunEntityActionInvocationViewResult!
+  RunEntityActionInvocationViewByName(input: RunViewByNameInput!): RunEntityActionInvocationViewResult!
+  RunEntityActionViewByID(input: RunViewByIDInput!): RunEntityActionViewResult!
+  RunEntityActionViewByName(input: RunViewByNameInput!): RunEntityActionViewResult!
   RunEntityBehaviorDynamicView(input: RunDynamicViewInput!): RunEntityBehaviorViewResult!
   RunEntityBehaviorTypeDynamicView(input: RunDynamicViewInput!): RunEntityBehaviorTypeViewResult!
   RunEntityBehaviorTypeViewByID(input: RunViewByIDInput!): RunEntityBehaviorTypeViewResult!
@@ -9294,6 +9756,106 @@ type RunAccount__client_crmViewResult {
   UserViewRunID: Int
 }
 
+type RunActionAuthorizationViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionAuthorization_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionCategory_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionContextTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionContextType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionContextViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionContext_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionExecutionLogViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionExecutionLog_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionFilterViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionFilter_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionInputViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionInput_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionOutputViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionOutput_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionResultCodeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionResultCode_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Action_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
 type RunActivityAttachmentViewResult {
   ErrorMessage: String
   ExecutionTime: Int
@@ -9772,6 +10334,46 @@ type RunEntityAIActionViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [EntityAIAction_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionFilterViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityActionFilter_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionInvocationTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityActionInvocationType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionInvocationViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityActionInvocation_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunEntityActionViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [EntityAction_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -13400,6 +14002,94 @@ input UpdateAccount__client_crmInput {
   new_c360sisiteurl: String
 }
 
+input UpdateActionAuthorizationInput {
+  ActionID: Int!
+  AuthorizationID: Int!
+  Comments: String
+  ID: Int!
+}
+
+input UpdateActionCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+  Status: String!
+}
+
+input UpdateActionContextInput {
+  ActionID: Int!
+  ContextTypeID: Int!
+  ID: Int!
+  Status: String!
+}
+
+input UpdateActionContextTypeInput {
+  Description: String
+  ID: Int!
+  Name: String!
+}
+
+input UpdateActionExecutionLogInput {
+  ActionID: Int!
+  EndedAt: Timestamp
+  ID: Int!
+  Inputs: String
+  Outputs: String
+  ResultCode: String
+  RetentionPeriod: Int
+  StartedAt: Timestamp!
+  UserID: Int!
+}
+
+input UpdateActionFilterInput {
+  Code: String!
+  CodeExplanation: String
+  ID: Int!
+  UserComments: String
+  UserDescription: String!
+}
+
+input UpdateActionInput {
+  CategoryID: Int
+  Code: String
+  CodeApprovalComments: String
+  CodeApprovalStatus: String!
+  CodeApprovedAt: Timestamp
+  CodeApprovedByUserID: Int
+  CodeComments: String
+  ID: Int!
+  RetentionPeriod: Int
+  Status: String!
+  UserComments: String
+  UserPrompt: String!
+}
+
+input UpdateActionInputInput {
+  ActionID: Int!
+  DefaultValue: String
+  Description: String
+  ID: Int!
+  IsRequired: Boolean!
+  Name: String!
+}
+
+input UpdateActionOutputInput {
+  ActionID: Int!
+  DefaultValue: String
+  Description: String
+  ID: Int!
+  IsRequired: Boolean!
+  Name: String!
+}
+
+input UpdateActionResultCodeInput {
+  ActionID: Int!
+  Description: String
+  ID: Int!
+  ResultCode: String!
+}
+
 input UpdateActivityAttachmentInput {
   Attachments: String
   ID: Int!
@@ -14816,6 +15506,34 @@ input UpdateEntityAIActionInput {
   SkipIfOutputFieldNotEmpty: Boolean!
   TriggerEvent: String!
   UserMessage: String!
+}
+
+input UpdateEntityActionFilterInput {
+  ActionFilterID: Int!
+  EntityActionID: Int!
+  ID: Int!
+  Sequence: Int!
+  Status: String!
+}
+
+input UpdateEntityActionInput {
+  ActionID: Int!
+  EntityID: Int!
+  ID: Int!
+  Status: String!
+}
+
+input UpdateEntityActionInvocationInput {
+  EntityActionID: Int!
+  ID: Int!
+  InvocationTypeID: Int!
+  Status: String!
+}
+
+input UpdateEntityActionInvocationTypeInput {
+  Description: String
+  ID: Int!
+  Name: String!
 }
 
 input UpdateEntityBehaviorInput {
@@ -18235,6 +18953,8 @@ type UserView_ {
 
 """A list of all users who have or had access to the system"""
 type User_ {
+  ActionExecutionLogsArray: [ActionExecutionLog_!]!
+  ActionsArray: [Action_!]!
   AuditLogsArray: [AuditLog_!]!
   CompanyIntegrationRunsArray: [CompanyIntegrationRun_!]!
   ConversationsArray: [Conversation_!]!
