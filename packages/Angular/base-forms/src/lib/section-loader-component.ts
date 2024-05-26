@@ -34,7 +34,7 @@ export class SectionLoaderComponent implements AfterViewInit, OnDestroy, OnChang
     }
 
     private loadComponent() { 
-      console.log("loading component?", `${this.Entity}.${this.Section}`);
+      //console.log("loading component?", `${this.Entity}.${this.Section}`);
       const sectionInfo = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent,`${this.Entity}.${this.Section}`); 
       if (sectionInfo) {
         const componentRef = this.container.createComponent(sectionInfo.SubClass); 

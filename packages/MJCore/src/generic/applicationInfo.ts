@@ -60,7 +60,7 @@ export class ApplicationInfo extends BaseInfo {
         return this._ApplicationSettings;
     }
 
-    constructor (md: IMetadataProvider, initData: any = null) {
+    constructor (initData: any = null, md: IMetadataProvider) {
         super()
         this.copyInitData(initData)
         if (initData) {

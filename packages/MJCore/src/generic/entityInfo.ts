@@ -517,41 +517,7 @@ export class EntityDocumentTypeInfo extends BaseInfo {
         this.copyInitData(initData)
     }
 }
-
-/**
- * Entity Behavior Type Info object has information about the behavior types that can be applied to an entity
- */
-export class EntityBehaviorTypeInfo extends BaseInfo {
-    Name: string = null
-    Description: string = null  
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
-
-    constructor (initData: any = null) {
-        super()
-        this.copyInitData(initData)
-    }
-}
-
-/**
- * Contains information about a specific behavior that has been applied to an entity
- */
-export class EntityBehaviorInfo extends BaseInfo {
-    EntityID: number = null
-    BehaviorTypeID: number = null
-    Description: string = null
-    RegenerateCode: boolean = null
-    Code: string = null
-    CodeExplanation: string = null
-    CodeGenerated: boolean = null
-    CreatedAt: Date = null
-    UpdatedAt: Date = null
-
-    constructor (initData: any = null) {
-        super()
-        this.copyInitData(initData)
-    }
-}
+ 
 
 /**
  * Settings allow you to store key/value pairs of information that can be used to configure the behavior of the entity.
@@ -636,7 +602,6 @@ export class EntityInfo extends BaseInfo {
     private _Fields: EntityFieldInfo[] 
     private _RelatedEntities: EntityRelationshipInfo[]
     private _Permissions: EntityPermissionInfo[]
-    private _Behaviors: EntityBehaviorInfo[]
     private _Settings: EntitySettingInfo[]
     _hasIdField: boolean = false
     _virtualCount: number = 0 
@@ -675,9 +640,6 @@ export class EntityInfo extends BaseInfo {
     }
     get Permissions(): EntityPermissionInfo[] {
         return this._Permissions;
-    }
-    get Behaviors(): EntityBehaviorInfo[] {
-        return this._Behaviors;
     }
     get Settings(): EntitySettingInfo[] {
         return this._Settings;
@@ -903,13 +865,6 @@ export class EntityInfo extends BaseInfo {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
                 }
-            }
-
-            // copy the Entity Behaviors
-            this._Behaviors = [];
-            const eb = initData.EntityBehaviors || initData._Behaviors;
-            if (eb) {
-                eb.map((b) => this._Behaviors.push(new EntityBehaviorInfo(b)));
             }
 
             // copy the Entity settings
