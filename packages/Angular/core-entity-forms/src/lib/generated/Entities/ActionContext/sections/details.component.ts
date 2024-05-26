@@ -43,6 +43,12 @@ import { ActionContextEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="Action"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="ContextType"
             Type="textbox"
             [EditMode]="EditMode"

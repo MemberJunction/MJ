@@ -48,6 +48,9 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
+/**
+ * Composite keys are used to represent database keys and can include one or more key value pairs.
+ */
 export class CompositeKey {
 
     KeyValuePairs: KeyValuePair[];

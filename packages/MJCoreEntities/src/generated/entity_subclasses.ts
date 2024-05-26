@@ -15358,7 +15358,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Parent(): string | null {  
             return this.Get('Parent');
@@ -15498,6 +15497,16 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
         
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
 
     }
         
@@ -15618,10 +15627,19 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Entity(): string {  
             return this.Get('Entity');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
         }
         
 
@@ -15744,7 +15762,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: InvocationType
         * * Display Name: Invocation Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get InvocationType(): string {  
             return this.Get('InvocationType');
@@ -15860,10 +15877,19 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
         * * Field Name: Authorization
         * * Display Name: Authorization
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get Authorization(): string {  
             return this.Get('Authorization');
@@ -16034,6 +16060,17 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('CategoryID', value);
         }
         /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(500)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
         * * Field Name: UserPrompt
         * * Display Name: User Prompt
         * * SQL Data Type: nvarchar(MAX)
@@ -16135,6 +16172,19 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('CodeApprovedAt', value);
         }
         /**
+        * * Field Name: ForceCodeGeneration
+        * * Display Name: Force Code Generation
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.
+        */
+        get ForceCodeGeneration(): boolean {  
+            return this.Get('ForceCodeGeneration');
+        }
+        set ForceCodeGeneration(value: boolean) {
+            this.Set('ForceCodeGeneration', value);
+        }
+        /**
         * * Field Name: RetentionPeriod
         * * Display Name: Retention Period
         * * SQL Data Type: int
@@ -16188,7 +16238,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -16198,7 +16247,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CodeApprovedByUser
         * * Display Name: Code Approved By User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get CodeApprovedByUser(): string | null {  
             return this.Get('CodeApprovedByUser');
@@ -16465,6 +16513,16 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
         }
         
 
@@ -16792,6 +16850,16 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
         
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
 
     }
         
@@ -16909,10 +16977,19 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
         * * Field Name: ContextType
         * * Display Name: Context Type
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: null
         */
         get ContextType(): string {  
             return this.Get('ContextType');
@@ -17087,10 +17164,19 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        * * Default Value: null
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
-        * * Default Value: null
         */
         get User(): string {  
             return this.Get('User');

@@ -24,6 +24,9 @@ import { contextFunction, getUserPayload } from './context';
 import { publicDirective } from './directives';
 import orm from './orm';
 
+import { LoadActionEntityServer } from '@memberjunction/actions';
+LoadActionEntityServer(); // prevent tree shaking for this dynamic module
+
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 export { MaxLength } from 'class-validator';

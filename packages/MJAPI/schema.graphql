@@ -419,6 +419,7 @@ type Account__client_crm_ {
 Links actions to authorizations, one or more of these must be possessed by a user in order to execute the action.
 """
 type ActionAuthorization_ {
+  Action: String!
   ActionID: Int!
   Authorization: String!
   AuthorizationID: Int!
@@ -472,6 +473,7 @@ type ActionContextType_ {
 Links actions to their supported context types enabling a given action to be executable in more than one context.
 """
 type ActionContext_ {
+  Action: String!
   ActionID: Int!
   ContextType: String!
   ContextTypeID: Int!
@@ -487,6 +489,7 @@ type ActionContext_ {
 Tracks every execution of an action, including start and end times, inputs, outputs, and result codes.
 """
 type ActionExecutionLog_ {
+  Action: String!
   ActionID: Int!
   CreatedAt: Timestamp!
 
@@ -523,6 +526,7 @@ type ActionFilter_ {
 
 """Defines the expected input properties for an action to execute."""
 type ActionInput_ {
+  Action: String!
   ActionID: Int!
   CreatedAt: Timestamp!
 
@@ -549,6 +553,7 @@ type ActionInput_ {
 Tracks outputs, which are optional, from an action, including names, values, and descriptions.
 """
 type ActionOutput_ {
+  Action: String!
   ActionID: Int!
   CreatedAt: Timestamp!
 
@@ -567,6 +572,7 @@ type ActionOutput_ {
 
 """Defines the possible result codes for each action."""
 type ActionResultCode_ {
+  Action: String!
   ActionID: Int!
   CreatedAt: Timestamp!
 
@@ -610,7 +616,13 @@ type Action_ {
   CodeComments: String
   CreatedAt: Timestamp!
   EntityActionsArray: [EntityAction_!]!
+
+  """
+  If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.
+  """
+  ForceCodeGeneration: Boolean!
   ID: Int!
+  Name: String!
 
   """Number of days to retain execution logs; NULL for indefinite."""
   RetentionPeriod: Int
@@ -1804,6 +1816,8 @@ input CreateActionInput {
   CodeApprovedAt: Timestamp
   CodeApprovedByUserID: Int
   CodeComments: String
+  ForceCodeGeneration: Boolean!
+  Name: String!
   RetentionPeriod: Int
   Status: String!
   UserComments: String
@@ -7308,6 +7322,7 @@ type EntityActionInvocation_ {
 Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.
 """
 type EntityAction_ {
+  Action: String!
   ActionID: Int!
   CreatedAt: Timestamp!
   Entity: String!
@@ -14058,7 +14073,9 @@ input UpdateActionInput {
   CodeApprovedAt: Timestamp
   CodeApprovedByUserID: Int
   CodeComments: String
+  ForceCodeGeneration: Boolean!
   ID: Int!
+  Name: String!
   RetentionPeriod: Int
   Status: String!
   UserComments: String

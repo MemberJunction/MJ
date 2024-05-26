@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/25/2024, 5:54:20 PM
+* GENERATED: 5/26/2024, 3:50:08 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -21058,9 +21058,9 @@ export class ActionCategoryResolver extends ResolverBase {
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ActionCategoryEntity>await new Metadata().GetEntityObject('Action Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
                 // save worked, fire afterevent and return all the data
                 await this.AfterUpdate(dataSource, input); // fire event
                 return entityObject.GetAll();
@@ -21114,6 +21114,10 @@ export class ActionOutput_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
         
 }
         
@@ -21253,9 +21257,9 @@ export class ActionOutputResolver extends ResolverBase {
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ActionOutputEntity>await new Metadata().GetEntityObject('Action Outputs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Outputs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
                 // save worked, fire afterevent and return all the data
                 await this.AfterUpdate(dataSource, input); // fire event
                 return entityObject.GetAll();
@@ -21307,6 +21311,10 @@ export class EntityAction_ {
     @Field() 
     @MaxLength(510)
     Entity: string;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
         
     @Field(() => [mj_core_schema_server_object_types.EntityActionInvocation_])
     EntityActionInvocationsArray: mj_core_schema_server_object_types.EntityActionInvocation_[]; // Link to EntityActionInvocations
@@ -21688,6 +21696,10 @@ export class ActionAuthorization_ {
     UpdatedAt: Date;
           
     @Field() 
+    @MaxLength(1000)
+    Action: string;
+          
+    @Field() 
     @MaxLength(200)
     Authorization: string;
         
@@ -22033,6 +22045,10 @@ export class Action_ {
     CategoryID?: number;
           
     @Field() 
+    @MaxLength(1000)
+    Name: string;
+          
+    @Field() 
     UserPrompt: string;
           
     @Field({nullable: true, description: 'User\'s comments not shared with the LLM.'}) 
@@ -22057,6 +22073,9 @@ export class Action_ {
     @Field({nullable: true, description: 'When the code was approved.'}) 
     @MaxLength(8)
     CodeApprovedAt?: Date;
+          
+    @Field(() => Boolean, {description: 'If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn\'t changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.'}) 
+    ForceCodeGeneration: boolean;
           
     @Field(() => Int, {nullable: true, description: 'Number of days to retain execution logs; NULL for indefinite.'}) 
     RetentionPeriod?: number;
@@ -22113,6 +22132,9 @@ export class CreateActionInput {
     CategoryID: number;
     
     @Field()
+    Name: string;
+    
+    @Field()
     UserPrompt: string;
     
     @Field({ nullable: true })
@@ -22135,6 +22157,9 @@ export class CreateActionInput {
     
     @Field({ nullable: true })
     CodeApprovedAt: Date;
+    
+    @Field(() => Boolean)
+    ForceCodeGeneration: boolean;
     
     @Field(() => Int, { nullable: true })
     RetentionPeriod: number;
@@ -22156,6 +22181,9 @@ export class UpdateActionInput {
     CategoryID: number;
     
     @Field()
+    Name: string;
+    
+    @Field()
     UserPrompt: string;
     
     @Field({ nullable: true })
@@ -22178,6 +22206,9 @@ export class UpdateActionInput {
     
     @Field({ nullable: true })
     CodeApprovedAt: Date;
+    
+    @Field(() => Boolean)
+    ForceCodeGeneration: boolean;
     
     @Field(() => Int, { nullable: true })
     RetentionPeriod: number;
@@ -22332,9 +22363,9 @@ export class ActionResolver extends ResolverBase {
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ActionEntity>await new Metadata().GetEntityObject('Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
                 // save worked, fire afterevent and return all the data
                 await this.AfterUpdate(dataSource, input); // fire event
                 return entityObject.GetAll();
@@ -22574,6 +22605,10 @@ export class ActionInput_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
         
 }
         
@@ -22713,9 +22748,9 @@ export class ActionInputResolver extends ResolverBase {
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ActionInputEntity>await new Metadata().GetEntityObject('Action Inputs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Inputs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
                 // save worked, fire afterevent and return all the data
                 await this.AfterUpdate(dataSource, input); // fire event
                 return entityObject.GetAll();
@@ -22909,9 +22944,9 @@ export class ActionFilterResolver extends ResolverBase {
     ) {
         if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
             const entityObject = <ActionFilterEntity>await new Metadata().GetEntityObject('Action Filters', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Filters
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
+            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
+            entityObject.SetMany(input);
+            if (await entityObject.Save()) {
                 // save worked, fire afterevent and return all the data
                 await this.AfterUpdate(dataSource, input); // fire event
                 return entityObject.GetAll();
@@ -23138,6 +23173,10 @@ export class ActionResultCode_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
         
 }
         
@@ -23315,6 +23354,10 @@ export class ActionContext_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
           
     @Field() 
     @MaxLength(510)
@@ -23513,6 +23556,10 @@ export class ActionExecutionLog_ {
     @Field() 
     @MaxLength(8)
     UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
           
     @Field() 
     @MaxLength(200)

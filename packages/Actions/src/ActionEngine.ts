@@ -2,6 +2,103 @@ import { RunView, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
 
+
+
+/**
+ * Class that is used for passing around generated code includes properties such as the code itself and a description of what the code does.
+ */
+export class GeneratedCode {
+    /**
+     * Indicates if the code generation was successful or not.  
+     */
+    Success: boolean;
+    /**
+     * The generated executable code
+     */
+    Code: string;
+    /**
+     * A description of the code used for documentation purposes
+     */
+    Comments: string;
+    /**
+     * ErrorMessage if the code generation failed
+     */
+    ErrorMessage?: string;
+}
+
+/**
+ * Library definition for use in code generation
+ */
+export class ActionAvailableLibrary {
+    /**
+     * Name of the library, and the name that will be used to import the library in the generated code unless ImportAs is specified.
+     */
+    public Name: string;
+    /**
+     * If specified, the library will be imported as this alias instead of the Name
+     */
+    public ImportAs?: string;
+    /**
+     * List of the items (classes, consts, functions, interfaces, etc) that are to be imported from the specified library
+     */
+    public ImportedItems: string[];
+    /**
+     * Description of the library and what it is used for
+     */
+    public Description: string;
+    /**
+     * Example Code that can be provided to the LLM to guide its code generation process
+     */
+    public ExampleCode?: string;
+}
+
+/**
+ * List of libraries that are available for all actions. Whenever the CodeGen tool generates a new action it will include these libraries in the generated code.
+ */
+export const GlobalActionLibraries: ActionAvailableLibrary[] = [
+    {
+        Name: '@memberjunction/core',
+        Description: 'This library contains the core functionality for the MemberJunction platform.',
+        ImportedItems: ['RunView', 'UserInfo', 'BaseEntity', 'Metadata'],
+        ExampleCode: `
+            import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+
+            // This function is a demo. You will have access to a local set of parameters that are the same as the params to this sample function.
+            // Only generate the code that goes INSIDE the function, I will generate the function signature and insert your code inside it.
+            function sample(contextUser: UserInfo) {
+                // first get a metadata object 
+                const md = new Metadata();
+
+                // when we need to get data from a particular entity we have two options, we can get a single record with 
+                // md.GetEntityObject, which returns a single BaseEntity derived object, which we can then call .Load() on.
+                // Alternatively, if we want multiple rows from a given entity, we can use RunView and get back either 
+                // simple objects or an array of BaseEntity derived objects.
+
+                // Example 1: Get a single record
+                const demoAccountRecord = await md.GetEntityObject('Demo Accounts', contextUser); // IMPORTANT: Pass in entity names WITHOUT modification, for example if an entity name a user is referring to has spaces or other special characters, INCLUDE them when referring to entity names.
+                const key = new CompositeKey([{Name: 'ID', Value: 1234}]); // create a composite key with an array of KeyValuePair objects
+                await demoAccountRecord.InnerLoad(key); // generic way of doing loading when you get back the BaseEntity level reference.
+                // now you have the accountRecord object loaded with the data from the database. BaseEntity supports direct field level binding where you can do things as shown below
+                accountRecord.Name = 'New Name';
+                await accountRecord.Save(); // saves the record back to the database
+
+                // Example 2: Get multiple records with RunView
+                const rv = new RunView();
+                const result = await rv.RunView({
+                    EntityName: 'Demo Accounts', // IMPORTANT: Pass in entity names WITHOUT modification, for example if an entity name a user is referring to has spaces or other special characters, INCLUDE them when referring to entity names.
+                    ResultType: 'entity_object' // alternative would be ResultType: 'simple_object' if you don't need the BaseEntity derived object it is faster/lighter weight to use simple objects. If you later need to edit the data use entity_object.
+                }, contextUser);
+
+                // The result object now has a RunViewResult object which has a Success boolean on it and also a Results property which is an array of BaseEntity derived objects.
+                // When you use each BaseEntity object in this array, let it be "any" so that you can access the properties that are part of subclasses of BaseEntity but will fail
+                // if you use the BaseEntity directly. BaseEntity doesn't have properties for each column of a given entity because it is generic, but the actual class instances returned
+                // will ALWAYS be from a sub-class of BaseEntity where the columns of the table are generated into strongly typed getter/setter properties you can use in your code if you just use Results as it is
+                // Also, you do NOT need to call .Load() on these objects as that has already been done for you via the RunView call.
+            }
+        `
+    },
+];
+
 /**
  * Class that has the result of an action. This is returned by the Run method of an action.
  */
