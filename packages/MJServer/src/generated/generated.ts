@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/26/2024, 3:50:08 PM
+* GENERATED: 5/27/2024, 6:09:45 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -11,8 +11,8 @@
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
-import { Metadata, EntityPermissionType } from '@memberjunction/core'
-import { AppContext } from '@memberjunction/server';
+import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
+import { AppContext, KeyValuePairInput } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -77,19 +77,19 @@ export class Company_ {
 export class CreateCompanyInput {
     @Field()
     Name: string;
-    
+
     @Field()
     Description: string;
-    
+
     @Field({ nullable: true })
-    Website: string;
-    
+    Website?: string;
+
     @Field({ nullable: true })
-    LogoURL: string;
-    
+    LogoURL?: string;
+
     @Field({ nullable: true })
-    Domain: string;
-    }
+    Domain?: string;
+}
     
         
 //****************************************************************************
@@ -99,22 +99,25 @@ export class CreateCompanyInput {
 export class UpdateCompanyInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Description: string;
-    
+
     @Field({ nullable: true })
-    Website: string;
-    
+    Website?: string;
+
     @Field({ nullable: true })
-    LogoURL: string;
-    
+    LogoURL?: string;
+
     @Field({ nullable: true })
-    Domain: string;
-    }
+    Domain?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Companies
@@ -206,28 +209,7 @@ export class CompanyResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateCompanyInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateCompanyInput) {
+        return this.CreateRecord('Companies', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Company_)
@@ -236,55 +218,13 @@ export class CompanyResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Companies', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Company_)
     async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyEntity>await new Metadata().GetEntityObject('Companies', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Companies', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -382,28 +322,28 @@ export class Employee_ {
 export class CreateEmployeeInput {
     @Field()
     FirstName: string;
-    
+
     @Field()
     LastName: string;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field({ nullable: true })
-    Phone: string;
-    
+    Phone?: string;
+
     @Field(() => Boolean)
     Active: boolean;
-    
+
     @Field(() => Int)
     CompanyID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    SupervisorID: number;
-    }
+    SupervisorID?: number;
+}
     
         
 //****************************************************************************
@@ -413,31 +353,34 @@ export class CreateEmployeeInput {
 export class UpdateEmployeeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     FirstName: string;
-    
+
     @Field()
     LastName: string;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field({ nullable: true })
-    Phone: string;
-    
+    Phone?: string;
+
     @Field(() => Boolean)
     Active: boolean;
-    
+
     @Field(() => Int)
     CompanyID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    SupervisorID: number;
-    }
+    SupervisorID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employees
@@ -545,28 +488,7 @@ export class EmployeeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEmployeeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEmployeeInput) {
+        return this.CreateRecord('Employees', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Employee_)
@@ -575,55 +497,13 @@ export class EmployeeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employees', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Employee_)
     async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeEntity>await new Metadata().GetEntityObject('Employees', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Employees', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -675,13 +555,13 @@ export class UserFavorite_ {
 export class CreateUserFavoriteInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -691,16 +571,19 @@ export class CreateUserFavoriteInput {
 export class UpdateUserFavoriteInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Favorites
@@ -760,28 +643,7 @@ export class UserFavoriteResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserFavoriteInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserFavoriteInput) {
+        return this.CreateRecord('User Favorites', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserFavorite_)
@@ -790,55 +652,13 @@ export class UserFavoriteResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Favorites
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserFavoriteInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserFavoriteInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Favorites', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserFavorite_)
     async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserFavoriteEntity>await new Metadata().GetEntityObject('User Favorites', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Favorites', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -881,19 +701,22 @@ export class EmployeeCompanyIntegration_ {
 export class UpdateEmployeeCompanyIntegrationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EmployeeID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employee Company Integrations
@@ -953,29 +776,7 @@ export class EmployeeCompanyIntegrationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeCompanyIntegrationEntity>await new Metadata().GetEntityObject('Employee Company Integrations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Employee Company Integrations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeCompanyIntegrationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeCompanyIntegrationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employee Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1015,13 +816,16 @@ export class EmployeeRole_ {
 export class UpdateEmployeeRoleInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EmployeeID: number;
-    
+
     @Field(() => Int)
     RoleID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employee Roles
@@ -1081,29 +885,7 @@ export class EmployeeRoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeRoleEntity>await new Metadata().GetEntityObject('Employee Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeRoleInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeRoleInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employee Roles', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1143,13 +925,16 @@ export class EmployeeSkill_ {
 export class UpdateEmployeeSkillInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EmployeeID: number;
-    
+
     @Field(() => Int)
     SkillID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Employee Skills
@@ -1209,29 +994,7 @@ export class EmployeeSkillResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EmployeeSkillEntity>await new Metadata().GetEntityObject('Employee Skills', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEmployeeSkillInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEmployeeSkillInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Employee Skills', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1291,16 +1054,16 @@ export class Role_ {
 export class CreateRoleInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DirectoryID: string;
-    
+    DirectoryID?: string;
+
     @Field({ nullable: true })
-    SQLName: string;
-    }
+    SQLName?: string;
+}
     
         
 //****************************************************************************
@@ -1310,19 +1073,22 @@ export class CreateRoleInput {
 export class UpdateRoleInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DirectoryID: string;
-    
+    DirectoryID?: string;
+
     @Field({ nullable: true })
-    SQLName: string;
-    }
+    SQLName?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Roles
@@ -1430,28 +1196,7 @@ export class RoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRoleInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRoleInput) {
+        return this.CreateRecord('Roles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Role_)
@@ -1460,55 +1205,13 @@ export class RoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Roles
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateRoleInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateRoleInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Roles', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Role_)
     async DeleteRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RoleEntity>await new Metadata().GetEntityObject('Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Roles', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1668,16 +1371,19 @@ export class IntegrationURLFormat_ {
 export class UpdateIntegrationURLFormatInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    IntegrationName: string;
-    
+    IntegrationName?: string;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     URLFormat: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Integration URL Formats
@@ -1745,29 +1451,7 @@ export class IntegrationURLFormatResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <IntegrationURLFormatEntity>await new Metadata().GetEntityObject('Integration URL Formats', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Integration URL Formats
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateIntegrationURLFormatInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateIntegrationURLFormatInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Integration URL Formats', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1829,28 +1513,31 @@ export class Integration_ {
 export class UpdateIntegrationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    NavigationBaseURL: string;
-    
+    NavigationBaseURL?: string;
+
     @Field({ nullable: true })
-    ClassName: string;
-    
+    ClassName?: string;
+
     @Field({ nullable: true })
-    ImportPath: string;
-    
+    ImportPath?: string;
+
     @Field(() => Int)
     BatchMaxRequestCount: number;
-    
+
     @Field(() => Int)
     BatchRequestWaitTime: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Integrations
@@ -1934,29 +1621,7 @@ export class IntegrationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <IntegrationEntity>await new Metadata().GetEntityObject('Integrations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Integrations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateIntegrationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateIntegrationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Integrations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2077,43 +1742,46 @@ export class CompanyIntegration_ {
 export class UpdateCompanyIntegrationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     CompanyName: string;
-    
+
     @Field()
     IntegrationName: string;
-    
+
     @Field(() => Boolean, { nullable: true })
-    IsActive: boolean;
-    
+    IsActive?: boolean;
+
     @Field({ nullable: true })
-    AccessToken: string;
-    
+    AccessToken?: string;
+
     @Field({ nullable: true })
-    RefreshToken: string;
-    
+    RefreshToken?: string;
+
     @Field({ nullable: true })
-    TokenExpirationDate: Date;
-    
+    TokenExpirationDate?: Date;
+
     @Field({ nullable: true })
-    APIKey: string;
-    
+    APIKey?: string;
+
     @Field({ nullable: true })
-    ExternalSystemID: string;
-    
+    ExternalSystemID?: string;
+
     @Field(() => Boolean)
     IsExternalSystemReadOnly: boolean;
-    
+
     @Field({ nullable: true })
-    ClientID: string;
-    
+    ClientID?: string;
+
     @Field({ nullable: true })
-    ClientSecret: string;
-    
+    ClientSecret?: string;
+
     @Field({ nullable: true })
-    CustomAttribute1: string;
-    }
+    CustomAttribute1?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integrations
@@ -2205,29 +1873,7 @@ export class CompanyIntegrationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationEntity>await new Metadata().GetEntityObject('Company Integrations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integrations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integrations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2416,74 +2062,74 @@ export class EntityField_ {
 @InputType()
 export class CreateEntityFieldInput {
     @Field({ nullable: true })
-    DisplayName: string;
-    
+    DisplayName?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field(() => Boolean)
     IsPrimaryKey: boolean;
-    
+
     @Field(() => Boolean)
     IsUnique: boolean;
-    
+
     @Field({ nullable: true })
-    Category: string;
-    
+    Category?: string;
+
     @Field()
     ValueListType: string;
-    
+
     @Field({ nullable: true })
-    ExtendedType: string;
-    
+    ExtendedType?: string;
+
     @Field(() => Boolean)
     DefaultInView: boolean;
-    
+
     @Field({ nullable: true })
-    ViewCellTemplate: string;
-    
+    ViewCellTemplate?: string;
+
     @Field(() => Int, { nullable: true })
-    DefaultColumnWidth: number;
-    
+    DefaultColumnWidth?: number;
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateInView: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    UserSearchParamFormatAPI: string;
-    
+    UserSearchParamFormatAPI?: string;
+
     @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
-    
+
     @Field()
     GeneratedFormSection: string;
-    
+
     @Field(() => Boolean)
     IsNameField: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    RelatedEntityID: number;
-    
+    RelatedEntityID?: number;
+
     @Field({ nullable: true })
-    RelatedEntityFieldName: string;
-    
+    RelatedEntityFieldName?: string;
+
     @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-    
+
     @Field({ nullable: true })
-    RelatedEntityNameFieldMap: string;
-    }
+    RelatedEntityNameFieldMap?: string;
+}
     
         
 //****************************************************************************
@@ -2493,76 +2139,79 @@ export class CreateEntityFieldInput {
 export class UpdateEntityFieldInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    DisplayName: string;
-    
+    DisplayName?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field(() => Boolean)
     IsPrimaryKey: boolean;
-    
+
     @Field(() => Boolean)
     IsUnique: boolean;
-    
+
     @Field({ nullable: true })
-    Category: string;
-    
+    Category?: string;
+
     @Field()
     ValueListType: string;
-    
+
     @Field({ nullable: true })
-    ExtendedType: string;
-    
+    ExtendedType?: string;
+
     @Field(() => Boolean)
     DefaultInView: boolean;
-    
+
     @Field({ nullable: true })
-    ViewCellTemplate: string;
-    
+    ViewCellTemplate?: string;
+
     @Field(() => Int, { nullable: true })
-    DefaultColumnWidth: number;
-    
+    DefaultColumnWidth?: number;
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateInView: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    UserSearchParamFormatAPI: string;
-    
+    UserSearchParamFormatAPI?: string;
+
     @Field(() => Boolean)
     IncludeInGeneratedForm: boolean;
-    
+
     @Field()
     GeneratedFormSection: string;
-    
+
     @Field(() => Boolean)
     IsNameField: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    RelatedEntityID: number;
-    
+    RelatedEntityID?: number;
+
     @Field({ nullable: true })
-    RelatedEntityFieldName: string;
-    
+    RelatedEntityFieldName?: string;
+
     @Field(() => Boolean)
     IncludeRelatedEntityNameFieldInBaseView: boolean;
-    
+
     @Field({ nullable: true })
-    RelatedEntityNameFieldMap: string;
-    }
+    RelatedEntityNameFieldMap?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Fields
@@ -2638,28 +2287,7 @@ export class EntityFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityFieldInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityFieldInput) {
+        return this.CreateRecord('Entity Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityField_)
@@ -2668,55 +2296,13 @@ export class EntityFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Fields
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityFieldInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityFieldInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Fields', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityField_)
     async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityFieldEntity>await new Metadata().GetEntityObject('Entity Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Fields', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2994,118 +2580,118 @@ export class Entity_ {
 export class CreateEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    NameSuffix: string;
-    
+    NameSuffix?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field()
     BaseView: string;
-    
+
     @Field(() => Boolean)
     BaseViewGenerated: boolean;
-    
+
     @Field(() => Boolean)
     VirtualEntity: boolean;
-    
+
     @Field(() => Boolean)
     TrackRecordChanges: boolean;
-    
+
     @Field(() => Boolean)
     AuditRecordAccess: boolean;
-    
+
     @Field(() => Boolean)
     AuditViewRuns: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowCreateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowDeleteAPI: boolean;
-    
+
     @Field(() => Boolean)
     CustomResolverAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextCatalog: string;
-    
+    FullTextCatalog?: string;
+
     @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextIndex: string;
-    
+    FullTextIndex?: string;
+
     @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextSearchFunction: string;
-    
+    FullTextSearchFunction?: string;
+
     @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    UserViewMaxRows: number;
-    
+    UserViewMaxRows?: number;
+
     @Field({ nullable: true })
-    spCreate: string;
-    
+    spCreate?: string;
+
     @Field({ nullable: true })
-    spUpdate: string;
-    
+    spUpdate?: string;
+
     @Field({ nullable: true })
-    spDelete: string;
-    
+    spDelete?: string;
+
     @Field(() => Boolean)
     spCreateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spUpdateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spDeleteGenerated: boolean;
-    
+
     @Field(() => Boolean)
     CascadeDeletes: boolean;
-    
+
     @Field({ nullable: true })
-    spMatch: string;
-    
+    spMatch?: string;
+
     @Field(() => Boolean)
     UserFormGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    EntityObjectSubclassName: string;
-    
+    EntityObjectSubclassName?: string;
+
     @Field({ nullable: true })
-    EntityObjectSubclassImport: string;
-    }
+    EntityObjectSubclassImport?: string;
+}
     
         
 //****************************************************************************
@@ -3115,118 +2701,121 @@ export class CreateEntityInput {
 export class UpdateEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    NameSuffix: string;
-    
+    NameSuffix?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     AutoUpdateDescription: boolean;
-    
+
     @Field()
     BaseView: string;
-    
+
     @Field(() => Boolean)
     BaseViewGenerated: boolean;
-    
+
     @Field(() => Boolean)
     VirtualEntity: boolean;
-    
+
     @Field(() => Boolean)
     TrackRecordChanges: boolean;
-    
+
     @Field(() => Boolean)
     AuditRecordAccess: boolean;
-    
+
     @Field(() => Boolean)
     AuditViewRuns: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowAllRowsAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUpdateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowCreateAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowDeleteAPI: boolean;
-    
+
     @Field(() => Boolean)
     CustomResolverAPI: boolean;
-    
+
     @Field(() => Boolean)
     AllowUserSearchAPI: boolean;
-    
+
     @Field(() => Boolean)
     FullTextSearchEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextCatalog: string;
-    
+    FullTextCatalog?: string;
+
     @Field(() => Boolean)
     FullTextCatalogGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextIndex: string;
-    
+    FullTextIndex?: string;
+
     @Field(() => Boolean)
     FullTextIndexGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    FullTextSearchFunction: string;
-    
+    FullTextSearchFunction?: string;
+
     @Field(() => Boolean)
     FullTextSearchFunctionGenerated: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    UserViewMaxRows: number;
-    
+    UserViewMaxRows?: number;
+
     @Field({ nullable: true })
-    spCreate: string;
-    
+    spCreate?: string;
+
     @Field({ nullable: true })
-    spUpdate: string;
-    
+    spUpdate?: string;
+
     @Field({ nullable: true })
-    spDelete: string;
-    
+    spDelete?: string;
+
     @Field(() => Boolean)
     spCreateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spUpdateGenerated: boolean;
-    
+
     @Field(() => Boolean)
     spDeleteGenerated: boolean;
-    
+
     @Field(() => Boolean)
     CascadeDeletes: boolean;
-    
+
     @Field({ nullable: true })
-    spMatch: string;
-    
+    spMatch?: string;
+
     @Field(() => Boolean)
     UserFormGenerated: boolean;
-    
+
     @Field({ nullable: true })
-    EntityObjectSubclassName: string;
-    
+    EntityObjectSubclassName?: string;
+
     @Field({ nullable: true })
-    EntityObjectSubclassImport: string;
-    }
+    EntityObjectSubclassImport?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entities
@@ -3550,28 +3139,7 @@ export class EntityResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityInput) {
+        return this.CreateRecord('Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Entity_)
@@ -3580,55 +3148,13 @@ export class EntityResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entities
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Entity_)
     async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityEntity>await new Metadata().GetEntityObject('Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entities', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3797,37 +3323,37 @@ export class User_ {
 export class CreateUserInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    FirstName: string;
-    
+    FirstName?: string;
+
     @Field({ nullable: true })
-    LastName: string;
-    
+    LastName?: string;
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field()
     LinkedRecordType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    EmployeeID: number;
-    
+    EmployeeID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityRecordID: number;
-    }
+    LinkedEntityRecordID?: number;
+}
     
         
 //****************************************************************************
@@ -3837,40 +3363,43 @@ export class CreateUserInput {
 export class UpdateUserInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    FirstName: string;
-    
+    FirstName?: string;
+
     @Field({ nullable: true })
-    LastName: string;
-    
+    LastName?: string;
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field()
     Email: string;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field()
     LinkedRecordType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    EmployeeID: number;
-    
+    EmployeeID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityRecordID: number;
-    }
+    LinkedEntityRecordID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Users
@@ -4138,28 +3667,7 @@ export class UserResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserInput) {
+        return this.CreateRecord('Users', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => User_)
@@ -4168,55 +3676,13 @@ export class UserResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Users', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => User_)
     async DeleteUser(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserEntity>await new Metadata().GetEntityObject('Users', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Users', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4336,43 +3802,43 @@ export class EntityRelationship_ {
 export class CreateEntityRelationshipInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Int)
     RelatedEntityID: number;
-    
+
     @Field(() => Boolean)
     BundleInAPI: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-    
+
     @Field()
     Type: string;
-    
+
     @Field({ nullable: true })
-    EntityKeyField: string;
-    
+    EntityKeyField?: string;
+
     @Field()
     RelatedEntityJoinField: string;
-    
+
     @Field({ nullable: true })
-    JoinView: string;
-    
+    JoinView?: string;
+
     @Field({ nullable: true })
-    JoinEntityJoinField: string;
-    
+    JoinEntityJoinField?: string;
+
     @Field({ nullable: true })
-    JoinEntityInverseJoinField: string;
-    
+    JoinEntityInverseJoinField?: string;
+
     @Field(() => Boolean)
     DisplayInForm: boolean;
-    
+
     @Field({ nullable: true })
-    DisplayName: string;
-    }
+    DisplayName?: string;
+}
     
         
 //****************************************************************************
@@ -4382,46 +3848,49 @@ export class CreateEntityRelationshipInput {
 export class UpdateEntityRelationshipInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Int)
     RelatedEntityID: number;
-    
+
     @Field(() => Boolean)
     BundleInAPI: boolean;
-    
+
     @Field(() => Boolean)
     IncludeInParentAllQuery: boolean;
-    
+
     @Field()
     Type: string;
-    
+
     @Field({ nullable: true })
-    EntityKeyField: string;
-    
+    EntityKeyField?: string;
+
     @Field()
     RelatedEntityJoinField: string;
-    
+
     @Field({ nullable: true })
-    JoinView: string;
-    
+    JoinView?: string;
+
     @Field({ nullable: true })
-    JoinEntityJoinField: string;
-    
+    JoinEntityJoinField?: string;
+
     @Field({ nullable: true })
-    JoinEntityInverseJoinField: string;
-    
+    JoinEntityInverseJoinField?: string;
+
     @Field(() => Boolean)
     DisplayInForm: boolean;
-    
+
     @Field({ nullable: true })
-    DisplayName: string;
-    }
+    DisplayName?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Relationships
@@ -4489,28 +3958,7 @@ export class EntityRelationshipResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityRelationshipInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityRelationshipInput) {
+        return this.CreateRecord('Entity Relationships', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRelationship_)
@@ -4519,55 +3967,13 @@ export class EntityRelationshipResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Relationships
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityRelationshipInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRelationshipInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Relationships', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityRelationship_)
     async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRelationshipEntity>await new Metadata().GetEntityObject('Entity Relationships', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Relationships', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4634,25 +4040,28 @@ export class UserRecordLog_ {
 export class UpdateUserRecordLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     EarliestAt: Date;
-    
+
     @Field()
     LatestAt: Date;
-    
+
     @Field(() => Int)
     TotalCount: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Record Logs
@@ -4712,29 +4121,7 @@ export class UserRecordLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserRecordLogEntity>await new Metadata().GetEntityObject('User Record Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Record Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserRecordLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserRecordLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Record Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4853,55 +4240,55 @@ export class UserView_ {
 export class CreateUserViewInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Boolean)
     IsShared: boolean;
-    
+
     @Field(() => Boolean)
     IsDefault: boolean;
-    
+
     @Field({ nullable: true })
-    GridState: string;
-    
+    GridState?: string;
+
     @Field({ nullable: true })
-    FilterState: string;
-    
+    FilterState?: string;
+
     @Field(() => Boolean)
     CustomFilterState: boolean;
-    
+
     @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    SmartFilterPrompt: string;
-    
+    SmartFilterPrompt?: string;
+
     @Field({ nullable: true })
-    SmartFilterWhereClause: string;
-    
+    SmartFilterWhereClause?: string;
+
     @Field({ nullable: true })
-    SmartFilterExplanation: string;
-    
+    SmartFilterExplanation?: string;
+
     @Field({ nullable: true })
-    WhereClause: string;
-    
+    WhereClause?: string;
+
     @Field(() => Boolean)
     CustomWhereClause: boolean;
-    
+
     @Field({ nullable: true })
-    SortState: string;
-    }
+    SortState?: string;
+}
     
         
 //****************************************************************************
@@ -4911,58 +4298,61 @@ export class CreateUserViewInput {
 export class UpdateUserViewInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Boolean)
     IsShared: boolean;
-    
+
     @Field(() => Boolean)
     IsDefault: boolean;
-    
+
     @Field({ nullable: true })
-    GridState: string;
-    
+    GridState?: string;
+
     @Field({ nullable: true })
-    FilterState: string;
-    
+    FilterState?: string;
+
     @Field(() => Boolean)
     CustomFilterState: boolean;
-    
+
     @Field(() => Boolean)
     SmartFilterEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    SmartFilterPrompt: string;
-    
+    SmartFilterPrompt?: string;
+
     @Field({ nullable: true })
-    SmartFilterWhereClause: string;
-    
+    SmartFilterWhereClause?: string;
+
     @Field({ nullable: true })
-    SmartFilterExplanation: string;
-    
+    SmartFilterExplanation?: string;
+
     @Field({ nullable: true })
-    WhereClause: string;
-    
+    WhereClause?: string;
+
     @Field(() => Boolean)
     CustomWhereClause: boolean;
-    
+
     @Field({ nullable: true })
-    SortState: string;
-    }
+    SortState?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Views
@@ -5054,28 +4444,7 @@ export class UserViewResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewInput) {
+        return this.CreateRecord('User Views', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserView_)
@@ -5084,55 +4453,13 @@ export class UserViewResolverBase extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Views', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserView_)
     async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewEntity>await new Metadata().GetEntityObject('User Views', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Views', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5187,25 +4514,28 @@ export class CompanyIntegrationRun_ {
 export class UpdateCompanyIntegrationRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field(() => Int)
     RunByUserID: number;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field(() => Int)
     TotalRecords: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Runs
@@ -5289,29 +4619,7 @@ export class CompanyIntegrationRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRunEntity>await new Metadata().GetEntityObject('Company Integration Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5369,25 +4677,28 @@ export class CompanyIntegrationRunDetail_ {
 export class UpdateCompanyIntegrationRunDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationRunID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     Action: string;
-    
+
     @Field()
     ExecutedAt: Date;
-    
+
     @Field(() => Boolean)
     IsSuccess: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Run Details
@@ -5455,29 +4766,7 @@ export class CompanyIntegrationRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRunDetailEntity>await new Metadata().GetEntityObject('Company Integration Run Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Run Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Run Details', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5531,31 +4820,34 @@ export class ErrorLog_ {
 export class UpdateErrorLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationRunID: number;
-    
+    CompanyIntegrationRunID?: number;
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationRunDetailID: number;
-    
+    CompanyIntegrationRunDetailID?: number;
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    Message: string;
-    
+    Message?: string;
+
     @Field({ nullable: true })
-    CreatedBy: string;
-    
+    CreatedBy?: string;
+
     @Field({ nullable: true })
-    Status: string;
-    
+    Status?: string;
+
     @Field({ nullable: true })
-    Category: string;
-    
+    Category?: string;
+
     @Field({ nullable: true })
-    Details: string;
-    }
+    Details?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Error Logs
@@ -5615,29 +4907,7 @@ export class ErrorLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ErrorLogEntity>await new Metadata().GetEntityObject('Error Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Error Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateErrorLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateErrorLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Error Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5683,10 +4953,10 @@ export class Application_ {
 export class CreateApplicationInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -5696,13 +4966,16 @@ export class CreateApplicationInput {
 export class UpdateApplicationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Applications
@@ -5794,28 +5067,7 @@ export class ApplicationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationInput) {
+        return this.CreateRecord('Applications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Application_)
@@ -5824,55 +5076,13 @@ export class ApplicationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Applications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Application_)
     async DeleteApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntity>await new Metadata().GetEntityObject('Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Applications', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5935,17 +5145,17 @@ export class ApplicationEntity_ {
 @InputType()
 export class CreateApplicationEntityInput {
     @Field({ nullable: true })
-    ApplicationName: string;
-    
+    ApplicationName?: string;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -5955,19 +5165,22 @@ export class CreateApplicationEntityInput {
 export class UpdateApplicationEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    ApplicationName: string;
-    
+    ApplicationName?: string;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Boolean)
     DefaultForNewUser: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Application Entities
@@ -6027,28 +5240,7 @@ export class ApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationEntityInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationEntityInput) {
+        return this.CreateRecord('Application Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ApplicationEntity_)
@@ -6057,55 +5249,13 @@ export class ApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Application Entities
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationEntityInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Application Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ApplicationEntity_)
     async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationEntityEntity>await new Metadata().GetEntityObject('Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Application Entities', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6190,34 +5340,34 @@ export class EntityPermission_ {
 export class CreateEntityPermissionInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field({ nullable: true })
-    RoleName: string;
-    
+    RoleName?: string;
+
     @Field(() => Boolean)
     CanCreate: boolean;
-    
+
     @Field(() => Boolean)
     CanRead: boolean;
-    
+
     @Field(() => Boolean)
     CanUpdate: boolean;
-    
+
     @Field(() => Boolean)
     CanDelete: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ReadRLSFilterID: number;
-    
+    ReadRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    CreateRLSFilterID: number;
-    
+    CreateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    UpdateRLSFilterID: number;
-    
+    UpdateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    DeleteRLSFilterID: number;
-    }
+    DeleteRLSFilterID?: number;
+}
     
         
 //****************************************************************************
@@ -6227,37 +5377,40 @@ export class CreateEntityPermissionInput {
 export class UpdateEntityPermissionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field({ nullable: true })
-    RoleName: string;
-    
+    RoleName?: string;
+
     @Field(() => Boolean)
     CanCreate: boolean;
-    
+
     @Field(() => Boolean)
     CanRead: boolean;
-    
+
     @Field(() => Boolean)
     CanUpdate: boolean;
-    
+
     @Field(() => Boolean)
     CanDelete: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ReadRLSFilterID: number;
-    
+    ReadRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    CreateRLSFilterID: number;
-    
+    CreateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    UpdateRLSFilterID: number;
-    
+    UpdateRLSFilterID?: number;
+
     @Field(() => Int, { nullable: true })
-    DeleteRLSFilterID: number;
-    }
+    DeleteRLSFilterID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Permissions
@@ -6325,28 +5478,7 @@ export class EntityPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityPermissionInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityPermissionInput) {
+        return this.CreateRecord('Entity Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityPermission_)
@@ -6355,55 +5487,13 @@ export class EntityPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Permissions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityPermissionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityPermissionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Permissions', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityPermission_)
     async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityPermissionEntity>await new Metadata().GetEntityObject('Entity Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Permissions', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6446,13 +5536,13 @@ export class UserApplicationEntity_ {
 export class CreateUserApplicationEntityInput {
     @Field(() => Int)
     UserApplicationID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+}
     
         
 //****************************************************************************
@@ -6462,16 +5552,19 @@ export class CreateUserApplicationEntityInput {
 export class UpdateUserApplicationEntityInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserApplicationID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Application Entities
@@ -6531,28 +5624,7 @@ export class UserApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserApplicationEntityInput) {
+        return this.CreateRecord('User Application Entities', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserApplicationEntity_)
@@ -6561,55 +5633,13 @@ export class UserApplicationEntityResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Application Entities
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserApplicationEntityInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserApplicationEntityInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Application Entities', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserApplicationEntity_)
     async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntityEntity>await new Metadata().GetEntityObject('User Application Entities', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Application Entities', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6654,19 +5684,22 @@ export class UserApplication_ {
 export class UpdateUserApplicationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int)
     ApplicationID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Applications
@@ -6734,55 +5767,13 @@ export class UserApplicationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntity>await new Metadata().GetEntityObject('User Applications', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Applications
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserApplicationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserApplicationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Applications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserApplication_)
     async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserApplicationEntity>await new Metadata().GetEntityObject('User Applications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Applications', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6824,25 +5815,28 @@ export class CompanyIntegrationRunAPILog_ {
 export class UpdateCompanyIntegrationRunAPILogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationRunID: number;
-    
+
     @Field()
     ExecutedAt: Date;
-    
+
     @Field(() => Boolean)
     IsSuccess: boolean;
-    
+
     @Field({ nullable: true })
-    RequestMethod: string;
-    
+    RequestMethod?: string;
+
     @Field({ nullable: true })
-    URL: string;
-    
+    URL?: string;
+
     @Field({ nullable: true })
-    Parameters: string;
-    }
+    Parameters?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Run API Logs
@@ -6902,29 +5896,7 @@ export class CompanyIntegrationRunAPILogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRunAPILogEntity>await new Metadata().GetEntityObject('Company Integration Run API Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Run API Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunAPILogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRunAPILogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Run API Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6988,22 +5960,22 @@ export class List_ {
 export class CreateListInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalSystemRecordID: string;
-    
+    ExternalSystemRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationID: number;
-    }
+    CompanyIntegrationID?: number;
+}
     
         
 //****************************************************************************
@@ -7013,25 +5985,28 @@ export class CreateListInput {
 export class UpdateListInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalSystemRecordID: string;
-    
+    ExternalSystemRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    CompanyIntegrationID: number;
-    }
+    CompanyIntegrationID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Lists
@@ -7107,28 +6082,7 @@ export class ListResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateListInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateListInput) {
+        return this.CreateRecord('Lists', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => List_)
@@ -7137,55 +6091,13 @@ export class ListResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Lists
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateListInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateListInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Lists', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => List_)
     async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListEntity>await new Metadata().GetEntityObject('Lists', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Lists', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7221,13 +6133,13 @@ export class ListDetail_ {
 export class CreateListDetailInput {
     @Field(() => Int)
     ListID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+}
     
         
 //****************************************************************************
@@ -7237,16 +6149,19 @@ export class CreateListDetailInput {
 export class UpdateListDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ListID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field(() => Int)
     Sequence: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for List Details
@@ -7306,28 +6221,7 @@ export class ListDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateListDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateListDetailInput) {
+        return this.CreateRecord('List Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ListDetail_)
@@ -7336,55 +6230,13 @@ export class ListDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for List Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateListDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateListDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('List Details', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ListDetail_)
     async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ListDetailEntity>await new Metadata().GetEntityObject('List Details', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('List Details', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7427,13 +6279,13 @@ export class UserViewRun_ {
 export class CreateUserViewRunInput {
     @Field(() => Int)
     UserViewID: number;
-    
+
     @Field()
     RunAt: Date;
-    
+
     @Field(() => Int)
     RunByUserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -7443,16 +6295,19 @@ export class CreateUserViewRunInput {
 export class UpdateUserViewRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserViewID: number;
-    
+
     @Field()
     RunAt: Date;
-    
+
     @Field(() => Int)
     RunByUserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User View Runs
@@ -7520,28 +6375,7 @@ export class UserViewRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunEntity>await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewRunInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunInput) {
+        return this.CreateRecord('User View Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewRun_)
@@ -7550,29 +6384,7 @@ export class UserViewRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunEntity>await new Metadata().GetEntityObject('User View Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User View Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7607,10 +6419,10 @@ export class UserViewRunDetail_ {
 export class CreateUserViewRunDetailInput {
     @Field(() => Int)
     UserViewRunID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -7620,13 +6432,16 @@ export class CreateUserViewRunDetailInput {
 export class UpdateUserViewRunDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserViewRunID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User View Run Details
@@ -7686,28 +6501,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunDetailEntity>await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewRunDetailInput) {
+        return this.CreateRecord('User View Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewRunDetail_)
@@ -7716,29 +6510,7 @@ export class UserViewRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewRunDetailEntity>await new Metadata().GetEntityObject('User View Run Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Run Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User View Run Details', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7791,25 +6563,28 @@ export class WorkflowRun_ {
 export class UpdateWorkflowRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     WorkflowName: string;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Results: string;
-    }
+    Results?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workflow Runs
@@ -7869,29 +6644,7 @@ export class WorkflowRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkflowRunEntity>await new Metadata().GetEntityObject('Workflow Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflow Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkflowRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workflow Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7963,34 +6716,37 @@ export class Workflow_ {
 export class UpdateWorkflowInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     WorkflowEngineName: string;
-    
+
     @Field()
     CompanyName: string;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Boolean)
     AutoRunEnabled: boolean;
-    
+
     @Field({ nullable: true })
-    AutoRunIntervalUnits: string;
-    
+    AutoRunIntervalUnits?: string;
+
     @Field(() => Int, { nullable: true })
-    AutoRunInterval: number;
-    
+    AutoRunInterval?: number;
+
     @Field({ nullable: true })
-    SubclassName: string;
-    }
+    SubclassName?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workflows
@@ -8066,29 +6822,7 @@ export class WorkflowResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkflowEntity>await new Metadata().GetEntityObject('Workflows', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflows
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkflowInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workflows', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8136,19 +6870,22 @@ export class WorkflowEngine_ {
 export class UpdateWorkflowEngineInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     DriverPath: string;
-    
+
     @Field()
     DriverClass: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workflow Engines
@@ -8216,29 +6953,7 @@ export class WorkflowEngineResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkflowEngineEntity>await new Metadata().GetEntityObject('Workflow Engines', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workflow Engines
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkflowEngineInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkflowEngineInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workflow Engines', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8298,31 +7013,31 @@ export class RecordChange_ {
 export class CreateRecordChangeInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     ChangedAt: Date;
-    
+
     @Field()
     ChangesJSON: string;
-    
+
     @Field()
     ChangesDescription: string;
-    
+
     @Field()
     FullRecordJSON: string;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
 //****************************************************************************
 // RESOLVER for Record Changes
@@ -8382,28 +7097,7 @@ export class RecordChangeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordChangeEntity>await new Metadata().GetEntityObject('Record Changes', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRecordChangeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRecordChangeInput) {
+        return this.CreateRecord('Record Changes', input, dataSource, userPayload, pubSub)
     }
         
 }
@@ -8444,10 +7138,10 @@ export class UserRole_ {
 export class CreateUserRoleInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     RoleName: string;
-    }
+}
     
 //****************************************************************************
 // RESOLVER for User Roles
@@ -8515,54 +7209,13 @@ export class UserRoleResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserRoleEntity>await new Metadata().GetEntityObject('User Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserRoleInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserRoleInput) {
+        return this.CreateRecord('User Roles', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserRole_)
     async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserRoleEntity>await new Metadata().GetEntityObject('User Roles', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Roles', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8727,29 +7380,29 @@ export class AuditLog_ {
 @InputType()
 export class CreateAuditLogInput {
     @Field({ nullable: true })
-    AuditLogTypeName: string;
-    
+    AuditLogTypeName?: string;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    AuthorizationName: string;
-    
+    AuthorizationName?: string;
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    Details: string;
-    
+    Details?: string;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    }
+    RecordID?: string;
+}
     
         
 //****************************************************************************
@@ -8759,31 +7412,34 @@ export class CreateAuditLogInput {
 export class UpdateAuditLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field({ nullable: true })
-    AuditLogTypeName: string;
-    
+    AuditLogTypeName?: string;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    AuthorizationName: string;
-    
+    AuthorizationName?: string;
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    Details: string;
-    
+    Details?: string;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    }
+    RecordID?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Audit Logs
@@ -8843,28 +7499,7 @@ export class AuditLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AuditLogEntity>await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateAuditLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateAuditLogInput) {
+        return this.CreateRecord('Audit Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => AuditLog_)
@@ -8873,29 +7508,7 @@ export class AuditLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AuditLogEntity>await new Metadata().GetEntityObject('Audit Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Audit Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAuditLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAuditLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Audit Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9448,34 +8061,37 @@ export class AIModel_ {
 export class UpdateAIModelInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Vendor: string;
-    
+    Vendor?: string;
+
     @Field(() => Int)
     AIModelTypeID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DriverClass: string;
-    
+    DriverClass?: string;
+
     @Field({ nullable: true })
-    DriverImportPath: string;
-    
+    DriverImportPath?: string;
+
     @Field({ nullable: true })
-    APIName: string;
-    
+    APIName?: string;
+
     @Field(() => Int, { nullable: true })
-    PowerRank: number;
-    }
+    PowerRank?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Models
@@ -9583,29 +8199,7 @@ export class AIModelResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIModelEntity>await new Metadata().GetEntityObject('AI Models', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Models
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIModelInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('AI Models', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9661,22 +8255,25 @@ export class AIAction_ {
 export class UpdateAIActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    DefaultModelID: number;
-    
+    DefaultModelID?: number;
+
     @Field({ nullable: true })
-    DefaultPrompt: string;
-    
+    DefaultPrompt?: string;
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Actions
@@ -9760,29 +8357,7 @@ export class AIActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIActionEntity>await new Metadata().GetEntityObject('AI Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIActionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('AI Actions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9829,16 +8404,19 @@ export class AIModelAction_ {
 export class UpdateAIModelActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     AIModelID: number;
-    
+
     @Field(() => Int)
     AIActionID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Model Actions
@@ -9906,29 +8484,7 @@ export class AIModelActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIModelActionEntity>await new Metadata().GetEntityObject('AI Model Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Model Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIModelActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelActionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('AI Model Actions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10006,43 +8562,46 @@ export class EntityAIAction_ {
 export class UpdateEntityAIActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     AIActionID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    AIModelID: number;
-    
+    AIModelID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Prompt: string;
-    
+    Prompt?: string;
+
     @Field()
     TriggerEvent: string;
-    
+
     @Field()
     UserMessage: string;
-    
+
     @Field()
     OutputType: string;
-    
+
     @Field({ nullable: true })
-    OutputField: string;
-    
+    OutputField?: string;
+
     @Field(() => Boolean)
     SkipIfOutputFieldNotEmpty: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    OutputEntityID: number;
-    
+    OutputEntityID?: number;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity AI Actions
@@ -10110,29 +8669,7 @@ export class EntityAIActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityAIActionEntity>await new Metadata().GetEntityObject('Entity AI Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity AI Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityAIActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityAIActionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10164,13 +8701,16 @@ export class AIModelType_ {
 export class UpdateAIModelTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for AI Model Types
@@ -10246,29 +8786,7 @@ export class AIModelTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <AIModelTypeEntity>await new Metadata().GetEntityObject('AI Model Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for AI Model Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateAIModelTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateAIModelTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('AI Model Types', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10457,52 +8975,52 @@ export class Queue_ {
 export class CreateQueueInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     QueueTypeID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ProcessPID: number;
-    
+    ProcessPID?: number;
+
     @Field({ nullable: true })
-    ProcessPlatform: string;
-    
+    ProcessPlatform?: string;
+
     @Field({ nullable: true })
-    ProcessVersion: string;
-    
+    ProcessVersion?: string;
+
     @Field({ nullable: true })
-    ProcessCwd: string;
-    
+    ProcessCwd?: string;
+
     @Field({ nullable: true })
-    ProcessIPAddress: string;
-    
+    ProcessIPAddress?: string;
+
     @Field({ nullable: true })
-    ProcessMacAddress: string;
-    
+    ProcessMacAddress?: string;
+
     @Field({ nullable: true })
-    ProcessOSName: string;
-    
+    ProcessOSName?: string;
+
     @Field({ nullable: true })
-    ProcessOSVersion: string;
-    
+    ProcessOSVersion?: string;
+
     @Field({ nullable: true })
-    ProcessHostName: string;
-    
+    ProcessHostName?: string;
+
     @Field({ nullable: true })
-    ProcessUserID: string;
-    
+    ProcessUserID?: string;
+
     @Field({ nullable: true })
-    ProcessUserName: string;
-    
+    ProcessUserName?: string;
+
     @Field()
     LastHeartbeat: Date;
-    }
+}
     
         
 //****************************************************************************
@@ -10512,55 +9030,58 @@ export class CreateQueueInput {
 export class UpdateQueueInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     QueueTypeID: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    ProcessPID: number;
-    
+    ProcessPID?: number;
+
     @Field({ nullable: true })
-    ProcessPlatform: string;
-    
+    ProcessPlatform?: string;
+
     @Field({ nullable: true })
-    ProcessVersion: string;
-    
+    ProcessVersion?: string;
+
     @Field({ nullable: true })
-    ProcessCwd: string;
-    
+    ProcessCwd?: string;
+
     @Field({ nullable: true })
-    ProcessIPAddress: string;
-    
+    ProcessIPAddress?: string;
+
     @Field({ nullable: true })
-    ProcessMacAddress: string;
-    
+    ProcessMacAddress?: string;
+
     @Field({ nullable: true })
-    ProcessOSName: string;
-    
+    ProcessOSName?: string;
+
     @Field({ nullable: true })
-    ProcessOSVersion: string;
-    
+    ProcessOSVersion?: string;
+
     @Field({ nullable: true })
-    ProcessHostName: string;
-    
+    ProcessHostName?: string;
+
     @Field({ nullable: true })
-    ProcessUserID: string;
-    
+    ProcessUserID?: string;
+
     @Field({ nullable: true })
-    ProcessUserName: string;
-    
+    ProcessUserName?: string;
+
     @Field()
     LastHeartbeat: Date;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Queues
@@ -10628,28 +9149,7 @@ export class QueueResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueEntity>await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueueInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueueInput) {
+        return this.CreateRecord('Queues', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Queue_)
@@ -10658,29 +9158,7 @@ export class QueueResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueEntity>await new Metadata().GetEntityObject('Queues', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queues
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueueInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueueInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Queues', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10736,31 +9214,31 @@ export class QueueTask_ {
 export class CreateQueueTaskInput {
     @Field(() => Int)
     QueueID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field({ nullable: true })
-    Data: string;
-    
+    Data?: string;
+
     @Field({ nullable: true })
-    Options: string;
-    
+    Options?: string;
+
     @Field({ nullable: true })
-    Output: string;
-    
+    Output?: string;
+
     @Field({ nullable: true })
-    ErrorMessage: string;
-    
+    ErrorMessage?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -10770,34 +9248,37 @@ export class CreateQueueTaskInput {
 export class UpdateQueueTaskInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     QueueID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field({ nullable: true })
-    Data: string;
-    
+    Data?: string;
+
     @Field({ nullable: true })
-    Options: string;
-    
+    Options?: string;
+
     @Field({ nullable: true })
-    Output: string;
-    
+    Output?: string;
+
     @Field({ nullable: true })
-    ErrorMessage: string;
-    
+    ErrorMessage?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Queue Tasks
@@ -10857,28 +9338,7 @@ export class QueueTaskResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueTaskEntity>await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueueTaskInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueueTaskInput) {
+        return this.CreateRecord('Queue Tasks', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueueTask_)
@@ -10887,29 +9347,7 @@ export class QueueTaskResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueueTaskEntity>await new Metadata().GetEntityObject('Queue Tasks', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queue Tasks
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueueTaskInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueueTaskInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Queue Tasks', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10955,19 +9393,19 @@ export class Dashboard_ {
 export class CreateDashboardInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     UIConfigDetails: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+}
     
         
 //****************************************************************************
@@ -10977,22 +9415,25 @@ export class CreateDashboardInput {
 export class UpdateDashboardInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     UIConfigDetails: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Dashboards
@@ -11053,28 +9494,7 @@ export class DashboardResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDashboardInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDashboardInput) {
+        return this.CreateRecord('Dashboards', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Dashboard_)
@@ -11083,55 +9503,13 @@ export class DashboardResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Dashboards
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDashboardInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Dashboards', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Dashboard_)
     async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardEntity>await new Metadata().GetEntityObject('Dashboards', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Dashboards', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11501,52 +9879,52 @@ export class Report_ {
 export class CreateReportInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     SharingScope: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ConversationID: number;
-    
+    ConversationID?: number;
+
     @Field(() => Int, { nullable: true })
-    ConversationDetailID: number;
-    
+    ConversationDetailID?: number;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    
+    DataContextID?: number;
+
     @Field({ nullable: true })
-    Configuration: string;
-    
+    Configuration?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputTriggerTypeID: number;
-    
+    OutputTriggerTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputFormatTypeID: number;
-    
+    OutputFormatTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputDeliveryTypeID: number;
-    
+    OutputDeliveryTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputEventID: number;
-    
+    OutputEventID?: number;
+
     @Field({ nullable: true })
-    OutputFrequency: string;
-    
+    OutputFrequency?: string;
+
     @Field({ nullable: true })
-    OutputTargetEmail: string;
-    
+    OutputTargetEmail?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputWorkflowID: number;
-    }
+    OutputWorkflowID?: number;
+}
     
         
 //****************************************************************************
@@ -11556,55 +9934,58 @@ export class CreateReportInput {
 export class UpdateReportInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field()
     SharingScope: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ConversationID: number;
-    
+    ConversationID?: number;
+
     @Field(() => Int, { nullable: true })
-    ConversationDetailID: number;
-    
+    ConversationDetailID?: number;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    
+    DataContextID?: number;
+
     @Field({ nullable: true })
-    Configuration: string;
-    
+    Configuration?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputTriggerTypeID: number;
-    
+    OutputTriggerTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputFormatTypeID: number;
-    
+    OutputFormatTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputDeliveryTypeID: number;
-    
+    OutputDeliveryTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    OutputEventID: number;
-    
+    OutputEventID?: number;
+
     @Field({ nullable: true })
-    OutputFrequency: string;
-    
+    OutputFrequency?: string;
+
     @Field({ nullable: true })
-    OutputTargetEmail: string;
-    
+    OutputTargetEmail?: string;
+
     @Field(() => Int, { nullable: true })
-    OutputWorkflowID: number;
-    }
+    OutputWorkflowID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Reports
@@ -11672,28 +10053,7 @@ export class ReportResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateReportInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateReportInput) {
+        return this.CreateRecord('Reports', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Report_)
@@ -11702,55 +10062,13 @@ export class ReportResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Reports
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Reports', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Report_)
     async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportEntity>await new Metadata().GetEntityObject('Reports', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Reports', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11793,13 +10111,13 @@ export class ReportSnapshot_ {
 export class CreateReportSnapshotInput {
     @Field(() => Int)
     ReportID: number;
-    
+
     @Field()
     ResultSet: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+}
     
         
 //****************************************************************************
@@ -11809,16 +10127,19 @@ export class CreateReportSnapshotInput {
 export class UpdateReportSnapshotInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ReportID: number;
-    
+
     @Field()
     ResultSet: string;
-    
+
     @Field(() => Int, { nullable: true })
-    UserID: number;
-    }
+    UserID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Report Snapshots
@@ -11878,28 +10199,7 @@ export class ReportSnapshotResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateReportSnapshotInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateReportSnapshotInput) {
+        return this.CreateRecord('Report Snapshots', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ReportSnapshot_)
@@ -11908,55 +10208,13 @@ export class ReportSnapshotResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Report Snapshots
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportSnapshotInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportSnapshotInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Report Snapshots', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ReportSnapshot_)
     async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportSnapshotEntity>await new Metadata().GetEntityObject('Report Snapshots', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Report Snapshots', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12286,13 +10544,13 @@ export class Workspace_ {
 export class CreateWorkspaceInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -12302,16 +10560,19 @@ export class CreateWorkspaceInput {
 export class UpdateWorkspaceInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workspaces
@@ -12380,28 +10641,7 @@ export class WorkspaceResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateWorkspaceInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceInput) {
+        return this.CreateRecord('Workspaces', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Workspace_)
@@ -12410,55 +10650,13 @@ export class WorkspaceResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workspaces
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkspaceInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkspaceInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workspaces', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Workspace_)
     async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceEntity>await new Metadata().GetEntityObject('Workspaces', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workspaces', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12511,25 +10709,25 @@ export class WorkspaceItem_ {
 export class CreateWorkspaceItemInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     WorkSpaceID: number;
-    
+
     @Field(() => Int)
     ResourceTypeID: number;
-    
+
     @Field({ nullable: true })
-    ResourceRecordID: string;
-    
+    ResourceRecordID?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field({ nullable: true })
-    Configuration: string;
-    }
+    Configuration?: string;
+}
     
         
 //****************************************************************************
@@ -12539,28 +10737,31 @@ export class CreateWorkspaceItemInput {
 export class UpdateWorkspaceItemInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     WorkSpaceID: number;
-    
+
     @Field(() => Int)
     ResourceTypeID: number;
-    
+
     @Field({ nullable: true })
-    ResourceRecordID: string;
-    
+    ResourceRecordID?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field({ nullable: true })
-    Configuration: string;
-    }
+    Configuration?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Workspace Items
@@ -12621,28 +10822,7 @@ export class WorkspaceItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateWorkspaceItemInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateWorkspaceItemInput) {
+        return this.CreateRecord('Workspace Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => WorkspaceItem_)
@@ -12651,55 +10831,13 @@ export class WorkspaceItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Workspace Items
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateWorkspaceItemInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateWorkspaceItemInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Workspace Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => WorkspaceItem_)
     async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <WorkspaceItemEntity>await new Metadata().GetEntityObject('Workspace Items', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Workspace Items', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12944,22 +11082,22 @@ export class ConversationDetail_ {
 export class CreateConversationDetailInput {
     @Field(() => Int)
     ConversationID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field()
     Role: string;
-    
+
     @Field()
     Message: string;
-    
+
     @Field({ nullable: true })
-    Error: string;
-    
+    Error?: string;
+
     @Field(() => Boolean)
     HiddenToUser: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -12969,25 +11107,28 @@ export class CreateConversationDetailInput {
 export class UpdateConversationDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ConversationID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field()
     Role: string;
-    
+
     @Field()
     Message: string;
-    
+
     @Field({ nullable: true })
-    Error: string;
-    
+    Error?: string;
+
     @Field(() => Boolean)
     HiddenToUser: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Conversation Details
@@ -13055,28 +11196,7 @@ export class ConversationDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateConversationDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateConversationDetailInput) {
+        return this.CreateRecord('Conversation Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ConversationDetail_)
@@ -13085,55 +11205,13 @@ export class ConversationDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Conversation Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateConversationDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateConversationDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Conversation Details', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ConversationDetail_)
     async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationDetailEntity>await new Metadata().GetEntityObject('Conversation Details', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Conversation Details', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13208,31 +11286,31 @@ export class Conversation_ {
 export class CreateConversationInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field({ nullable: true })
-    Name: string;
-    
+    Name?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsArchived: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field({ nullable: true })
-    LinkedRecordID: string;
-    
+    LinkedRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    }
+    DataContextID?: number;
+}
     
         
 //****************************************************************************
@@ -13242,34 +11320,37 @@ export class CreateConversationInput {
 export class UpdateConversationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    ExternalID: string;
-    
+    ExternalID?: string;
+
     @Field({ nullable: true })
-    Name: string;
-    
+    Name?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     Type: string;
-    
+
     @Field(() => Boolean)
     IsArchived: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    LinkedEntityID: number;
-    
+    LinkedEntityID?: number;
+
     @Field({ nullable: true })
-    LinkedRecordID: string;
-    
+    LinkedRecordID?: string;
+
     @Field(() => Int, { nullable: true })
-    DataContextID: number;
-    }
+    DataContextID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Conversations
@@ -13345,28 +11426,7 @@ export class ConversationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateConversationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateConversationInput) {
+        return this.CreateRecord('Conversations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Conversation_)
@@ -13375,55 +11435,13 @@ export class ConversationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Conversations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateConversationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateConversationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Conversations', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => Conversation_)
     async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ConversationEntity>await new Metadata().GetEntityObject('Conversations', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Conversations', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13483,28 +11501,28 @@ export class UserNotification_ {
 export class CreateUserNotificationInput {
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field({ nullable: true })
-    Message: string;
-    
+    Message?: string;
+
     @Field(() => Int, { nullable: true })
-    ResourceTypeID: number;
-    
+    ResourceTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    ResourceRecordID: number;
-    
+    ResourceRecordID?: number;
+
     @Field({ nullable: true })
-    ResourceConfiguration: string;
-    
+    ResourceConfiguration?: string;
+
     @Field(() => Boolean)
     Unread: boolean;
-    
+
     @Field({ nullable: true })
-    ReadAt: Date;
-    }
+    ReadAt?: Date;
+}
     
         
 //****************************************************************************
@@ -13514,31 +11532,34 @@ export class CreateUserNotificationInput {
 export class UpdateUserNotificationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Title: string;
-    
+    Title?: string;
+
     @Field({ nullable: true })
-    Message: string;
-    
+    Message?: string;
+
     @Field(() => Int, { nullable: true })
-    ResourceTypeID: number;
-    
+    ResourceTypeID?: number;
+
     @Field(() => Int, { nullable: true })
-    ResourceRecordID: number;
-    
+    ResourceRecordID?: number;
+
     @Field({ nullable: true })
-    ResourceConfiguration: string;
-    
+    ResourceConfiguration?: string;
+
     @Field(() => Boolean)
     Unread: boolean;
-    
+
     @Field({ nullable: true })
-    ReadAt: Date;
-    }
+    ReadAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User Notifications
@@ -13598,28 +11619,7 @@ export class UserNotificationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserNotificationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserNotificationInput) {
+        return this.CreateRecord('User Notifications', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserNotification_)
@@ -13628,55 +11628,13 @@ export class UserNotificationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User Notifications
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserNotificationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserNotificationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User Notifications', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserNotification_)
     async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserNotificationEntity>await new Metadata().GetEntityObject('User Notifications', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User Notifications', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13719,16 +11677,16 @@ export class SchemaInfo_ {
 export class CreateSchemaInfoInput {
     @Field()
     SchemaName: string;
-    
+
     @Field(() => Int)
     EntityIDMin: number;
-    
+
     @Field(() => Int)
     EntityIDMax: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -13738,19 +11696,22 @@ export class CreateSchemaInfoInput {
 export class UpdateSchemaInfoInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     SchemaName: string;
-    
+
     @Field(() => Int)
     EntityIDMin: number;
-    
+
     @Field(() => Int)
     EntityIDMax: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Schema Info
@@ -13810,28 +11771,7 @@ export class SchemaInfoResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <SchemaInfoEntity>await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateSchemaInfoInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateSchemaInfoInput) {
+        return this.CreateRecord('Schema Info', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => SchemaInfo_)
@@ -13840,29 +11780,7 @@ export class SchemaInfoResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <SchemaInfoEntity>await new Metadata().GetEntityObject('Schema Info', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Schema Info
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateSchemaInfoInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateSchemaInfoInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Schema Info', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -13910,16 +11828,16 @@ export class CompanyIntegrationRecordMap_ {
 export class CreateCompanyIntegrationRecordMapInput {
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     EntityRecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -13929,19 +11847,22 @@ export class CreateCompanyIntegrationRecordMapInput {
 export class UpdateCompanyIntegrationRecordMapInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     CompanyIntegrationID: number;
-    
+
     @Field()
     ExternalSystemRecordID: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     EntityRecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Company Integration Record Maps
@@ -14001,28 +11922,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRecordMapEntity>await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateCompanyIntegrationRecordMapInput) {
+        return this.CreateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => CompanyIntegrationRecordMap_)
@@ -14031,29 +11931,7 @@ export class CompanyIntegrationRecordMapResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <CompanyIntegrationRecordMapEntity>await new Metadata().GetEntityObject('Company Integration Record Maps', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Company Integration Record Maps
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRecordMapInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateCompanyIntegrationRecordMapInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Company Integration Record Maps', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14132,34 +12010,34 @@ export class RecordMergeLog_ {
 export class CreateRecordMergeLogInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     SurvivingRecordID: string;
-    
+
     @Field(() => Int)
     InitiatedByUserID: number;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field()
     ProcessingStartedAt: Date;
-    
+
     @Field({ nullable: true })
-    ProcessingEndedAt: Date;
-    
+    ProcessingEndedAt?: Date;
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    
+    ProcessingLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -14169,37 +12047,40 @@ export class CreateRecordMergeLogInput {
 export class UpdateRecordMergeLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     SurvivingRecordID: string;
-    
+
     @Field(() => Int)
     InitiatedByUserID: number;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field()
     ProcessingStartedAt: Date;
-    
+
     @Field({ nullable: true })
-    ProcessingEndedAt: Date;
-    
+    ProcessingEndedAt?: Date;
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    
+    ProcessingLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Record Merge Logs
@@ -14275,28 +12156,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeLogEntity>await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRecordMergeLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeLogInput) {
+        return this.CreateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordMergeLog_)
@@ -14305,29 +12165,7 @@ export class RecordMergeLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeLogEntity>await new Metadata().GetEntityObject('Record Merge Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Record Merge Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateRecordMergeLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Record Merge Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14371,16 +12209,16 @@ export class RecordMergeDeletionLog_ {
 export class CreateRecordMergeDeletionLogInput {
     @Field(() => Int)
     RecordMergeLogID: number;
-    
+
     @Field()
     DeletedRecordID: string;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    }
+    ProcessingLog?: string;
+}
     
         
 //****************************************************************************
@@ -14390,19 +12228,22 @@ export class CreateRecordMergeDeletionLogInput {
 export class UpdateRecordMergeDeletionLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     RecordMergeLogID: number;
-    
+
     @Field()
     DeletedRecordID: string;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    ProcessingLog: string;
-    }
+    ProcessingLog?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Record Merge Deletion Logs
@@ -14462,28 +12303,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeDeletionLogEntity>await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateRecordMergeDeletionLogInput) {
+        return this.CreateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => RecordMergeDeletionLog_)
@@ -14492,29 +12312,7 @@ export class RecordMergeDeletionLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <RecordMergeDeletionLogEntity>await new Metadata().GetEntityObject('Record Merge Deletion Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Record Merge Deletion Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateRecordMergeDeletionLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Record Merge Deletion Logs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14592,40 +12390,40 @@ export class QueryField_ {
 export class CreateQueryFieldInput {
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field()
     SQLBaseType: string;
-    
+
     @Field()
     SQLFullType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    SourceEntityID: number;
-    
+    SourceEntityID?: number;
+
     @Field({ nullable: true })
-    SourceFieldName: string;
-    
+    SourceFieldName?: string;
+
     @Field(() => Boolean)
     IsComputed: boolean;
-    
+
     @Field({ nullable: true })
-    ComputationDescription: string;
-    
+    ComputationDescription?: string;
+
     @Field(() => Boolean)
     IsSummary: boolean;
-    
+
     @Field({ nullable: true })
-    SummaryDescription: string;
-    }
+    SummaryDescription?: string;
+}
     
         
 //****************************************************************************
@@ -14635,43 +12433,46 @@ export class CreateQueryFieldInput {
 export class UpdateQueryFieldInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field()
     SQLBaseType: string;
-    
+
     @Field()
     SQLFullType: string;
-    
+
     @Field(() => Int, { nullable: true })
-    SourceEntityID: number;
-    
+    SourceEntityID?: number;
+
     @Field({ nullable: true })
-    SourceFieldName: string;
-    
+    SourceFieldName?: string;
+
     @Field(() => Boolean)
     IsComputed: boolean;
-    
+
     @Field({ nullable: true })
-    ComputationDescription: string;
-    
+    ComputationDescription?: string;
+
     @Field(() => Boolean)
     IsSummary: boolean;
-    
+
     @Field({ nullable: true })
-    SummaryDescription: string;
-    }
+    SummaryDescription?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Query Fields
@@ -14731,28 +12532,7 @@ export class QueryFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryFieldEntity>await new Metadata().GetEntityObject('Query Fields', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryFieldInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryFieldInput) {
+        return this.CreateRecord('Query Fields', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryField_)
@@ -14761,29 +12541,7 @@ export class QueryFieldResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryFieldEntity>await new Metadata().GetEntityObject('Query Fields', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Fields
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryFieldInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryFieldInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Query Fields', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14840,16 +12598,16 @@ export class QueryCategory_ {
 export class CreateQueryCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -14859,19 +12617,22 @@ export class CreateQueryCategoryInput {
 export class UpdateQueryCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Query Categories
@@ -14947,28 +12708,7 @@ export class QueryCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryCategoryInput) {
+        return this.CreateRecord('Query Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryCategory_)
@@ -14977,55 +12717,13 @@ export class QueryCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Query Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => QueryCategory_)
     async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryCategoryEntity>await new Metadata().GetEntityObject('Query Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Query Categories', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15094,28 +12792,28 @@ export class Query_ {
 export class CreateQueryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    OriginalSQL: string;
-    
+    OriginalSQL?: string;
+
     @Field({ nullable: true })
-    Feedback: string;
-    
+    Feedback?: string;
+
     @Field()
     Status: string;
-    
+
     @Field(() => Int, { nullable: true })
-    QualityRank: number;
-    }
+    QualityRank?: number;
+}
     
         
 //****************************************************************************
@@ -15125,31 +12823,34 @@ export class CreateQueryInput {
 export class UpdateQueryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    OriginalSQL: string;
-    
+    OriginalSQL?: string;
+
     @Field({ nullable: true })
-    Feedback: string;
-    
+    Feedback?: string;
+
     @Field()
     Status: string;
-    
+
     @Field(() => Int, { nullable: true })
-    QualityRank: number;
-    }
+    QualityRank?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Queries
@@ -15233,28 +12934,7 @@ export class QueryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryEntity>await new Metadata().GetEntityObject('Queries', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryInput) {
+        return this.CreateRecord('Queries', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Query_)
@@ -15263,29 +12943,7 @@ export class QueryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryEntity>await new Metadata().GetEntityObject('Queries', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Queries
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Queries', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15322,10 +12980,10 @@ export class QueryPermission_ {
 export class CreateQueryPermissionInput {
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     RoleName: string;
-    }
+}
     
         
 //****************************************************************************
@@ -15335,13 +12993,16 @@ export class CreateQueryPermissionInput {
 export class UpdateQueryPermissionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     QueryID: number;
-    
+
     @Field()
     RoleName: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Query Permissions
@@ -15401,28 +13062,7 @@ export class QueryPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryPermissionEntity>await new Metadata().GetEntityObject('Query Permissions', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateQueryPermissionInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateQueryPermissionInput) {
+        return this.CreateRecord('Query Permissions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => QueryPermission_)
@@ -15431,29 +13071,7 @@ export class QueryPermissionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <QueryPermissionEntity>await new Metadata().GetEntityObject('Query Permissions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Query Permissions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateQueryPermissionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Query Permissions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15504,16 +13122,16 @@ export class VectorIndex_ {
 export class CreateVectorIndexInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     EmbeddingModelID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -15523,19 +13141,22 @@ export class CreateVectorIndexInput {
 export class UpdateVectorIndexInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     EmbeddingModelID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Vector Indexes
@@ -15595,28 +13216,7 @@ export class VectorIndexResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorIndexEntity>await new Metadata().GetEntityObject('Vector Indexes', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateVectorIndexInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateVectorIndexInput) {
+        return this.CreateRecord('Vector Indexes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VectorIndex_)
@@ -15625,29 +13225,7 @@ export class VectorIndexResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorIndexEntity>await new Metadata().GetEntityObject('Vector Indexes', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Vector Indexes
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVectorIndexInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorIndexInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Vector Indexes', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15687,10 +13265,10 @@ export class EntityDocumentType_ {
 export class CreateEntityDocumentTypeInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -15700,13 +13278,16 @@ export class CreateEntityDocumentTypeInput {
 export class UpdateEntityDocumentTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Document Types
@@ -15774,28 +13355,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentTypeEntity>await new Metadata().GetEntityObject('Entity Document Types', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentTypeInput) {
+        return this.CreateRecord('Entity Document Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentType_)
@@ -15804,29 +13364,7 @@ export class EntityDocumentTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentTypeEntity>await new Metadata().GetEntityObject('Entity Document Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Document Types', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15875,16 +13413,16 @@ export class EntityDocumentRun_ {
 export class CreateEntityDocumentRunInput {
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -15894,19 +13432,22 @@ export class CreateEntityDocumentRunInput {
 export class UpdateEntityDocumentRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field({ nullable: true })
-    StartedAt: Date;
-    
+    StartedAt?: Date;
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Document Runs
@@ -15966,28 +13507,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentRunEntity>await new Metadata().GetEntityObject('Entity Document Runs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentRunInput) {
+        return this.CreateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentRun_)
@@ -15996,29 +13516,7 @@ export class EntityDocumentRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentRunEntity>await new Metadata().GetEntityObject('Entity Document Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Document Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16069,16 +13567,16 @@ export class VectorDatabase_ {
 export class CreateVectorDatabaseInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DefaultURL: string;
-    
+    DefaultURL?: string;
+
     @Field({ nullable: true })
-    ClassKey: string;
-    }
+    ClassKey?: string;
+}
     
         
 //****************************************************************************
@@ -16088,19 +13586,22 @@ export class CreateVectorDatabaseInput {
 export class UpdateVectorDatabaseInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    DefaultURL: string;
-    
+    DefaultURL?: string;
+
     @Field({ nullable: true })
-    ClassKey: string;
-    }
+    ClassKey?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Vector Databases
@@ -16176,28 +13677,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorDatabaseEntity>await new Metadata().GetEntityObject('Vector Databases', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateVectorDatabaseInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateVectorDatabaseInput) {
+        return this.CreateRecord('Vector Databases', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VectorDatabase_)
@@ -16206,29 +13686,7 @@ export class VectorDatabaseResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VectorDatabaseEntity>await new Metadata().GetEntityObject('Vector Databases', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Vector Databases
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateVectorDatabaseInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Vector Databases', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16285,28 +13743,28 @@ export class EntityRecordDocument_ {
 export class CreateEntityRecordDocumentInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field({ nullable: true })
-    DocumentText: string;
-    
+    DocumentText?: string;
+
     @Field(() => Int)
     VectorIndexID: number;
-    
+
     @Field({ nullable: true })
-    VectorID: string;
-    
+    VectorID?: string;
+
     @Field({ nullable: true })
-    VectorJSON: string;
-    
+    VectorJSON?: string;
+
     @Field()
     EntityRecordUpdatedAt: Date;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -16316,31 +13774,34 @@ export class CreateEntityRecordDocumentInput {
 export class UpdateEntityRecordDocumentInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field({ nullable: true })
-    DocumentText: string;
-    
+    DocumentText?: string;
+
     @Field(() => Int)
     VectorIndexID: number;
-    
+
     @Field({ nullable: true })
-    VectorID: string;
-    
+    VectorID?: string;
+
     @Field({ nullable: true })
-    VectorJSON: string;
-    
+    VectorJSON?: string;
+
     @Field()
     EntityRecordUpdatedAt: Date;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Record Documents
@@ -16400,28 +13861,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRecordDocumentEntity>await new Metadata().GetEntityObject('Entity Record Documents', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityRecordDocumentInput) {
+        return this.CreateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityRecordDocument_)
@@ -16430,29 +13870,7 @@ export class EntityRecordDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityRecordDocumentEntity>await new Metadata().GetEntityObject('Entity Record Documents', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Record Documents
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityRecordDocumentInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Record Documents', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16525,31 +13943,31 @@ export class EntityDocument_ {
 export class CreateEntityDocumentInput {
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     TypeID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Template: string;
-    
+    Template?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     AIModelID: number;
-    
+
     @Field(() => Float)
     PotentialMatchThreshold: number;
-    
+
     @Field(() => Float)
     AbsoluteMatchThreshold: number;
-    }
+}
     
         
 //****************************************************************************
@@ -16559,34 +13977,37 @@ export class CreateEntityDocumentInput {
 export class UpdateEntityDocumentInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     TypeID: number;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    Template: string;
-    
+    Template?: string;
+
     @Field(() => Int)
     VectorDatabaseID: number;
-    
+
     @Field(() => Int)
     AIModelID: number;
-    
+
     @Field(() => Float)
     PotentialMatchThreshold: number;
-    
+
     @Field(() => Float)
     AbsoluteMatchThreshold: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Documents
@@ -16662,28 +14083,7 @@ export class EntityDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentEntity>await new Metadata().GetEntityObject('Entity Documents', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentInput) {
+        return this.CreateRecord('Entity Documents', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocument_)
@@ -16692,29 +14092,7 @@ export class EntityDocumentResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentEntity>await new Metadata().GetEntityObject('Entity Documents', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Documents
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Documents', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -16790,31 +14168,31 @@ export class DataContextItem_ {
 export class CreateDataContextItemInput {
     @Field(() => Int)
     DataContextID: number;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ViewID: number;
-    
+    ViewID?: number;
+
     @Field(() => Int, { nullable: true })
-    QueryID: number;
-    
+    QueryID?: number;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    
+    RecordID?: string;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    DataJSON: string;
-    
+    DataJSON?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+}
     
         
 //****************************************************************************
@@ -16824,34 +14202,37 @@ export class CreateDataContextItemInput {
 export class UpdateDataContextItemInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     DataContextID: number;
-    
+
     @Field()
     Type: string;
-    
+
     @Field(() => Int, { nullable: true })
-    ViewID: number;
-    
+    ViewID?: number;
+
     @Field(() => Int, { nullable: true })
-    QueryID: number;
-    
+    QueryID?: number;
+
     @Field(() => Int, { nullable: true })
-    EntityID: number;
-    
+    EntityID?: number;
+
     @Field({ nullable: true })
-    RecordID: string;
-    
+    RecordID?: string;
+
     @Field({ nullable: true })
-    SQL: string;
-    
+    SQL?: string;
+
     @Field({ nullable: true })
-    DataJSON: string;
-    
+    DataJSON?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Data Context Items
@@ -16911,28 +14292,7 @@ export class DataContextItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDataContextItemInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDataContextItemInput) {
+        return this.CreateRecord('Data Context Items', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DataContextItem_)
@@ -16941,55 +14301,13 @@ export class DataContextItemResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Data Context Items
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDataContextItemInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextItemInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Data Context Items', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DataContextItem_)
     async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextItemEntity>await new Metadata().GetEntityObject('Data Context Items', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Data Context Items', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17043,16 +14361,16 @@ export class DataContext_ {
 export class CreateDataContextInput {
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+}
     
         
 //****************************************************************************
@@ -17062,19 +14380,22 @@ export class CreateDataContextInput {
 export class UpdateDataContextInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field({ nullable: true })
-    LastRefreshedAt: Date;
-    }
+    LastRefreshedAt?: Date;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Data Contexts
@@ -17150,28 +14471,7 @@ export class DataContextResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDataContextInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDataContextInput) {
+        return this.CreateRecord('Data Contexts', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DataContext_)
@@ -17180,55 +14480,13 @@ export class DataContextResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Data Contexts
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDataContextInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDataContextInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Data Contexts', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DataContext_)
     async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DataContextEntity>await new Metadata().GetEntityObject('Data Contexts', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Data Contexts', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17288,19 +14546,19 @@ export class UserViewCategory_ {
 export class CreateUserViewCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -17310,22 +14568,25 @@ export class CreateUserViewCategoryInput {
 export class UpdateUserViewCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for User View Categories
@@ -17401,28 +14662,7 @@ export class UserViewCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateUserViewCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateUserViewCategoryInput) {
+        return this.CreateRecord('User View Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => UserViewCategory_)
@@ -17431,55 +14671,13 @@ export class UserViewCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for User View Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateUserViewCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('User View Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => UserViewCategory_)
     async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <UserViewCategoryEntity>await new Metadata().GetEntityObject('User View Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('User View Categories', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17536,16 +14734,16 @@ export class DashboardCategory_ {
 export class CreateDashboardCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -17555,19 +14753,22 @@ export class CreateDashboardCategoryInput {
 export class UpdateDashboardCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Dashboard Categories
@@ -17643,28 +14844,7 @@ export class DashboardCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDashboardCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDashboardCategoryInput) {
+        return this.CreateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DashboardCategory_)
@@ -17673,55 +14853,13 @@ export class DashboardCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Dashboard Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDashboardCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Dashboard Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => DashboardCategory_)
     async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DashboardCategoryEntity>await new Metadata().GetEntityObject('Dashboard Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Dashboard Categories', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17778,16 +14916,16 @@ export class ReportCategory_ {
 export class CreateReportCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -17797,19 +14935,22 @@ export class CreateReportCategoryInput {
 export class UpdateReportCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field(() => Int)
     UserID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Report Categories
@@ -17885,28 +15026,7 @@ export class ReportCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateReportCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateReportCategoryInput) {
+        return this.CreateRecord('Report Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ReportCategory_)
@@ -17915,55 +15035,13 @@ export class ReportCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Report Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateReportCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateReportCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Report Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ReportCategory_)
     async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ReportCategoryEntity>await new Metadata().GetEntityObject('Report Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Report Categories', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18017,22 +15095,22 @@ export class FileStorageProvider_ {
 export class CreateFileStorageProviderInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     ServerDriverKey: string;
-    
+
     @Field()
     ClientDriverKey: string;
-    
+
     @Field(() => Int)
     Priority: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -18042,25 +15120,28 @@ export class CreateFileStorageProviderInput {
 export class UpdateFileStorageProviderInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field()
     ServerDriverKey: string;
-    
+
     @Field()
     ClientDriverKey: string;
-    
+
     @Field(() => Int)
     Priority: number;
-    
+
     @Field(() => Boolean)
     IsActive: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for File Storage Providers
@@ -18128,28 +15209,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileStorageProviderEntity>await new Metadata().GetEntityObject('File Storage Providers', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileStorageProviderInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileStorageProviderInput) {
+        return this.CreateRecord('File Storage Providers', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileStorageProvider_)
@@ -18158,29 +15218,7 @@ export class FileStorageProviderResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileStorageProviderEntity>await new Metadata().GetEntityObject('File Storage Providers', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Storage Providers
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileStorageProviderInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('File Storage Providers', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18246,25 +15284,25 @@ export class File_ {
 export class CreateFileInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     ProviderID: number;
-    
+
     @Field({ nullable: true })
-    ContentType: string;
-    
+    ContentType?: string;
+
     @Field({ nullable: true })
-    ProviderKey: string;
-    
+    ProviderKey?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -18274,28 +15312,31 @@ export class CreateFileInput {
 export class UpdateFileInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int)
     ProviderID: number;
-    
+
     @Field({ nullable: true })
-    ContentType: string;
-    
+    ContentType?: string;
+
     @Field({ nullable: true })
-    ProviderKey: string;
-    
+    ProviderKey?: string;
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Files
@@ -18363,28 +15404,7 @@ export class FileResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileInput) {
+        return this.CreateRecord('Files', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => File_)
@@ -18393,55 +15413,13 @@ export class FileResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Files
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Files', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => File_)
     async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntity>await new Metadata().GetEntityObject('Files', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Files', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18491,13 +15469,13 @@ export class FileCategory_ {
 export class CreateFileCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    }
+    ParentID?: number;
+}
     
         
 //****************************************************************************
@@ -18507,16 +15485,19 @@ export class CreateFileCategoryInput {
 export class UpdateFileCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    }
+    ParentID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for File Categories
@@ -18592,28 +15573,7 @@ export class FileCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileCategoryInput) {
+        return this.CreateRecord('File Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileCategory_)
@@ -18622,55 +15582,13 @@ export class FileCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Categories
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('File Categories', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => FileCategory_)
     async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileCategoryEntity>await new Metadata().GetEntityObject('File Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('File Categories', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18718,13 +15636,13 @@ export class FileEntityRecordLink_ {
 export class CreateFileEntityRecordLinkInput {
     @Field(() => Int)
     FileID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+}
     
         
 //****************************************************************************
@@ -18734,16 +15652,19 @@ export class CreateFileEntityRecordLinkInput {
 export class UpdateFileEntityRecordLinkInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     FileID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     RecordID: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for File Entity Record Links
@@ -18803,28 +15724,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntityRecordLinkEntity>await new Metadata().GetEntityObject('File Entity Record Links', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateFileEntityRecordLinkInput) {
+        return this.CreateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => FileEntityRecordLink_)
@@ -18833,29 +15733,7 @@ export class FileEntityRecordLinkResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <FileEntityRecordLinkEntity>await new Metadata().GetEntityObject('File Entity Record Links', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for File Entity Record Links
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateFileEntityRecordLinkInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('File Entity Record Links', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18916,28 +15794,28 @@ export class VersionInstallation_ {
 export class CreateVersionInstallationInput {
     @Field(() => Int)
     MajorVersion: number;
-    
+
     @Field(() => Int)
     MinorVersion: number;
-    
+
     @Field(() => Int)
     PatchVersion: number;
-    
+
     @Field({ nullable: true })
-    Type: string;
-    
+    Type?: string;
+
     @Field()
     InstalledAt: Date;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    InstallLog: string;
-    
+    InstallLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -18947,31 +15825,34 @@ export class CreateVersionInstallationInput {
 export class UpdateVersionInstallationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     MajorVersion: number;
-    
+
     @Field(() => Int)
     MinorVersion: number;
-    
+
     @Field(() => Int)
     PatchVersion: number;
-    
+
     @Field({ nullable: true })
-    Type: string;
-    
+    Type?: string;
+
     @Field()
     InstalledAt: Date;
-    
+
     @Field()
     Status: string;
-    
+
     @Field({ nullable: true })
-    InstallLog: string;
-    
+    InstallLog?: string;
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Version Installations
@@ -19031,28 +15912,7 @@ export class VersionInstallationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VersionInstallationEntity>await new Metadata().GetEntityObject('Version Installations', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateVersionInstallationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateVersionInstallationInput) {
+        return this.CreateRecord('Version Installations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => VersionInstallation_)
@@ -19061,29 +15921,7 @@ export class VersionInstallationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <VersionInstallationEntity>await new Metadata().GetEntityObject('Version Installations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Version Installations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateVersionInstallationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Version Installations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19150,34 +15988,34 @@ export class DuplicateRunDetailMatch_ {
 export class CreateDuplicateRunDetailMatchInput {
     @Field(() => Int)
     DuplicateRunDetailID: number;
-    
+
     @Field()
     MatchSource: string;
-    
+
     @Field()
     MatchRecordID: string;
-    
+
     @Field(() => Float)
     MatchProbability: number;
-    
+
     @Field()
     MatchedAt: Date;
-    
+
     @Field()
     Action: string;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field()
     MergeStatus: string;
-    
+
     @Field()
     MergedAt: Date;
-    
+
     @Field(() => Int, { nullable: true })
-    RecordMergeLogID: number;
-    }
+    RecordMergeLogID?: number;
+}
     
         
 //****************************************************************************
@@ -19187,37 +16025,40 @@ export class CreateDuplicateRunDetailMatchInput {
 export class UpdateDuplicateRunDetailMatchInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     DuplicateRunDetailID: number;
-    
+
     @Field()
     MatchSource: string;
-    
+
     @Field()
     MatchRecordID: string;
-    
+
     @Field(() => Float)
     MatchProbability: number;
-    
+
     @Field()
     MatchedAt: Date;
-    
+
     @Field()
     Action: string;
-    
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field()
     MergeStatus: string;
-    
+
     @Field()
     MergedAt: Date;
-    
+
     @Field(() => Int, { nullable: true })
-    RecordMergeLogID: number;
-    }
+    RecordMergeLogID?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Duplicate Run Detail Matches
@@ -19277,28 +16118,7 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailMatchEntity>await new Metadata().GetEntityObject('Duplicate Run Detail Matches', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunDetailMatchInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunDetailMatchInput) {
+        return this.CreateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRunDetailMatch_)
@@ -19307,29 +16127,7 @@ export class DuplicateRunDetailMatchResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailMatchEntity>await new Metadata().GetEntityObject('Duplicate Run Detail Matches', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Run Detail Matches
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailMatchInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailMatchInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Duplicate Run Detail Matches', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19376,16 +16174,16 @@ export class EntityDocumentSetting_ {
 export class CreateEntityDocumentSettingInput {
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -19395,19 +16193,22 @@ export class CreateEntityDocumentSettingInput {
 export class UpdateEntityDocumentSettingInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityDocumentID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Document Settings
@@ -19467,28 +16268,7 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentSettingEntity>await new Metadata().GetEntityObject('Entity Document Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityDocumentSettingInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityDocumentSettingInput) {
+        return this.CreateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityDocumentSetting_)
@@ -19497,29 +16277,7 @@ export class EntityDocumentSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityDocumentSettingEntity>await new Metadata().GetEntityObject('Entity Document Settings', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Document Settings
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityDocumentSettingInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityDocumentSettingInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Document Settings', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19566,16 +16324,16 @@ export class EntitySetting_ {
 export class CreateEntitySettingInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -19585,19 +16343,22 @@ export class CreateEntitySettingInput {
 export class UpdateEntitySettingInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Settings
@@ -19657,28 +16418,7 @@ export class EntitySettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntitySettingEntity>await new Metadata().GetEntityObject('Entity Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntitySettingInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntitySettingInput) {
+        return this.CreateRecord('Entity Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntitySetting_)
@@ -19687,29 +16427,7 @@ export class EntitySettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntitySettingEntity>await new Metadata().GetEntityObject('Entity Settings', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Settings
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntitySettingInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntitySettingInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Settings', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19792,34 +16510,34 @@ export class DuplicateRun_ {
 export class CreateDuplicateRunInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     StartedByUserID: number;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field({ nullable: true })
-    ApprovalComments: string;
-    
+    ApprovalComments?: string;
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field({ nullable: true })
-    ProcessingErrorMessage: string;
-    
+    ProcessingErrorMessage?: string;
+
     @Field(() => Int)
     SourceListID: number;
-    }
+}
     
         
 //****************************************************************************
@@ -19829,37 +16547,40 @@ export class CreateDuplicateRunInput {
 export class UpdateDuplicateRunInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     StartedByUserID: number;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field()
     ApprovalStatus: string;
-    
+
     @Field({ nullable: true })
-    ApprovalComments: string;
-    
+    ApprovalComments?: string;
+
     @Field(() => Int, { nullable: true })
-    ApprovedByUserID: number;
-    
+    ApprovedByUserID?: number;
+
     @Field()
     ProcessingStatus: string;
-    
+
     @Field({ nullable: true })
-    ProcessingErrorMessage: string;
-    
+    ProcessingErrorMessage?: string;
+
     @Field(() => Int)
     SourceListID: number;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Duplicate Runs
@@ -19927,28 +16648,7 @@ export class DuplicateRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunEntity>await new Metadata().GetEntityObject('Duplicate Runs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunInput) {
+        return this.CreateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRun_)
@@ -19957,29 +16657,7 @@ export class DuplicateRunResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunEntity>await new Metadata().GetEntityObject('Duplicate Runs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Runs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Duplicate Runs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20036,25 +16714,25 @@ export class DuplicateRunDetail_ {
 export class CreateDuplicateRunDetailInput {
     @Field(() => Int)
     DuplicateRunID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     MatchStatus: string;
-    
+
     @Field({ nullable: true })
-    SkippedReason: string;
-    
+    SkippedReason?: string;
+
     @Field({ nullable: true })
-    MatchErrorMessage: string;
-    
+    MatchErrorMessage?: string;
+
     @Field()
     MergeStatus: string;
-    
+
     @Field({ nullable: true })
-    MergeErrorMessage: string;
-    }
+    MergeErrorMessage?: string;
+}
     
         
 //****************************************************************************
@@ -20064,28 +16742,31 @@ export class CreateDuplicateRunDetailInput {
 export class UpdateDuplicateRunDetailInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     DuplicateRunID: number;
-    
+
     @Field()
     RecordID: string;
-    
+
     @Field()
     MatchStatus: string;
-    
+
     @Field({ nullable: true })
-    SkippedReason: string;
-    
+    SkippedReason?: string;
+
     @Field({ nullable: true })
-    MatchErrorMessage: string;
-    
+    MatchErrorMessage?: string;
+
     @Field()
     MergeStatus: string;
-    
+
     @Field({ nullable: true })
-    MergeErrorMessage: string;
-    }
+    MergeErrorMessage?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Duplicate Run Details
@@ -20153,28 +16834,7 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailEntity>await new Metadata().GetEntityObject('Duplicate Run Details', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateDuplicateRunDetailInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateDuplicateRunDetailInput) {
+        return this.CreateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => DuplicateRunDetail_)
@@ -20183,29 +16843,7 @@ export class DuplicateRunDetailResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <DuplicateRunDetailEntity>await new Metadata().GetEntityObject('Duplicate Run Details', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Duplicate Run Details
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateDuplicateRunDetailInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Duplicate Run Details', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20260,25 +16898,25 @@ export class EntityBehavior_ {
 export class CreateEntityBehaviorInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     BehaviorTypeID: number;
-    
+
     @Field()
     Description: string;
-    
+
     @Field(() => Boolean)
     RegenerateCode: boolean;
-    
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    CodeExplanation: string;
-    
+    CodeExplanation?: string;
+
     @Field(() => Boolean)
     CodeGenerated: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -20288,28 +16926,31 @@ export class CreateEntityBehaviorInput {
 export class UpdateEntityBehaviorInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     BehaviorTypeID: number;
-    
+
     @Field()
     Description: string;
-    
+
     @Field(() => Boolean)
     RegenerateCode: boolean;
-    
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    CodeExplanation: string;
-    
+    CodeExplanation?: string;
+
     @Field(() => Boolean)
     CodeGenerated: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Behaviors
@@ -20369,28 +17010,7 @@ export class EntityBehaviorResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityBehaviorInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityBehaviorInput) {
+        return this.CreateRecord('Entity Behaviors', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityBehavior_)
@@ -20399,55 +17019,13 @@ export class EntityBehaviorResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Behaviors
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityBehaviorInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityBehaviorInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Behaviors', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityBehavior_)
     async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorEntity>await new Metadata().GetEntityObject('Entity Behaviors', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Behaviors', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20487,10 +17065,10 @@ export class EntityBehaviorType_ {
 export class CreateEntityBehaviorTypeInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -20500,13 +17078,16 @@ export class CreateEntityBehaviorTypeInput {
 export class UpdateEntityBehaviorTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Behavior Types
@@ -20574,28 +17155,7 @@ export class EntityBehaviorTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityBehaviorTypeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityBehaviorTypeInput) {
+        return this.CreateRecord('Entity Behavior Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityBehaviorType_)
@@ -20604,55 +17164,13 @@ export class EntityBehaviorTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Behavior Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityBehaviorTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityBehaviorTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Behavior Types', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => EntityBehaviorType_)
     async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityBehaviorTypeEntity>await new Metadata().GetEntityObject('Entity Behavior Types', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Behavior Types', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20696,16 +17214,16 @@ export class ApplicationSetting_ {
 export class CreateApplicationSettingInput {
     @Field()
     ApplicationName: string;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -20715,19 +17233,22 @@ export class CreateApplicationSettingInput {
 export class UpdateApplicationSettingInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     ApplicationName: string;
-    
+
     @Field()
     Name: string;
-    
+
     @Field()
     Value: string;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Application Settings
@@ -20787,28 +17308,7 @@ export class ApplicationSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateApplicationSettingInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateApplicationSettingInput) {
+        return this.CreateRecord('Application Settings', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ApplicationSetting_)
@@ -20817,55 +17317,13 @@ export class ApplicationSettingResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Application Settings
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateApplicationSettingInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateApplicationSettingInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Application Settings', input, dataSource, userPayload, pubSub);
     }
     
     @Mutation(() => ApplicationSetting_)
     async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ID)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ApplicationSettingEntity>await new Metadata().GetEntityObject('Application Settings', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(ID);
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ID); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ID: number): Promise<boolean> {
-        const i = ID, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ID: number) {
-        const i = ID, d = dataSource; // prevent error
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Application Settings', key, dataSource, userPayload, pubSub);
     }
     
 }
@@ -20919,16 +17377,16 @@ export class ActionCategory_ {
 export class CreateActionCategoryInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -20938,19 +17396,22 @@ export class CreateActionCategoryInput {
 export class UpdateActionCategoryInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Int, { nullable: true })
-    ParentID: number;
-    
+    ParentID?: number;
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Categories
@@ -21026,28 +17487,7 @@ export class ActionCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionCategoryEntity>await new Metadata().GetEntityObject('Action Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionCategoryInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionCategoryInput) {
+        return this.CreateRecord('Action Categories', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionCategory_)
@@ -21056,29 +17496,7 @@ export class ActionCategoryResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionCategoryEntity>await new Metadata().GetEntityObject('Action Categories', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionCategoryInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionCategoryInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Categories', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -21128,19 +17546,19 @@ export class ActionOutput_ {
 export class CreateActionOutputInput {
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    DefaultValue: string;
-    
+    DefaultValue?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     IsRequired: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -21150,22 +17568,25 @@ export class CreateActionOutputInput {
 export class UpdateActionOutputInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    DefaultValue: string;
-    
+    DefaultValue?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     IsRequired: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Outputs
@@ -21225,28 +17646,7 @@ export class ActionOutputResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionOutputEntity>await new Metadata().GetEntityObject('Action Outputs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionOutputInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionOutputInput) {
+        return this.CreateRecord('Action Outputs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionOutput_)
@@ -21255,29 +17655,7 @@ export class ActionOutputResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionOutputEntity>await new Metadata().GetEntityObject('Action Outputs', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionOutputInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionOutputInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Outputs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -21331,13 +17709,13 @@ export class EntityAction_ {
 export class CreateEntityActionInput {
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -21347,16 +17725,19 @@ export class CreateEntityActionInput {
 export class UpdateEntityActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Actions
@@ -21432,28 +17813,7 @@ export class EntityActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionEntity>await new Metadata().GetEntityObject('Entity Actions', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionInput) {
+        return this.CreateRecord('Entity Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityAction_)
@@ -21462,29 +17822,7 @@ export class EntityActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionEntity>await new Metadata().GetEntityObject('Entity Actions', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Actions
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Actions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -21528,13 +17866,13 @@ export class EntityActionInvocation_ {
 export class CreateEntityActionInvocationInput {
     @Field(() => Int)
     EntityActionID: number;
-    
+
     @Field(() => Int)
     InvocationTypeID: number;
-    
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -21544,16 +17882,19 @@ export class CreateEntityActionInvocationInput {
 export class UpdateEntityActionInvocationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityActionID: number;
-    
+
     @Field(() => Int)
     InvocationTypeID: number;
-    
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Action Invocations
@@ -21613,28 +17954,7 @@ export class EntityActionInvocationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionInvocationEntity>await new Metadata().GetEntityObject('Entity Action Invocations', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionInvocationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionInvocationInput) {
+        return this.CreateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionInvocation_)
@@ -21643,29 +17963,7 @@ export class EntityActionInvocationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionInvocationEntity>await new Metadata().GetEntityObject('Entity Action Invocations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Action Invocations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -21712,13 +18010,13 @@ export class ActionAuthorization_ {
 export class CreateActionAuthorizationInput {
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field(() => Int)
     AuthorizationID: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+}
     
         
 //****************************************************************************
@@ -21728,16 +18026,19 @@ export class CreateActionAuthorizationInput {
 export class UpdateActionAuthorizationInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field(() => Int)
     AuthorizationID: number;
-    
+
     @Field({ nullable: true })
-    Comments: string;
-    }
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Authorizations
@@ -21797,28 +18098,7 @@ export class ActionAuthorizationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionAuthorizationEntity>await new Metadata().GetEntityObject('Action Authorizations', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionAuthorizationInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionAuthorizationInput) {
+        return this.CreateRecord('Action Authorizations', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionAuthorization_)
@@ -21827,29 +18107,7 @@ export class ActionAuthorizationResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionAuthorizationEntity>await new Metadata().GetEntityObject('Action Authorizations', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Authorizations
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionAuthorizationInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionAuthorizationInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Authorizations', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -21889,10 +18147,10 @@ export class EntityActionInvocationType_ {
 export class CreateEntityActionInvocationTypeInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -21902,13 +18160,16 @@ export class CreateEntityActionInvocationTypeInput {
 export class UpdateEntityActionInvocationTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Action Invocation Types
@@ -21976,28 +18237,7 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionInvocationTypeEntity>await new Metadata().GetEntityObject('Entity Action Invocation Types', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionInvocationTypeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionInvocationTypeInput) {
+        return this.CreateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionInvocationType_)
@@ -22006,29 +18246,7 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionInvocationTypeEntity>await new Metadata().GetEntityObject('Entity Action Invocation Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Action Invocation Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionInvocationTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -22129,44 +18347,44 @@ export class Action_ {
 @InputType()
 export class CreateActionInput {
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field()
     UserPrompt: string;
-    
+
     @Field({ nullable: true })
-    UserComments: string;
-    
+    UserComments?: string;
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    CodeComments: string;
-    
+    CodeComments?: string;
+
     @Field()
     CodeApprovalStatus: string;
-    
+
     @Field({ nullable: true })
-    CodeApprovalComments: string;
-    
+    CodeApprovalComments?: string;
+
     @Field(() => Int, { nullable: true })
-    CodeApprovedByUserID: number;
-    
+    CodeApprovedByUserID?: number;
+
     @Field({ nullable: true })
-    CodeApprovedAt: Date;
-    
+    CodeApprovedAt?: Date;
+
     @Field(() => Boolean)
     ForceCodeGeneration: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    RetentionPeriod: number;
-    
+    RetentionPeriod?: number;
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -22176,46 +18394,49 @@ export class CreateActionInput {
 export class UpdateActionInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    CategoryID: number;
-    
+    CategoryID?: number;
+
     @Field()
     Name: string;
-    
+
     @Field()
     UserPrompt: string;
-    
+
     @Field({ nullable: true })
-    UserComments: string;
-    
+    UserComments?: string;
+
     @Field({ nullable: true })
-    Code: string;
-    
+    Code?: string;
+
     @Field({ nullable: true })
-    CodeComments: string;
-    
+    CodeComments?: string;
+
     @Field()
     CodeApprovalStatus: string;
-    
+
     @Field({ nullable: true })
-    CodeApprovalComments: string;
-    
+    CodeApprovalComments?: string;
+
     @Field(() => Int, { nullable: true })
-    CodeApprovedByUserID: number;
-    
+    CodeApprovedByUserID?: number;
+
     @Field({ nullable: true })
-    CodeApprovedAt: Date;
-    
+    CodeApprovedAt?: Date;
+
     @Field(() => Boolean)
     ForceCodeGeneration: boolean;
-    
+
     @Field(() => Int, { nullable: true })
-    RetentionPeriod: number;
-    
+    RetentionPeriod?: number;
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Actions
@@ -22331,28 +18552,7 @@ export class ActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionEntity>await new Metadata().GetEntityObject('Actions', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionInput) {
+        return this.CreateRecord('Actions', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => Action_)
@@ -22361,29 +18561,7 @@ export class ActionResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionEntity>await new Metadata().GetEntityObject('Actions', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Actions', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -22426,16 +18604,16 @@ export class EntityActionFilter_ {
 export class CreateEntityActionFilterInput {
     @Field(() => Int)
     EntityActionID: number;
-    
+
     @Field(() => Int)
     ActionFilterID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -22445,19 +18623,22 @@ export class CreateEntityActionFilterInput {
 export class UpdateEntityActionFilterInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     EntityActionID: number;
-    
+
     @Field(() => Int)
     ActionFilterID: number;
-    
+
     @Field(() => Int)
     Sequence: number;
-    
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Entity Action Filters
@@ -22517,28 +18698,7 @@ export class EntityActionFilterResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionFilterEntity>await new Metadata().GetEntityObject('Entity Action Filters', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateEntityActionFilterInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateEntityActionFilterInput) {
+        return this.CreateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => EntityActionFilter_)
@@ -22547,29 +18707,7 @@ export class EntityActionFilterResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <EntityActionFilterEntity>await new Metadata().GetEntityObject('Entity Action Filters', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Entity Action Filters
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateEntityActionFilterInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateEntityActionFilterInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -22619,19 +18757,19 @@ export class ActionInput_ {
 export class CreateActionInputInput {
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    DefaultValue: string;
-    
+    DefaultValue?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     IsRequired: boolean;
-    }
+}
     
         
 //****************************************************************************
@@ -22641,22 +18779,25 @@ export class CreateActionInputInput {
 export class UpdateActionInputInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    DefaultValue: string;
-    
+    DefaultValue?: string;
+
     @Field({ nullable: true })
-    Description: string;
-    
+    Description?: string;
+
     @Field(() => Boolean)
     IsRequired: boolean;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Inputs
@@ -22716,28 +18857,7 @@ export class ActionInputResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionInputEntity>await new Metadata().GetEntityObject('Action Inputs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionInputInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionInputInput) {
+        return this.CreateRecord('Action Inputs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionInput_)
@@ -22746,29 +18866,7 @@ export class ActionInputResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionInputEntity>await new Metadata().GetEntityObject('Action Inputs', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionInputInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionInputInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Inputs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -22813,16 +18911,16 @@ export class ActionFilter_ {
 export class CreateActionFilterInput {
     @Field()
     UserDescription: string;
-    
+
     @Field({ nullable: true })
-    UserComments: string;
-    
+    UserComments?: string;
+
     @Field()
     Code: string;
-    
+
     @Field({ nullable: true })
-    CodeExplanation: string;
-    }
+    CodeExplanation?: string;
+}
     
         
 //****************************************************************************
@@ -22832,19 +18930,22 @@ export class CreateActionFilterInput {
 export class UpdateActionFilterInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     UserDescription: string;
-    
+
     @Field({ nullable: true })
-    UserComments: string;
-    
+    UserComments?: string;
+
     @Field()
     Code: string;
-    
+
     @Field({ nullable: true })
-    CodeExplanation: string;
-    }
+    CodeExplanation?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Filters
@@ -22912,28 +19013,7 @@ export class ActionFilterResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionFilterEntity>await new Metadata().GetEntityObject('Action Filters', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionFilterInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionFilterInput) {
+        return this.CreateRecord('Action Filters', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionFilter_)
@@ -22942,29 +19022,7 @@ export class ActionFilterResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionFilterEntity>await new Metadata().GetEntityObject('Action Filters', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(input.ID) // Track Changes is turned on, so we need to get the latest data from DB first before we save
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionFilterInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionFilterInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Filters', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -23004,10 +19062,10 @@ export class ActionContextType_ {
 export class CreateActionContextTypeInput {
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -23017,13 +19075,16 @@ export class CreateActionContextTypeInput {
 export class UpdateActionContextTypeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field()
     Name: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Context Types
@@ -23091,28 +19152,7 @@ export class ActionContextTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionContextTypeEntity>await new Metadata().GetEntityObject('Action Context Types', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionContextTypeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionContextTypeInput) {
+        return this.CreateRecord('Action Context Types', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionContextType_)
@@ -23121,29 +19161,7 @@ export class ActionContextTypeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionContextTypeEntity>await new Metadata().GetEntityObject('Action Context Types', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Context Types
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionContextTypeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionContextTypeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Context Types', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -23187,13 +19205,13 @@ export class ActionResultCode_ {
 export class CreateActionResultCodeInput {
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     ResultCode: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+}
     
         
 //****************************************************************************
@@ -23203,16 +19221,19 @@ export class CreateActionResultCodeInput {
 export class UpdateActionResultCodeInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     ResultCode: string;
-    
+
     @Field({ nullable: true })
-    Description: string;
-    }
+    Description?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Result Codes
@@ -23272,28 +19293,7 @@ export class ActionResultCodeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionResultCodeEntity>await new Metadata().GetEntityObject('Action Result Codes', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionResultCodeInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionResultCodeInput) {
+        return this.CreateRecord('Action Result Codes', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionResultCode_)
@@ -23302,29 +19302,7 @@ export class ActionResultCodeResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionResultCodeEntity>await new Metadata().GetEntityObject('Action Result Codes', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Result Codes
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionResultCodeInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionResultCodeInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Result Codes', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -23372,13 +19350,13 @@ export class ActionContext_ {
 export class CreateActionContextInput {
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field(() => Int)
     ContextTypeID: number;
-    
+
     @Field()
     Status: string;
-    }
+}
     
         
 //****************************************************************************
@@ -23388,16 +19366,19 @@ export class CreateActionContextInput {
 export class UpdateActionContextInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field(() => Int)
     ContextTypeID: number;
-    
+
     @Field()
     Status: string;
-    }
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Contexts
@@ -23457,28 +19438,7 @@ export class ActionContextResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionContextEntity>await new Metadata().GetEntityObject('Action Contexts', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionContextInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionContextInput) {
+        return this.CreateRecord('Action Contexts', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionContext_)
@@ -23487,29 +19447,7 @@ export class ActionContextResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionContextEntity>await new Metadata().GetEntityObject('Action Contexts', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Contexts
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionContextInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionContextInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Contexts', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -23574,28 +19512,28 @@ export class ActionExecutionLog_ {
 export class CreateActionExecutionLogInput {
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field({ nullable: true })
-    Inputs: string;
-    
+    Inputs?: string;
+
     @Field({ nullable: true })
-    Outputs: string;
-    
+    Outputs?: string;
+
     @Field({ nullable: true })
-    ResultCode: string;
-    
+    ResultCode?: string;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    RetentionPeriod: number;
-    }
+    RetentionPeriod?: number;
+}
     
         
 //****************************************************************************
@@ -23605,31 +19543,34 @@ export class CreateActionExecutionLogInput {
 export class UpdateActionExecutionLogInput {
     @Field(() => Int)
     ID: number;
-    
+
     @Field(() => Int)
     ActionID: number;
-    
+
     @Field()
     StartedAt: Date;
-    
+
     @Field({ nullable: true })
-    EndedAt: Date;
-    
+    EndedAt?: Date;
+
     @Field({ nullable: true })
-    Inputs: string;
-    
+    Inputs?: string;
+
     @Field({ nullable: true })
-    Outputs: string;
-    
+    Outputs?: string;
+
     @Field({ nullable: true })
-    ResultCode: string;
-    
+    ResultCode?: string;
+
     @Field(() => Int)
     UserID: number;
-    
+
     @Field(() => Int, { nullable: true })
-    RetentionPeriod: number;
-    }
+    RetentionPeriod?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
     
 //****************************************************************************
 // RESOLVER for Action Execution Logs
@@ -23689,28 +19630,7 @@ export class ActionExecutionLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionExecutionLogEntity>await new Metadata().GetEntityObject('Action Execution Logs', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: CreateActionExecutionLogInput): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: CreateActionExecutionLogInput) {
+        return this.CreateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub)
     }
         
     @Mutation(() => ActionExecutionLog_)
@@ -23719,29 +19639,7 @@ export class ActionExecutionLogResolver extends ResolverBase {
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <ActionExecutionLogEntity>await new Metadata().GetEntityObject('Action Execution Logs', this.GetUserFromPayload(userPayload));
-            entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for Action Execution Logs
-            
-            if (await entityObject.Save({ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: UpdateActionExecutionLogInput): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: UpdateActionExecutionLogInput) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub);
     }
     
 }

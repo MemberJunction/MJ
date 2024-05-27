@@ -242,6 +242,15 @@ export class CompositeKey {
     }
 
     /**
+     * Loads the key from a single key value pair
+     * @param fieldName 
+     * @param value 
+     */
+    LoadFromSingleKeyValuePair(fieldName: string, value: any): void {
+        this.KeyValuePairs = [{ FieldName: fieldName, Value: value }];
+    }
+
+    /**
      * Helper method to check if the underlying key value pairs are valid or not
      * i.e. if any of the key value pairs are null or undefined
      * @returns true if all key value pairs are valid, false if any are null or undefined

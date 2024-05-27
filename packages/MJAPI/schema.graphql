@@ -8116,6 +8116,11 @@ type Item__client_finance_ {
   Warranty_Days: Int
 }
 
+input KeyValuePairInput {
+  Key: String!
+  Value: String
+}
+
 input KeyValuePairInputType {
   FieldName: String!
   Value: String!
@@ -13704,6 +13709,7 @@ input UpdateAIActionInput {
   ID: Int!
   IsActive: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateAIModelActionInput {
@@ -13711,6 +13717,7 @@ input UpdateAIModelActionInput {
   AIModelID: Int!
   ID: Int!
   IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateAIModelInput {
@@ -13722,6 +13729,7 @@ input UpdateAIModelInput {
   ID: Int!
   IsActive: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   PowerRank: Int
   Vendor: String
 }
@@ -13730,6 +13738,7 @@ input UpdateAIModelTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateAccountInput {
@@ -13757,6 +13766,7 @@ input UpdateAccountInput {
   Logo: String
   LogoURL: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OperatingName: String
   PhoneNumber: String
   PostalCode: String
@@ -13918,6 +13928,7 @@ input UpdateAccount__client_crmInput {
   Name: String
   New_scribe_stripcompany: Boolean
   NumberOfEmployees: Int
+  OldValues___: [KeyValuePairInput!]
   OnHoldTime: Int
   OpenDeals: Int
   OpenDeals_Date: Timestamp
@@ -14022,12 +14033,14 @@ input UpdateActionAuthorizationInput {
   AuthorizationID: Int!
   Comments: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActionCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   Status: String!
 }
@@ -14036,6 +14049,7 @@ input UpdateActionContextInput {
   ActionID: Int!
   ContextTypeID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Status: String!
 }
 
@@ -14043,6 +14057,7 @@ input UpdateActionContextTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActionExecutionLogInput {
@@ -14050,6 +14065,7 @@ input UpdateActionExecutionLogInput {
   EndedAt: Timestamp
   ID: Int!
   Inputs: String
+  OldValues___: [KeyValuePairInput!]
   Outputs: String
   ResultCode: String
   RetentionPeriod: Int
@@ -14061,6 +14077,7 @@ input UpdateActionFilterInput {
   Code: String!
   CodeExplanation: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   UserComments: String
   UserDescription: String!
 }
@@ -14076,6 +14093,7 @@ input UpdateActionInput {
   ForceCodeGeneration: Boolean!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   RetentionPeriod: Int
   Status: String!
   UserComments: String
@@ -14089,6 +14107,7 @@ input UpdateActionInputInput {
   ID: Int!
   IsRequired: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActionOutputInput {
@@ -14098,18 +14117,21 @@ input UpdateActionOutputInput {
   ID: Int!
   IsRequired: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActionResultCodeInput {
   ActionID: Int!
   Description: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ResultCode: String!
 }
 
 input UpdateActivityAttachmentInput {
   Attachments: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActivityInput {
@@ -14128,6 +14150,7 @@ input UpdateActivityInput {
   IsBounced: Boolean
   IsOpened: Boolean
   IsReplied: Boolean
+  OldValues___: [KeyValuePairInput!]
   Summary: String
   Title: String
   Type: String
@@ -14138,6 +14161,7 @@ input UpdateApplicationEntityInput {
   DefaultForNewUser: Boolean!
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
 }
 
@@ -14145,6 +14169,7 @@ input UpdateApplicationInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateApplicationSettingInput {
@@ -14152,6 +14177,7 @@ input UpdateApplicationSettingInput {
   Comments: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Value: String!
 }
 
@@ -14162,6 +14188,7 @@ input UpdateAuditLogInput {
   Details: String
   EntityID: Int
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String
   Status: String!
   UserID: Int!
@@ -14173,6 +14200,7 @@ input UpdateCompanyInput {
   ID: Int!
   LogoURL: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Website: String
 }
 
@@ -14188,6 +14216,7 @@ input UpdateCompanyIntegrationInput {
   IntegrationName: String!
   IsActive: Boolean
   IsExternalSystemReadOnly: Boolean!
+  OldValues___: [KeyValuePairInput!]
   RefreshToken: String
   TokenExpirationDate: Timestamp
 }
@@ -14198,6 +14227,7 @@ input UpdateCompanyIntegrationRecordMapInput {
   EntityRecordID: String!
   ExternalSystemRecordID: String!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateCompanyIntegrationRunAPILogInput {
@@ -14205,6 +14235,7 @@ input UpdateCompanyIntegrationRunAPILogInput {
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
+  OldValues___: [KeyValuePairInput!]
   Parameters: String
   RequestMethod: String
   URL: String
@@ -14217,6 +14248,7 @@ input UpdateCompanyIntegrationRunDetailInput {
   ExecutedAt: Timestamp!
   ID: Int!
   IsSuccess: Boolean!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
 }
 
@@ -14225,6 +14257,7 @@ input UpdateCompanyIntegrationRunInput {
   CompanyIntegrationID: Int!
   EndedAt: Timestamp
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RunByUserID: Int!
   StartedAt: Timestamp
   TotalRecords: Int!
@@ -14249,6 +14282,7 @@ input UpdateContactInput {
   LevelID: Int
   LinkedIn: String
   NickName: String
+  OldValues___: [KeyValuePairInput!]
   PhoneNumber: String
   Prefix: String
   ProfilePictureURL: String
@@ -14267,6 +14301,7 @@ input UpdateContactLevelInput {
   ID: Int!
   Keywords: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Rank: Int!
 }
 
@@ -14275,6 +14310,7 @@ input UpdateContactRoleInput {
   ID: Int!
   Keywords: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateContact__client_crmInput {
@@ -14602,6 +14638,7 @@ input UpdateContact__client_crmInput {
   New_renewaldate: String
   NickName: String
   NumberOfChildren: Int
+  OldValues___: [KeyValuePairInput!]
   OnHoldTime: Int
   OriginatingLeadIdName: String
   OriginatingLeadIdYomiName: String
@@ -14734,6 +14771,7 @@ input UpdateConversationDetailInput {
   HiddenToUser: Boolean!
   ID: Int!
   Message: String!
+  OldValues___: [KeyValuePairInput!]
   Role: String!
 }
 
@@ -14746,6 +14784,7 @@ input UpdateConversationInput {
   LinkedEntityID: Int
   LinkedRecordID: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   Type: String!
   UserID: Int!
 }
@@ -14826,6 +14865,7 @@ input UpdateCustomerAddressInput {
   Minimum_Payment_Type: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
   Phone_1: String
@@ -14942,6 +14982,7 @@ input UpdateCustomerAddress__client_financeInput {
   Minimum_Payment_Type: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
   Phone_1: String
@@ -15082,6 +15123,7 @@ input UpdateCustomerInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
@@ -15267,6 +15309,7 @@ input UpdateCustomer__client_financeInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Fulfillment_Shortage_Default: String
   Payment_Terms_ID: String
@@ -15356,6 +15399,7 @@ input UpdateDashboardCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -15365,6 +15409,7 @@ input UpdateDashboardInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UIConfigDetails: String!
   UserID: Int
 }
@@ -15374,6 +15419,7 @@ input UpdateDataContextInput {
   ID: Int!
   LastRefreshedAt: Timestamp
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
 }
 
@@ -15383,6 +15429,7 @@ input UpdateDataContextItemInput {
   EntityID: Int
   ID: Int!
   LastRefreshedAt: Timestamp
+  OldValues___: [KeyValuePairInput!]
   QueryID: Int
   RecordID: String
   SQL: String
@@ -15395,6 +15442,7 @@ input UpdateDealForecastCategoryInput {
   DisplayName: String
   ID: Int!
   Name: String
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateDealInput {
@@ -15418,6 +15466,7 @@ input UpdateDealInput {
   LeadSource: String
   LeadSourceDetail: String
   MRR: Float!
+  OldValues___: [KeyValuePairInput!]
   OneTimeFees: Float!
   Pipeline: String
   Probability: Float
@@ -15429,6 +15478,7 @@ input UpdateDealStageInput {
   Description: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateDealTypeInput {
@@ -15436,6 +15486,7 @@ input UpdateDealTypeInput {
   DisplayName: String
   ID: Int!
   Name: String
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateDuplicateRunDetailInput {
@@ -15445,6 +15496,7 @@ input UpdateDuplicateRunDetailInput {
   MatchStatus: String!
   MergeErrorMessage: String
   MergeStatus: String!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   SkippedReason: String
 }
@@ -15460,6 +15512,7 @@ input UpdateDuplicateRunDetailMatchInput {
   MatchedAt: Timestamp!
   MergeStatus: String!
   MergedAt: Timestamp!
+  OldValues___: [KeyValuePairInput!]
   RecordMergeLogID: Int
 }
 
@@ -15470,6 +15523,7 @@ input UpdateDuplicateRunInput {
   EndedAt: Timestamp
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ProcessingErrorMessage: String
   ProcessingStatus: String!
   SourceListID: Int!
@@ -15483,6 +15537,7 @@ input UpdateEmployeeCompanyIntegrationInput {
   ExternalSystemRecordID: String!
   ID: Int!
   IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEmployeeInput {
@@ -15492,6 +15547,7 @@ input UpdateEmployeeInput {
   FirstName: String!
   ID: Int!
   LastName: String!
+  OldValues___: [KeyValuePairInput!]
   Phone: String
   SupervisorID: Int
   Title: String
@@ -15500,12 +15556,14 @@ input UpdateEmployeeInput {
 input UpdateEmployeeRoleInput {
   EmployeeID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RoleID: Int!
 }
 
 input UpdateEmployeeSkillInput {
   EmployeeID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   SkillID: Int!
 }
 
@@ -15516,6 +15574,7 @@ input UpdateEntityAIActionInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OutputEntityID: Int
   OutputField: String
   OutputType: String!
@@ -15529,6 +15588,7 @@ input UpdateEntityActionFilterInput {
   ActionFilterID: Int!
   EntityActionID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
   Status: String!
 }
@@ -15537,6 +15597,7 @@ input UpdateEntityActionInput {
   ActionID: Int!
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Status: String!
 }
 
@@ -15544,6 +15605,7 @@ input UpdateEntityActionInvocationInput {
   EntityActionID: Int!
   ID: Int!
   InvocationTypeID: Int!
+  OldValues___: [KeyValuePairInput!]
   Status: String!
 }
 
@@ -15551,6 +15613,7 @@ input UpdateEntityActionInvocationTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEntityBehaviorInput {
@@ -15561,6 +15624,7 @@ input UpdateEntityBehaviorInput {
   Description: String!
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RegenerateCode: Boolean!
 }
 
@@ -15568,6 +15632,7 @@ input UpdateEntityBehaviorTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEntityDocumentInput {
@@ -15576,6 +15641,7 @@ input UpdateEntityDocumentInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   PotentialMatchThreshold: Float!
   Status: String!
   Template: String
@@ -15587,6 +15653,7 @@ input UpdateEntityDocumentRunInput {
   EndedAt: Timestamp
   EntityDocumentID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   StartedAt: Timestamp
   Status: String!
 }
@@ -15596,6 +15663,7 @@ input UpdateEntityDocumentSettingInput {
   EntityDocumentID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Value: String!
 }
 
@@ -15603,6 +15671,7 @@ input UpdateEntityDocumentTypeInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateEntityFieldInput {
@@ -15624,6 +15693,7 @@ input UpdateEntityFieldInput {
   IsNameField: Boolean!
   IsPrimaryKey: Boolean!
   IsUnique: Boolean!
+  OldValues___: [KeyValuePairInput!]
   RelatedEntityFieldName: String
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
@@ -15659,6 +15729,7 @@ input UpdateEntityInput {
   IncludeInAPI: Boolean!
   Name: String!
   NameSuffix: String
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   TrackRecordChanges: Boolean!
   UserFormGenerated: Boolean!
@@ -15682,6 +15753,7 @@ input UpdateEntityPermissionInput {
   DeleteRLSFilterID: Int
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ReadRLSFilterID: Int
   RoleName: String
   UpdateRLSFilterID: Int
@@ -15693,6 +15765,7 @@ input UpdateEntityRecordDocumentInput {
   EntityID: Int!
   EntityRecordUpdatedAt: Timestamp!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   VectorID: String
   VectorIndexID: Int!
@@ -15710,6 +15783,7 @@ input UpdateEntityRelationshipInput {
   JoinEntityInverseJoinField: String
   JoinEntityJoinField: String
   JoinView: String
+  OldValues___: [KeyValuePairInput!]
   RelatedEntityID: Int!
   RelatedEntityJoinField: String!
   Sequence: Int!
@@ -15721,6 +15795,7 @@ input UpdateEntitySettingInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Value: String!
 }
 
@@ -15733,6 +15808,7 @@ input UpdateErrorLogInput {
   Details: String
   ID: Int!
   Message: String
+  OldValues___: [KeyValuePairInput!]
   Status: String
 }
 
@@ -15740,6 +15816,7 @@ input UpdateFileCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
 }
 
@@ -15747,6 +15824,7 @@ input UpdateFileEntityRecordLinkInput {
   EntityID: Int!
   FileID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
 }
 
@@ -15756,6 +15834,7 @@ input UpdateFileInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ProviderID: Int!
   ProviderKey: String
   Status: String!
@@ -15767,6 +15846,7 @@ input UpdateFileStorageProviderInput {
   ID: Int!
   IsActive: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Priority: Int!
   ServerDriverKey: String!
 }
@@ -15776,6 +15856,7 @@ input UpdateIndustryInput {
   ID: Int!
   Keywords: String
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateIntegrationInput {
@@ -15787,12 +15868,14 @@ input UpdateIntegrationInput {
   ImportPath: String
   Name: String!
   NavigationBaseURL: String
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateIntegrationURLFormatInput {
   EntityID: Int!
   ID: Int!
   IntegrationName: String
+  OldValues___: [KeyValuePairInput!]
   URLFormat: String!
 }
 
@@ -15805,6 +15888,7 @@ input UpdateInvoiceInput {
   ID: Int!
   InvoiceDate: Timestamp!
   InvoiceNumber: String!
+  OldValues___: [KeyValuePairInput!]
   PaymentTermsID: Int
   PostingDate: Timestamp
   StatusID: Int!
@@ -15817,6 +15901,7 @@ input UpdateInvoiceStatusTypeInput {
   Description: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateItemInput {
@@ -15880,6 +15965,7 @@ input UpdateItemInput {
   Mfg__Item_Description: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   PriceLevel: String
   Price_Group: String
   Price_Method: String
@@ -15985,6 +16071,7 @@ input UpdateItem__client_financeInput {
   Mfg__Item_Description: String
   Modified_Date: Timestamp
   Note_Index: Float
+  OldValues___: [KeyValuePairInput!]
   PriceLevel: String
   Price_Group: String
   Price_Method: String
@@ -16032,6 +16119,7 @@ input UpdateItem__client_financeInput {
 input UpdateListDetailInput {
   ID: Int!
   ListID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   Sequence: Int!
 }
@@ -16043,6 +16131,7 @@ input UpdateListInput {
   ExternalSystemRecordID: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
 }
 
@@ -16050,6 +16139,7 @@ input UpdateOrganizationLinkInput {
   CategoryName: String
   MainGreatPlainsCustomerID: String
   MembershipGreatPlainsCustomerID: String
+  OldValues___: [KeyValuePairInput!]
   OrganizationLinkID: Int!
   OrganizationName: String
 }
@@ -16063,6 +16153,7 @@ input UpdatePaymentTermsTypeInput {
   ExternalSystemRecordID: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdatePersonLinkInput {
@@ -16071,6 +16162,7 @@ input UpdatePersonLinkInput {
   LastName: String
   MainGreatPlainsCustomerID: String
   MembershipGreatPlainsCustomerID: String
+  OldValues___: [KeyValuePairInput!]
   PersonLinkID: Int!
 }
 
@@ -16131,6 +16223,7 @@ input UpdateProductInput {
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   OrganizationIdName: String
   OverriddenCreatedOn: Timestamp
   ParentProductIdName: String
@@ -16235,6 +16328,7 @@ input UpdateProductPriceLevelInput {
   ModifiedOn: Timestamp
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   Percentage: Float
   PriceLevelIdName: String
@@ -16258,6 +16352,7 @@ input UpdateQueryCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -16269,6 +16364,7 @@ input UpdateQueryFieldInput {
   IsComputed: Boolean!
   IsSummary: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   QueryID: Int!
   SQLBaseType: String!
   SQLFullType: String!
@@ -16284,6 +16380,7 @@ input UpdateQueryInput {
   Feedback: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OriginalSQL: String
   QualityRank: Int
   SQL: String
@@ -16292,6 +16389,7 @@ input UpdateQueryInput {
 
 input UpdateQueryPermissionInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   QueryID: Int!
   RoleName: String!
 }
@@ -16302,6 +16400,7 @@ input UpdateQueueInput {
   IsActive: Boolean!
   LastHeartbeat: Timestamp!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ProcessCwd: String
   ProcessHostName: String
   ProcessIPAddress: String
@@ -16322,6 +16421,7 @@ input UpdateQueueTaskInput {
   EndedAt: Timestamp
   ErrorMessage: String
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Options: String
   Output: String
   QueueID: Int!
@@ -16332,6 +16432,7 @@ input UpdateQueueTaskInput {
 input UpdateRecordMergeDeletionLogInput {
   DeletedRecordID: String!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ProcessingLog: String
   RecordMergeLogID: Int!
   Status: String!
@@ -16344,6 +16445,7 @@ input UpdateRecordMergeLogInput {
   EntityID: Int!
   ID: Int!
   InitiatedByUserID: Int!
+  OldValues___: [KeyValuePairInput!]
   ProcessingEndedAt: Timestamp
   ProcessingLog: String
   ProcessingStartedAt: Timestamp!
@@ -16355,6 +16457,7 @@ input UpdateReportCategoryInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -16368,6 +16471,7 @@ input UpdateReportInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   OutputDeliveryTypeID: Int
   OutputEventID: Int
   OutputFormatTypeID: Int
@@ -16381,6 +16485,7 @@ input UpdateReportInput {
 
 input UpdateReportSnapshotInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   ReportID: Int!
   ResultSet: String!
   UserID: Int
@@ -16391,6 +16496,7 @@ input UpdateRoleInput {
   DirectoryID: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   SQLName: String
 }
 
@@ -16676,6 +16782,7 @@ input UpdateSalesLineItemInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -17245,6 +17352,7 @@ input UpdateSalesLineItem__client_membershipInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -17559,6 +17667,7 @@ input UpdateSalesOrderDetailInput {
   ModifiedOn: Timestamp
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   OwnerIdType: Int
   PricePerUnit: Float
@@ -17695,6 +17804,7 @@ input UpdateSalesOrderInput {
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   OnHoldTime: Int
   OpportunityIdName: String
   OrderNumber: String
@@ -17957,6 +18067,7 @@ input UpdateSalesTransactionInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -18327,6 +18438,7 @@ input UpdateSalesTransaction__client_membershipInput {
   Number_ADTP_Documents___Year: Int
   Number_Of_NSF_Checks_Life: Int
   Number_Of_NSF_Checks_YTD: Int
+  OldValues___: [KeyValuePairInput!]
   On_Order_Amount: Float
   Order_Date: Timestamp
   Order_Fulfillment_Shortage_Default: String
@@ -18522,6 +18634,7 @@ input UpdateSchemaInfoInput {
   EntityIDMax: Int!
   EntityIDMin: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   SchemaName: String!
 }
 
@@ -18531,6 +18644,7 @@ input UpdateStringMapInput {
   DisplayOrder: Int
   LangId: Int
   ObjectTypeCode: Int
+  OldValues___: [KeyValuePairInput!]
   StringMapId: String!
   Value: String
   VersionNumber: Int!
@@ -18555,6 +18669,7 @@ input UpdateUoMInput {
   ModifiedOnBehalfByName: String
   ModifiedOnBehalfByYomiName: String
   Name: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   Quantity: Float
   UoMId: String!
@@ -18564,6 +18679,7 @@ input UpdateUoMInput {
 input UpdateUserApplicationEntityInput {
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
   UserApplicationID: Int!
 }
@@ -18572,6 +18688,7 @@ input UpdateUserApplicationInput {
   ApplicationID: Int!
   ID: Int!
   IsActive: Boolean!
+  OldValues___: [KeyValuePairInput!]
   Sequence: Int!
   UserID: Int!
 }
@@ -18579,6 +18696,7 @@ input UpdateUserApplicationInput {
 input UpdateUserFavoriteInput {
   EntityID: Int!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   UserID: Int!
 }
@@ -18594,6 +18712,7 @@ input UpdateUserInput {
   LinkedEntityRecordID: Int
   LinkedRecordType: String!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   Title: String
   Type: String!
 }
@@ -18601,6 +18720,7 @@ input UpdateUserInput {
 input UpdateUserNotificationInput {
   ID: Int!
   Message: String
+  OldValues___: [KeyValuePairInput!]
   ReadAt: Timestamp
   ResourceConfiguration: String
   ResourceRecordID: Int
@@ -18615,6 +18735,7 @@ input UpdateUserRecordLogInput {
   EntityID: Int!
   ID: Int!
   LatestAt: Timestamp!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   TotalCount: Int!
   UserID: Int!
@@ -18625,6 +18746,7 @@ input UpdateUserViewCategoryInput {
   EntityID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ParentID: Int
   UserID: Int!
 }
@@ -18641,6 +18763,7 @@ input UpdateUserViewInput {
   IsDefault: Boolean!
   IsShared: Boolean!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   SmartFilterEnabled: Boolean!
   SmartFilterExplanation: String
   SmartFilterPrompt: String
@@ -18652,12 +18775,14 @@ input UpdateUserViewInput {
 
 input UpdateUserViewRunDetailInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RecordID: String!
   UserViewRunID: Int!
 }
 
 input UpdateUserViewRunInput {
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   RunAt: Timestamp!
   RunByUserID: Int!
   UserViewID: Int!
@@ -18669,6 +18794,7 @@ input UpdateVectorDatabaseInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateVectorIndexInput {
@@ -18676,6 +18802,7 @@ input UpdateVectorIndexInput {
   EmbeddingModelID: Int!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   VectorDatabaseID: Int!
 }
 
@@ -18686,6 +18813,7 @@ input UpdateVersionInstallationInput {
   InstalledAt: Timestamp!
   MajorVersion: Int!
   MinorVersion: Int!
+  OldValues___: [KeyValuePairInput!]
   PatchVersion: Int!
   Status: String!
   Type: String
@@ -18697,6 +18825,7 @@ input UpdateWorkflowEngineInput {
   DriverPath: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateWorkflowInput {
@@ -18708,6 +18837,7 @@ input UpdateWorkflowInput {
   ExternalSystemRecordID: String!
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   SubclassName: String
   WorkflowEngineName: String!
 }
@@ -18716,6 +18846,7 @@ input UpdateWorkflowRunInput {
   EndedAt: Timestamp
   ExternalSystemRecordID: String!
   ID: Int!
+  OldValues___: [KeyValuePairInput!]
   Results: String
   StartedAt: Timestamp!
   Status: String!
@@ -18726,6 +18857,7 @@ input UpdateWorkspaceInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   UserID: Int!
 }
 
@@ -18734,6 +18866,7 @@ input UpdateWorkspaceItemInput {
   Description: String
   ID: Int!
   Name: String!
+  OldValues___: [KeyValuePairInput!]
   ResourceRecordID: String
   ResourceTypeID: Int!
   Sequence: Int!
@@ -18776,6 +18909,7 @@ input Updateclient_membershipInput {
   ModifiedByName: String
   ModifiedOn: Timestamp
   ModifiedOnBehalfByName: String
+  OldValues___: [KeyValuePairInput!]
   OverriddenCreatedOn: Timestamp
   OwnerIdDsc: Int
   OwnerIdName: String

@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
@@ -348,4 +348,107 @@ export class ResolverBase {
   public get MJCoreSchema(): string {
     return Metadata.Provider.ConfigData.MJCoreSchemaName;
   }
+
+
+
+  protected async CreateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+    if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+        const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
+        entityObject.NewRecord();
+        entityObject.SetMany(input);
+        if (await entityObject.Save()) {
+            // save worked, fire the AfterCreate event and then return all the data
+            await this.AfterCreate(dataSource, input); // fire event
+            return entityObject.GetAll();
+        }
+        else 
+            // save failed, return null
+            return null;
+    }
+    else    
+        return null;
+  }
+
+  // Before/After CREATE Event Hooks for Sub-Classes to Override
+  protected async BeforeCreate(dataSource: DataSource, input: any): Promise<boolean> {
+      return true;
+  }
+  protected async AfterCreate(dataSource: DataSource, input: any) {
+  }  
+
+
+  protected async UpdateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+      if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
+          const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
+
+          // first, load from the input.OldValues we are using this as the assumed OLD state of the record
+          if (input.OldValues___) {
+              const oldValues = {};
+              // for each item in the oldValues array, add it to the oldValues object
+              input.OldValues___?.forEach((item) => oldValues[item.Key] = item.Value);
+              entityObject.LoadFromData(oldValues); // load the old values, this will be the initial state of the object
+  
+              // Now get the new valus from the input property, less the OldValues property
+              const values = {};
+              Object.keys(input).forEach((key) => { if (key !== 'OldValues___') values[key] = input[key]; });
+              entityObject.SetMany(values); // then, set the new values from the input, less the OldValues property
+          }
+          else {
+              // if old values not provided, we need to load from the DB which has overhead
+              const md = new Metadata();
+              const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+              if (!entityInfo) 
+                  throw new Error(`Entity ${entityName} not found in metadata`);
+
+              // have the entity info, build a composite key based on all the primary keys we have 
+              const key = new CompositeKey(entityInfo.PrimaryKeys.map((pk) => {
+                return { 
+                  FieldName: pk.Name, 
+                  Value: input[pk.CodeName]
+                }
+              }));
+              await entityObject.InnerLoad(key);
+          }
+
+          if (await entityObject.Save()) {
+              // save worked, fire afterevent and return all the data
+              await this.AfterUpdate(dataSource, input); // fire event
+              return entityObject.GetAll();
+          }
+          else
+              return null; // save failed, return null
+      }
+      else
+          return null;
+  }
+
+  protected async DeleteRecord(entityName: string, key: CompositeKey, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+    if (await this.BeforeDelete(dataSource, key)) { // fire event and proceed if it wasn't cancelled
+        const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
+        await entityObject.InnerLoad(key);
+        const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
+        if (await entityObject.Delete()) {
+            await this.AfterDelete(dataSource, key); // fire event
+            return returnValue;
+        }
+        else 
+            return null; // delete failed, this will cause an exception
+    }
+    else
+        return null; // BeforeDelete canceled the operation, this will cause an exception
+  }
+
+  // Before/After DELETE Event Hooks for Sub-Classes to Override
+  protected async BeforeDelete(dataSource: DataSource, key: CompositeKey,): Promise<boolean> {
+      return true;
+  }
+  protected async AfterDelete(dataSource: DataSource, key: CompositeKey,) {
+  }
+
+  // Before/After UPDATE Event Hooks for Sub-Classes to Override
+  protected async BeforeUpdate(dataSource: DataSource, input: any): Promise<boolean> {
+      return true;
+  }
+  protected async AfterUpdate(dataSource: DataSource, input: any) {
+  }  
 }
