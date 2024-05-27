@@ -3,6 +3,10 @@ import { resolve } from 'node:path';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
 LoadGeneratedEntities();
 
+// UNCOMMENT THIS AFTER CodeGen generates this
+// import { LoadGeneratedActions } from 'mj_generatedactions';
+// LoadGeneratedActions();
+
 import './auth/exampleNewUserSubClass'; // make sure this new class gets registered
 
 const localPath = (p: string) => resolve(__dirname, p);

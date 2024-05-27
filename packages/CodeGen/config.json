@@ -177,6 +177,14 @@
             "directory": "../MJServer/src/generated"
         },
         {
+            "type": "CoreActionSubclasses",
+            "directory": "../MJCoreActions/src/generated"
+        },
+        {
+            "type": "ActionSubclasses",
+            "directory": "../GeneratedActions/src/generated"
+        },
+        {
             "type": "CoreEntitySubclasses",
             "directory": "../MJCoreEntities/src/generated"
         },
@@ -200,6 +208,15 @@
             "when": "after"
         },
         {
+            "workingDirectory": "../CoreActions",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
             "workingDirectory": "../Angular/core-entity-forms",
             "command": "npm",
             "args": [
@@ -210,6 +227,15 @@
         },
         {
             "workingDirectory": "../GeneratedEntities",
+            "command": "npm",
+            "args": [
+                "run",
+                "build"
+            ],
+            "when": "after"
+        },
+        {
+            "workingDirectory": "../GeneratedActions",
             "command": "npm",
             "args": [
                 "run",

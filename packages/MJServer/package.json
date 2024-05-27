@@ -22,6 +22,7 @@
     "@apollo/server": "^4.9.1",
     "@graphql-tools/utils": "^10.0.1",
     "@memberjunction/actions": "~1.4.0",
+    "@memberjunction/core-actions": "~1.4.0",
     "@memberjunction/ai": "~1.4.0",
     "@memberjunction/ai-openai": "~1.4.0",
     "@memberjunction/aiengine": "~1.4.0",
