@@ -13,6 +13,7 @@ import { AngularClientGeneratorBase } from './angular_client_codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
 
 /**
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
@@ -193,8 +194,6 @@ export class RunCodeGenBase {
             else
                 logStatus('Angular output directory NOT found in config file, skipping...');
         
-                //AngularCoreEntities
-    
             /****************************************************************************************
             // STEP 6 - Database Schema Output in JSON - for documentation and can be used by AI/etc.
             ****************************************************************************************/
@@ -208,10 +207,33 @@ export class RunCodeGenBase {
             }
             else
                 logStatus('DB Schema output directory NOT found in config file, skipping...');
+
+                
+            /****************************************************************************************
+            // STEP 7 - Actions Code Gen
+            ****************************************************************************************/
+            const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
+            if (coreActionsOutputDir) {
+                logStatus('Generating CORE Actions Code...')
+                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
+                if (! actionsGenerator.generateActions())  
+                    logError('Error generating CORE Actions code');
+            }
     
+            const actionsOutputDir = outputDir('ActionSubclasses', false);
+            if (actionsOutputDir) {
+                logStatus('Generating Actions Code...')
+                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
+                if (! actionsGenerator.generateActions())
+                    logError('Error generating Actions code');
+            }
+            else
+                logStatus('Actions output directory NOT found in config file, skipping...');
+
+
     
             /****************************************************************************************
-            // STEP 7 --- Finalization Step - execute any AFTER commands specified in the config file
+            // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
             ****************************************************************************************/
             const afterCommands = commands('AFTER')
             if (afterCommands && afterCommands.length > 0) {
@@ -223,7 +245,7 @@ export class RunCodeGenBase {
 
 
             /****************************************************************************************
-            // STEP 8 --- Execute any AFTER SQL Scripts specified in the config file
+            // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
             ****************************************************************************************/
             if (!skipDB) {
                 if (! await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))

@@ -9,7 +9,8 @@ import { RegisterClass } from '@memberjunction/global';
  */
 @RegisterClass(ActionSubClassGeneratorBase)
 export class ActionSubClassGeneratorBase {
-    public generateActions() {
+    public async generateActions(): Promise<boolean> {
         // stub for now
+        return true;
     }
 }
