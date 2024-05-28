@@ -1,9 +1,9 @@
 import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata } from "@memberjunction/core";
-import { ActionEntity } from "@memberjunction/core-entities";
+import { ActionEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { CleanJSON, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
-import { GeneratedCode, GlobalActionLibraries } from "./ActionEngine";
+import { ActionEngine, GeneratedCode, GlobalActionLibraries } from "./ActionEngine";
 import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 
 /**
@@ -34,12 +34,34 @@ export class ActionEntityServer extends ActionEntity {
     }
 
     /**
+     * Returns true if this action is a core MemberJunction framework action, false otherwise.
+     */
+    public get IsCoreAction(): boolean {
+        return this.Category.trim().toLowerCase() === ActionEngine.Instance.CoreCategoryName.trim().toLowerCase();
+    }
+
+    private _resultCodes: ActionResultCodeEntity[] = null;
+    /**
+     * Provides a list of possible result codes for this action.
+     */
+    public get ResultCodes(): ActionResultCodeEntity[] {
+        if (this._resultCodes === null) {
+            // load the result codes
+            this._resultCodes = ActionEngine.Instance.ActionResultCodes.filter(c => c.ActionID === this.ID);
+        }
+        return this._resultCodes;
+    }
+
+    /**
      * Override of the base Save method to handle the pre-processing to auto generate code whenever an action's UserPrompt is modified.
      * This happens when a new record is created and also whenever the UserPrompt field is changed. 
      * @param options 
      * @returns 
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // make sure the ActionEngine is configured
+        await ActionEngine.Instance.Config(false, this.ContextCurrentUser);
+
         if (this.GetFieldByName('UserPrompt').Dirty|| !this.IsSaved || this.ForceCodeGeneration) {
             // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
             const result = await this.GenerateCode();
@@ -134,16 +156,18 @@ export class ActionEntityServer extends ActionEntity {
     public GenerateSysPrompt(): string {
         const prompt: string = `You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
 You will be provided a system administrator's request for how to handle a specific type of action that they want created. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
-Your job is to write the TypeScript code that will be taken and inserted into a class as shown below: 
+Your job is to write the TypeScript code that will be taken and inserted into a class as shown below using the classes
+for inputs/outputs and the ActionResultSimple class that is provided. The code you write will be used by the MemberJunction engine to execute the action when 
+it is called by the user.
 
 <CODE_EXAMPLE>
 export class ${this.ProgrammaticName}Action extends BaseAction {
-    public async Run(params: RunActionParams): Promise<ActionResult> {
+    public async Run(params: RunActionParams): Promise<ActionResultSimple> {
         // IMPORTANT: your code will go here, do not generate the method signature, just the code inside the method
         /* FOR THE RETURN VALUE you should return a JavaScript object that has these properties:
             {
                 Success: boolean // or false if the action failed
-                ResultCode: string // or some result if the action succeeded
+                ResultCode: ${this.ResultCodes && this.ResultCodes.length > 0 ? this.ResultCodes.map(rc => `'${rc.ResultCode}'`).join(" | ") : 'string'} // The result of the action
                 Message: string // a message to show the user
             }
         */
@@ -160,6 +184,51 @@ ${
     GlobalActionLibraries.map(l => JSON.stringify(l)).join('\n')
 }
 </AVAILABLE_LIBRARIES>
+
+<REFERENCE_TYPES>
+    /**
+     * Class that has the result of the individual action execution and used by the engine or other caller
+     */
+    export class ActionResultSimple {
+        /**
+            * Indicates if the action was successful or not.
+            */
+        public Success: boolean;
+
+        /**
+            * A string that indicates the strucutred output/results of the action
+            */
+        public ResultCode: string;
+
+        /**
+            * Optional, additional information about the result of the action
+            */
+        public Message?: string;
+
+        /**
+            * Some actions return output parameters. If the action that was run has outputs, they will be provided here.
+            */
+        public Outputs?: ActionParam[];
+    }
+    /**
+     * Generic class for holding parameters for an action for both inputs and outputs
+     */
+    export class ActionParam {
+        public Name: string;
+        public Value: string;
+    }
+    /**
+     * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
+     */
+    export class RunActionParams {
+        public Action: ActionEntity;
+        public ContextUser: UserInfo;
+        public Filters: ActionFilterEntity[];
+        public Inputs: ActionParam[];
+        public Outputs: ActionParam[];
+    }
+</REFERENCE_TYPES>
+
 
 The next message, which will be a user message in the conversation, will contain the sys admin's requested behavior for this entity. 
 

@@ -1,6 +1,8 @@
 import { RunView, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal } from "@memberjunction/global";
+import { ActionEntityServer } from "./ActionEntity.server";
+import { BaseAction } from "./BaseAction";
 
 
 
@@ -100,7 +102,33 @@ export const GlobalActionLibraries: ActionAvailableLibrary[] = [
 ];
 
 /**
- * Class that has the result of an action. This is returned by the Run method of an action.
+ * Class that has the result of the individual action execution and used by the engine or other caller
+ */
+
+export class ActionResultSimple {
+   /**
+    * Indicates if the action was successful or not.
+    */
+   public Success: boolean;
+
+   /**
+    * A string that indicates the strucutred output/results of the action
+    */
+   public ResultCode: string;
+
+   /**
+    * Optional, additional information about the result of the action
+    */
+   public Message?: string;
+
+   /**
+    * Some actions return output parameters. If the action that was run has outputs, they will be provided here.
+    */
+   public Outputs?: ActionParam[];
+}
+
+/**
+ * Class that has the result of a complete action execution, returned by the Run method of the ActionEngine.
  */
 export class ActionResult {
    /**
@@ -147,8 +175,10 @@ export class ActionParam {
  */
 export class RunActionParams {
    public Action: ActionEntity;
+   public ContextUser: UserInfo;
    public Filters: ActionFilterEntity[];
    public Inputs: ActionParam[];
+   public Outputs: ActionParam[];
 }
 
 
@@ -157,23 +187,49 @@ export class RunActionParams {
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
 export class ActionEngine {
+   private __coreCategoryName = '__mj';
+   private static _instance: ActionEngine;
+
     // implement a singleton pattern for caching metadata. All uses of the ActionEngine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
     // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the ActionEngine. This is important because the metadata is not expected to change.
     private static _globalKey: string = 'MJ_ActionMetadata';
     constructor() {
-        const g = MJGlobal.Instance.GetGlobalObjectStore();
-        const instance = g[ActionEngine._globalKey];
+      if (ActionEngine._instance) 
+         return ActionEngine._instance;
+      else {
+            const g = MJGlobal.Instance.GetGlobalObjectStore();
+            if (g && g[ActionEngine._globalKey]) {
+               ActionEngine._instance = g[ActionEngine._globalKey];
+               return ActionEngine._instance;
+            }
 
-        if (!instance) {
-            // first time this is happening, so create the instance
-            g[ActionEngine._globalKey] = this;
-        }
-        return g[ActionEngine._globalKey];
+            // finally, if we get here, we are the first instance of this class, so create it
+            if (!ActionEngine._instance) {
+               ActionEngine._instance = this;
+            
+               // try to put this in global object store if there is a window/e.g. we're in a browser, a global object, we're in node, etc...
+               if (g)
+                  g[ActionEngine._globalKey] = ActionEngine._instance;
+               
+               return this;
+            }
+      }
     }
+
+    /**
+     * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
+     */
+   public static get Instance(): ActionEngine {
+      if (!ActionEngine._instance)
+         ActionEngine._instance = new ActionEngine();
+
+      return ActionEngine._instance;
+   }
+
  
     // internal instance properties used for the singleton pattern
     private _loaded: boolean = false;
-    private _Actions: ActionEntity[];
+    private _Actions: ActionEntityServer[];
     private _Filters: ActionFilterEntity[];
     private _ActionResultCodes: ActionResultCodeEntity[];
     private _contextUser: UserInfo;
@@ -220,6 +276,28 @@ export class ActionEngine {
             // we have already loaded and have not been told to force the refresh
         }
     }
+
+    public get Actions(): ActionEntityServer[] {
+      return this._Actions;
+    }
+    public get ActionFilters(): ActionFilterEntity[] {
+      return this._Filters;
+    }
+    public get ActionResultCodes(): ActionResultCodeEntity[] {
+      return this._ActionResultCodes;
+    }
+
+    public get CoreActions(): ActionEntity[] {
+      return this._Actions.filter((a) => a.IsCoreAction);
+    }
+    public get NonCoreActions(): ActionEntity[] {
+      return this._Actions.filter((a) => !a.IsCoreAction);
+    }
+
+    public get CoreCategoryName(): string {
+      return this.__coreCategoryName;
+    }
+    
 
     public async RunAction(params: RunActionParams): Promise<ActionResult> {
       if (await this.ValidateInputs(params)) {
@@ -285,6 +363,16 @@ export class ActionEngine {
 
    protected async InternalRunAction(params: RunActionParams): Promise<ActionResult> {
       // this is where the actual action code will be implemented
+      // first, let's get the right BaseAction derived sub-class for this particular action
+      // using ClassFactory
+      const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.Name);
+      if (!action) 
+         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      
+      // we now have the action class for this particular action, so run it
+      const result = await action.Run(params);
+      
+      // TO-DO - Log the run of the action and return it
       return {
          Success: true,
          Message: "This action has not been implemented yet.",
@@ -299,3 +387,4 @@ export class ActionEngine {
       return null;
    }
 }
+

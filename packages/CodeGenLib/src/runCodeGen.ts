@@ -1,7 +1,7 @@
 import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
 import { SQLCodeGenBase } from './sql_codegen';
 import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
-import { setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
+import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource from "./db"
 import { ManageMetadataBase } from './manageMetadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
@@ -14,6 +14,7 @@ import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovi
 import { CreateNewUserBase } from './createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
+import { ActionEngine } from '@memberjunction/actions';
 
 /**
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
@@ -51,7 +52,11 @@ export class RunCodeGenBase {
             logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString())
             
             await this.setupDataSource();
-    
+
+            await UserCache.Instance.Refresh(AppDataSource);
+            const userMatch: MJ.UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner');
+            const currentUser = userMatch ? userMatch : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
+
             // get the entity metadata
             const md = new MJ.Metadata();
             if (md.Entities.length === 0) {
@@ -213,10 +218,11 @@ export class RunCodeGenBase {
             // STEP 7 - Actions Code Gen
             ****************************************************************************************/
             const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
+            await ActionEngine.Instance.Config(false, currentUser)
             if (coreActionsOutputDir) {
                 logStatus('Generating CORE Actions Code...')
                 const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
-                if (! actionsGenerator.generateActions())  
+                if (! await actionsGenerator.generateActions(ActionEngine.Instance.CoreActions, coreActionsOutputDir))  
                     logError('Error generating CORE Actions code');
             }
     
@@ -224,7 +230,7 @@ export class RunCodeGenBase {
             if (actionsOutputDir) {
                 logStatus('Generating Actions Code...')
                 const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
-                if (! actionsGenerator.generateActions())
+                if (! await actionsGenerator.generateActions(ActionEngine.Instance.NonCoreActions, actionsOutputDir))
                     logError('Error generating Actions code');
             }
             else

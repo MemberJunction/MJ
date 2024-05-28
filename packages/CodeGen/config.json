@@ -178,7 +178,7 @@
         },
         {
             "type": "CoreActionSubclasses",
-            "directory": "../MJCoreActions/src/generated"
+            "directory": "../CoreActions/src/generated"
         },
         {
             "type": "ActionSubclasses",
