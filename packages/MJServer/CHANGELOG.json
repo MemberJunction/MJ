@@ -2,6 +2,125 @@
   "name": "@memberjunction/server",
   "entries": [
     {
+      "date": "Sat, 25 May 2024 15:30:17 GMT",
+      "version": "1.4.0",
+      "tag": "@memberjunction/server_v1.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/server",
+            "commit": "2f37a63012267eebb751ad11dccacc35e459a7c9",
+            "comment": "Updates to SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai-openai to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/aiengine to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai-mistral to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/ai-vectors-pinecone to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/core to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/core-entities to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/data-context to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/data-context-server to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/global to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/storage to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/queue to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/sqlserver-dataprovider to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/server",
+            "comment": "Bump @memberjunction/skip-types to v1.4.0",
+            "commit": "not available"
+          }
+        ],
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/server",
+            "commit": "8e05b77b4555c7f119d7b11e2a37e74371af693d",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/server",
+            "commit": "03a9eac3e477233f183b62205b50128b6271d7d0",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/server",
+            "commit": "b8d94e0c1c2ca912676992a8a43aa9a7a9d6bad0",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 May 2024 18:35:52 GMT",
       "version": "1.3.3",
       "tag": "@memberjunction/server_v1.3.3",

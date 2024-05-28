@@ -1,8 +1,24 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
-This log was last generated on Thu, 23 May 2024 18:35:52 GMT and should not be manually modified.
+This log was last generated on Sat, 25 May 2024 15:30:16 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.4.0
+
+Sat, 25 May 2024 15:30:16 GMT
+
+### Minor changes
+
+- Updates to SQL scripts (craig.adam@bluecypress.io)
+- Bump @memberjunction/ai to v1.4.0
+- Bump @memberjunction/ai-vectordb to v1.4.0
+- Bump @memberjunction/ai-vectors to v1.4.0
+- Bump @memberjunction/ai-vector-sync to v1.4.0
+- Bump @memberjunction/aiengine to v1.4.0
+- Bump @memberjunction/core to v1.4.0
+- Bump @memberjunction/global to v1.4.0
+- Bump @memberjunction/core-entities to v1.4.0
 
 ## 1.3.3
 

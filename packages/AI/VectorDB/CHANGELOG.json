@@ -2,6 +2,33 @@
   "name": "@memberjunction/ai-vectordb",
   "entries": [
     {
+      "date": "Sat, 25 May 2024 15:30:16 GMT",
+      "version": "1.4.0",
+      "tag": "@memberjunction/ai-vectordb_v1.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ai-vectordb",
+            "commit": "2f37a63012267eebb751ad11dccacc35e459a7c9",
+            "comment": "Updates to SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectordb",
+            "comment": "Bump @memberjunction/core to v1.4.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ai-vectordb",
+            "comment": "Bump @memberjunction/global to v1.4.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 May 2024 18:35:52 GMT",
       "version": "1.3.3",
       "tag": "@memberjunction/ai-vectordb_v1.3.3",

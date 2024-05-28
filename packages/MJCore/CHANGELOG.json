@@ -2,6 +2,35 @@
   "name": "@memberjunction/core",
   "entries": [
     {
+      "date": "Sat, 25 May 2024 15:30:17 GMT",
+      "version": "1.4.0",
+      "tag": "@memberjunction/core_v1.4.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/core",
+            "commit": "2f37a63012267eebb751ad11dccacc35e459a7c9",
+            "comment": "Updates to SQL scripts"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core",
+            "comment": "Bump @memberjunction/global to v1.4.0",
+            "commit": "not available"
+          }
+        ],
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core",
+            "commit": "6c99badc62141a60b6668b6960a1a957d85bb707",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Thu, 23 May 2024 18:35:52 GMT",
       "version": "1.3.3",
       "tag": "@memberjunction/core_v1.3.3",
