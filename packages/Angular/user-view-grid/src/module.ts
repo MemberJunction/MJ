@@ -1,5 +1,4 @@
 import { NgModule } from '@angular/core';
-import { UserViewGridComponent } from './ng-user-view-grid.component';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
@@ -14,6 +13,8 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+
+import { UserViewGridComponent } from './lib/ng-user-view-grid.component';
 
 @NgModule({
   declarations: [
@@ -31,7 +32,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
     CompareRecordsModule,
     ContainerDirectivesModule,
     LayoutModule,
-    InputsModule
+    InputsModule,
   ],
   exports: [
     UserViewGridComponent

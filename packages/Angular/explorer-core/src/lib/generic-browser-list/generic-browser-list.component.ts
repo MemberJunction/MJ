@@ -1,12 +1,13 @@
-import { Component, EventEmitter, Input, OnInit, Output, input } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, ViewChild, input } from '@angular/core';
 import { Router } from '@angular/router'
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
-import { BaseEntity, Metadata, KeyValuePair, RunView, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, Metadata, KeyValuePair, RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
 import { Subscription, Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { ResourceTypeEntity } from '@memberjunction/core-entities';
+import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
 
 @Component({
   selector: 'app-generic-browser-list',
@@ -14,6 +15,8 @@ import { ResourceTypeEntity } from '@memberjunction/core-entities';
   styleUrls: ['./generic-browser-list.component.css', '../../shared/first-tab-styles.css']
 })
 export class GenericBrowserListComponent implements OnInit{
+  @ViewChild('createRecordDialog') createRecordDialogRef: CreateRecordComponent | undefined;
+
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
   @Input() public title: string | undefined = '';
@@ -74,7 +77,9 @@ export class GenericBrowserListComponent implements OnInit{
   public createFolderDialogOpened: boolean = false;
   private newFolderText: string = "Sample Folder";
   private resourceTypes: ResourceTypeEntity[] = [];
+  private createNewRecordName: string = "Record";
 
+  public entityObjectName: string = "";
   public createButtonDropdownData = [
     { text: "Folder" },
   ];
@@ -91,6 +96,17 @@ export class GenericBrowserListComponent implements OnInit{
     }
 
     const md: Metadata = new Metadata();
+
+    if(this.categoryEntityID){
+      let entity: EntityInfo | undefined = md.Entities.find(e => e.ID == this.categoryEntityID);
+      if(entity){
+        this.createNewRecordName = `${entity.DisplayName} Record`;
+        this.entityObjectName = entity.Name;
+      }
+
+      this.createButtonDropdownData.unshift({ text: this.createNewRecordName });
+    }
+
     const view = new RunView();
     
     const rvResult = await view.RunView({
@@ -441,6 +457,11 @@ export class GenericBrowserListComponent implements OnInit{
     }
     else if(data.text === this.resourceName){
       this.addResourceButtonClicked();
+    }
+    else if(data.text === this.createNewRecordName){
+      if(this.createRecordDialogRef){
+        this.createRecordDialogRef.toggleCreateDialog(true);
+      }
     }
   }
 

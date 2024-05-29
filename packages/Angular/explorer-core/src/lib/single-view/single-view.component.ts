@@ -1,12 +1,13 @@
 import { Component, ViewChild, Input, Output, EventEmitter, AfterViewInit, OnInit } from '@angular/core';
 import { GridRowClickedEvent } from '@memberjunction/ng-user-view-grid';
 import { UserViewGridWithAnalysisComponent } from '@memberjunction/ng-ask-skip';
-import { Metadata, EntityInfo, LogError } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogError, BaseEntity, EntityPermissionType } from '@memberjunction/core';
 import { ActivatedRoute, Router } from '@angular/router'
 import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
 import { UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
 
 @Component({
   selector: 'mj-single-view',
@@ -15,6 +16,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 })
 export class SingleViewComponent implements AfterViewInit, OnInit  {
   @ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
+  @ViewChild('createRecordDialog') createRecordDialogRef: CreateRecordComponent | undefined;
 
   @Input() public viewId: number | null = null;
   @Input() public viewName: string| null = null;
@@ -27,6 +29,9 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   public selectedEntity: EntityInfo | null = null;
   public showSearch: boolean = false;
   public searchText: string = '';
+  public createNewText: string = 'Create New Record';
+  public entityObjectName: string = '';
+  public canCreateRecord: boolean = false;
   private searchDebounce$: Subject<string> = new Subject();
   private _deferLoadCount: number = 0;
 
@@ -37,6 +42,7 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   ngAfterViewInit() { 
     this.initialLoad();
   }
+
   ngOnInit(): void {
     this.setupSearchDebounce();
   }
@@ -73,11 +79,27 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
         this.sharedService.CreateSimpleNotification(`The entity name ${this.entityName} is not valid. Please check the URL and try again.`,"error",5000);
       }
     }
+
+    if(this.selectedEntity) {
+      this.createNewText = `Create New ${this.selectedEntity.DisplayName}`;
+      const entityObj: BaseEntity = await md.GetEntityObject(this.selectedEntity.Name);
+      this.canCreateRecord = entityObj.CheckPermissions(EntityPermissionType.Create, false);
+      this.entityObjectName = this.selectedEntity.Name;
+    }
   }
 
   public async handleRowClick(args: GridRowClickedEvent) {
-      // tell the router to navigate instead of raising an event directly. router will in turn handle raising the event as required
-      this.router.navigate(['resource', 'record', args.CompositeKey.ToURLSegment()], { queryParams: { Entity: args.entityName } })
+    // tell the router to navigate instead of raising an event directly. router will in turn handle raising the event as required
+    this.router.navigate(['resource', 'record', args.CompositeKey.ToURLSegment()], { queryParams: { Entity: args.entityName } })
+  }
+
+  public createNewRecord(): void {
+    if(this.createRecordDialogRef){
+      this.createRecordDialogRef.toggleCreateDialog(true);
+    }
+    else{
+      LogError("Create Record Dialog Ref not found");
+    }
   }
 
   public async LoadView(viewInfo: UserViewEntity) {

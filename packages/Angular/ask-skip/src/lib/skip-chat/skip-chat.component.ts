@@ -110,6 +110,10 @@ export class SkipChatComponent implements OnInit, AfterViewInit, AfterViewChecke
     try {
       MJGlobal.Instance.GetEventListener().subscribe( (event: MJEvent) => {
         if (event.event === MJEventType.ComponentEvent) {
+          if(!event.args){
+            return;
+          }
+          
           const obj: {type?: string, status?: string, conversationID?: number, message?: string} = event.args;
           if (obj.type?.trim().toLowerCase() === 'askskip' && obj.status?.trim().toLowerCase() === 'ok') {
             if(obj.conversationID && this._conversationsInProgress[obj.conversationID]){

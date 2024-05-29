@@ -1,8 +1,9 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { BaseFormComponent } from './base-form-component';
-import { SharedService } from '@memberjunction/ng-shared';
+import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { BaseEntity, CompositeKey, Metadata, RecordDependency } from '@memberjunction/core';
 import { Router } from '@angular/router';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 
 @Component({
@@ -15,12 +16,6 @@ import { Router } from '@angular/router';
     template: `
         <div class="toolbar-container">
             @if (!form.EditMode) {
-                @if(form.UserCanCreate){
-                    <button kendoButton (click)="toggleCreateDialog(true)" title="Create New Record">
-                        <span class="fa-solid fa-plus"></span>
-                        <span class="button-text">Create</span>
-                    </button> 
-                }
                 @if(form.UserCanDelete){
                     <button kendoButton (click)="toggleDeleteDialog(true)" title="Delete this Record">
                         <span class="fa-regular fa-trash-can"></span>
@@ -105,30 +100,6 @@ import { Router } from '@angular/router';
                 </button>
               </kendo-dialog-actions>
             </kendo-dialog>
-            <kendo-dialog
-            [minWidth]="750"
-            [minHeight]="500"
-            [maxHeight]= 800
-            class="dialog-wrapper" 
-            [title]="createNewDialogTitle" 
-            *ngIf="showCreateDialog" 
-            (close)="toggleCreateDialog(false)"
-            >
-                @if(showLoader){
-                    <kendo-loader *ngIf="showLoader" type="converging-spinner"></kendo-loader>
-                }
-                @else{
-                    <mj-form-section [Entity]="form.record.EntityInfo.Name" Section="details" [record]="newRecord" [EditMode]="true"></mj-form-section>
-                }
-                <kendo-dialog-actions class="popup-actions-btn">
-                    <button class="cancel-btn" (click)="saveNewRecord()" kendoButton themeColor="info">
-                        Create
-                    </button>
-                    <button class="yes-btn" (click)="toggleCreateDialog(false)" kendoButton fillMode="outline" themeColor="info">
-                        Cancel
-                    </button>
-                </kendo-dialog-actions>
-            </kendo-dialog>
         </div>
     `
 })
@@ -151,10 +122,6 @@ export class FormToolbarComponent implements OnInit {
     }
 
     public async ngOnInit(): Promise<void> {
-        if(this.form && this.form.record){
-            this.createNewDialogTitle = `Create New ${this.form.record.EntityInfo.Name} Record`;
-            await this.createNewRecord();
-        }
     }
 
     public saveExistingRecord(event: MouseEvent): void {
@@ -170,10 +137,6 @@ export class FormToolbarComponent implements OnInit {
         this.SkipChatVisible = !this.SkipChatVisible;
         SharedService.Instance.InvokeManualResize();
     }
-
-    public toggleCreateDialog(show: boolean): void {
-        this.showCreateDialog = show;
-      }
     
     public toggleDeleteDialog(show: boolean): void {
         this.showDeleteDialog = show;
@@ -187,35 +150,20 @@ export class FormToolbarComponent implements OnInit {
             return;
         }
 
-        console.log(this.form.record.CompositeKey);
         const deleteResult: boolean = await this.form.record.Delete();
         if (deleteResult) {
             SharedService.Instance.CreateSimpleNotification('Record deleted succesfully', 'success', 2000);
-            this.router.navigate(['/']);
+            let event: any = {
+                event: MJEventType.ComponentEvent, 
+                eventCode: EventCodes.CloseCurrentTab,
+                component: null,
+                args: null
+            };
+
+            MJGlobal.Instance.RaiseEvent(event);
         }
         else {
             SharedService.Instance.CreateSimpleNotification('Error deleting record', 'error', 2000);
         }
-    }
-
-    public async createNewRecord(): Promise<void> {
-        const md: Metadata = new Metadata();
-        this.newRecord = await md.GetEntityObject(this.form.record.EntityInfo.Name);
-        this.newRecord.NewRecord();
-    }
-    
-    public async saveNewRecord(): Promise<void> {
-        console.log('Create new record button pressed');
-        this.showLoader = true;
-        let saveResult: boolean = await this.newRecord.Save();
-        if(saveResult){
-            this.toggleCreateDialog(false);
-            SharedService.Instance.CreateSimpleNotification(`Successfully created new ${this.form.record.EntityInfo.Name} record`, 'success', 1000);
-            this.router.navigate(['resource', 'record', this.newRecord.CompositeKey.ToURLSegment()], { queryParams: { Entity: this.newRecord.EntityInfo.Name } });
-        }
-        else{
-            SharedService.Instance.CreateSimpleNotification(`Failed to create new ${this.form.record.EntityInfo.Name} record`, 'error', 1000);
-        }
-        this.showLoader = false;
     }
 }
