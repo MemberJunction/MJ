@@ -1,4 +1,4 @@
-import { CompositeKey, EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
@@ -379,47 +379,123 @@ export class ResolverBase {
 
   protected async UpdateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
       if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-          const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
+        const md = new Metadata();
+        const userInfo = this.GetUserFromPayload(userPayload)
+        const entityObject = await md.GetEntityObject(entityName, userInfo);
+        const entityInfo = entityObject.EntityInfo;
+        const clientNewValues = {};
+        Object.keys(input).forEach((key) => { if (key !== 'OldValues___') clientNewValues[key] = input[key]; }); // grab all the props except for the OldValues property
 
-          // first, load from the input.OldValues we are using this as the assumed OLD state of the record
-          if (input.OldValues___) {
-              const oldValues = {};
-              // for each item in the oldValues array, add it to the oldValues object
-              input.OldValues___?.forEach((item) => oldValues[item.Key] = item.Value);
-              entityObject.LoadFromData(oldValues); // load the old values, this will be the initial state of the object
-  
-              // Now get the new valus from the input property, less the OldValues property
-              const values = {};
-              Object.keys(input).forEach((key) => { if (key !== 'OldValues___') values[key] = input[key]; });
-              entityObject.SetMany(values); // then, set the new values from the input, less the OldValues property
+        if (entityInfo.TrackRecordChanges || !input.OldValues___) {
+          // the entity tracks record changes, so we need to load the old values from the DB to make sure they are not inconsistent
+          // with the old values from the input.OldValues property. If they are different, but on different fields, we allow it
+          // but if they are different on fields that the current UpdateRecord call is trying to update, we throw an error.
+          const cKey = new CompositeKey(entityInfo.PrimaryKeys.map((pk) => {
+            return { 
+              FieldName: pk.Name, 
+              Value: input[pk.CodeName]
+            }
+          }));
+
+          if (await entityObject.InnerLoad(cKey)) {
+            // load worked, now, if we HAVE OldValues, we need to check them against the values in the DB we just loaded. 
+            if (!input.OldValues___) {
+              // no OldValues, so we can just set the new values from input
+              entityObject.SetMany(input);
+            }
+            else {
+              // we DO have OldValues, so we need to do a more in depth analysis
+              this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject);
+            }
           }
           else {
-              // if old values not provided, we need to load from the DB which has overhead
-              const md = new Metadata();
-              const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
-              if (!entityInfo) 
-                  throw new Error(`Entity ${entityName} not found in metadata`);
-
-              // have the entity info, build a composite key based on all the primary keys we have 
-              const key = new CompositeKey(entityInfo.PrimaryKeys.map((pk) => {
-                return { 
-                  FieldName: pk.Name, 
-                  Value: input[pk.CodeName]
-                }
-              }));
-              await entityObject.InnerLoad(key);
+            throw new Error(`Record not found for ${entityName} with key ${JSON.stringify(cKey)}`);
           }
+        }
+        else {
+          // not tracking changes and we DO have OldValues, so we can load from them
+          const oldValues = {};
+          // for each item in the oldValues array, add it to the oldValues object
+          input.OldValues___?.forEach((item) => oldValues[item.Key] = item.Value);
 
-          if (await entityObject.Save()) {
-              // save worked, fire afterevent and return all the data
-              await this.AfterUpdate(dataSource, input); // fire event
-              return entityObject.GetAll();
-          }
-          else
-              return null; // save failed, return null
+          // 1) load the old values, this will be the initial state of the object
+          entityObject.LoadFromData(oldValues); 
+
+          // 2) set the new values from the input, not including the OldValues property
+          entityObject.SetMany(clientNewValues);  
+        }
+        if (await entityObject.Save()) {
+          // save worked, fire afterevent and return all the data
+          await this.AfterUpdate(dataSource, input); // fire event
+          return entityObject.GetAll();
+        }
+        else
+          return null; // save failed, return null
       }
       else
-          return null;
+          return null; // update canceled by the BeforeUpdate event, return null
+  }
+
+  /**
+   * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client 
+   * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
+   * and the ClientOldValues are not 100% the same, so long as there is no overlap in the specific FIELDS that are different.
+   * 
+   * ASSUMES: input object has an OldValues___ property that is an array of Key/Value pairs that represent the old values of the record that the client is trying to update.
+   */
+  protected TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity) {
+    // we have OldValues, so we need to compare them to the values we just loaded from the DB
+    const clientOldValues = {};
+    // for each item in the oldValues array, add it to the oldValues object
+    input.OldValues___.forEach((item) => clientOldValues[item.Key] = item.Value);
+
+    // oldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
+    // with the DB values
+    const dbValues = entityObject.GetAll();
+
+    // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
+    const dbDifferences = [];
+    Object.keys(clientOldValues).forEach((key) => {
+      if (clientOldValues[key] !== dbValues[key]) {
+        dbDifferences.push({
+          FieldName: key,
+          ClientOldValue: clientOldValues[key],
+          DBValue: dbValues[key]
+        });
+      }
+    });
+
+    if (dbDifferences.length > 0) {
+      // now we have an array of any dbDifferences with length > 0, between the clientOldValues and the dbValues, we need to check to see if any of the differences are on fields that the client is trying to update
+      // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
+      const clientDifferences = [];
+      Object.keys(clientOldValues).forEach((key) => {
+        if (clientOldValues[key] !== clientNewValues[key]) {
+          clientDifferences.push({
+            FieldName: key,
+            ClientOldValue: clientOldValues[key],
+            ClientNewValue: clientNewValues[key]
+          });
+        }
+      });
+
+      // now we have clientDifferences which shows what the client thinks they are changing. And, we have the dbDifferences array that shows changes between the clientOldValues and the dbValues
+      // if there is ANY overlap in the FIELDS that appear in both arrays, we need to throw an error
+      const overlap = clientDifferences.filter((cd) => dbDifferences.find((dd) => dd.FieldName === cd.FieldName));
+      if (overlap.length > 0) {
+        const msg = {
+          Message: 'Inconsistency between old values provided for changed fields, and the values of one or more of those fields in the database. Update operation cancelled.',
+          ClientDifferences: clientDifferences,
+          DBDifferences: dbDifferences,
+          Overlap: overlap
+        };
+        throw new Error(JSON.stringify(msg));
+      }
+      else {
+        // NO OVERLAP, so we can set the new values from the data provided from the client now...
+        entityObject.SetMany(clientNewValues);
+      }
+    }
   }
 
   protected async DeleteRecord(entityName: string, key: CompositeKey, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
