@@ -279,6 +279,15 @@ export abstract class BaseEntity {
     }
 
     /**
+     * This method MUST be called right after the class is instantiated to provide an async/await pair for any asynchronous operations a given entity needs to do when it is first 
+     * created/configured. When you call Metadata/Provider GetEntityObject() this is done automatically for you. In nearly all cases you should go through GetEntityObject() anyway
+     * and not ever directly instantiate a BaseEntity derived class.
+     */
+    public async Config(contextUser: UserInfo) {
+        this.ContextCurrentUser = contextUser;
+    }
+    
+    /**
      * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
      */
     get IsSaved(): boolean {
@@ -569,6 +578,7 @@ export abstract class BaseEntity {
     public get ContextCurrentUser(): UserInfo {
         return this._contextCurrentUser;
     }
+
 
     /**
      * This method will create a new state for the object that is equivalent to a new record including default values.

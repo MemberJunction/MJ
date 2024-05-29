@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
@@ -446,17 +446,42 @@ export class ResolverBase {
   protected TestAndSetClientOldValuesToDBValues(input: any, clientNewValues: any, entityObject: BaseEntity) {
     // we have OldValues, so we need to compare them to the values we just loaded from the DB
     const clientOldValues = {};
-    // for each item in the oldValues array, add it to the oldValues object
-    input.OldValues___.forEach((item) => clientOldValues[item.Key] = item.Value);
+    // for each item in the oldValues array, add it to the clientOldValues object
+    input.OldValues___.forEach((item) => {
+      // we need to do a quick transform on the values to make sure they match the TS Type for the given field because item.Value will always be a string
+      const field = entityObject.EntityInfo.Fields.find((f) => f.CodeName === item.Key);
+      let val = item.Value;
+      if ( (val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined) 
+        val = field.DefaultValue; // set default value as the field was never set
 
-    // oldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
+      if (field && val !== null && val !== undefined) {
+        switch (field.TSType) {
+          case EntityFieldTSType.Number:
+            val =  parseInt(val);
+            break;
+          case EntityFieldTSType.Boolean:
+            val = val === 'false' || val === '0' || parseInt(val) === 0 ? false : true;
+            break;
+          case EntityFieldTSType.Date:
+            val = new Date(val);
+            break;
+          default:
+            break; // already a string
+        }
+      }
+      clientOldValues[item.Key] = val
+    });
+
+    // clientOldValues now has all of the oldValues the CLIENT passed us. Now we need to build the same kind of object
     // with the DB values
     const dbValues = entityObject.GetAll();
 
     // now we need to compare clientOldValues and dbValues and have a new array that has entries for any differences and have FieldName, clientOldValue and dbValue as properties
     const dbDifferences = [];
     Object.keys(clientOldValues).forEach((key) => {
-      if (clientOldValues[key] !== dbValues[key]) {
+      const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
+      if (clientOldValues[key] !== dbValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey ) {
+        // only include updateable fields
         dbDifferences.push({
           FieldName: key,
           ClientOldValue: clientOldValues[key],
@@ -470,7 +495,9 @@ export class ResolverBase {
       // first step is to get clientNewValues into an object that is like clientOldValues, get the diff and then compare that diff to the differences array that shows diff between DB and ClientOld
       const clientDifferences = [];
       Object.keys(clientOldValues).forEach((key) => {
-        if (clientOldValues[key] !== clientNewValues[key]) {
+        const f = entityObject.EntityInfo.Fields.find((f) => f.CodeName === key);
+        if (clientOldValues[key] !== clientNewValues[key] && f && f.AllowUpdateAPI && !f.IsPrimaryKey) {
+          // only include updateable fields
           clientDifferences.push({
             FieldName: key,
             ClientOldValue: clientOldValues[key],
@@ -491,11 +518,11 @@ export class ResolverBase {
         };
         throw new Error(JSON.stringify(msg));
       }
-      else {
-        // NO OVERLAP, so we can set the new values from the data provided from the client now...
-        entityObject.SetMany(clientNewValues);
-      }
     }
+
+    // If we get here that means we've not thrown an exception, so there is 
+    // NO OVERLAP, so we can set the new values from the data provided from the client now...
+    entityObject.SetMany(clientNewValues);
   }
 
   protected async DeleteRecord(entityName: string, key: CompositeKey, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {

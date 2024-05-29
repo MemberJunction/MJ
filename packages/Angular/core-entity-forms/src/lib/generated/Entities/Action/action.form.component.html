@@ -24,17 +24,6 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
  
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Inputs')">
-                        Action Inputs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Inputs')"  
-                            [AllowLoad]="this.IsCurrentTab('Action Inputs')"  
-                            [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
- 
                     <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Result Codes')">
                         Action Result Codes
                     </mj-tab>
@@ -57,17 +46,6 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
  
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Outputs')">
-                        Action Outputs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Outputs')"  
-                            [AllowLoad]="this.IsCurrentTab('Action Outputs')"  
-                            [EditMode]="this.GridEditMode()"  
-                            [BottomMargin]="GridBottomMargin">
-                        </mj-user-view-grid>
-                    </mj-tab-body>
- 
                     <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Entity Actions')">
                         Entity Actions
                     </mj-tab>
@@ -85,6 +63,17 @@
                     <mj-tab-body>
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Execution Logs')"  
                             [AllowLoad]="this.IsCurrentTab('Action Execution Logs')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Params')">
+                        Action Params
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Params')"  
+                            [AllowLoad]="this.IsCurrentTab('Action Params')"  
                             [EditMode]="this.GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>

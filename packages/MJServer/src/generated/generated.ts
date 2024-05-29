@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/27/2024, 8:15:00 PM
+* GENERATED: 5/29/2024, 6:23:14 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, ActionOutputEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionInputEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -17502,165 +17502,6 @@ export class ActionCategoryResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for Action Outputs
-//****************************************************************************
-@ObjectType({ description: 'Tracks outputs, which are optional, from an action, including names, values, and descriptions.' })
-export class ActionOutput_ {  
-    @Field(() => Int) 
-    ID: number;
-          
-    @Field(() => Int) 
-    ActionID: number;
-          
-    @Field({description: 'Name of the output variable the action will produce.'}) 
-    @MaxLength(510)
-    Name: string;
-          
-    @Field({nullable: true, description: 'Default value of the output.'}) 
-    DefaultValue?: string;
-          
-    @Field({nullable: true, description: 'Description of the output.'}) 
-    Description?: string;
-          
-    @Field(() => Boolean) 
-    IsRequired: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(1000)
-    Action: string;
-        
-}
-        
-//****************************************************************************
-// INPUT TYPE for Action Outputs   
-//****************************************************************************
-@InputType()
-export class CreateActionOutputInput {
-    @Field(() => Int)
-    ActionID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    IsRequired: boolean;
-}
-    
-        
-//****************************************************************************
-// INPUT TYPE for Action Outputs   
-//****************************************************************************
-@InputType()
-export class UpdateActionOutputInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field(() => Int)
-    ActionID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    IsRequired: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Action Outputs
-//****************************************************************************
-@ObjectType()
-export class RunActionOutputViewResult {
-    @Field(() => [ActionOutput_])
-    Results: ActionOutput_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ActionOutput_)
-export class ActionOutputResolver extends ResolverBase {
-    @Query(() => RunActionOutputViewResult)
-    async RunActionOutputViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunActionOutputViewResult)
-    async RunActionOutputViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunActionOutputViewResult)
-    async RunActionOutputDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Action Outputs';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => ActionOutput_, { nullable: true })
-    async ActionOutput(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionOutput_ | null> {
-        this.CheckUserReadPermissions('Action Outputs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionOutputs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Outputs', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Action Outputs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => ActionOutput_)
-    async CreateActionOutput(
-        @Arg('input', () => CreateActionOutputInput) input: CreateActionOutputInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Action Outputs', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ActionOutput_)
-    async UpdateActionOutput(
-        @Arg('input', () => UpdateActionOutputInput) input: UpdateActionOutputInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Action Outputs', input, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
 // ENTITY CLASS for Entity Actions
 //****************************************************************************
 @ObjectType({ description: 'Links entities to actions - this is the main place where you define the actions that part of, or available, for a given entity.' })
@@ -18321,23 +18162,20 @@ export class Action_ {
     @Field(() => [mj_core_schema_server_object_types.ActionAuthorization_])
     ActionAuthorizationsArray: mj_core_schema_server_object_types.ActionAuthorization_[]; // Link to ActionAuthorizations
     
-    @Field(() => [mj_core_schema_server_object_types.ActionInput_])
-    ActionInputsArray: mj_core_schema_server_object_types.ActionInput_[]; // Link to ActionInputs
-    
     @Field(() => [mj_core_schema_server_object_types.ActionResultCode_])
     ActionResultCodesArray: mj_core_schema_server_object_types.ActionResultCode_[]; // Link to ActionResultCodes
     
     @Field(() => [mj_core_schema_server_object_types.ActionContext_])
     ActionContextsArray: mj_core_schema_server_object_types.ActionContext_[]; // Link to ActionContexts
     
-    @Field(() => [mj_core_schema_server_object_types.ActionOutput_])
-    ActionOutputsArray: mj_core_schema_server_object_types.ActionOutput_[]; // Link to ActionOutputs
-    
     @Field(() => [mj_core_schema_server_object_types.EntityAction_])
     EntityActionsArray: mj_core_schema_server_object_types.EntityAction_[]; // Link to EntityActions
     
     @Field(() => [mj_core_schema_server_object_types.ActionExecutionLog_])
     ActionExecutionLogsArray: mj_core_schema_server_object_types.ActionExecutionLog_[]; // Link to ActionExecutionLogs
+    
+    @Field(() => [mj_core_schema_server_object_types.ActionParam_])
+    ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
     
 }
         
@@ -18498,14 +18336,6 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionInput_])
-    async ActionInputsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Inputs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionInputs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Inputs', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Inputs', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [mj_core_schema_server_object_types.ActionResultCode_])
     async ActionResultCodesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Action Result Codes', userPayload);
@@ -18522,14 +18352,6 @@ export class ActionResolver extends ResolverBase {
         return result;
     }
           
-    @FieldResolver(() => [mj_core_schema_server_object_types.ActionOutput_])
-    async ActionOutputsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Action Outputs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionOutputs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Outputs', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.ArrayMapFieldNamesToCodeNames('Action Outputs', await dataSource.query(sSQL));
-        return result;
-    }
-          
     @FieldResolver(() => [mj_core_schema_server_object_types.EntityAction_])
     async EntityActionsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('Entity Actions', userPayload);
@@ -18543,6 +18365,14 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Execution Logs', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionExecutionLogs] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Execution Logs', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionParam_])
+    async ActionParamsArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
         return result;
     }
         
@@ -18708,165 +18538,6 @@ export class EntityActionFilterResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for Action Inputs
-//****************************************************************************
-@ObjectType({ description: 'Defines the expected input properties for an action to execute.' })
-export class ActionInput_ {  
-    @Field(() => Int) 
-    ID: number;
-          
-    @Field(() => Int) 
-    ActionID: number;
-          
-    @Field({description: 'Key for the input.'}) 
-    @MaxLength(510)
-    Name: string;
-          
-    @Field({nullable: true, description: 'Default value for the action, can be overriden at run time by the caller of the action.'}) 
-    DefaultValue?: string;
-          
-    @Field({nullable: true, description: 'Description of the input.'}) 
-    Description?: string;
-          
-    @Field(() => Boolean, {description: 'Specifies if the input property is required when executing the action or not.'}) 
-    IsRequired: boolean;
-          
-    @Field() 
-    @MaxLength(8)
-    CreatedAt: Date;
-          
-    @Field() 
-    @MaxLength(8)
-    UpdatedAt: Date;
-          
-    @Field() 
-    @MaxLength(1000)
-    Action: string;
-        
-}
-        
-//****************************************************************************
-// INPUT TYPE for Action Inputs   
-//****************************************************************************
-@InputType()
-export class CreateActionInputInput {
-    @Field(() => Int)
-    ActionID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    IsRequired: boolean;
-}
-    
-        
-//****************************************************************************
-// INPUT TYPE for Action Inputs   
-//****************************************************************************
-@InputType()
-export class UpdateActionInputInput {
-    @Field(() => Int)
-    ID: number;
-
-    @Field(() => Int)
-    ActionID: number;
-
-    @Field()
-    Name: string;
-
-    @Field({ nullable: true })
-    DefaultValue?: string;
-
-    @Field({ nullable: true })
-    Description?: string;
-
-    @Field(() => Boolean)
-    IsRequired: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for Action Inputs
-//****************************************************************************
-@ObjectType()
-export class RunActionInputViewResult {
-    @Field(() => [ActionInput_])
-    Results: ActionInput_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ActionInput_)
-export class ActionInputResolver extends ResolverBase {
-    @Query(() => RunActionInputViewResult)
-    async RunActionInputViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunActionInputViewResult)
-    async RunActionInputViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunActionInputViewResult)
-    async RunActionInputDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Action Inputs';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => ActionInput_, { nullable: true })
-    async ActionInput(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionInput_ | null> {
-        this.CheckUserReadPermissions('Action Inputs', userPayload);
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionInputs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Inputs', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Action Inputs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
-    
-    @Mutation(() => ActionInput_)
-    async CreateActionInput(
-        @Arg('input', () => CreateActionInputInput) input: CreateActionInputInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Action Inputs', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ActionInput_)
-    async UpdateActionInput(
-        @Arg('input', () => UpdateActionInputInput) input: UpdateActionInputInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Action Inputs', input, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19640,6 +19311,194 @@ export class ActionExecutionLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Params
+//****************************************************************************
+@ObjectType({ description: 'Tracks the input and output parameters for Actions.' })
+export class ActionParam_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    DefaultValue?: string;
+          
+    @Field() 
+    @MaxLength(20)
+    Type: string;
+          
+    @Field({description: 'Tracks the basic value type of the parameter, additional information can be provided in the Description field'}) 
+    @MaxLength(60)
+    ValueType: string;
+          
+    @Field(() => Boolean) 
+    IsArray: boolean;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field(() => Boolean) 
+    IsRequired: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Params   
+//****************************************************************************
+@InputType()
+export class CreateActionParamInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field()
+    Type: string;
+
+    @Field()
+    ValueType: string;
+
+    @Field(() => Boolean)
+    IsArray: boolean;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Params   
+//****************************************************************************
+@InputType()
+export class UpdateActionParamInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    DefaultValue?: string;
+
+    @Field()
+    Type: string;
+
+    @Field()
+    ValueType: string;
+
+    @Field(() => Boolean)
+    IsArray: boolean;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field(() => Boolean)
+    IsRequired: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Params
+//****************************************************************************
+@ObjectType()
+export class RunActionParamViewResult {
+    @Field(() => [ActionParam_])
+    Results: ActionParam_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionParam_)
+export class ActionParamResolver extends ResolverBase {
+    @Query(() => RunActionParamViewResult)
+    async RunActionParamViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionParamViewResult)
+    async RunActionParamViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionParamViewResult)
+    async RunActionParamDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Params';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionParam_, { nullable: true })
+    async ActionParam(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionParam_ | null> {
+        this.CheckUserReadPermissions('Action Params', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionParam_)
+    async CreateActionParam(
+        @Arg('input', () => CreateActionParamInput) input: CreateActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Params', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionParam_)
+    async UpdateActionParam(
+        @Arg('input', () => UpdateActionParamInput) input: UpdateActionParamInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Params', input, dataSource, userPayload, pubSub);
     }
     
 }

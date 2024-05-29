@@ -53,7 +53,7 @@ ${GlobalActionLibraries.map(lib => `import { ${lib.ImportedItems.map(item => ite
             const codeName = CodeNameFromString(action.Name);
             const actionClassName = codeName + '_Action';
             // replace all \n with \t\t\n
-            const generatedCode = action.Code.replace(/\n/g, '\n\t\t')
+            const generatedCode = action.Code ? action.Code.replace(/\n/g, '\n\t\t') : 'throw new Error("Action not yet implemented")';
             const codeComments = action.CodeComments ? action.CodeComments.replace(/\n/g, '\n\t\t') : '';
             const codeCommentsInserted = codeComments ? `/*\n\t\t${codeComments}\n\t*/` : '';
             const actionCode = `

@@ -1,5 +1,5 @@
 import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata } from "@memberjunction/core";
-import { ActionEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { ActionEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { CleanJSON, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
@@ -9,8 +9,8 @@ import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 /**
  * Server-Only custom sub-class for Actions entity. This sub-class handles the process of auto-generation code for the Actions entity. 
  */
-@RegisterClass(BaseEntity, 'Actions', 3) // high priority make sure this class is used ahead of other things
-export class ActionEntityServer extends ActionEntity {
+@RegisterClass(BaseEntity, 'Actions') // high priority make sure this class is used ahead of other things
+export class ActionEntityServerEntity extends ActionEntity {
     constructor(Entity: EntityInfo) {
         super(Entity); // call super
 
@@ -37,7 +37,7 @@ export class ActionEntityServer extends ActionEntity {
      * Returns true if this action is a core MemberJunction framework action, false otherwise.
      */
     public get IsCoreAction(): boolean {
-        return this.Category.trim().toLowerCase() === ActionEngine.Instance.CoreCategoryName.trim().toLowerCase();
+        return this.Category?.trim().toLowerCase() === ActionEngine.Instance.CoreCategoryName.trim().toLowerCase();
     }
 
     private _resultCodes: ActionResultCodeEntity[] = null;
@@ -45,12 +45,22 @@ export class ActionEntityServer extends ActionEntity {
      * Provides a list of possible result codes for this action.
      */
     public get ResultCodes(): ActionResultCodeEntity[] {
-        if (this._resultCodes === null) {
+        if (!this._resultCodes) {
             // load the result codes
             this._resultCodes = ActionEngine.Instance.ActionResultCodes.filter(c => c.ActionID === this.ID);
         }
         return this._resultCodes;
     }
+
+    private _params: ActionParamEntity[] = null;
+    public get Params(): ActionParamEntity[] {
+        if (!this._params) {
+            // load the inputs
+            this._params = ActionEngine.Instance.ActionParams.filter(i => i.ActionID === this.ID);
+        }
+        return this._params;
+    }
+ 
 
     /**
      * Override of the base Save method to handle the pre-processing to auto generate code whenever an action's UserPrompt is modified.
@@ -155,7 +165,7 @@ export class ActionEntityServer extends ActionEntity {
 
     public GenerateSysPrompt(): string {
         const prompt: string = `You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
-You will be provided a system administrator's request for how to handle a specific type of action that they want created. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
+You will be provided a request for how to handle a specific type of action that they want created. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
 Your job is to write the TypeScript code that will be taken and inserted into a class as shown below using the classes
 for inputs/outputs and the ActionResultSimple class that is provided. The code you write will be used by the MemberJunction engine to execute the action when 
 it is called by the user.
@@ -174,6 +184,15 @@ export class ${this.ProgrammaticName}Action extends BaseAction {
     }
 }
 </CODE_EXAMPLE>
+
+<AVAILABLE_PARAMETERS>
+The params parameter into the Run method has a property called Params which is an array of ActionParam objects. These objects have a Name and Value property and map to the defined parameters for this action. The parameters for this
+action are as shown below. For parameters shown as output, make sure you generate the code to handle this and place a new item in the Params array with the Name and Value set to the output parameter name and value respectively. If
+the parameter has a type of input/output, you will receive the value as an input, and you can update it if the program you create needs to pass back a different value.
+    ${
+        JSON.stringify(this.Params) 
+    }
+</AVAILABLE_PARAMETERS>
 
 <AVAILABLE_LIBRARIES>
 The following libraries are available for use in your code. THEY ARE ALREADY IMPORTED SO DO NOT IMPORT THEM IN YOUR CODE. 
@@ -214,8 +233,14 @@ ${
      * Generic class for holding parameters for an action for both inputs and outputs
      */
     export class ActionParam {
+        /**
+        * The name of the parameter
+        */
         public Name: string;
-        public Value: string;
+        /**
+        * The value of the parameter. This can be any type of object.
+        */
+        public Value: any;
     }
     /**
      * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
@@ -223,20 +248,38 @@ ${
     export class RunActionParams {
         public Action: ActionEntity;
         public ContextUser: UserInfo;
+        /**
+        * Optional, a list of filters that should be run before the action is executed.
+        */
         public Filters: ActionFilterEntity[];
-        public Inputs: ActionParam[];
-        public Outputs: ActionParam[];
+        /**
+        * Optional, the input and output parameters as defined in the metadata for the action.
+        */
+        public Params: ActionParam[];
     }
 </REFERENCE_TYPES>
 
-
+<ENTITIES>
+Entities in MemberJunction are storage objects and roughly map to database tables. Here are the entities in the system to give you additional context to understand the request:
+${
+    JSON.stringify(Metadata.Provider.Entities.map(e => {
+        // for each entity, get the name, description and base view
+        return {
+            Entity: e.Name,
+            SchemaName: e.SchemaName,
+            Description: e.Description,
+            BaseView: e.BaseView
+        }
+    }))
+}
+</ENTITIES>
 The next message, which will be a user message in the conversation, will contain the sys admin's requested behavior for this entity. 
 
 <CRITICAL>
 I am a bot and can only understand JSON. Your response must be parsable into this type:
 const returnType = {
-    code: string, // The typescript code you will create that will work in the context described above. MAKE SURE TO PRETTY FORMAT THIS WITH SPACE INDENTS AND LINE BREAKS IN THE CODE!
-    explanation: string // an explanation for the system admin of how the code works and why it was written that way
+    code: string, // The typescript code you will create that will work in the context described above. Make sure to include line breaks, but not tabs. That is, pretty format in terms of new lines, but do NOT indent with spaces/tabs, as I'll handle indentation.
+    explanation: string // an explanation for a semi-technical person explaining what the code does. Here again use line breaks liberally to make it easy to read but do NOT indent with spaces/tabs as I will handle that. Use * lists and numbered lists as appropriate.
 };
 </CRITICAL>
 **** REMEMBER **** I am a BOT, do not return anything other than JSON to me or I will choke on your response!

@@ -15367,150 +15367,6 @@ import { RegisterClass } from "@memberjunction/global";
     }
         
     /**
-     * Action Outputs - strongly typed entity sub-class
-     * * Schema: __mj
-     * * Base Table: ActionOutput
-     * * Base View: vwActionOutputs
-     * * @description Tracks outputs, which are optional, from an action, including names, values, and descriptions.
-     * * Primary Key: ID
-     * @extends {BaseEntity}
-     * @class
-     * @public
-     */
-    @RegisterClass(BaseEntity, 'Action Outputs')
-    export class ActionOutputEntity extends BaseEntity {
-        /**
-        * Loads the Action Outputs record from the database
-        * @param ID: number - primary key value to load the Action Outputs record.
-        * @param EntityRelationshipsToLoad - (optional) the relationships to load
-        * @returns {Promise<boolean>} - true if successful, false otherwise
-        * @public
-        * @async
-        * @memberof ActionOutputEntity
-        * @method
-        * @override
-        */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-        }
-            
-        /**
-        * Action Outputs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionOutputEntity
-        * @throws {Error} - Delete is not allowed for Action Outputs, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Outputs, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
-            /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
-        * * Field Name: ActionID
-        * * Display Name: Action ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Actions (vwActions.ID)
-        */
-        get ActionID(): number {  
-            return this.Get('ActionID');
-        }
-        set ActionID(value: number) {
-            this.Set('ActionID', value);
-        }
-        /**
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Name of the output variable the action will produce.
-        */
-        get Name(): string {  
-            return this.Get('Name');
-        }
-        set Name(value: string) {
-            this.Set('Name', value);
-        }
-        /**
-        * * Field Name: DefaultValue
-        * * Display Name: Default Value
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Default value of the output.
-        */
-        get DefaultValue(): string | null {  
-            return this.Get('DefaultValue');
-        }
-        set DefaultValue(value: string | null) {
-            this.Set('DefaultValue', value);
-        }
-        /**
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Description of the output.
-        */
-        get Description(): string | null {  
-            return this.Get('Description');
-        }
-        set Description(value: string | null) {
-            this.Set('Description', value);
-        }
-        /**
-        * * Field Name: IsRequired
-        * * Display Name: Is Required
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        */
-        get IsRequired(): boolean {  
-            return this.Get('IsRequired');
-        }
-        set IsRequired(value: boolean) {
-            this.Set('IsRequired', value);
-        }
-        /**
-        * * Field Name: CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get CreatedAt(): Date {  
-            return this.Get('CreatedAt');
-        }
-        
-        /**
-        * * Field Name: UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get UpdatedAt(): Date {  
-            return this.Get('UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: Action
-        * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
-        */
-        get Action(): string {  
-            return this.Get('Action');
-        }
-        
-
-    }
-        
-    /**
      * Entity Actions - strongly typed entity sub-class
      * * Schema: __mj
      * * Base Table: EntityAction
@@ -15636,7 +15492,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
         */
         get Action(): string {  
             return this.Get('Action');
@@ -15880,7 +15735,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16384,151 +16238,6 @@ import { RegisterClass } from "@memberjunction/global";
     }
         
     /**
-     * Action Inputs - strongly typed entity sub-class
-     * * Schema: __mj
-     * * Base Table: ActionInput
-     * * Base View: vwActionInputs
-     * * @description Defines the expected input properties for an action to execute.
-     * * Primary Key: ID
-     * @extends {BaseEntity}
-     * @class
-     * @public
-     */
-    @RegisterClass(BaseEntity, 'Action Inputs')
-    export class ActionInputEntity extends BaseEntity {
-        /**
-        * Loads the Action Inputs record from the database
-        * @param ID: number - primary key value to load the Action Inputs record.
-        * @param EntityRelationshipsToLoad - (optional) the relationships to load
-        * @returns {Promise<boolean>} - true if successful, false otherwise
-        * @public
-        * @async
-        * @memberof ActionInputEntity
-        * @method
-        * @override
-        */      
-        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-            const compositeKey: CompositeKey = new CompositeKey();
-            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-        }
-            
-        /**
-        * Action Inputs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionInputEntity
-        * @throws {Error} - Delete is not allowed for Action Inputs, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Inputs, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
-            /**
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: int
-        */
-        get ID(): number {  
-            return this.Get('ID');
-        }
-        
-        /**
-        * * Field Name: ActionID
-        * * Display Name: Action ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Actions (vwActions.ID)
-        */
-        get ActionID(): number {  
-            return this.Get('ActionID');
-        }
-        set ActionID(value: number) {
-            this.Set('ActionID', value);
-        }
-        /**
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Key for the input.
-        */
-        get Name(): string {  
-            return this.Get('Name');
-        }
-        set Name(value: string) {
-            this.Set('Name', value);
-        }
-        /**
-        * * Field Name: DefaultValue
-        * * Display Name: Default Value
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Default value for the action, can be overriden at run time by the caller of the action.
-        */
-        get DefaultValue(): string | null {  
-            return this.Get('DefaultValue');
-        }
-        set DefaultValue(value: string | null) {
-            this.Set('DefaultValue', value);
-        }
-        /**
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Description of the input.
-        */
-        get Description(): string | null {  
-            return this.Get('Description');
-        }
-        set Description(value: string | null) {
-            this.Set('Description', value);
-        }
-        /**
-        * * Field Name: IsRequired
-        * * Display Name: Is Required
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Specifies if the input property is required when executing the action or not.
-        */
-        get IsRequired(): boolean {  
-            return this.Get('IsRequired');
-        }
-        set IsRequired(value: boolean) {
-            this.Set('IsRequired', value);
-        }
-        /**
-        * * Field Name: CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get CreatedAt(): Date {  
-            return this.Get('CreatedAt');
-        }
-        
-        /**
-        * * Field Name: UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetime
-        * * Default Value: getdate()
-        */
-        get UpdatedAt(): Date {  
-            return this.Get('UpdatedAt');
-        }
-        
-        /**
-        * * Field Name: Action
-        * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
-        */
-        get Action(): string {  
-            return this.Get('Action');
-        }
-        
-
-    }
-        
-    /**
      * Action Filters - strongly typed entity sub-class
      * * Schema: __mj
      * * Base Table: ActionFilter
@@ -16854,7 +16563,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16980,7 +16688,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17167,7 +16874,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(500)
-        * * Default Value: null
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17180,6 +16886,192 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get User(): string {  
             return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Action Params - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionParam
+     * * Base View: vwActionParams
+     * * @description Tracks the input and output parameters for Actions.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Params')
+    export class ActionParamEntity extends BaseEntity {
+        /**
+        * Loads the Action Params record from the database
+        * @param ID: number - primary key value to load the Action Params record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionParamEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Params - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionParamEntity
+        * @throws {Error} - Delete is not allowed for Action Params, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Params, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: DefaultValue
+        * * Display Name: Default Value
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get DefaultValue(): string | null {  
+            return this.Get('DefaultValue');
+        }
+        set DefaultValue(value: string | null) {
+            this.Set('DefaultValue', value);
+        }
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nchar(10)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Input
+        *   * Output
+        *   * Both
+        */
+        get Type(): 'Input' | 'Output' | 'Both' {  
+            return this.Get('Type');
+        }
+        set Type(value: 'Input' | 'Output' | 'Both') {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: ValueType
+        * * Display Name: Value Type
+        * * SQL Data Type: nvarchar(30)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Scalar
+        *   * Simple Object
+        *   * BaseEntity Sub-Class
+        *   * Other
+        * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
+        */
+        get ValueType(): 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other' {  
+            return this.Get('ValueType');
+        }
+        set ValueType(value: 'Scalar' | 'Simple Object' | 'BaseEntity Sub-Class' | 'Other') {
+            this.Set('ValueType', value);
+        }
+        /**
+        * * Field Name: IsArray
+        * * Display Name: Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        */
+        get IsArray(): boolean {  
+            return this.Get('IsArray');
+        }
+        set IsArray(value: boolean) {
+            this.Set('IsArray', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        */
+        get IsRequired(): boolean {  
+            return this.Get('IsRequired');
+        }
+        set IsRequired(value: boolean) {
+            this.Set('IsRequired', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        */
+        get Action(): string {  
+            return this.Get('Action');
         }
         
 

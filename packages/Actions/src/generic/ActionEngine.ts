@@ -1,8 +1,8 @@
 import { RunView, UserInfo } from "@memberjunction/core";
-import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJGlobal } from "@memberjunction/global";
-import { ActionEntityServer } from "./ActionEntity.server";
+import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
+import { ActionEntityServerEntity } from "./ActionEntity.server";
 
 
 
@@ -166,8 +166,14 @@ export class ActionResult {
  * Generic class for holding parameters for an action for both inputs and outputs
  */
 export class ActionParam {
+   /**
+    * The name of the parameter
+    */
    public Name: string;
-   public Value: string;
+   /**
+    * The value of the parameter. This can be any type of object.
+    */
+   public Value: any;
 }
 
 /**
@@ -176,9 +182,14 @@ export class ActionParam {
 export class RunActionParams {
    public Action: ActionEntity;
    public ContextUser: UserInfo;
+   /**
+    * Optional, a list of filters that should be run before the action is executed.
+    */
    public Filters: ActionFilterEntity[];
-   public Inputs: ActionParam[];
-   public Outputs: ActionParam[];
+   /**
+    * Optional, the input and output parameters as defined in the metadata for the action.
+    */
+   public Params: ActionParam[];
 }
 
 
@@ -186,51 +197,28 @@ export class RunActionParams {
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
-export class ActionEngine {
+export class ActionEngine extends BaseSingleton<ActionEngine> {
    private __coreCategoryName = '__mj';
-   private static _instance: ActionEngine;
 
     // implement a singleton pattern for caching metadata. All uses of the ActionEngine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
     // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the ActionEngine. This is important because the metadata is not expected to change.
-    private static _globalKey: string = 'MJ_ActionMetadata';
-    constructor() {
-      if (ActionEngine._instance) 
-         return ActionEngine._instance;
-      else {
-            const g = MJGlobal.Instance.GetGlobalObjectStore();
-            if (g && g[ActionEngine._globalKey]) {
-               ActionEngine._instance = g[ActionEngine._globalKey];
-               return ActionEngine._instance;
-            }
+    private constructor() {
+      super('MJ_Action_Metadata');
+   }
 
-            // finally, if we get here, we are the first instance of this class, so create it
-            if (!ActionEngine._instance) {
-               ActionEngine._instance = this;
-            
-               // try to put this in global object store if there is a window/e.g. we're in a browser, a global object, we're in node, etc...
-               if (g)
-                  g[ActionEngine._globalKey] = ActionEngine._instance;
-               
-               return this;
-            }
-      }
-    }
-
-    /**
-     * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
-     */
+   /**
+    * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application. Do not directly create new instances of it, always use this method to get the instance.
+    */
    public static get Instance(): ActionEngine {
-      if (!ActionEngine._instance)
-         ActionEngine._instance = new ActionEngine();
-
-      return ActionEngine._instance;
+      return super.getInstance<ActionEngine>('MJ_Action_Metadata');
    }
 
  
     // internal instance properties used for the singleton pattern
     private _loaded: boolean = false;
-    private _Actions: ActionEntityServer[];
+    private _Actions: ActionEntityServerEntity[];
     private _Filters: ActionFilterEntity[];
+    private _Params: ActionParamEntity[];
     private _ActionResultCodes: ActionResultCodeEntity[];
     private _contextUser: UserInfo;
 
@@ -271,14 +259,27 @@ export class ActionEngine {
             if (resultCodes.Success) {
                 this._ActionResultCodes = resultCodes.Results;
             }
+
+            const params = await rv.RunView({
+               EntityName: 'Action Params',
+               ResultType: 'entity_object'
+            }, contextUser);
+            if (resultCodes.Success) {
+               this._Params = params.Results;
+            }
+
+            this._loaded = true;
         }
         else {
             // we have already loaded and have not been told to force the refresh
         }
     }
 
-    public get Actions(): ActionEntityServer[] {
+    public get Actions(): ActionEntityServerEntity[] {
       return this._Actions;
+    }
+    public get ActionParams(): ActionParamEntity[] {
+      return this._Params;
     }
     public get ActionFilters(): ActionFilterEntity[] {
       return this._Filters;

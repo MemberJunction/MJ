@@ -524,50 +524,24 @@ type ActionFilter_ {
   UserDescription: String!
 }
 
-"""Defines the expected input properties for an action to execute."""
-type ActionInput_ {
+"""Tracks the input and output parameters for Actions."""
+type ActionParam_ {
   Action: String!
   ActionID: Int!
   CreatedAt: Timestamp!
-
-  """
-  Default value for the action, can be overriden at run time by the caller of the action.
-  """
   DefaultValue: String
-
-  """Description of the input."""
   Description: String
   ID: Int!
+  IsArray: Boolean!
+  IsRequired: Boolean!
+  Name: String!
+  Type: String!
+  UpdatedAt: Timestamp!
 
   """
-  Specifies if the input property is required when executing the action or not.
+  Tracks the basic value type of the parameter, additional information can be provided in the Description field
   """
-  IsRequired: Boolean!
-
-  """Key for the input."""
-  Name: String!
-  UpdatedAt: Timestamp!
-}
-
-"""
-Tracks outputs, which are optional, from an action, including names, values, and descriptions.
-"""
-type ActionOutput_ {
-  Action: String!
-  ActionID: Int!
-  CreatedAt: Timestamp!
-
-  """Default value of the output."""
-  DefaultValue: String
-
-  """Description of the output."""
-  Description: String
-  ID: Int!
-  IsRequired: Boolean!
-
-  """Name of the output variable the action will produce."""
-  Name: String!
-  UpdatedAt: Timestamp!
+  ValueType: String!
 }
 
 """Defines the possible result codes for each action."""
@@ -590,8 +564,7 @@ type Action_ {
   ActionAuthorizationsArray: [ActionAuthorization_!]!
   ActionContextsArray: [ActionContext_!]!
   ActionExecutionLogsArray: [ActionExecutionLog_!]!
-  ActionInputsArray: [ActionInput_!]!
-  ActionOutputsArray: [ActionOutput_!]!
+  ActionParamsArray: [ActionParam_!]!
   ActionResultCodesArray: [ActionResultCode_!]!
   Category: String
   CategoryID: Int
@@ -1824,20 +1797,15 @@ input CreateActionInput {
   UserPrompt: String!
 }
 
-input CreateActionInputInput {
+input CreateActionParamInput {
   ActionID: Int!
   DefaultValue: String
   Description: String
+  IsArray: Boolean!
   IsRequired: Boolean!
   Name: String!
-}
-
-input CreateActionOutputInput {
-  ActionID: Int!
-  DefaultValue: String
-  Description: String
-  IsRequired: Boolean!
-  Name: String!
+  Type: String!
+  ValueType: String!
 }
 
 input CreateActionResultCodeInput {
@@ -8169,8 +8137,7 @@ type Mutation {
   CreateActionContextType(input: CreateActionContextTypeInput!): ActionContextType_!
   CreateActionExecutionLog(input: CreateActionExecutionLogInput!): ActionExecutionLog_!
   CreateActionFilter(input: CreateActionFilterInput!): ActionFilter_!
-  CreateActionInput(input: CreateActionInputInput!): ActionInput_!
-  CreateActionOutput(input: CreateActionOutputInput!): ActionOutput_!
+  CreateActionParam(input: CreateActionParamInput!): ActionParam_!
   CreateActionResultCode(input: CreateActionResultCodeInput!): ActionResultCode_!
   CreateActivity(input: CreateActivityInput!): Activity_!
   CreateActivityAttachment(input: CreateActivityAttachmentInput!): ActivityAttachment_!
@@ -8325,8 +8292,7 @@ type Mutation {
   UpdateActionContextType(input: UpdateActionContextTypeInput!): ActionContextType_!
   UpdateActionExecutionLog(input: UpdateActionExecutionLogInput!): ActionExecutionLog_!
   UpdateActionFilter(input: UpdateActionFilterInput!): ActionFilter_!
-  UpdateActionInput(input: UpdateActionInputInput!): ActionInput_!
-  UpdateActionOutput(input: UpdateActionOutputInput!): ActionOutput_!
+  UpdateActionParam(input: UpdateActionParamInput!): ActionParam_!
   UpdateActionResultCode(input: UpdateActionResultCodeInput!): ActionResultCode_!
   UpdateActivity(input: UpdateActivityInput!): Activity_!
   UpdateActivityAttachment(input: UpdateActivityAttachmentInput!): ActivityAttachment_!
@@ -8779,8 +8745,7 @@ type Query {
   ActionContextType(ID: Int!): ActionContextType_
   ActionExecutionLog(ID: Int!): ActionExecutionLog_
   ActionFilter(ID: Int!): ActionFilter_
-  ActionInput(ID: Int!): ActionInput_
-  ActionOutput(ID: Int!): ActionOutput_
+  ActionParam(ID: Int!): ActionParam_
   ActionResultCode(ID: Int!): ActionResultCode_
   Activity(ID: Int!): Activity_
   ActivityAttachment(ID: Int!): ActivityAttachment_
@@ -8959,12 +8924,9 @@ type Query {
   RunActionFilterDynamicView(input: RunDynamicViewInput!): RunActionFilterViewResult!
   RunActionFilterViewByID(input: RunViewByIDInput!): RunActionFilterViewResult!
   RunActionFilterViewByName(input: RunViewByNameInput!): RunActionFilterViewResult!
-  RunActionInputDynamicView(input: RunDynamicViewInput!): RunActionInputViewResult!
-  RunActionInputViewByID(input: RunViewByIDInput!): RunActionInputViewResult!
-  RunActionInputViewByName(input: RunViewByNameInput!): RunActionInputViewResult!
-  RunActionOutputDynamicView(input: RunDynamicViewInput!): RunActionOutputViewResult!
-  RunActionOutputViewByID(input: RunViewByIDInput!): RunActionOutputViewResult!
-  RunActionOutputViewByName(input: RunViewByNameInput!): RunActionOutputViewResult!
+  RunActionParamDynamicView(input: RunDynamicViewInput!): RunActionParamViewResult!
+  RunActionParamViewByID(input: RunViewByIDInput!): RunActionParamViewResult!
+  RunActionParamViewByName(input: RunViewByNameInput!): RunActionParamViewResult!
   RunActionResultCodeDynamicView(input: RunDynamicViewInput!): RunActionResultCodeViewResult!
   RunActionResultCodeViewByID(input: RunViewByIDInput!): RunActionResultCodeViewResult!
   RunActionResultCodeViewByName(input: RunViewByNameInput!): RunActionResultCodeViewResult!
@@ -9836,20 +9798,10 @@ type RunActionFilterViewResult {
   UserViewRunID: Int
 }
 
-type RunActionInputViewResult {
+type RunActionParamViewResult {
   ErrorMessage: String
   ExecutionTime: Int
-  Results: [ActionInput_!]!
-  RowCount: Int
-  Success: Boolean!
-  TotalRowCount: Int
-  UserViewRunID: Int
-}
-
-type RunActionOutputViewResult {
-  ErrorMessage: String
-  ExecutionTime: Int
-  Results: [ActionOutput_!]!
+  Results: [ActionParam_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -14100,24 +14052,17 @@ input UpdateActionInput {
   UserPrompt: String!
 }
 
-input UpdateActionInputInput {
+input UpdateActionParamInput {
   ActionID: Int!
   DefaultValue: String
   Description: String
   ID: Int!
+  IsArray: Boolean!
   IsRequired: Boolean!
   Name: String!
   OldValues___: [KeyValuePairInput!]
-}
-
-input UpdateActionOutputInput {
-  ActionID: Int!
-  DefaultValue: String
-  Description: String
-  ID: Int!
-  IsRequired: Boolean!
-  Name: String!
-  OldValues___: [KeyValuePairInput!]
+  Type: String!
+  ValueType: String!
 }
 
 input UpdateActionResultCodeInput {
