@@ -7,7 +7,7 @@ import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDe
 import { Subscription, Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { ResourceTypeEntity } from '@memberjunction/core-entities';
-import { CreateRecordComponent } from '../create-record-component/create-record.component';
+import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
 
 @Component({
   selector: 'app-generic-browser-list',
