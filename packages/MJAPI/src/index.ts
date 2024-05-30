@@ -2,6 +2,8 @@ import { serve } from '@memberjunction/server';
 import { resolve } from 'node:path';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
 LoadGeneratedEntities();
+import { LoadGeneratedActions } from 'mj_generatedactions';
+LoadGeneratedActions();
 
 // UNCOMMENT THIS AFTER CodeGen generates this
 // import { LoadGeneratedActions } from 'mj_generatedactions';

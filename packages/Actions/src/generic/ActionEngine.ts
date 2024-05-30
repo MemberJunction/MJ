@@ -1,8 +1,9 @@
-import { RunView, UserInfo } from "@memberjunction/core";
+import { LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { ActionEntityServerEntity } from "./ActionEntity.server";
+import { BehaviorSubject } from "rxjs";
 
 
 
@@ -122,9 +123,9 @@ export class ActionResultSimple {
    public Message?: string;
 
    /**
-    * Some actions return output parameters. If the action that was run has outputs, they will be provided here.
+    * All parameters including inputs and outputs are provided here for convenience
     */
-   public Outputs?: ActionParam[];
+   public Params?: ActionParam[];
 }
 
 /**
@@ -157,9 +158,9 @@ export class ActionResult {
    public Message?: string;
 
    /**
-    * Some actions return output parameters. If the action that was run has outputs, they will be stored here.
+    * All parameters including inputs and outputs are provided here for convenience
     */
-   public Outputs: ActionParam[];
+   public Params?: ActionParam[];
 }
 
 /**
@@ -216,6 +217,8 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
  
     // internal instance properties used for the singleton pattern
     private _loaded: boolean = false;
+    private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+
     private _Actions: ActionEntityServerEntity[];
     private _Filters: ActionFilterEntity[];
     private _Params: ActionParamEntity[];
@@ -229,46 +232,67 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+        // make sure we don't do this more than once while the first call is still going on
+        if (this._loadingSubject.value && !forceRefresh) {
+            return new Promise<void>((resolve) => {
+               const subscription = this._loadingSubject.subscribe((loading) => {
+                  if (!loading) {
+                        subscription.unsubscribe();
+                        resolve();
+                  }
+               });
+            });
+        }
+
         if (!this._loaded || forceRefresh) {
+            this._loadingSubject.next(true);
             this._contextUser = contextUser;
 
             // Load all actions
             const rv = new RunView();
-            const actions = await rv.RunView({
-                EntityName: 'Actions',
-                ResultType: 'entity_object'
-            }, contextUser);
-            if (actions.Success) {
-                this._Actions = actions.Results;
-            }
+            try {
+               const actions = await rv.RunView({
+                  EntityName: 'Actions',
+                  ResultType: 'entity_object'
+               }, contextUser);
+               if (actions.Success) {
+                  this._Actions = actions.Results;
+               }
 
-            // Load all filters
-            const filters = await rv.RunView({
-                EntityName: 'Action Filters',
-                ResultType: 'entity_object'
-            }, contextUser);
-            if (filters.Success) {
-                this._Filters = filters.Results;
-            }
+               // Load all filters
+               const filters = await rv.RunView({
+                  EntityName: 'Action Filters',
+                  ResultType: 'entity_object'
+               }, contextUser);
+               if (filters.Success) {
+                  this._Filters = filters.Results;
+               }
 
-            // Load all result codes
-            const resultCodes = await rv.RunView({
-                EntityName: 'Action Result Codes',
-                ResultType: 'entity_object'
-            }, contextUser);
-            if (resultCodes.Success) {
-                this._ActionResultCodes = resultCodes.Results;
-            }
+               // Load all result codes
+               const resultCodes = await rv.RunView({
+                  EntityName: 'Action Result Codes',
+                  ResultType: 'entity_object'
+               }, contextUser);
+               if (resultCodes.Success) {
+                  this._ActionResultCodes = resultCodes.Results;
+               }
 
-            const params = await rv.RunView({
+               const params = await rv.RunView({
                EntityName: 'Action Params',
                ResultType: 'entity_object'
-            }, contextUser);
-            if (resultCodes.Success) {
+               }, contextUser);
+               if (resultCodes.Success) {
                this._Params = params.Results;
-            }
+               }
 
-            this._loaded = true;
+               this._loaded = true;
+            }
+            catch (e) {
+               LogError(e);
+            }
+            finally {
+                this._loadingSubject.next(false);
+            }
         }
         else {
             // we have already loaded and have not been told to force the refresh
@@ -311,7 +335,7 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
                Success: true,
                Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
                LogEntry: null, // initially null
-               Outputs: [],
+               Params: [],
                RunParams: params
             };
 
@@ -324,7 +348,7 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
             Success: false,
             Message: "Input validation failed. This is a failure condition.",
             LogEntry: null,
-            Outputs: [],
+            Params: [],
             RunParams: params
          };
       }
@@ -341,16 +365,14 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
     * This method runs any filters for the action. Subclasses can override this method to provide custom filter logic.
     */
    protected async RunFilters(params: RunActionParams): Promise<boolean> {
-      if (!params.Filters) {
-         return true;
-      }
-      else {
+      if (params.Filters) {
          for (let filter of params.Filters) {
             if (!await this.RunSingleFilter(params, filter)) {
                return false;
             }
          }
       }
+      return true; // if we get here we either had no filters or passed them all
    }
 
    /**
@@ -371,20 +393,30 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
       
       // we now have the action class for this particular action, so run it
-      const result = await action.Run(params);
-      
-      // TO-DO - Log the run of the action and return it
-      return {
-         Success: true,
-         Message: "This action has not been implemented yet.",
+      const simpleResult = await action.Run(params);
+
+      const resultCodeEntity = this.ActionResultCodes.find(r => r.ActionID === params.Action.ID && 
+                                                            r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
+      const result: ActionResult = {
+         RunParams: params,
+         Success: simpleResult.Success,
+         Message: simpleResult.Message,
          LogEntry: null,
-         Outputs: [],
-         RunParams: null
+         Params: simpleResult.Params,
+         Result: resultCodeEntity
       };
+      const logResult = await this.LogActionRun(params, result);
+      result.LogEntry = logResult;
+      return result;
    }
 
    protected async LogActionRun(params: RunActionParams, result: ActionResult): Promise<ActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
+      const md = new Metadata();
+      const logEntity = await md.GetEntityObject<ActionExecutionLogEntity>('Action Execution Logs', this._contextUser);
+      logEntity.NewRecord();
+      logEntity.ActionID = params.Action.ID;
+      
       return null;
    }
 }

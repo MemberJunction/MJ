@@ -3145,6 +3145,7 @@ input CreateEntityActionInvocationInput {
 
 input CreateEntityActionInvocationTypeInput {
   Description: String
+  DisplaySequence: Int!
   Name: String!
 }
 
@@ -7263,6 +7264,7 @@ type EntityActionInvocationType_ {
 
   """Description of the invocation type."""
   Description: String
+  DisplaySequence: Int!
   EntityActionInvocationsArray: [EntityActionInvocation_!]!
   ID: Int!
 
@@ -15556,6 +15558,7 @@ input UpdateEntityActionInvocationInput {
 
 input UpdateEntityActionInvocationTypeInput {
   Description: String
+  DisplaySequence: Int!
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]

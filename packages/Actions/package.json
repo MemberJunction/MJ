@@ -19,6 +19,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "rxjs": "^7.8.1",
     "@memberjunction/global": "~1.4.0",
     "@memberjunction/core": "~1.4.0",
     "@memberjunction/core-entities": "~1.4.0",

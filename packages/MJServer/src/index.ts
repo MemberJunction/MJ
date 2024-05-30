@@ -27,9 +27,8 @@ import orm from './orm';
 import { LoadActionEntityServer } from '@memberjunction/actions';
 LoadActionEntityServer(); // prevent tree shaking for this dynamic module
 
-// TO-DO ------ UNCOMMENT THIS AFTER CodeGen generates the actions
-// import { LoadGeneratedActions } from '@memberjunction/core-actions';
-// LoadGeneratedActions(); // prevent tree shaking for this dynamic module
+import { LoadGeneratedActions } from '@memberjunction/core-actions';
+LoadGeneratedActions(); // prevent tree shaking for this dynamic module
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 

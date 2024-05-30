@@ -29,7 +29,16 @@ ${GlobalActionLibraries.map(lib => `import { ${lib.ImportedItems.map(item => ite
             for (const action of actions) {
                 sCode += await this.generateSingleAction(action, directory);
             }
-            const actionCode = actionHeader + sCode;
+            let actionCode = actionHeader + sCode;
+
+            // finally add the LoadGeneratedActions() stub function at the very end
+            actionCode += `
+            
+export function LoadGeneratedActions() {
+    // this function is a stub that is used to force the bundler to include the generated action classes in the final bundle and not tree shake them out
+}
+`;    
+
             mkdirSync(directory, { recursive: true });
             fs.writeFileSync(actionFilePath, actionCode);
             return true;    

@@ -15828,6 +15828,18 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('Description', value);
         }
         /**
+        * * Field Name: DisplaySequence
+        * * Display Name: Display Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        */
+        get DisplaySequence(): number {  
+            return this.Get('DisplaySequence');
+        }
+        set DisplaySequence(value: number) {
+            this.Set('DisplaySequence', value);
+        }
+        /**
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime

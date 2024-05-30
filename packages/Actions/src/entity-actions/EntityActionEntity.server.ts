@@ -37,6 +37,7 @@ export class EntityActionEntityServer extends EntityActionEntity {
      */
     public override async Config(contextUser: UserInfo): Promise<void> {
         super.Config(contextUser);
-        await EntityActionEngine.Instance.Config(false, contextUser);
+        EntityActionEngine.Instance.Config(false, contextUser); // do this withOUT an await because that will cause an deadlock due to circular situation, sometimes the EntityActinEngine.Config() is called by someone else first
+                                                                // harmless to call it again here because it will not do anything extra if already in progress or done.
     }
 }       

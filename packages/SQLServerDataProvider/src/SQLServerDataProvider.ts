@@ -22,6 +22,7 @@ import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 import { UserCache } from "./UserCache";
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
+import { EntityActionEngine } from "@memberjunction/actions";
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     get DataSource(): any { return this.Data.DataSource }
@@ -984,6 +985,32 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                                       a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'));
     }
 
+    protected async HandleEntityActions(entity: BaseEntity, before: boolean, user: UserInfo) {
+        // use the EntityActionEngine for this
+        const engine = EntityActionEngine.Instance;
+        await engine.Config(false, user);
+        const newRecord = entity.IsSaved ? false : true;
+        const invocationType = before ? newRecord ? 'BeforeCreate' : 'BeforeUpdate' : newRecord ? 'AfterCreate' : 'AfterUpdate';
+        const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
+        if (!invocationTypeEntity)
+            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+
+        const actions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType);
+        if (actions.length > 0) {
+            // we have 1 or more actions to run
+            for (const a of actions) {
+                const result = await engine.RunEntityAction({
+                    EntityAction: a,
+                    EntityObject: entity,
+                    InvocationType: invocationTypeEntity,
+                    ContextUser: user
+                })    
+                if (!result)
+                    throw new Error(`Error running Entity Action ${a.Action} for Entity ${entity.EntityInfo.Name} with invocation type ${invocationType}`);
+            }
+        }
+    }
+
     protected async HandleEntityAIActions(entity: BaseEntity, before: boolean, user: UserInfo) {
         // Make sure AI Metadata is loaded here...
         await AIEngine.LoadAIMetadata(user);
@@ -1036,6 +1063,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     const bNewRecord = pkeyVal ? false : true;
                     const spName = bNewRecord ? (entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0 ? entity.EntityInfo.spCreate : 'spCreate' + entity.EntityInfo.BaseTable) : 
                                                 (entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0 ? entity.EntityInfo.spUpdate : 'spUpdate' + entity.EntityInfo.BaseTable);
+                    if (!options /*no options set*/ ||
+                        options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/ ) {
+                        await this.HandleEntityActions(entity, true, user);
+                    }
 
                     if (!options /*no options set*/ || 
                          options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) {

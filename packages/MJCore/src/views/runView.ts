@@ -140,7 +140,7 @@ export class RunView  {
             const md = new Metadata();
             const newItems = [];
             for (const item of result.Results) {
-                const entity = await md.GetEntityObject(params.EntityName);
+                const entity = await md.GetEntityObject(params.EntityName, contextUser);
                 entity.LoadFromData(item);
                 newItems.push(entity);
             }
