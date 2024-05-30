@@ -49,7 +49,7 @@ export class MJFormField extends BaseRecordComponent {
     @Input() 
     public get DisplayName(): string {
         if (!this._displayName) {
-            const ef = this.record.Fields.find(f => f.Name == this.FieldName)?.EntityFieldInfo;
+            const ef = this.record.Fields.find(f => f.CodeName == this.FieldName)?.EntityFieldInfo;
             if (ef)
                 this._displayName = ef.DisplayNameOrName;
             else
@@ -69,7 +69,7 @@ export class MJFormField extends BaseRecordComponent {
      */
     @Input() get PossibleValues(): string[] {
         if (!this._possibleValues) {
-            const ef = this.record.Fields.find(f => f.Name == this.FieldName)?.EntityFieldInfo;
+            const ef = this.record.Fields.find(f => f.CodeName == this.FieldName)?.EntityFieldInfo;
             if (ef && ef.ValueListType !== 'None')
                 this._possibleValues = ef.EntityFieldValues.map(v => v.Value);
             else
@@ -85,7 +85,7 @@ export class MJFormField extends BaseRecordComponent {
     @Input()
     public get Value(): any {
         const v = this.record.Get(this.FieldName);
-        const f = this.record.Fields.find(f => f.Name == this.FieldName);
+        const f = this.record.Fields.find(f => f.CodeName == this.FieldName);
         if (v === null || v === undefined) {
             // check to see if this is a text type of field
             if (f?.EntityFieldInfo.TSType === EntityFieldTSType.String)
@@ -108,7 +108,7 @@ export class MJFormField extends BaseRecordComponent {
      * Returns true if the field is read only. This is determined by the ReadOnly property in the entity field metadata.
      */
     public get IsFieldReadOnly(): boolean {
-        const f = this.record.Fields.find(f => f.Name == this.FieldName);
+        const f = this.record.Fields.find(f => f.CodeName == this.FieldName);
         if (f)
             return f.ReadOnly;
         else

@@ -110,6 +110,7 @@ async function handleSingleEnvironmentFile(dir, normalizedDir, archive, subDir, 
 
   // Clear values for sensitive keys in the environment configuration
   fileContent = clearSensitiveAngularEnvironmentValues(fileContent, isDevelopment);
+  fileContent = `export const environment = ${fileContent}`
 
   // Append modified content to the archive
   archive.append(fileContent, { name: path.join(normalizedDir, subDir, fileName) });
