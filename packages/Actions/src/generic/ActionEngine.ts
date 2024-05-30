@@ -429,7 +429,7 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
       // this is where the log entry for the action run will be created
       logEntity.EndedAt = new Date();
       logEntity.Params = JSON.stringify(params.Params);
-      logEntity.ResultCode = result.Result.ResultCode;
+      logEntity.ResultCode = result.Result?.ResultCode;
       await logEntity.Save(); // save a second time to record the action ending
    }
 

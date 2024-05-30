@@ -1,13 +1,22 @@
-import { MJGlobal, RegisterClass } from "@memberjunction/global";
+import { RegisterClass } from "@memberjunction/global";
 import { EntityActionInvocationParams } from "./EntityActionEngine";
 import { ActionEngine, ActionParam, ActionResult } from "../generic/ActionEngine";
-import { BaseAction } from "../generic/BaseAction";
+import { ActionParamEntity } from "@memberjunction/core-entities";
 
 /**
  * Base class for invocation of any entity action invocation type
  */
 export abstract class EntityActionInvocationBase {
     public abstract InvokeAction(params: EntityActionInvocationParams): Promise<ActionResult>
+
+    /**
+     * Case insensitive helper method to find a param by valueType
+     * @param allParams 
+     * @param valueType 
+     */
+    public FindParam(allParams: ActionParamEntity[], valueType: "Scalar" | "Simple Object" | "BaseEntity Sub-Class" | "Other"): ActionParamEntity {
+        return allParams.find(p => p.ValueType.trim().toLowerCase() === valueType.trim().toLowerCase());
+    }
 }
 
 /**
@@ -37,7 +46,7 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             await ActionEngine.Instance.Config(false, params.ContextUser);
 
             const action = ActionEngine.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
-            const param = action.Params.find(p => p.ValueType.trim().toLowerCase() === 'BaseEntity Sub-Class'.trim().toLowerCase()); // find the base entity sub-class param 
+            const param = this.FindParam(action.Params, 'BaseEntity Sub-Class'); // find the base entity sub-class param 
 
             const internalParams: ActionParam[] = [{
                 Name: param.Name, // parameter could be named anything, but we know it's the base entity sub-class so we are using it here
@@ -74,7 +83,7 @@ export class EntityActionInvocationValidate extends EntityActionInvocationSingle
             await ActionEngine.Instance.Config(false, params.ContextUser);
 
             const action = ActionEngine.Instance.Actions.find(a => a.ID === params.EntityAction.ActionID);
-            const param = action.Params.find(p => p.ValueType === 'BaseEntity Sub-Class'); // find the base entity sub-class param 
+            const param = this.FindParam(action.Params, 'BaseEntity Sub-Class'); // find the base entity sub-class param 
             const internalParams: ActionParam[] = [{
                 Name: param.Name, // parameter could be named anything, but we know it's the base entity sub-class so we are using it here
                 Value: params.EntityObject
