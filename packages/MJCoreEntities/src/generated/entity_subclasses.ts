@@ -16806,26 +16806,15 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('EndedAt', value);
         }
         /**
-        * * Field Name: Inputs
-        * * Display Name: Inputs
+        * * Field Name: Params
+        * * Display Name: Params
         * * SQL Data Type: nvarchar(MAX)
         */
-        get Inputs(): string | null {  
-            return this.Get('Inputs');
+        get Params(): string | null {  
+            return this.Get('Params');
         }
-        set Inputs(value: string | null) {
-            this.Set('Inputs', value);
-        }
-        /**
-        * * Field Name: Outputs
-        * * Display Name: Outputs
-        * * SQL Data Type: nvarchar(MAX)
-        */
-        get Outputs(): string | null {  
-            return this.Get('Outputs');
-        }
-        set Outputs(value: string | null) {
-            this.Set('Outputs', value);
+        set Params(value: string | null) {
+            this.Set('Params', value);
         }
         /**
         * * Field Name: ResultCode

@@ -339,7 +339,7 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
                RunParams: params
             };
 
-            result.LogEntry = await this.LogActionRun(params, result);
+            result.LogEntry = await this.StartAndEndActionLog(params, result);
          }
       }
       else {
@@ -388,6 +388,7 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
       // this is where the actual action code will be implemented
       // first, let's get the right BaseAction derived sub-class for this particular action
       // using ClassFactory
+      const logEntry = await this.StartActionLog(params);
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.Name);
       if (!action) 
          throw new Error(`Could not find a class for action ${params.Action.Name}.`);
@@ -405,19 +406,37 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
          Params: simpleResult.Params,
          Result: resultCodeEntity
       };
-      const logResult = await this.LogActionRun(params, result);
-      result.LogEntry = logResult;
+      await this.EndActionLog(logEntry, params, result);
+      result.LogEntry = logEntry;
       return result;
    }
 
-   protected async LogActionRun(params: RunActionParams, result: ActionResult): Promise<ActionExecutionLogEntity> {
+   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<ActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
       const md = new Metadata();
       const logEntity = await md.GetEntityObject<ActionExecutionLogEntity>('Action Execution Logs', this._contextUser);
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
-      
-      return null;
+      logEntity.StartedAt = new Date();
+      logEntity.UserID = this._contextUser.ID;
+      logEntity.Params = JSON.stringify(params.Params); // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
+      if (saveRecord)
+         await logEntity.Save(); // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save
+
+      return logEntity;
+   }
+   protected async EndActionLog(logEntity: ActionExecutionLogEntity, params: RunActionParams, result: ActionResult) {
+      // this is where the log entry for the action run will be created
+      logEntity.EndedAt = new Date();
+      logEntity.Params = JSON.stringify(params.Params);
+      logEntity.ResultCode = result.Result.ResultCode;
+      await logEntity.Save(); // save a second time to record the action ending
+   }
+
+   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<ActionExecutionLogEntity> {
+      const logEntity = await this.StartActionLog(params, false); // don't do the initial save
+      await this.EndActionLog(logEntity, params, result);
+      return logEntity;
    }
 }
 

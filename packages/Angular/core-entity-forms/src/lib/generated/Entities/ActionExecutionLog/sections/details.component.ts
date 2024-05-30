@@ -30,13 +30,7 @@ import { ActionExecutionLogEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Inputs"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Outputs"
+            FieldName="Params"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

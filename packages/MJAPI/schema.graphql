@@ -496,8 +496,7 @@ type ActionExecutionLog_ {
   """Timestamp of when the action ended execution."""
   EndedAt: Timestamp
   ID: Int!
-  Inputs: String
-  Outputs: String
+  Params: String
   ResultCode: String
 
   """Number of days to retain the log; NULL for indefinite retention."""
@@ -1766,8 +1765,7 @@ input CreateActionContextTypeInput {
 input CreateActionExecutionLogInput {
   ActionID: Int!
   EndedAt: Timestamp
-  Inputs: String
-  Outputs: String
+  Params: String
   ResultCode: String
   RetentionPeriod: Int
   StartedAt: Timestamp!
@@ -14018,9 +14016,8 @@ input UpdateActionExecutionLogInput {
   ActionID: Int!
   EndedAt: Timestamp
   ID: Int!
-  Inputs: String
   OldValues___: [KeyValuePairInput!]
-  Outputs: String
+  Params: String
   ResultCode: String
   RetentionPeriod: Int
   StartedAt: Timestamp!

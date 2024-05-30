@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/29/2024, 8:37:30 PM
+* GENERATED: 5/30/2024, 8:01:16 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -19143,10 +19143,7 @@ export class ActionExecutionLog_ {
     EndedAt?: Date;
           
     @Field({nullable: true}) 
-    Inputs?: string;
-          
-    @Field({nullable: true}) 
-    Outputs?: string;
+    Params?: string;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -19191,10 +19188,7 @@ export class CreateActionExecutionLogInput {
     EndedAt?: Date;
 
     @Field({ nullable: true })
-    Inputs?: string;
-
-    @Field({ nullable: true })
-    Outputs?: string;
+    Params?: string;
 
     @Field({ nullable: true })
     ResultCode?: string;
@@ -19225,10 +19219,7 @@ export class UpdateActionExecutionLogInput {
     EndedAt?: Date;
 
     @Field({ nullable: true })
-    Inputs?: string;
-
-    @Field({ nullable: true })
-    Outputs?: string;
+    Params?: string;
 
     @Field({ nullable: true })
     ResultCode?: string;
