@@ -2,7 +2,7 @@ import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, Host
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
-import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -219,6 +219,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
               case EventCodes.ViewCreated:
               case EventCodes.AddDashboard:
               case EventCodes.AddReport:
+
               case EventCodes.AddQuery:
               case EventCodes.EntityRecordClicked:
               case EventCodes.ViewClicked:
@@ -226,6 +227,14 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
               case EventCodes.RunSearch:
                   // another component requested that we add something to our tab structure
                 this.AddOrSelectTab(<ResourceData>event.args);
+                break;
+              case EventCodes.CloseCurrentTab:
+                if(this.mjTabStrip && this.activeTabIndex > 0) {
+                  this.mjTabStrip.CloseTab(this.activeTabIndex);
+                }
+                else{
+                  LogError("no active tab to close or tabstrip not available");
+                }
                 break;
               default:
                 break;
@@ -741,9 +750,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public async closeTab(tab: any, newTabIndex: number): Promise<void> {
     const tabIndex = this.tabs.indexOf(tab);
     if (tabIndex >= 0) {
-       this.removeWorkspaceItem(this.tabs[tabIndex], null /*no transaction group*/); // INTENTIONAL - do not use await here, we want to let the database updates happen in the background
-//      await this.waitForDomUpdate(); // make sure dom is up to date
-
+      // INTENTIONAL - do not use await here, we want to let the database updates happen in the background
+      this.removeWorkspaceItem(this.tabs[tabIndex], null /*no transaction group*/);
+      //await this.waitForDomUpdate(); // make sure dom is up to date
       // now, check to see how many tabs we have left and if we have none, then we need to select the HOME tab
       if (this.tabs.length > 0) {
         if (newTabIndex === 0) {
@@ -792,7 +801,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
 
 
-  public getActiveTabId() {
+  public getActiveTabId(): any | null {
     if (this.activeTabIndex === 0) {
       return null
     }
@@ -1019,7 +1028,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.drawerItems.push(drawerItem); 
     }
     else{
-      console.log("no resource type found for " + resourceType);
+      LogStatus("no resource type found for " + resourceType);
     }
   }
 

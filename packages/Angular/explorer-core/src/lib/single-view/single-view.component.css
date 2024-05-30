@@ -1,14 +1,26 @@
 .single-view-wrap {
   padding: 10px;
 }
+
 ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper {
     background: var(--white-color) !important;
     padding-left: 0 !important;
-  }
-  ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item.k-active {
-    border-bottom: 3px solid var(--border-blue) !important;
-  }
-    ::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item {
+}
+
+::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item.k-active {
+  border-bottom: 3px solid var(--border-blue) !important;
+}
+
+::ng-deep .analysis-wrapper .k-tabstrip-items-wrapper .k-tabstrip-items .k-tabstrip-item {
     background: var(--white-color) !important;
     border-right: 0 !important;
-  }
+}
+
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.padding-left-small {
+  padding-left: 10px;
+}

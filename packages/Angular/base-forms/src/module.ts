@@ -12,19 +12,21 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { FormToolbarComponent } from './lib/form-toolbar';
 import { MJFormField } from './lib/base-field-component';
-import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { AskSkipModule } from '@memberjunction/ng-ask-skip';
+import { CreateRecordComponent } from './lib/create-record/create-record.component';
 
 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
     FormToolbarComponent,
-    MJFormField
+    MJFormField,
+    CreateRecordComponent
   ],
   imports: [
     CommonModule,
@@ -43,7 +45,8 @@ import { AskSkipModule } from '@memberjunction/ng-ask-skip';
   exports: [
     SectionLoaderComponent,
     FormToolbarComponent,
-    MJFormField
+    MJFormField,
+    CreateRecordComponent
   ]
 })
 export class BaseFormsModule { }

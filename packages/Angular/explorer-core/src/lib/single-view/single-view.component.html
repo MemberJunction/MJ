@@ -2,7 +2,6 @@
   <div class="card-container" class="searchBox">
     <kendo-textbox
       id="txtSearch"
-      *ngIf="showSearch"
       placeholder="Search here..."
       kendoTextBox
       (valueChange)="onSearch($event)"
@@ -10,8 +9,17 @@
       [(ngModel)]="searchText"
     ></kendo-textbox>
 
-    <mj-user-view-properties-dialog *ngIf="selectedView" [ViewID]="selectedView.ID" (dialogClosed)="this.viewPropertiesDialogClosed($event)" ></mj-user-view-properties-dialog>
+    <div class="flex-row">
+      @if(canCreateRecord){
+        <button kendoButton (click)="createNewRecord()">
+          <span class="fa-solid fa-plus"></span>
+          {{createNewText}}
+        </button>
+      }
+      <mj-user-view-properties-dialog class="padding-left-small" *ngIf="selectedView" [ViewID]="selectedView.ID" (dialogClosed)="this.viewPropertiesDialogClosed($event)"/>
+    </div>
   </div>
 
-  <mj-user-view-grid-with-analysis class="analysis-wrapper" (rowClicked)="handleRowClick($event)" [AutoNavigate]="false" mjFillContainer></mj-user-view-grid-with-analysis>
+  <mj-user-view-grid-with-analysis class="analysis-wrapper" (rowClicked)="handleRowClick($event)" [AutoNavigate]="false" mjFillContainer/>
+  <create-record-dialog #createRecordDialog [EntityObjectName]=entityObjectName/>
 </div>

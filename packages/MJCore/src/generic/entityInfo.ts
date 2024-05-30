@@ -636,6 +636,13 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Returns the BaseTable but with spaces inbetween capital letters
+     * */
+    get DisplayName(): string {
+        return this.BaseTable.replace(/([A-Z])/g, ' $1').trim();
+    }
+
+    /**
      * Returns the EntityField object for the Field that has IsNameField set to true. If multiple fields have IsNameField on, the function will return the first field (by sequence) that matches. 
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
