@@ -561,7 +561,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && pKeyValue) ));
-
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => f.CodeName).join("\n                    ")}
             }`
@@ -591,6 +590,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
                 }
                 vars.input[f.CodeName] = val;
+            }
+
+            // now add an OldValues prop to the vars IF the type === 'update'
+            if (type.trim().toLowerCase() === 'update') {
+                const ov = [];
+                entity.Fields.forEach(f => {
+                    const val = f.OldValue ? (typeof f.OldValue === 'string' ? f.OldValue : f.OldValue.toString()) : null;
+                    ov.push({Key: f.CodeName, Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                });
+                vars.input['OldValues___'] = ov;
             }
             
             if (entity.TransactionGroup) {

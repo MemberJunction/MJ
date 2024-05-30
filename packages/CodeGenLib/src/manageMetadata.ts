@@ -670,8 +670,12 @@ export class ManageMetadataBase {
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
                const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName);
                if (parsedValues) {
+                  // flip the order of parsedValues because they come out in reverse order from SQL Server
+                  parsedValues.reverse();
+
                   // we have parsed values from the check constraint, so sync them with the entity field values
                   await this.syncEntityFieldValues(ds, r.EntityID, r.ColumnName, parsedValues);
+                  
                   // finally, make sure the ValueListType column within the EntityField table is set to "List" because for check constraints we only allow the values specified in the list.
                   await ds.query(`UPDATE [${mj_core_schema()}].EntityField SET ValueListType='List' WHERE EntityID=${r.EntityID} AND Name='${r.ColumnName}'`)
                }

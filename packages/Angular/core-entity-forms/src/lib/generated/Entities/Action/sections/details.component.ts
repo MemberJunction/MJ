@@ -18,6 +18,12 @@ import { ActionEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="UserPrompt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -63,6 +69,12 @@ import { ActionEntity } from '@memberjunction/core-entities';
             [record]="record"
             FieldName="CodeApprovedAt"
             Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ForceCodeGeneration"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
