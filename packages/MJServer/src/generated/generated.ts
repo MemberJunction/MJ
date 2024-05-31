@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/31/2024, 2:37:01 PM
+* GENERATED: 5/31/2024, 3:19:32 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -5938,7 +5938,7 @@ export class List_ {
     UpdatedAt: Date;
           
     @Field(() => Int, {nullable: true}) 
-    ParentID?: number;
+    CategoryID?: number;
           
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -5980,7 +5980,7 @@ export class CreateListInput {
     CompanyIntegrationID?: number;
 
     @Field(() => Int, { nullable: true })
-    ParentID?: number;
+    CategoryID?: number;
 }
     
         
@@ -6011,7 +6011,7 @@ export class UpdateListInput {
     CompanyIntegrationID?: number;
 
     @Field(() => Int, { nullable: true })
-    ParentID?: number;
+    CategoryID?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
