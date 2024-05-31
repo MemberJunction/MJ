@@ -10,7 +10,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          AuditLogTypeInfo, AuthorizationInfo, TransactionGroupBase, TransactionItem, EntityPermissionType, EntitySaveOptions, LogError, RunReportParams,
          DatasetItemFilterType, DatasetResultType, DatasetStatusEntityUpdateDateType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, IRunReportProvider, RunReportResult,
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
-         CompositeKey} from "@memberjunction/core";
+         CompositeKey,
+         EntityDeleteOptions} from "@memberjunction/core";
 
 import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
@@ -1493,7 +1494,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return sSQL;
     }
 
-    public async Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean> {
+    public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
         try {
             if (!entity.PrimaryKey?.Value)
                 // existing record and not allowed to update
@@ -1508,8 +1509,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const sSQL = this.GetDeleteSQL(entity, user);
 
             // Handle Entity and Entity AI Actions here w/ before and after handling
-            await this.HandleEntityActions(entity, 'delete', true, user);
-            await this.HandleEntityAIActions(entity, 'delete', true, user);
+            if (!options || false === options?.SkipEntityActions)
+                await this.HandleEntityActions(entity, 'delete', true, user);
+            if (!options || false === options?.SkipEntityAIActions)
+                await this.HandleEntityAIActions(entity, 'delete', true, user);
        
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
@@ -1521,8 +1524,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         // our query.  
                         if (success && results) {
                             // Entity AI Actions and Actions - fired off async, NO await on purpose
-                            this.HandleEntityActions(entity, 'delete', false, user);
-                            this.HandleEntityAIActions(entity, 'delete', false, user);
+                            if (!options || false === options?.SkipEntityActions)
+                                this.HandleEntityActions(entity, 'delete', false, user);
+                            if (!options || false === options?.SkipEntityAIActions)
+                                this.HandleEntityAIActions(entity, 'delete', false, user);
 
                             resolve (entity.PrimaryKey.Value === results[0][entity.PrimaryKey.Name])
                         }

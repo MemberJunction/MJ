@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/30/2024, 8:01:16 AM
+* GENERATED: 5/31/2024, 1:09:03 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -10,9 +10,9 @@
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
+            AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
-import { AppContext, KeyValuePairInput } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -222,9 +222,9 @@ export class CompanyResolver extends ResolverBase {
     }
     
     @Mutation(() => Company_)
-    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Companies', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Companies', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -501,9 +501,9 @@ export class EmployeeResolver extends ResolverBase {
     }
     
     @Mutation(() => Employee_)
-    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Employees', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Employees', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -656,9 +656,9 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
     
     @Mutation(() => UserFavorite_)
-    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Favorites', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Favorites', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1209,9 +1209,9 @@ export class RoleResolver extends ResolverBase {
     }
     
     @Mutation(() => Role_)
-    async DeleteRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteRole(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Roles', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Roles', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2300,9 +2300,9 @@ export class EntityFieldResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityField_)
-    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Fields', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Fields', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3152,9 +3152,9 @@ export class EntityResolverBase extends ResolverBase {
     }
     
     @Mutation(() => Entity_)
-    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entities', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3680,9 +3680,9 @@ export class UserResolverBase extends ResolverBase {
     }
     
     @Mutation(() => User_)
-    async DeleteUser(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUser(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Users', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Users', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3971,9 +3971,9 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityRelationship_)
-    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Relationships', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Relationships', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4457,9 +4457,9 @@ export class UserViewResolverBase extends ResolverBase {
     }
     
     @Mutation(() => UserView_)
-    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Views', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Views', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5080,9 +5080,9 @@ export class ApplicationResolver extends ResolverBase {
     }
     
     @Mutation(() => Application_)
-    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Applications', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Applications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5253,9 +5253,9 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
     
     @Mutation(() => ApplicationEntity_)
-    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Application Entities', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Application Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5491,9 +5491,9 @@ export class EntityPermissionResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityPermission_)
-    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Permissions', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Permissions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5637,9 +5637,9 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
     
     @Mutation(() => UserApplicationEntity_)
-    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Application Entities', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Application Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5771,9 +5771,9 @@ export class UserApplicationResolver extends ResolverBase {
     }
     
     @Mutation(() => UserApplication_)
-    async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Applications', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Applications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6095,9 +6095,9 @@ export class ListResolver extends ResolverBase {
     }
     
     @Mutation(() => List_)
-    async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteList(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Lists', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Lists', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6234,9 +6234,9 @@ export class ListDetailResolver extends ResolverBase {
     }
     
     @Mutation(() => ListDetail_)
-    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('List Details', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('List Details', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7213,9 +7213,9 @@ export class UserRoleResolver extends ResolverBase {
     }
         
     @Mutation(() => UserRole_)
-    async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Roles', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Roles', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9506,9 +9506,9 @@ export class DashboardResolver extends ResolverBase {
     }
     
     @Mutation(() => Dashboard_)
-    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Dashboards', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Dashboards', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10062,9 +10062,9 @@ export class ReportResolver extends ResolverBase {
     }
     
     @Mutation(() => Report_)
-    async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReport(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Reports', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Reports', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10208,9 +10208,9 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
     
     @Mutation(() => ReportSnapshot_)
-    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Report Snapshots', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Report Snapshots', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10646,9 +10646,9 @@ export class WorkspaceResolver extends ResolverBase {
     }
     
     @Mutation(() => Workspace_)
-    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Workspaces', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Workspaces', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10826,9 +10826,9 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
     
     @Mutation(() => WorkspaceItem_)
-    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Workspace Items', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Workspace Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11200,9 +11200,9 @@ export class ConversationDetailResolver extends ResolverBase {
     }
     
     @Mutation(() => ConversationDetail_)
-    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Conversation Details', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Conversation Details', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11430,9 +11430,9 @@ export class ConversationResolver extends ResolverBase {
     }
     
     @Mutation(() => Conversation_)
-    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Conversations', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Conversations', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11623,9 +11623,9 @@ export class UserNotificationResolver extends ResolverBase {
     }
     
     @Mutation(() => UserNotification_)
-    async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Notifications', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Notifications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12712,9 +12712,9 @@ export class QueryCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => QueryCategory_)
-    async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Query Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Query Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14296,9 +14296,9 @@ export class DataContextItemResolver extends ResolverBase {
     }
     
     @Mutation(() => DataContextItem_)
-    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Data Context Items', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Data Context Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14475,9 +14475,9 @@ export class DataContextResolver extends ResolverBase {
     }
     
     @Mutation(() => DataContext_)
-    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Data Contexts', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Data Contexts', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14666,9 +14666,9 @@ export class UserViewCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => UserViewCategory_)
-    async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User View Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User View Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14848,9 +14848,9 @@ export class DashboardCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => DashboardCategory_)
-    async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Dashboard Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Dashboard Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15030,9 +15030,9 @@ export class ReportCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => ReportCategory_)
-    async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Report Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Report Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15408,9 +15408,9 @@ export class FileResolver extends ResolverBase {
     }
     
     @Mutation(() => File_)
-    async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFile(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Files', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Files', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15577,9 +15577,9 @@ export class FileCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => FileCategory_)
-    async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('File Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('File Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17014,9 +17014,9 @@ export class EntityBehaviorResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityBehavior_)
-    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Behaviors', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Behaviors', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17159,9 +17159,9 @@ export class EntityBehaviorTypeResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityBehaviorType_)
-    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Behavior Types', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Behavior Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17312,9 +17312,9 @@ export class ApplicationSettingResolver extends ResolverBase {
     }
     
     @Mutation(() => ApplicationSetting_)
-    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Application Settings', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Application Settings', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18177,6 +18177,9 @@ export class Action_ {
     @Field(() => [mj_core_schema_server_object_types.ActionParam_])
     ActionParamsArray: mj_core_schema_server_object_types.ActionParam_[]; // Link to ActionParams
     
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    
 }
         
 //****************************************************************************
@@ -18373,6 +18376,14 @@ export class ActionResolver extends ResolverBase {
         this.CheckUserReadPermissions('Action Params', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionParams] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Params', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Action Params', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() action_: Action_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ActionID]=${action_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
         return result;
     }
         
@@ -19490,6 +19501,326 @@ export class ActionParamResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Params', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Action Libraries
+//****************************************************************************
+@ObjectType({ description: 'Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.' })
+export class ActionLibrary_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    ActionID: number;
+          
+    @Field(() => Int) 
+    LibraryID: number;
+          
+    @Field({nullable: true, description: 'List of classes and functions used by the action from the library.'}) 
+    ItemsUsed?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(1000)
+    Action: string;
+          
+    @Field() 
+    @MaxLength(510)
+    Library: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Action Libraries   
+//****************************************************************************
+@InputType()
+export class CreateActionLibraryInput {
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field(() => Int)
+    LibraryID: number;
+
+    @Field({ nullable: true })
+    ItemsUsed?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Action Libraries   
+//****************************************************************************
+@InputType()
+export class UpdateActionLibraryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    ActionID: number;
+
+    @Field(() => Int)
+    LibraryID: number;
+
+    @Field({ nullable: true })
+    ItemsUsed?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Action Libraries
+//****************************************************************************
+@ObjectType()
+export class RunActionLibraryViewResult {
+    @Field(() => [ActionLibrary_])
+    Results: ActionLibrary_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ActionLibrary_)
+export class ActionLibraryResolver extends ResolverBase {
+    @Query(() => RunActionLibraryViewResult)
+    async RunActionLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionLibraryViewResult)
+    async RunActionLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunActionLibraryViewResult)
+    async RunActionLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Action Libraries';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => ActionLibrary_, { nullable: true })
+    async ActionLibrary(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ActionLibrary_ | null> {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => ActionLibrary_)
+    async CreateActionLibrary(
+        @Arg('input', () => CreateActionLibraryInput) input: CreateActionLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Action Libraries', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ActionLibrary_)
+    async UpdateActionLibrary(
+        @Arg('input', () => UpdateActionLibraryInput) input: UpdateActionLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Action Libraries', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Libraries
+//****************************************************************************
+@ObjectType({ description: 'Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.' })
+export class Library_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({description: 'Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true, description: 'List of classes and functions exported by the library.'}) 
+    ExportedItems?: string;
+          
+    @Field({nullable: true, description: 'Code showing the types and functions defined in the library to be used for reference by humans and AI'}) 
+    TypeDefinitions?: string;
+          
+    @Field({nullable: true, description: 'Examples of code use of the classes and/or functions from within the library'}) 
+    SampleCode?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    ActionLibrariesArray: mj_core_schema_server_object_types.ActionLibrary_[]; // Link to ActionLibraries
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Libraries   
+//****************************************************************************
+@InputType()
+export class CreateLibraryInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ExportedItems?: string;
+
+    @Field({ nullable: true })
+    TypeDefinitions?: string;
+
+    @Field({ nullable: true })
+    SampleCode?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Libraries   
+//****************************************************************************
+@InputType()
+export class UpdateLibraryInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    ExportedItems?: string;
+
+    @Field({ nullable: true })
+    TypeDefinitions?: string;
+
+    @Field({ nullable: true })
+    SampleCode?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Libraries
+//****************************************************************************
+@ObjectType()
+export class RunLibraryViewResult {
+    @Field(() => [Library_])
+    Results: Library_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(Library_)
+export class LibraryResolver extends ResolverBase {
+    @Query(() => RunLibraryViewResult)
+    async RunLibraryViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunLibraryViewResult)
+    async RunLibraryViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunLibraryViewResult)
+    async RunLibraryDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Libraries';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => Library_, { nullable: true })
+    async Library(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<Library_ | null> {
+        this.CheckUserReadPermissions('Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwLibraries] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Libraries', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.ActionLibrary_])
+    async ActionLibrariesArray(@Root() library_: Library_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Action Libraries', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActionLibraries] WHERE [LibraryID]=${library_.ID} ` + this.getRowLevelSecurityWhereClause('Action Libraries', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Action Libraries', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => Library_)
+    async CreateLibrary(
+        @Arg('input', () => CreateLibraryInput) input: CreateLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Libraries', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => Library_)
+    async UpdateLibrary(
+        @Arg('input', () => UpdateLibraryInput) input: UpdateLibraryInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Libraries', input, dataSource, userPayload, pubSub);
     }
     
 }

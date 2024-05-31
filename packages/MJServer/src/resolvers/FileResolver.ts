@@ -4,6 +4,7 @@ import {
   AppContext,
   Arg,
   Ctx,
+  DeleteOptionsInput,
   Field,
   FieldResolver,
   InputType,
@@ -121,7 +122,7 @@ export class FileResolver extends FileResolverBase {
   }
 
   @Mutation(() => File_)
-  async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+  async DeleteFile(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
     const md = new Metadata();
     const userInfo = this.GetUserFromPayload(userPayload);
 
@@ -139,6 +140,6 @@ export class FileResolver extends FileResolverBase {
       await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.Name);
     }
 
-    return super.DeleteFile(ID, { dataSource, userPayload }, pubSub);
+    return super.DeleteFile(ID, options, { dataSource, userPayload }, pubSub);
   }
 }

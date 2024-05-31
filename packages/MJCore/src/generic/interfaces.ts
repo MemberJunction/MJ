@@ -7,6 +7,7 @@ import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
+import { LibraryInfo } from "./libraryInfo";
 
 export class ProviderConfigDataBase {
     private _includeSchemas: string[] = [];
@@ -320,13 +321,13 @@ export interface IEntityDataProvider {
 
     Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
 
-    Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean>
+    Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean>
 
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
 }
 
 /**
- * Save options used when saving an entity
+ * Save options used when saving an entity record
  */
 export class EntitySaveOptions {
     /**
@@ -339,6 +340,21 @@ export class EntitySaveOptions {
     SkipEntityAIActions?: boolean = false;
     /**
      * If set to true, any Entity Actions associated with invocation types of Create or Update will be skipped during the save operation
+     */
+    SkipEntityActions?: boolean = false;
+}
+
+/**
+ * Options used when deleting an entity record
+ */
+export class EntityDeleteOptions {
+    /**
+     * If set to true, an AI actions associated with the entity will be skipped during the delete operation
+     */
+    SkipEntityAIActions?: boolean = false;
+
+    /**
+     * If set to true, any Entity Actions associated with invocation types of Delete will be skipped during the delete operation
      */
     SkipEntityActions?: boolean = false;
 }
@@ -388,6 +404,8 @@ export interface IMetadataProvider {
     get QueryCategories(): QueryCategoryInfo[]
 
     get QueryPermissions(): QueryPermissionInfo[]
+
+    get Libraries(): LibraryInfo[]
 
     get LatestRemoteMetadata(): MetadataInfo[]
 
