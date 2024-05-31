@@ -10,9 +10,9 @@
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
+            AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
-import { AppContext, KeyValuePairInput } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -938,9 +938,9 @@ export class AccountResolver extends ResolverBase {
     }
     
     @Mutation(() => Account_)
-    async DeleteAccount(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteAccount(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Accounts', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Accounts', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1924,9 +1924,9 @@ export class DealForecastCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => DealForecastCategory_)
-    async DeleteDealForecastCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDealForecastCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Deal Forecast Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Deal Forecast Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }

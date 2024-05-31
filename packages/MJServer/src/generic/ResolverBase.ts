@@ -6,6 +6,7 @@ import { DataSource } from 'typeorm';
 
 import { UserPayload } from '../types';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
+import { DeleteOptionsInput } from './DeleteOptionsInput';
 
 export class ResolverBase {
 
@@ -525,12 +526,12 @@ export class ResolverBase {
     entityObject.SetMany(clientNewValues);
   }
 
-  protected async DeleteRecord(entityName: string, key: CompositeKey, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  protected async DeleteRecord(entityName: string, key: CompositeKey, options: DeleteOptionsInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeDelete(dataSource, key)) { // fire event and proceed if it wasn't cancelled
         const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
         await entityObject.InnerLoad(key);
         const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-        if (await entityObject.Delete()) {
+        if (await entityObject.Delete(options)) {
             await this.AfterDelete(dataSource, key); // fire event
             return returnValue;
         }

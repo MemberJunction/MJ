@@ -10,9 +10,9 @@
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
+            AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
-import { AppContext, KeyValuePairInput } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -222,9 +222,9 @@ export class CompanyResolver extends ResolverBase {
     }
     
     @Mutation(() => Company_)
-    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteCompany(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Companies', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Companies', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -501,9 +501,9 @@ export class EmployeeResolver extends ResolverBase {
     }
     
     @Mutation(() => Employee_)
-    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEmployee(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Employees', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Employees', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -656,9 +656,9 @@ export class UserFavoriteResolverBase extends ResolverBase {
     }
     
     @Mutation(() => UserFavorite_)
-    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserFavorite(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Favorites', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Favorites', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -1209,9 +1209,9 @@ export class RoleResolver extends ResolverBase {
     }
     
     @Mutation(() => Role_)
-    async DeleteRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteRole(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Roles', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Roles', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -2300,9 +2300,9 @@ export class EntityFieldResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityField_)
-    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityField(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Fields', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Fields', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3152,9 +3152,9 @@ export class EntityResolverBase extends ResolverBase {
     }
     
     @Mutation(() => Entity_)
-    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entities', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3680,9 +3680,9 @@ export class UserResolverBase extends ResolverBase {
     }
     
     @Mutation(() => User_)
-    async DeleteUser(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUser(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Users', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Users', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -3971,9 +3971,9 @@ export class EntityRelationshipResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityRelationship_)
-    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityRelationship(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Relationships', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Relationships', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -4457,9 +4457,9 @@ export class UserViewResolverBase extends ResolverBase {
     }
     
     @Mutation(() => UserView_)
-    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserView(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Views', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Views', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5080,9 +5080,9 @@ export class ApplicationResolver extends ResolverBase {
     }
     
     @Mutation(() => Application_)
-    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplication(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Applications', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Applications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5253,9 +5253,9 @@ export class ApplicationEntityResolver extends ResolverBase {
     }
     
     @Mutation(() => ApplicationEntity_)
-    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Application Entities', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Application Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5491,9 +5491,9 @@ export class EntityPermissionResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityPermission_)
-    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityPermission(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Permissions', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Permissions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5637,9 +5637,9 @@ export class UserApplicationEntityResolver extends ResolverBase {
     }
     
     @Mutation(() => UserApplicationEntity_)
-    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplicationEntity(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Application Entities', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Application Entities', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -5771,9 +5771,9 @@ export class UserApplicationResolver extends ResolverBase {
     }
     
     @Mutation(() => UserApplication_)
-    async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserApplication(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Applications', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Applications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6104,9 +6104,9 @@ export class ListResolver extends ResolverBase {
     }
     
     @Mutation(() => List_)
-    async DeleteList(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteList(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Lists', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Lists', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -6243,9 +6243,9 @@ export class ListDetailResolver extends ResolverBase {
     }
     
     @Mutation(() => ListDetail_)
-    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteListDetail(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('List Details', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('List Details', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -7222,9 +7222,9 @@ export class UserRoleResolver extends ResolverBase {
     }
         
     @Mutation(() => UserRole_)
-    async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserRole(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Roles', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Roles', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -9515,9 +9515,9 @@ export class DashboardResolver extends ResolverBase {
     }
     
     @Mutation(() => Dashboard_)
-    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboard(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Dashboards', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Dashboards', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10071,9 +10071,9 @@ export class ReportResolver extends ResolverBase {
     }
     
     @Mutation(() => Report_)
-    async DeleteReport(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReport(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Reports', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Reports', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10217,9 +10217,9 @@ export class ReportSnapshotResolver extends ResolverBase {
     }
     
     @Mutation(() => ReportSnapshot_)
-    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportSnapshot(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Report Snapshots', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Report Snapshots', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10655,9 +10655,9 @@ export class WorkspaceResolver extends ResolverBase {
     }
     
     @Mutation(() => Workspace_)
-    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspace(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Workspaces', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Workspaces', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -10835,9 +10835,9 @@ export class WorkspaceItemResolver extends ResolverBase {
     }
     
     @Mutation(() => WorkspaceItem_)
-    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteWorkspaceItem(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Workspace Items', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Workspace Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11209,9 +11209,9 @@ export class ConversationDetailResolver extends ResolverBase {
     }
     
     @Mutation(() => ConversationDetail_)
-    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversationDetail(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Conversation Details', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Conversation Details', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11439,9 +11439,9 @@ export class ConversationResolver extends ResolverBase {
     }
     
     @Mutation(() => Conversation_)
-    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteConversation(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Conversations', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Conversations', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -11632,9 +11632,9 @@ export class UserNotificationResolver extends ResolverBase {
     }
     
     @Mutation(() => UserNotification_)
-    async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserNotification(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User Notifications', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User Notifications', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -12721,9 +12721,9 @@ export class QueryCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => QueryCategory_)
-    async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteQueryCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Query Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Query Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14305,9 +14305,9 @@ export class DataContextItemResolver extends ResolverBase {
     }
     
     @Mutation(() => DataContextItem_)
-    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDataContextItem(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Data Context Items', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Data Context Items', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14484,9 +14484,9 @@ export class DataContextResolver extends ResolverBase {
     }
     
     @Mutation(() => DataContext_)
-    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDataContext(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Data Contexts', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Data Contexts', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14675,9 +14675,9 @@ export class UserViewCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => UserViewCategory_)
-    async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteUserViewCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('User View Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('User View Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -14857,9 +14857,9 @@ export class DashboardCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => DashboardCategory_)
-    async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteDashboardCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Dashboard Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Dashboard Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15039,9 +15039,9 @@ export class ReportCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => ReportCategory_)
-    async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteReportCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Report Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Report Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15417,9 +15417,9 @@ export class FileResolver extends ResolverBase {
     }
     
     @Mutation(() => File_)
-    async DeleteFile(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFile(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Files', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Files', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -15586,9 +15586,9 @@ export class FileCategoryResolver extends ResolverBase {
     }
     
     @Mutation(() => FileCategory_)
-    async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('File Categories', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('File Categories', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17023,9 +17023,9 @@ export class EntityBehaviorResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityBehavior_)
-    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityBehavior(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Behaviors', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Behaviors', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17168,9 +17168,9 @@ export class EntityBehaviorTypeResolver extends ResolverBase {
     }
     
     @Mutation(() => EntityBehaviorType_)
-    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteEntityBehaviorType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Entity Behavior Types', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Entity Behavior Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17321,9 +17321,9 @@ export class ApplicationSettingResolver extends ResolverBase {
     }
     
     @Mutation(() => ApplicationSetting_)
-    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async DeleteApplicationSetting(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('Application Settings', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('Application Settings', key, options, dataSource, userPayload, pubSub);
     }
     
 }

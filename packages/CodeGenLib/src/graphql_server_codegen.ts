@@ -96,9 +96,9 @@ export class GraphQLServerGeneratorBase {
 * 
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
-            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
+            PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
+            AppContext, KeyValuePairInput, DeleteOptionsInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
-import { AppContext, KeyValuePairInput } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -463,9 +463,9 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
     
     sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
-    async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const key = new CompositeKey([${compositeKeyString}]);
-        return this.DeleteRecord('${entity.Name}', key, dataSource, userPayload, pubSub);
+        return this.DeleteRecord('${entity.Name}', key, options, dataSource, userPayload, pubSub);
     }
     `        
         }

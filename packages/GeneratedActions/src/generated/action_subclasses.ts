@@ -4,7 +4,7 @@
 **************************************************/
 import { ActionResultSimple, BaseAction, RunActionParams } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { RunView, UserInfo, BaseEntity, Metadata } from "@memberjunction/core";
+import { Metadata } from "@memberjunction/core";
 
             
 /**
@@ -15,65 +15,60 @@ import { RunView, UserInfo, BaseEntity, Metadata } from "@memberjunction/core";
 @RegisterClass(BaseAction, "Validate Accounts")
 export class Validate_Accounts_Action extends BaseAction {
     /*
-		The provided code accomplishes the following steps:
+		The provided TypeScript code performs the following actions:
 		
-		* Extracts the 'EntityObject' from the input parameters.
-		* Checks if 'EntityObject' is provided, if not, returns a failure message.
-		* Retrieves the 'Name' property from the 'EntityObject'.
-		* Checks if the 'Name' property is present, if not, returns a failure message.
-		* Evaluates the length of the 'Name'.
-		    * If the 'Name' length is greater than 10 characters:
-		        * Verifies that the first letter is one of 'A', 'C', 'X', or 'Y'.
-		        * If not, returns a failure message.
-		    * If the 'Name' length is 10 characters or fewer:
-		        * Verifies that the first character is one of 'O', 'P', or a number ('0'-'9').
-		        * If not, returns a failure message.
-		* If all checks are passed, returns a success message indicating the name is valid.
+		1. Define a type `EntityObject` with a single property `Name` of type string.
+		
+		2. Extract the 'EntityObject' parameter from the input `params.Params` array.
+		
+		3. Check if the 'EntityObject' parameter is present and valid.
+		
+		4. Retrieve the name value from the 'EntityObject'.
+		
+		5. Validate the 'Name' property based on its length:
+		
+		    * If the length is greater than 10, ensure the name starts with 'A', 'C', 'X', or 'Y'.
+		    * If the length is less than or equal to 10, ensure the name starts with 'O', 'P', or a numerical digit.
+		
+		6. If the validation fails, return an object indicating the failure along with an appropriate message.
+		
+		7. If the validation passes, return an object indicating success.
 	*/
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const entityObject = params.Params.find(p => p.Name === 'EntityObject')?.Value;
-		if (!entityObject) {
+        type EntityObject = { Name: string };
+		
+		// Extract the 'EntityObject' from params array
+		const entityParam = params.Params.find(p => p.Name === "EntityObject");
+		
+		if (!entityParam || !entityParam.Value) {
 		    return {
 		        Success: false,
-		        ResultCode: 'EntityObjectNotFound',
-		        Message: 'The entity object was not provided.'
+		        ResultCode: "INVALID_PARAMETER",
+		        Message: "EntityObject parameter missing or invalid"
 		    };
 		}
 		
-		const name = entityObject.Name;
-		if (!name) {
+		const entityObject = entityParam.Value as EntityObject;
+		const name = entityObject.Name || "";
+		
+		// Validate the 'Name' property
+		const isNameLengthValid = name.length > 10;
+		const startsWithAllowedLetter = isNameLengthValid
+		    ? /^[ACXY].*/.test(name)
+		    : /^[OP0-9].*/.test(name);
+		
+		if (!startsWithAllowedLetter) {
 		    return {
 		        Success: false,
-		        ResultCode: 'NameNotFound',
-		        Message: 'The Name property is missing in the entity object.'
+		        ResultCode: "NAME_VALIDATION_FAILED",
+		        Message: isNameLengthValid ? "Name must start with A, C, X, or Y for names longer than 10 characters" : "Name must start with O, P, or a number for names equal to or shorter than 10 characters"
 		    };
-		}
-		
-		const nameLength = name.length;
-		if (nameLength > 10) {
-		    const initialChar = name.charAt(0).toUpperCase();
-		    if (!['A', 'C', 'X', 'Y'].includes(initialChar)) {
-		        return {
-		            Success: false,
-		            ResultCode: 'InvalidNameCharacter',
-		            Message: 'For names longer than 10 characters, the first letter must be A, C, X, or Y.'
-		        };
-		    }
-		} else {
-		    const initialChar = name.charAt(0).toUpperCase();
-		    if (!['O', 'P', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(initialChar)) {
-		        return {
-		            Success: false,
-		            ResultCode: 'InvalidNameCharacterForShortName',
-		            Message: 'For names 10 characters or shorter, the first letter must be O, P, or a number.'
-		        };
-		    }
 		}
 		
 		return {
 		    Success: true,
-		    ResultCode: 'ValidationPassed',
-		    Message: 'The entity object name is valid.'
+		    ResultCode: "NAME_VALIDATION_SUCCESS",
+		    Message: "Name validation passed"
 		};
     }
 }        
@@ -87,46 +82,58 @@ export class Validate_Accounts_Action extends BaseAction {
 @RegisterClass(BaseAction, "Create New Action Category")
 export class Create_New_Action_Category_Action extends BaseAction {
     /*
-		The code provided creates a new Action Category with a randomly generated name composed of a color, an animal, and a Canadian province.
+		The provided code performs the following steps:
 		
-		The steps are as follows:
+		* Defines three arrays containing lists of colors, animals, and Canadian provinces.
 		
-		1. Initialize Metadata object and get a new entity object for 'Action Categories'.
-		2. Define a helper function `getRandomElement` that returns a random element from an array.
-		3. Define arrays for colors, animals, and Canadian provinces.
-		4. Generate the random name by concatenating a random color, animal, and Canadian province.
-		5. Set the `Name` and `Description` fields of the new action category entity.
-		6. Save the new action category to the database.
-		7. Return an ActionResultSimple object indicating success, the result code, and a message showing the generated name.
+		* Defines a function `getRandomElement` to select a random element from an array.
+		
+		* Uses the `getRandomElement` function to randomly pick one color, one animal, and one province.
+		
+		* Combines the randomly selected elements into a string `randomCategoryName` with the format `'<Color> <Animal> of <Province>'`.
+		
+		* Creates a new action category using the `Metadata` object and setting the 'Name' and 'Description' fields of the new category entity.
+		
+		* Attempts to save the new category and checks if the save operation was successful.
+		
+		* Returns an appropriate success or failure response depending on the result of the save operation.
 	*/
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const md = new Metadata();
-		const newActionCategory = await md.GetEntityObject('Action Categories', params.ContextUser);
+        const colors = ['Red', 'Green', 'Blue', 'Yellow', 'Purple', 'Orange', 'Pink', 'Brown', 'Black', 'White'];
+		const animals = ['Bear', 'Wolf', 'Eagle', 'Hawk', 'Salmon', 'Beaver', 'Fox', 'Moose', 'Lynx', 'Bison'];
+		const provinces = ['Ontario', 'Quebec', 'British Columbia', 'Alberta', 'Manitoba', 'Saskatchewan', 'Nova Scotia', 'New Brunswick', 'Newfoundland and Labrador', 'Prince Edward Island'];
 		
-		// Helper function to get a random element from an array
-		const getRandomElement = (arr: string[]): string => arr[Math.floor(Math.random() * arr.length)];
+		function getRandomElement(arr: string[]): string {
+		    return arr[Math.floor(Math.random() * arr.length)];
+		}
 		
-		// Arrays of colors, animals, and Canadian provinces
-		const colors = ['Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Purple', 'Pink', 'Brown', 'Grey', 'Black', 'White'];
-		const animals = ['Bear', 'Moose', 'Beaver', 'Goose', 'Whale', 'Wolf', 'Cougar', 'Eagle', 'Lynx', 'Elk', 'Caribou'];
-		const provinces = ['Ontario', 'Quebec', 'Nova Scotia', 'New Brunswick', 'Manitoba', 'British Columbia', 'Prince Edward Island', 'Saskatchewan', 'Alberta', 'Newfoundland and Labrador'];
+		const randomColor = getRandomElement(colors);
+		const randomAnimal = getRandomElement(animals);
+		const randomProvince = getRandomElement(provinces);
 		
-		// Generating a random name
-		const name = `${getRandomElement(colors)} ${getRandomElement(animals)} of ${getRandomElement(provinces)}`;
+		const randomCategoryName = `${randomColor} ${randomAnimal} of ${randomProvince}`;
 		
-		// Setting the fields of the new action category
-		newActionCategory.Name = name;
-		newActionCategory.Description = `An auto-generated action category named ${name}`;
+		const metadata = new Metadata();
+		const newCategory = await metadata.GetEntityObject('Action Categories', params.ContextUser);
 		
-		// Save the new action category to the database
-		await newActionCategory.Save();
+		newCategory.Set('Name', randomCategoryName);
+		newCategory.Set('Description', `Category created with random name: ${randomCategoryName}`);
 		
-		// Return the result
-		return new ActionResultSimple({
+		const saveResult = await newCategory.Save();
+		
+		if (!saveResult) {
+		    return {
+		        Success: false,
+		        ResultCode: 'ERROR_SAVING_CATEGORY',
+		        Message: 'Failed to save the new action category.'
+		    };
+		}
+		
+		return {
 		    Success: true,
-		    ResultCode: 'ActionCategoryCreated',
-		    Message: `Successfully created a new action category with the name: ${name}`
-		});
+		    ResultCode: 'ValidationPassed',
+		    Message: 'The entity object name is valid.'
+		};
     }
 }        
             

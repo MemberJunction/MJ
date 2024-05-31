@@ -11,7 +11,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey,  
-         LogStatus} from "@memberjunction/core";
+         LogStatus,
+         EntityDeleteOptions} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -711,7 +712,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return rel;
     }
 
-    public async Delete(entity: BaseEntity, user: UserInfo) : Promise<boolean> {
+    public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
         try {
             const vars = {};
             const mutationInputTypes = [];
@@ -734,18 +735,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 returnValues += `${pk.CodeName}`;
             }
 
+            vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
+
             const queryName: string = 'Delete' + entity.EntityInfo.ClassName;
-            const inner = gql`${queryName}(${pkeyInnerParamString}) {
+            const inner = gql`${queryName}(${pkeyInnerParamString}, options___: $options___) {
                 ${returnValues}
             }
             `
-            const query = gql`mutation ${queryName} (${pkeyOuterParamString}) {
+            const query = gql`mutation ${queryName} (${pkeyOuterParamString}, $options___: DeleteOptionsInput!) {
                 ${inner}
             }
             `
-
-            console.log(query);
-            console.log(vars);
 
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it

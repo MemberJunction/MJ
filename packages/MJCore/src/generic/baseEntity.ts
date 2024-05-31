@@ -1,6 +1,6 @@
 import { MJGlobal } from '@memberjunction/global';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo, KeyValuePair } from './entityInfo';
-import { CompositeKey, EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import { CompositeKey, EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -793,14 +793,14 @@ export abstract class BaseEntity {
      * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting. 
      * @returns 
      */
-    public async Delete() : Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
         }
         else{
             this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
             
-            if (await BaseEntity.Provider.Delete(this, this.ActiveUser)) {
+            if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
                 // record deleted correctly
                 // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                 this.NewRecord();
