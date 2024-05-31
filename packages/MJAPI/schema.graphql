@@ -3632,6 +3632,7 @@ input CreateListInput {
   EntityID: Int
   ExternalSystemRecordID: String
   Name: String!
+  ParentID: Int
   UserID: Int!
 }
 
@@ -8207,6 +8208,7 @@ type List_ {
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
   Name: String!
+  ParentID: Int
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -16239,6 +16241,7 @@ input UpdateListInput {
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
+  ParentID: Int
   UserID: Int!
 }
 

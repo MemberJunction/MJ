@@ -341,7 +341,7 @@ export const EventCodes = {
   ViewNotifications: "ViewNotifications",
   PushStatusUpdates: "PushStatusUpdates",
   UserNotificationsUpdated: "UserNotificationsUpdated",
-  CloseCurrentTab: "CloseCurrentTab",
+  CloseCurrentTab: "CloseCurrentTab"
 } as const;
 
 export type EventCodes = typeof EventCodes[keyof typeof EventCodes];

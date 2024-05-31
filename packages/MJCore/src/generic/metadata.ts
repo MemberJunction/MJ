@@ -122,6 +122,21 @@ export class Metadata {
     }
 
     /**
+     * Helper function to return an EntityInfo from an Entity ID
+     * @param entityID
+     */
+    public EntityFromEntityID(entityID: number): EntityInfo | null {
+        let entity = this.Entities.find(e => e.ID == entityID);
+        if(entity){
+            return entity;
+        }
+        else{
+            LogError(`Entity ID: ${entityID} not found`);
+            return null;
+        }
+    }
+
+    /**
      * Returns true if the combination of userId/entityName/KeyValuePairs has a favorite status on (meaning the user has marked the record as a "favorite" for easy access)
      * @param userId 
      * @param entityName 
