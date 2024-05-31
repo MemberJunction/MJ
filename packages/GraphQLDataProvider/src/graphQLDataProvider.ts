@@ -735,14 +735,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 returnValues += `${pk.CodeName}`;
             }
 
-            vars["options___"] = options;
+            vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
 
             const queryName: string = 'Delete' + entity.EntityInfo.ClassName;
-            const inner = gql`${queryName}(${pkeyInnerParamString}) {
+            const inner = gql`${queryName}(${pkeyInnerParamString}, options___: $options___) {
                 ${returnValues}
             }
             `
-            const query = gql`mutation ${queryName} (${pkeyOuterParamString}) {
+            const query = gql`mutation ${queryName} (${pkeyOuterParamString}, $options___: DeleteOptionsInput!) {
                 ${inner}
             }
             `

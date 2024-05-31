@@ -1,32 +1,30 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
+import { ListCategoryEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Action Authorizations.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'List Categories.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-actionauthorization-form-details',
+    selector: 'gen-listcategory-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field
             [record]="record"
-            FieldName="ActionID"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Description"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ParentID"
             Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="AuthorizationName"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Comments"
-            Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
@@ -43,8 +41,8 @@ import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="Action"
-            Type="textbox"
+            FieldName="UserID"
+            Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
 
@@ -52,12 +50,12 @@ import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ActionAuthorizationDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ActionAuthorizationEntity;
+export class ListCategoryDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ListCategoryEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadActionAuthorizationDetailsComponent() {
+export function LoadListCategoryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

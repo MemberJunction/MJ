@@ -5082,6 +5082,17 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
+        * * SQL Data Type: int
+        */
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
+        }
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
+        }
+        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -15689,16 +15700,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ActionID', value);
         }
         /**
-        * * Field Name: AuthorizationID
-        * * Display Name: Authorization ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
+        * * Field Name: AuthorizationName
+        * * Display Name: Authorization Name
+        * * SQL Data Type: nvarchar(100)
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
         */
-        get AuthorizationID(): number {  
-            return this.Get('AuthorizationID');
+        get AuthorizationName(): string {  
+            return this.Get('AuthorizationName');
         }
-        set AuthorizationID(value: number) {
-            this.Set('AuthorizationID', value);
+        set AuthorizationName(value: string) {
+            this.Set('AuthorizationName', value);
         }
         /**
         * * Field Name: Comments
@@ -15738,15 +15749,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Action(): string {  
             return this.Get('Action');
-        }
-        
-        /**
-        * * Field Name: Authorization
-        * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        */
-        get Authorization(): string {  
-            return this.Get('Authorization');
         }
         
 
@@ -17353,6 +17355,121 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('UpdatedAt');
         }
         
+
+    }
+        
+    /**
+     * List Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ListCategory
+     * * Base View: vwListCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'List Categories')
+    export class ListCategoryEntity extends BaseEntity {
+        /**
+        * Loads the List Categories record from the database
+        * @param ID: number - primary key value to load the List Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ListCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * List Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ListCategoryEntity
+        * @throws {Error} - Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
 
     }
         

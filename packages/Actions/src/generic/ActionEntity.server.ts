@@ -1,9 +1,9 @@
-import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata } from "@memberjunction/core";
-import { ActionEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { ActionEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { CleanJSON, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
-import { ActionEngine, GeneratedCode, GlobalActionLibraries } from "./ActionEngine";
+import { ActionEngine, ActionLibrary, GeneratedCode } from "./ActionEngine";
 import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 
 /**
@@ -60,7 +60,16 @@ export class ActionEntityServerEntity extends ActionEntity {
         }
         return this._params;
     }
- 
+
+    private _libs: ActionLibraryEntity[] = null;
+    public get Libraries(): ActionLibraryEntity[] {
+        if (!this._libs) {
+            // load the inputs
+            this._libs = ActionEngine.Instance.ActionLibraries.filter(l => l.ActionID === this.ID);
+        }
+        return this._libs;
+    }
+
 
     /**
      * Override of the base Save method to handle the pre-processing to auto generate code whenever an action's UserPrompt is modified.
@@ -72,6 +81,8 @@ export class ActionEntityServerEntity extends ActionEntity {
         // make sure the ActionEngine is configured
         await ActionEngine.Instance.Config(false, this.ContextCurrentUser);
 
+        let newCodeGenerated: boolean = false;
+        let codeLibraries: ActionLibrary[] = [];
         if (this.GetFieldByName('UserPrompt').Dirty|| !this.IsSaved || this.ForceCodeGeneration) {
             // UserPrompt field is dirty, or this is a new record, either way, this is the condition where we want to generate the Code.
             const result = await this.GenerateCode();
@@ -81,12 +92,74 @@ export class ActionEntityServerEntity extends ActionEntity {
                 this.CodeApprovalStatus = 'Pending'; // set to pending even if previously approved since we changed the code
                 this.CodeApprovedAt = null; // reset the approved at date
                 this.CodeApprovedByUserID = null; // reset the approved by user id
+                newCodeGenerated = true; // flag for post-save processing of libraries
+                codeLibraries = result.LibrariesUsed;
             }
             else
                 throw new Error(`Failed to generate code for Action ${this.Name}.`);
         }
         this.ForceCodeGeneration = false; // make sure to reset this flag every time we save, it should never live past one run of the Save method, of course if Save fails, below, then it will not be reset
-        return super.Save(options);        
+        const wasNewRecord = !this.IsSaved;
+        if (await super.Save(options)) {
+            if (newCodeGenerated) {
+                // new code was generated, we need to sync up the ActionLibraries table with the libraries used in the code for this Action
+                // get a list of existing ActionLibrary records that match this Action
+                const existingLibraries: ActionLibraryEntity[] = [];       
+                if (!wasNewRecord) {
+                    const rv = new RunView();
+                    const libResult = await rv.RunView(
+                        {
+                            EntityName: 'Action Libraries',
+                            ExtraFilter: `ActionID = ${this.ID}`,
+                            ResultType: 'entity_object'
+                        },
+                        this.ContextCurrentUser
+                    );
+                    if (libResult.Success && libResult.Results.length > 0) {
+                        existingLibraries.push(...libResult.Results);
+                    }
+                }
+
+                // now we need to go through the libraries we ARE currently using in the current code and make sure they are in the ActionLibraries table
+                // and make sure nothing is in the table that we are not using
+                const librariesToAdd = codeLibraries.filter(l => !existingLibraries.some(el => el.Library.trim().toLowerCase() === l.LibraryName.trim().toLowerCase()));
+                const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
+                const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
+                const md = new Metadata();
+                const promises = [];
+                for (const lib of librariesToAdd) {
+                    const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
+                    if (libMetadata) {
+                        const newLib = await md.GetEntityObject<ActionLibraryEntity>('Action Libraries', this.ContextCurrentUser);
+                        newLib.ActionID = this.ID;
+                        newLib.LibraryID = libMetadata.ID;
+                        newLib.ItemsUsed = lib.ItemsUsed.join(',');
+                        promises.push(newLib.Save());  
+                    }
+                }
+
+                // now update the libraries that were already in place to ensure the ItemsUsed are up to date
+                for (const lib of librariesToUpdate) {
+                    const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
+                    lib.ItemsUsed = newCode.ItemsUsed.join(',');
+                    promises.push(lib.Save());  
+                }
+
+                // now remove the libraries that are no longer used
+                for (const lib of librariesToRemove) {
+                    // each lib in this array iteration is already a BaseEntity derived object
+                    promises.push(lib.Delete());  
+                }
+
+                // now wait for all the promises to complete
+                const results = await Promise.all(promises);
+                return results.some(r => r === false) ? false : true;
+            }
+            else 
+                return true;
+        }
+        else
+            return false;        
     }
 
     /**
@@ -94,7 +167,7 @@ export class ActionEntityServerEntity extends ActionEntity {
      * the mj_actions library for each user environment. The mj_actions library will have a class for each action and that class will have certain libraries imported at the top of the file and available for use.
      * That information along with a detailed amount of system prompt steering goes into the AI model in order to generate contextually appropriate and reliable code that maps to the business logic of the user  
      */
-    public async GenerateCode(): Promise<GeneratedCode> {
+    public async GenerateCode(maxAttempts: number = 3): Promise<GeneratedCode> {
         try {
             const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
             const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)); 
@@ -112,48 +185,7 @@ export class ActionEntityServerEntity extends ActionEntity {
                     },
                 ],
             }
-            const result = await llm.ChatCompletion(chatParams);
-            if (result && result.data) {
-                const llmResponse = result.data.choices[0].message.content;
-                if (llmResponse) {
-                    // try to parse it as JSON
-                    try {
-                        const cleansed = CleanJSON(llmResponse);
-                        if (!cleansed)
-                            throw new Error('Invalid JSON response from AI: ' + llmResponse);
-    
-                        const parsed = JSON.parse(cleansed);
-                        if (parsed.code && parsed.code.length > 0) {
-                            const trimmed = parsed.code.trim();
-    
-                            return  { 
-                                        Success: true,
-                                        Code: trimmed, 
-                                        Comments: parsed.explanation
-                                    };
-                        }
-                        else if (parsed.code !== undefined && parsed.code !== null) {
-                            return  { 
-                                Success: true,
-                                Code: '',  // empty string is valid, it means no code generated
-                                Comments: parsed.explanation
-                            };
-                        }
-                        else {
-                            // if we get here, no code was provided by the LLM, that is an error
-                            throw new Error('Invalid response from AI, no code property found in response: ' + llmResponse);
-                        }
-                    }
-                    catch (e) {
-                        LogError(e);
-                        throw new Error('Error parsing JSON response from AI: ' + llmResponse);
-                    }
-                }
-                else 
-                    throw new Error('Null response from AI');
-            }
-            else
-                throw new Error('No result returned from AI');
+            return await this.InternalGenerateCode(llm, chatParams, maxAttempts);
         }
         catch (e) {
             LogError(e);
@@ -161,14 +193,70 @@ export class ActionEntityServerEntity extends ActionEntity {
         }
     }
 
+    protected async InternalGenerateCode(llm: BaseLLM, chatParams: ChatParams, attemptsRemaining: number): Promise<GeneratedCode> {
+        try {
+            const result = await llm.ChatCompletion(chatParams);
+            if (result && result.data) {
+                const llmResponse = result.data.choices[0].message.content;
+                if (llmResponse) {
+                    // try to parse it as JSON
+                    const cleansed = CleanJSON(llmResponse);
+                    if (!cleansed)
+                        throw new Error('Invalid JSON response from AI: ' + llmResponse);
+
+                    const parsed = JSON.parse(cleansed);
+                    if (parsed.code && parsed.code.length > 0) {
+                        const trimmed = parsed.code.trim();
+
+                        return  { 
+                                    Success: true,
+                                    Code: trimmed, 
+                                    Comments: parsed.explanation,
+                                    LibrariesUsed: parsed.libraries
+                                };
+                    }
+                    else {
+                        throw new Error('Invalid JSON response from AI: ' + llmResponse);
+                    }
+                }
+                else 
+                    throw new Error('No response from AI');
+            }
+            else
+                throw new Error('No response from AI');
+        }
+        catch (e) {
+            LogError(e);
+            if (attemptsRemaining > 1) {
+                // try again
+                return await this.InternalGenerateCode(llm, chatParams, attemptsRemaining - 1);
+            }
+            else
+                return {
+                    Success: false,
+                    Code: '',
+                    Comments: `Error communicating with AI: ${e.message}`,
+                    LibrariesUsed: []
+                }
+        }
+    }
+
  
 
     public GenerateSysPrompt(): string {
-        const prompt: string = `You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
+        const prompt: string = `<RETURN_FORMAT>
+    * CRITICAL - I am a bot, I can ONLY understand fully formed JSON responses
+    * YOUR RESPONSE MUST BE A JSON OBJECT
+    * MORE INFO BELOW
+</RETURN_FORMAT>
+        
+<INTRODUCTION>
+You are an expert in TypeScript coding and business applications. You take great pride in easy to read, commented, and nicely formatted code.
 You will be provided a request for how to handle a specific type of action that they want created. An action is a "verb" in the MemberJunction framework that can do basically anything the user asks for.
 Your job is to write the TypeScript code that will be taken and inserted into a class as shown below using the classes
 for inputs/outputs and the ActionResultSimple class that is provided. The code you write will be used by the MemberJunction engine to execute the action when 
 it is called by the user.
+</INTRODUCTION>
 
 <CODE_EXAMPLE>
 export class ${this.ProgrammaticName}Action extends BaseAction {
@@ -195,12 +283,12 @@ the parameter has a type of input/output, you will receive the value as an input
 </AVAILABLE_PARAMETERS>
 
 <AVAILABLE_LIBRARIES>
-The following libraries are available for use in your code. THEY ARE ALREADY IMPORTED SO DO NOT IMPORT THEM IN YOUR CODE. 
+The following libraries are available for use in your code. THEY ARE ALREADY IMPORTED. **DO NOT IMPORT THEM IN YOUR CODE**
 Use these libraries as needed along with the documentation available at https://docs.memberjunction.org that explains these libraries/objects in detail to generate
 code that will conform to our framework and achieve the business logic desired by the user's prompt.
 IMPORTANT: DO NOT GENERATE IMPORT STATEMENTS FOR THESE LIBRARIES, THEY ARE ALREADY IMPORTED FOR YOU!
 ${
-    GlobalActionLibraries.map(l => JSON.stringify(l)).join('\n')
+    JSON.stringify(Metadata.Provider.Libraries)
 }
 </AVAILABLE_LIBRARIES>
 
@@ -276,13 +364,18 @@ ${
 The next message, which will be a user message in the conversation, will contain the sys admin's requested behavior for this entity. 
 
 <CRITICAL>
-I am a bot and can only understand JSON. Your response must be parsable into this type:
+I am a bot and can only understand FULLY FORMED JSON responses that can be parsed with JSON.parse(). 
+
+Your response must be JSON and parsable into this type:
 const returnType = {
     code: string, // The typescript code you will create that will work in the context described above. Make sure to include line breaks, but not tabs. That is, pretty format in terms of new lines, but do NOT indent with spaces/tabs, as I'll handle indentation.
     explanation: string // an explanation for a semi-technical person explaining what the code does. Here again use line breaks liberally to make it easy to read but do NOT indent with spaces/tabs as I will handle that. Use * lists and numbered lists as appropriate.
+    libraries: [
+        {LibraryName: string, ItemsUsed: string[]}, // tell me the libraries you have used in the code you created here in this array of libraries. I need this info to properly import them in the final code.
+    ]
 };
 </CRITICAL>
-**** REMEMBER **** I am a BOT, do not return anything other than JSON to me or I will choke on your response!
+**** REMEMBER **** I am a BOT, do not return anything other than the above JSON format to me or I will choke on your response!
 `
         return prompt;
     }        

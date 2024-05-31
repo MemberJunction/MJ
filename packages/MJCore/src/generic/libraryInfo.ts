@@ -31,8 +31,19 @@ export class LibraryInfo extends BaseInfo {
     CreatedAt: Date = null
     UpdatedAt: Date = null
 
-    // virtual fields - returned by the database VIEW
-    Parent: string = null
+    private _exportItemsArray: string[] = null; 
+    /**
+     * Helper method to get the ExportedItems as an array of strings, parsing the comma delimited string in the ExportedItems property
+     */
+    public get ExportItemsArray(): string[] {
+        if (!this._exportItemsArray && this.ExportedItems && this.ExportedItems.length > 0) {
+            this._exportItemsArray = this.ExportedItems.split(',').map(item => item.trim());
+        }
+        else
+            this._exportItemsArray = [];
+
+        return this._exportItemsArray;
+    }
 
     constructor(initData: any = null) {
         super();

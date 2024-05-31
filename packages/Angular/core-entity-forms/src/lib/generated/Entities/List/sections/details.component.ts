@@ -62,6 +62,12 @@ import { ListEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="CategoryID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"
