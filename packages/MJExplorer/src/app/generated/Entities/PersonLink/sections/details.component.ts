@@ -9,70 +9,70 @@ import { PersonLinkEntity } from 'mj_generatedentities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
-            [record]="record"
-            FieldName="PersonLinkID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CRMContactID"
-            Type="textbox"
-            [EditMode]="EditMode"
+        <mj-form-field 
+    [record]="record"
+    FieldName="PersonLinkID"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CRMContactID"
+    Type="textbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="MainGreatPlainsCustomerID"
-            Type="textbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="MainGreatPlainsCustomerID"
+    Type="textbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="MembershipGreatPlainsCustomerID"
-            Type="textbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="MembershipGreatPlainsCustomerID"
+    Type="textbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FirstName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="LastName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Email"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CRMAccountID"
-            Type="textbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FirstName"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="LastName"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Email"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CRMAccountID"
+    Type="textbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CreatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="UpdatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
 
     </div>
 </div>

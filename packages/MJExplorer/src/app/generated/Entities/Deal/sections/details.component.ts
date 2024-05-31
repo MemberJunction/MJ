@@ -9,199 +9,199 @@ import { DealEntity } from 'mj_generatedentities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
-            [record]="record"
-            FieldName="BCMID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ExternalSystemRecordID"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CompanyIntegrationID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+        <mj-form-field 
+    [record]="record"
+    FieldName="BCMID"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ExternalSystemRecordID"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CompanyIntegrationID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="AccountID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="AccountID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ContactID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ContactID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Title"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Description"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Value"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="IncludeInForecast"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Probability"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CloseDate"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="EmployeeID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Title"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Description"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Value"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="IncludeInForecast"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Probability"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CloseDate"
+    Type="datepicker"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="EmployeeID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Pipeline"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="LeadSource"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="LeadSourceDetail"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ExternalSystemCreatedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ExternalSystemUpdatedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="DealTypeID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Pipeline"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="LeadSource"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="LeadSourceDetail"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ExternalSystemCreatedAt"
+    Type="datepicker"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ExternalSystemUpdatedAt"
+    Type="datepicker"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CreatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="UpdatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="DealTypeID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="DealStageID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="DealStageID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="DealForecastCategoryID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="DealForecastCategoryID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="MRR"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="OneTimeFees"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ContractTermMonths"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ForecastNotes"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="IsDeleted"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Account"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="DealType"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="DealStage"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="DealForecastCategory"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="MRR"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="OneTimeFees"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ContractTermMonths"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ForecastNotes"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="IsDeleted"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Account"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="DealType"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="DealStage"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="DealForecastCategory"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
 
     </div>
 </div>

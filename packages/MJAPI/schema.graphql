@@ -3220,6 +3220,7 @@ input CreateEntityFieldInput {
   AllowUpdateInView: Boolean!
   AutoUpdateDescription: Boolean!
   Category: String
+  CodeType: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
   Description: String
@@ -3632,7 +3633,6 @@ input CreateListInput {
   EntityID: Int
   ExternalSystemRecordID: String
   Name: String!
-  ParentID: Int
   UserID: Int!
 }
 
@@ -7478,9 +7478,22 @@ type EntityFieldValue_ {
 
 """List of all fields within each entity with metadata about each field"""
 type EntityField_ {
+  """
+  If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
+  """
   AllowUpdateAPI: Boolean!
+
+  """
+  If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
+  """
   AllowUpdateInView: Boolean!
+
+  """Does the column allow null or not (auto maintained by CodeGen)"""
   AllowsNull: Boolean!
+
+  """
+  If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
+  """
   AutoIncrement: Boolean!
 
   """
@@ -7489,48 +7502,135 @@ type EntityField_ {
   AutoUpdateDescription: Boolean!
   BaseTable: String!
   BaseView: String!
+
+  """
+  Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
+  """
   Category: String
+
+  """
+  The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
+  """
+  CodeType: String
   CreatedAt: Timestamp!
+
+  """Determines the default width for this field when included in a view"""
   DefaultColumnWidth: Int
+
+  """
+  If set to 1, this field will be included by default in any new view created by a user.
+  """
   DefaultInView: Boolean!
+
+  """
+  If a default value is defined for the field it is stored here (auto maintained by CodeGen)
+  """
   DefaultValue: String
+
+  """Descriptive text explaining the purpose of the field"""
   Description: String
+
+  """A user friendly alternative to the field name"""
   DisplayName: String
   Entity: String!
   EntityClassName: String
   EntityCodeName: String
   EntityFieldValuesArray: [EntityFieldValue_!]!
   EntityID: Int!
+
+  """
+  Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
+  """
   ExtendedType: String
+
+  """
+  If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
+  """
   FullTextSearchEnabled: Boolean!
+
+  """
+  When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
+  """
   GeneratedFormSection: String!
   ID: Int!
+
+  """
+  If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
+  """
   IncludeInGeneratedForm: Boolean!
+
+  """
+  If set to 1, this column will be included in user search queries for both traditional and full text search
+  """
   IncludeInUserSearchAPI: Boolean!
+
+  """
+  If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
+  """
   IncludeRelatedEntityNameFieldInBaseView: Boolean!
+
+  """
+  If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
+  """
   IsNameField: Boolean!
+
+  """
+  Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
+  """
   IsPrimaryKey: Boolean!
+
+  """Indicates if the field must have unique values within the entity."""
   IsUnique: Boolean!
+
+  """NULL"""
   IsVirtual: Boolean!
+
+  """SQL data length (auto maintained by CodeGen)"""
   Length: Int
+
+  """Name of the field within the database table"""
   Name: String!
+
+  """SQL precision (auto maintained by CodeGen)"""
   Precision: Int
   RelatedEntity: String
   RelatedEntityBaseTable: String
   RelatedEntityBaseView: String
   RelatedEntityClassName: String
   RelatedEntityCodeName: String
+
+  """
+  Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
+  """
   RelatedEntityFieldName: String
+
+  """
+  Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)
+  """
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
   RelatedEntitySchemaName: String
+
+  """SQL scale (auto maintained by CodeGen)"""
   Scale: Int
   SchemaName: String!
+
+  """Display order of the field within the entity"""
   Sequence: Int!
+
+  """SQL Data type (auto maintained by CodeGen)"""
   Type: String!
   UpdatedAt: Timestamp!
+
+  """NULL"""
   UserSearchParamFormatAPI: String
+
+  """
+  Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
+  """
   ValueListType: String!
+
+  """NULL"""
   ViewCellTemplate: String
 }
 
@@ -8208,7 +8308,6 @@ type List_ {
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
   Name: String!
-  ParentID: Int
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -15767,6 +15866,7 @@ input UpdateEntityFieldInput {
   AllowUpdateInView: Boolean!
   AutoUpdateDescription: Boolean!
   Category: String
+  CodeType: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
   Description: String
@@ -16241,7 +16341,6 @@ input UpdateListInput {
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
-  ParentID: Int
   UserID: Int!
 }
 

@@ -9,104 +9,104 @@ import { QueryFieldEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
-            [record]="record"
-            FieldName="QueryID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+        <mj-form-field 
+    [record]="record"
+    FieldName="QueryID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Name"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Description"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Sequence"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="SQLBaseType"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="SQLFullType"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="SourceEntityID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Name"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Description"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Sequence"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="SQLBaseType"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="SQLFullType"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="SourceEntityID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="SourceFieldName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="IsComputed"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ComputationDescription"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="IsSummary"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="SummaryDescription"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Query"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="SourceEntity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="SourceFieldName"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="IsComputed"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ComputationDescription"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="IsSummary"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="SummaryDescription"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CreatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="UpdatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Query"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="SourceEntity"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
 
     </div>
 </div>

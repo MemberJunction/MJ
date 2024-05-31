@@ -256,6 +256,7 @@ import { ActionParamDetailsComponent, LoadActionParamDetailsComponent } from "./
 import { ActionLibraryDetailsComponent, LoadActionLibraryDetailsComponent } from "./Entities/ActionLibrary/sections/details.component"
 import { LibraryDetailsComponent, LoadLibraryDetailsComponent } from "./Entities/Library/sections/details.component"
 import { ListCategoryDetailsComponent, LoadListCategoryDetailsComponent } from "./Entities/ListCategory/sections/details.component"
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
     
 
 @NgModule({
@@ -513,7 +514,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    CodeEditorModule
 ],
 exports: [
 ]
@@ -768,7 +770,8 @@ imports: [
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule,
+    CodeEditorModule
 ],
 exports: [
 ]

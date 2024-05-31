@@ -9,62 +9,62 @@ import { ErrorLogEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
-            [record]="record"
-            FieldName="CompanyIntegrationRunID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+        <mj-form-field 
+    [record]="record"
+    FieldName="CompanyIntegrationRunID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CompanyIntegrationRunDetailID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CompanyIntegrationRunDetailID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Code"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Message"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CreatedBy"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Status"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Category"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Details"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Code"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Message"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CreatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CreatedBy"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Status"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Category"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="Details"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
 
     </div>
 </div>

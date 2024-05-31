@@ -9,157 +9,157 @@ import { EntityEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
-            [record]="record"
-            FieldName="ParentID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+        <mj-form-field 
+    [record]="record"
+    FieldName="ParentID"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="NameSuffix"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="AutoUpdateDescription"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="BaseViewGenerated"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="VirtualEntity"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextSearchEnabled"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextCatalog"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextCatalogGenerated"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextIndex"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextIndexGenerated"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextSearchFunction"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="FullTextSearchFunctionGenerated"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="UserViewMaxRows"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CascadeDeletes"
-            Type="checkbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="spMatch"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="EntityObjectSubclassName"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="EntityObjectSubclassImport"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CreatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="UpdatedAt"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CodeName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ClassName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="BaseTableCodeName"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ParentEntity"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ParentBaseTable"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="ParentBaseView"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="NameSuffix"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="AutoUpdateDescription"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="BaseViewGenerated"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="VirtualEntity"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextSearchEnabled"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextCatalog"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextCatalogGenerated"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextIndex"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextIndexGenerated"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextSearchFunction"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="FullTextSearchFunctionGenerated"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="UserViewMaxRows"
+    Type="numerictextbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CascadeDeletes"
+    Type="checkbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="spMatch"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="EntityObjectSubclassName"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="EntityObjectSubclassImport"
+    Type="textarea"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CreatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="UpdatedAt"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="CodeName"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ClassName"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="BaseTableCodeName"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ParentEntity"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ParentBaseTable"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
+        <mj-form-field 
+    [record]="record"
+    FieldName="ParentBaseView"
+    Type="textbox"
+    [EditMode]="EditMode"
+></mj-form-field>
 
     </div>
 </div>

@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/31/2024, 3:19:32 PM
+* GENERATED: 5/31/2024, 5:48:31 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -1889,110 +1889,114 @@ export class EntityField_ {
     @Field(() => Int) 
     EntityID: number;
           
-    @Field(() => Int) 
+    @Field(() => Int, {description: 'Display order of the field within the entity'}) 
     Sequence: number;
           
-    @Field() 
+    @Field({description: 'Name of the field within the database table'}) 
     @MaxLength(510)
     Name: string;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'A user friendly alternative to the field name'}) 
     @MaxLength(510)
     DisplayName?: string;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Descriptive text explaining the purpose of the field'}) 
     Description?: string;
           
     @Field(() => Boolean, {description: 'When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.'}) 
     AutoUpdateDescription: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)'}) 
     IsPrimaryKey: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Indicates if the field must have unique values within the entity.'}) 
     IsUnique: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category'}) 
     @MaxLength(510)
     Category?: string;
           
-    @Field() 
+    @Field({description: 'SQL Data type (auto maintained by CodeGen)'}) 
     @MaxLength(200)
     Type: string;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'SQL data length (auto maintained by CodeGen)'}) 
     Length?: number;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'SQL precision (auto maintained by CodeGen)'}) 
     Precision?: number;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'SQL scale (auto maintained by CodeGen)'}) 
     Scale?: number;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'Does the column allow null or not (auto maintained by CodeGen)'}) 
     AllowsNull: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'If a default value is defined for the field it is stored here (auto maintained by CodeGen)'}) 
     @MaxLength(510)
     DefaultValue?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)'}) 
     AutoIncrement: boolean;
           
-    @Field() 
+    @Field({description: 'Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.'}) 
     @MaxLength(40)
     ValueListType: string;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.'}) 
     @MaxLength(100)
     ExtendedType?: string;
           
-    @Field(() => Boolean) 
+    @Field({nullable: true, description: 'The type of code associated with this field. Only used when the ExtendedType field is set to "Code"'}) 
+    @MaxLength(100)
+    CodeType?: string;
+          
+    @Field(() => Boolean, {description: 'If set to 1, this field will be included by default in any new view created by a user.'}) 
     DefaultInView: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'NULL'}) 
     ViewCellTemplate?: string;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Determines the default width for this field when included in a view'}) 
     DefaultColumnWidth?: number;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)'}) 
     AllowUpdateAPI: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.'}) 
     AllowUpdateInView: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this column will be included in user search queries for both traditional and full text search'}) 
     IncludeInUserSearchAPI: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.'}) 
     FullTextSearchEnabled: boolean;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'NULL'}) 
     @MaxLength(1000)
     UserSearchParamFormatAPI?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.'}) 
     IncludeInGeneratedForm: boolean;
           
-    @Field() 
+    @Field({description: 'When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details'}) 
     @MaxLength(20)
     GeneratedFormSection: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'NULL'}) 
     IsVirtual: boolean;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.'}) 
     IsNameField: boolean;
           
-    @Field(() => Int, {nullable: true}) 
+    @Field(() => Int, {nullable: true, description: 'Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)'}) 
     RelatedEntityID?: number;
           
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: 'Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)'}) 
     @MaxLength(510)
     RelatedEntityFieldName?: string;
           
-    @Field(() => Boolean) 
+    @Field(() => Boolean, {description: 'If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field'}) 
     IncludeRelatedEntityNameFieldInBaseView: boolean;
           
     @Field({nullable: true}) 
@@ -2085,6 +2089,9 @@ export class CreateEntityFieldInput {
     @Field({ nullable: true })
     ExtendedType?: string;
 
+    @Field({ nullable: true })
+    CodeType?: string;
+
     @Field(() => Boolean)
     DefaultInView: boolean;
 
@@ -2163,6 +2170,9 @@ export class UpdateEntityFieldInput {
 
     @Field({ nullable: true })
     ExtendedType?: string;
+
+    @Field({ nullable: true })
+    CodeType?: string;
 
     @Field(() => Boolean)
     DefaultInView: boolean;
