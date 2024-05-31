@@ -11,7 +11,7 @@ import { BeforeUpdateItemEvent } from '../../generic/Events.types';
   templateUrl: './report-browser.component.html',
   styleUrls: ['./report-browser.component.css', '../../shared/first-tab-styles.css']
 })
-export class ReportBrowserComponent extends BaseBrowserComponent{
+export class ReportBrowserComponent extends BaseBrowserComponent {
   public reports: ReportEntity[] = [];
   public showLoader: boolean = false;
 

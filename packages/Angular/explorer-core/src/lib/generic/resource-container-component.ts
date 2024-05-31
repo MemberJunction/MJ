@@ -50,7 +50,6 @@ export class ResourceContainerComponent implements OnChanges {
   loadComponent() {
     try {
       this._loaded = true;
-
       const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType); 
       if (!resourceReg) {
         throw new Error(`Unable to find resource registration for ${this.Data.ResourceType}`);

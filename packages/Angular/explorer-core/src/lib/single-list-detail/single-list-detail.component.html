@@ -1,0 +1,8 @@
+<div>
+    @if(showLoader){
+        <kendo-loader type="converging-spinner"></kendo-loader>
+    }
+    @else{
+        <kendo-grid [data]="gridData"></kendo-grid>
+    }
+</div>
