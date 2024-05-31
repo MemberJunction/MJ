@@ -1,7 +1,7 @@
 import { GraphQLServerGeneratorBase } from './graphql_server_codegen';
 import { SQLCodeGenBase } from './sql_codegen';
 import { EntitySubClassGeneratorBase } from './entity_subclasses_codegen';
-import { setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
+import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider'
 import AppDataSource from "./db"
 import { ManageMetadataBase } from './manageMetadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
@@ -13,6 +13,8 @@ import { AngularClientGeneratorBase } from './angular_client_codegen';
 import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { CreateNewUserBase } from './createNewUser';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { ActionSubClassGeneratorBase } from './action_subclasses_codegen';
+import { ActionEngine } from '@memberjunction/actions';
 
 /**
  * This class is the main entry point for running the code generation process. It will handle all the steps required to generate the code for the MemberJunction system. You can sub-class this class
@@ -50,7 +52,11 @@ export class RunCodeGenBase {
             logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString())
             
             await this.setupDataSource();
-    
+
+            await UserCache.Instance.Refresh(AppDataSource);
+            const userMatch: MJ.UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner');
+            const currentUser = userMatch ? userMatch : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
+
             // get the entity metadata
             const md = new MJ.Metadata();
             if (md.Entities.length === 0) {
@@ -193,8 +199,6 @@ export class RunCodeGenBase {
             else
                 logStatus('Angular output directory NOT found in config file, skipping...');
         
-                //AngularCoreEntities
-    
             /****************************************************************************************
             // STEP 6 - Database Schema Output in JSON - for documentation and can be used by AI/etc.
             ****************************************************************************************/
@@ -208,10 +212,34 @@ export class RunCodeGenBase {
             }
             else
                 logStatus('DB Schema output directory NOT found in config file, skipping...');
+
+                
+            /****************************************************************************************
+            // STEP 7 - Actions Code Gen
+            ****************************************************************************************/
+            const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
+            await ActionEngine.Instance.Config(false, currentUser)
+            if (coreActionsOutputDir) {
+                logStatus('Generating CORE Actions Code...')
+                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
+                if (! await actionsGenerator.generateActions(ActionEngine.Instance.CoreActions, coreActionsOutputDir))  
+                    logError('Error generating CORE Actions code');
+            }
     
+            const actionsOutputDir = outputDir('ActionSubclasses', false);
+            if (actionsOutputDir) {
+                logStatus('Generating Actions Code...')
+                const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase);
+                if (! await actionsGenerator.generateActions(ActionEngine.Instance.NonCoreActions, actionsOutputDir))
+                    logError('Error generating Actions code');
+            }
+            else
+                logStatus('Actions output directory NOT found in config file, skipping...');
+
+
     
             /****************************************************************************************
-            // STEP 7 --- Finalization Step - execute any AFTER commands specified in the config file
+            // STEP 8 --- Finalization Step - execute any AFTER commands specified in the config file
             ****************************************************************************************/
             const afterCommands = commands('AFTER')
             if (afterCommands && afterCommands.length > 0) {
@@ -223,7 +251,7 @@ export class RunCodeGenBase {
 
 
             /****************************************************************************************
-            // STEP 8 --- Execute any AFTER SQL Scripts specified in the config file
+            // STEP 9 --- Execute any AFTER SQL Scripts specified in the config file
             ****************************************************************************************/
             if (!skipDB) {
                 if (! await sqlCodeGenObject.runCustomSQLScripts(AppDataSource, 'after-all'))

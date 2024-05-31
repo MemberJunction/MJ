@@ -12,7 +12,7 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          StripStopWords, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult, EntityDependency, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, LogStatus,
          CompositeKey} from "@memberjunction/core";
 
-import { AuditLogEntity, DuplicateRunEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { AuditLogEntity, DuplicateRunEntity, EntityAIActionEntity, ListEntity, RecordMergeDeletionLogEntity, RecordMergeLogEntity, UserFavoriteEntity, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 import { AIEngine, EntityAIActionParams } from "@memberjunction/aiengine";
 import { QueueManager } from '@memberjunction/queue'
 
@@ -22,6 +22,7 @@ import { SQLServerTransactionGroup } from "./SQLServerTransactionGroup";
 import { UserCache } from "./UserCache";
 import { RunQueryParams } from "@memberjunction/core/dist/generic/runQuery";
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
+import { ActionResult, EntityActionEngine } from "@memberjunction/actions";
 
 export class SQLServerProviderConfigData extends ProviderConfigDataBase {
     get DataSource(): any { return this.Data.DataSource }
@@ -979,12 +980,54 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         return sSQL;
     }
 
-    protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): any {
+    protected GetEntityAIActions(entityInfo: EntityInfo, before: boolean): EntityAIActionEntity[] {
         return AIEngine.EntityAIActions.filter((a) => a.EntityID === entityInfo.ID && 
                                                       a.TriggerEvent.toLowerCase().trim() === (before ? 'before save' : 'after save'));
     }
 
-    protected async HandleEntityAIActions(entity: BaseEntity, before: boolean, user: UserInfo) {
+    protected async HandleEntityActions(entity: BaseEntity, baseType: 'save' | 'delete' | 'validate', before: boolean, user: UserInfo): Promise<ActionResult[]> {
+        // use the EntityActionEngine for this
+        const engine = EntityActionEngine.Instance;
+        await engine.Config(false, user);
+        const newRecord = entity.IsSaved ? false : true;
+        const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
+        const invocationType = baseType === 'validate' ? 'Validate' : (before ? 'Before' + baseTypeType : 'After' + baseTypeType);
+        const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
+        if (!invocationTypeEntity)
+            throw new Error(`Invocation Type ${invocationType} not found in metadata`);
+
+        const actions = engine.GetActionsByEntityNameAndInvocationType(entity.EntityInfo.Name, invocationType);
+        const results: ActionResult[] = [];
+        if (actions.length > 0) {
+            const activeActions = actions.filter(a => a.Status === 'Active');
+            // filter down to only the active actions and loop through however many of those we have
+            for (const a of activeActions) {
+                const result = await engine.RunEntityAction({
+                    EntityAction: a,
+                    EntityObject: entity,
+                    InvocationType: invocationTypeEntity,
+                    ContextUser: user
+                })    
+                results.push(result);
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Handles Entity AI Actions. Parameters are setup for a future support of delete actions, but currently that isn't supported so the baseType parameter
+     * isn't fully functional. If you pass in delete, the function will just exit for now, and in the future calling code will start working when we support
+     * Delete as a trigger event for Entity AI Actions...
+     * @param entity 
+     * @param baseType 
+     * @param before 
+     * @param user 
+     */
+    protected async HandleEntityAIActions(entity: BaseEntity, baseType: 'save' | 'delete', before: boolean, user: UserInfo) {
+        // TEMP while we don't support delete
+        if (baseType === 'delete')
+            return;
+
         // Make sure AI Metadata is loaded here...
         await AIEngine.LoadAIMetadata(user);
         
@@ -993,39 +1036,40 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             const ai = new AIEngine();
             for (let i = 0; i < actions.length; i++) {
                 const a = actions[i];
-                const p: EntityAIActionParams = {
-                    entityAIActionId: a.ID,
-                    entityRecord: entity,
-                    actionId: a.AIActionID,
-                    modelId: a.AIModelID
-                }
-                if (before) {
-                    // do it with await so we're blocking, as it needs to complete before the record save continues
-                    await ai.ExecuteEntityAIAction(p)
-                }
-                else {
-                    // just add a task and move on, we are doing 'after save' so we don't wait
-                    try {
-                        QueueManager.AddTask('Entity AI Action', p, null, user);
+                if (a.TriggerEvent === 'before save' && before || 
+                    a.TriggerEvent === 'after save' && !before) {
+                    const p: EntityAIActionParams = {
+                        entityAIActionId: a.ID,
+                        entityRecord: entity,
+                        actionId: a.AIActionID,
+                        modelId: a.AIModelID
                     }
-                    catch (e) {
-                        LogError(e.message);
+                    if (before) {
+                        // do it with await so we're blocking, as it needs to complete before the record save continues
+                        await ai.ExecuteEntityAIAction(p)
                     }
+                    else {
+                        // just add a task and move on, we are doing 'after save' so we don't wait
+                        try {
+                            QueueManager.AddTask('Entity AI Action', p, null, user);
+                        }
+                        catch (e) {
+                            LogError(e.message);
+                        }
+                    }        
                 }
-
             }
         }
     }
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         try {
-            const pkeyName = entity.PrimaryKey.Name;
-            const pkeyVal = entity.PrimaryKey.Value;
-            if (pkeyVal && !entity.EntityInfo.AllowUpdateAPI) {
+            const bNewRecord = !entity.IsSaved;
+            if (!bNewRecord && !entity.EntityInfo.AllowUpdateAPI) {
                 // existing record and not allowed to update
                 throw new Error(`UPDATE not allowed for entity ${entity.EntityInfo.Name}`);
             }
-            else if ( (!pkeyVal) && !entity.EntityInfo.AllowCreateAPI) {
+            else if ( bNewRecord && !entity.EntityInfo.AllowCreateAPI) {
                 // new record and not allowed to create
                 throw new Error(`CREATE not allowed for entity ${entity.EntityInfo.Name}`);
             }
@@ -1033,15 +1077,29 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // getting here means we are good to save, now check to see if we're dirty and need to save
                 // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
                 if ( entity.Dirty || (options && options.IgnoreDirtyState) ) {
-                    const bNewRecord = pkeyVal ? false : true;
+                    // The assumption is that Validate() has already been called by the BaseEntity object that is invoking this provider.
+                    // However, we have an extra responsibility in this situation which is to fire off the EntityActions for the Validate invocation type and
+                    // make sure they clear. If they don't clear we throw an exception with the message provided.
+                    const validationResult = await this.HandleEntityActions(entity, 'validate', false, user);
+                    if (validationResult && validationResult.length > 0) {
+                        // one or more actions executed, see the reults and if any failed, concat their messages and return as exception being thrown
+                        const message = validationResult.filter(v => !v.Success).map(v => v.Message).join('\n\n');
+                        if (message)
+                            throw new Error(`Action Validation Failed:\n\n${message}`);
+                    }
+
                     const spName = bNewRecord ? (entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0 ? entity.EntityInfo.spCreate : 'spCreate' + entity.EntityInfo.BaseTable) : 
                                                 (entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0 ? entity.EntityInfo.spUpdate : 'spUpdate' + entity.EntityInfo.BaseTable);
+                    if (!options /*no options set*/ ||
+                        options.SkipEntityActions !== true /*options set, but not set to skip entity actions*/ ) {
+                        await this.HandleEntityActions(entity, 'save', true, user);
+                    }
 
                     if (!options /*no options set*/ || 
                          options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) {
                         // process any Entity AI actions that are set to trigger BEFORE the save, these are generally a really bad idea to do before save
                         // but they are supported (for now)
-                        await this.HandleEntityAIActions(entity, true, user);
+                        await this.HandleEntityAIActions(entity, 'save', true, user);
                     }
 
                     const sSQL = this.GetSaveSQL(entity, bNewRecord, spName, user);
@@ -1062,8 +1120,12 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                                     // the transaction group will still commit, but the AI action will not be executed
                                     if (!options /*no options set*/ || 
                                         options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
-                                        this.HandleEntityAIActions(entity, false, user);
-    
+                                        this.HandleEntityAIActions(entity, 'save', false, user);
+
+                                    // Same approach to Entity Actions as Entity AI Actions
+                                    if (!options || options.SkipEntityActions !== true) 
+                                        this.HandleEntityActions(entity, 'save', false, user);
+
                                     resolve (results[0])
                                 }
                                 else
@@ -1082,10 +1144,15 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                         this._bAllowRefresh = true; // allow refreshes now
 
                         if (result && result.length > 0) {
+                            // Entity AI Actions - fired off async, NO await on purpose
                             if (!options /*no options set*/ || 
                                  options.SkipEntityAIActions !== true /*options set, but not set to skip entity AI actions*/ ) 
-                                this.HandleEntityAIActions(entity, false, user); // fire off any AFTER SAVE AI actions, but don't wait for them
+                                this.HandleEntityAIActions(entity, 'save', false, user); // fire off any AFTER SAVE AI actions, but don't wait for them
 
+                            // Entity Actions - fired off async, NO await on purpose
+                            if (!options || options.SkipEntityActions !== true) 
+                                this.HandleEntityActions(entity, 'save', false, user);
+                                
                             return result[0]; 
                         }
                         else
@@ -1439,6 +1506,10 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             // if we get here we can delete, so build the SQL and then handle appropriately either as part of TransGroup or directly...
 
             const sSQL = this.GetDeleteSQL(entity, user);
+
+            // Handle Entity and Entity AI Actions here w/ before and after handling
+            await this.HandleEntityActions(entity, 'delete', true, user);
+            await this.HandleEntityAIActions(entity, 'delete', true, user);
        
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
@@ -1448,8 +1519,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     entity.TransactionGroup.AddTransaction(new TransactionItem(sSQL, null, {dataSource: this._dataSource}, (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query.  
-                        if (success && results) 
+                        if (success && results) {
+                            // Entity AI Actions and Actions - fired off async, NO await on purpose
+                            this.HandleEntityActions(entity, 'delete', false, user);
+                            this.HandleEntityAIActions(entity, 'delete', false, user);
+
                             resolve (entity.PrimaryKey.Value === results[0][entity.PrimaryKey.Name])
+                        }
                         else 
                             // the transaction failed, nothing to update, but we need to call Reject so the 
                             // promise resolves with a rejection so our outer caller knows
@@ -1467,6 +1543,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                             if (key.Value !== d[0][key.Name]) 
                                 return false;
                         }
+
+                        // Entity AI Actions and Actions - fired off async, NO await on purpose
+                        this.HandleEntityActions(entity, 'delete', false, user);
+                        this.HandleEntityAIActions(entity, 'delete', false, user);
+            
                         return true
                     }
                     else

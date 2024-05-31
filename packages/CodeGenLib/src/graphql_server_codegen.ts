@@ -97,8 +97,8 @@ export class GraphQLServerGeneratorBase {
 **********************************************************************************/
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation, 
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput } from '@memberjunction/server';
-import { Metadata, EntityPermissionType } from '@memberjunction/core'
-import { AppContext } from '@memberjunction/server';
+import { Metadata, EntityPermissionType, CompositeKey } from '@memberjunction/core'
+import { AppContext, KeyValuePairInput } from '@memberjunction/server';
 
 import { MaxLength } from 'class-validator';
 import { DataSource } from 'typeorm';
@@ -385,11 +385,20 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
             if ( (includePrimaryKey && f.IsPrimaryKey) || (!f.IsPrimaryKey && !f.IsVirtual && f.AllowUpdateAPI && f.Type.trim().toLowerCase() !== 'uniqueidentifier') ) {
                 sRet += `
     @Field(${sFullTypeGraphQLString})
-    ${f.CodeName}: ${TypeScriptTypeFromSQLType(f.Type)};
-    `
+    ${f.CodeName}${f.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(f.Type)};
+`
             }
         }
-        sRet+=`}
+
+        // if the classPrefix is UPDATE, we need to add an optional OldValues array which will simply be an array of 
+        // KeyValuePairInputs that can be used to pass in the old values for all fields
+        if (classPrefix.trim().toLowerCase() === 'update') {
+            sRet += `
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+`
+        }
+        sRet += `}
     `
         return sRet;
     }
@@ -408,28 +417,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         @Ctx() { dataSource, userPayload }: AppContext, 
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
-            await entityObject.NewRecord();
-            entityObject.SetMany(input);
-            if (await entityObject.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
-                await this.AfterCreate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else 
-                // save failed, return null
-                return null;
-        }
-        else    
-            return null;
-    }
-
-    // Before/After CREATE Event Hooks for Sub-Classes to Override
-    protected async BeforeCreate(dataSource: DataSource, input: Create${entity.BaseTableCodeName}Input): Promise<boolean> {
-        return true;
-    }
-    protected async AfterCreate(dataSource: DataSource, input: Create${entity.BaseTableCodeName}Input) {
+        return this.CreateRecord('${entity.Name}', input, dataSource, userPayload, pubSub)
     }
         `
         }
@@ -443,36 +431,14 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         @Ctx() { dataSource, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
-        if (await this.BeforeUpdate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
-            ${entity.TrackRecordChanges ? `await entityObject.Load(${loadParamString}) // Track Changes is turned on, so we need to get the latest data from DB first before we save` : 
-                                            `entityObject.LoadFromData(input) // using the input instead of loading from DB because TrackChanges is turned off for ${entity.Name}` }
-            ${entity.TrackRecordChanges ? 'entityObject.SetMany(input);' : ''}
-            if (await entityObject.Save(${entity.TrackRecordChanges ? '' : '{ IgnoreDirtyState: true /*flag used because of LoadFromData() call above*/ }' })) {
-                // save worked, fire afterevent and return all the data
-                await this.AfterUpdate(dataSource, input); // fire event
-                return entityObject.GetAll();
-            }
-            else
-                return null; // save failed, return null
-        }
-        else
-            return null;
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeUpdate(dataSource: DataSource, input: Update${entity.BaseTableCodeName}Input): Promise<boolean> {
-        const i = input, d = dataSource; // prevent error
-        return true;
-    }
-    protected async AfterUpdate(dataSource: DataSource, input: Update${entity.BaseTableCodeName}Input) {
-        const i = input, d = dataSource; // prevent error
+        return this.UpdateRecord('${entity.Name}', input, dataSource, userPayload, pubSub);
     }
     `
         }
         if (entity.AllowDeleteAPI && !entity.VirtualEntity) {
             let graphQLPKEYArgs = '';
             let simplePKEYArgs = '';
+            let compositeKeyString = '';
             let pkeys = '';
             let whereClause = '';
             for (let i = 0; i < entity.PrimaryKeys.length; i++) {
@@ -484,6 +450,9 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         
                 simplePKEYArgs += (simplePKEYArgs.length > 0 ? ', ' : '');
                 simplePKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
+
+                compositeKeyString += (compositeKeyString.length > 0 ? ', ' : '');
+                compositeKeyString += `{FieldName: '${pk.Name}', Value: ${pk.CodeName}}`;
     
                 pkeys += (pkeys.length > 0 ? ', ' : '');
                 pkeys += `${pk.CodeName}`;
@@ -495,89 +464,16 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
     sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
     async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        if (await this.BeforeDelete(dataSource, ${pkeys})) { // fire event and proceed if it wasn't cancelled
-            const entityObject = <${`${entity.ClassName}Entity`}>await new Metadata().GetEntityObject('${entity.Name}', this.GetUserFromPayload(userPayload));
-            await entityObject.Load(${pkeys});
-            const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-            if (await entityObject.Delete()) {
-                await this.AfterDelete(dataSource, ${pkeys}); // fire event
-                return returnValue;
-            }
-            else 
-                return null; // delete failed, this will cause an exception
-        }
-        else
-            return null; // BeforeDelete canceled the operation, this will cause an exception
-    }
-
-    // Before/After UPDATE Event Hooks for Sub-Classes to Override
-    protected async BeforeDelete(dataSource: DataSource, ${simplePKEYArgs}): Promise<boolean> {
-        const i = ${entity.PrimaryKey.Name}, d = dataSource; // prevent error;
-        return true;
-    }
-    protected async AfterDelete(dataSource: DataSource, ${simplePKEYArgs}) {
-        const i = ${entity.PrimaryKey.Name}, d = dataSource; // prevent error
+        const key = new CompositeKey([${compositeKeyString}]);
+        return this.DeleteRecord('${entity.Name}', key, dataSource, userPayload, pubSub);
     }
     `        
         }
         return sRet;
     }
-    
-    // function generateSPParams(entity: EntityInfo, isUpdate: boolean): string {
-    //     let sRet: string = '',bFirst: boolean = true;
-    //     for (let i = 0; i < entity.Fields.length; i++) {
-    //         const f = entity.Fields[i];
-    //         if (!f.IsVirtual) {
-    //             switch (f.Name.toLowerCase()) {
-    //                 case 'id':
-    //                     if (isUpdate) {
-    //                         sRet += generateSingleSPParam(f, bFirst);
-    //                         bFirst = false;
-    //                     }
-    //                     break;
-    //                 case 'createdat':
-    //                 case 'updatedat':
-    //                     // do nothing
-    //                     break;
-    //                 default:
-    //                     if (f.Type.trim().toLowerCase() !== 'uniqueidentifier') {
-    //                         // DO NOT INCLUDE UNIQUEIDENTIFIER FIELDS
-    //                         // FOR CREATE/UPDATE, THEY ARE GENERATED BY THE DB
-    //                         sRet += generateSingleSPParam(f, bFirst);
-    //                         bFirst = false;
-    //                     }
-    //                     break;
-    //             }    
-    //         }
-    //     }
-    //     return sRet;
-    // }
-    
-    // function generateSingleSPParam(f: EntityFieldInfo, isFirst: boolean): string {
-    //     let sRet: string = '';
-    //     let quotes: string = '';
-    //     switch  ( TypeScriptTypeFromSQLType(f.Type).toLowerCase() ) {
-    //         case 'string':
-    //         case 'date':
-    //             quotes = "'";
-    //             break;
-    //         default:
-    //             break;
-    //     }
-    //     if (!isFirst) 
-    //         sRet += ',\n                ';
-    
-    //     sRet += `@${f.Name}=\${this.packageSPParam(input.${f.Name},"${quotes}")}`
-    
-    //     return sRet;
-    // }
+     
     
     protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
-        // let keyFieldTS: string = 'number';
-        // if (r.EntityKeyField) { 
-        //     const keyField = entity.Fields.find(f => f.Name.toLowerCase() == r.EntityKeyField.toLowerCase())
-        //     keyFieldTS = keyField ? TypeScriptTypeFromSQLType(keyField.Type)  : 'int';    
-        // }
         const md = new Metadata();
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
         const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
@@ -599,6 +495,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
     }
         `    
     }
+
     protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
         const md = new Metadata();
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());

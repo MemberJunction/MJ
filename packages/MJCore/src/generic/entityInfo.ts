@@ -3,7 +3,7 @@ import { Metadata } from "./metadata"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue } from "./util"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
 import { CompositeKey } from "./interfaces"
 
@@ -482,17 +482,7 @@ export class EntityFieldInfo extends BaseInfo {
 }
 
 
-export function CodeNameFromString(input: string): string {
-    // the code below replaces characters invalid for SQL or TypeScript identifiers with _ and stashes the result in a private variable so we only do this once
-    // Replace all invalid characters with _
-    let codeName = input.replace(/[^a-zA-Z0-9_]/g, "_");
 
-    // Prepend an underscore if the first character is a number
-    if (/^[0-9]/.test(codeName)) {
-        codeName = "_" + codeName;
-    }
-    return codeName;
-}
 
 /**
  * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
