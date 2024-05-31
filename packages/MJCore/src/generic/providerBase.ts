@@ -301,8 +301,7 @@ export abstract class ProviderBase implements IMetadataProvider {
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity) 
-                    if (contextUser)
-                        newObject.ContextCurrentUser = contextUser;
+                    await newObject.Config(contextUser);
 
                     return newObject;
                 }

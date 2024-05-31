@@ -43,6 +43,12 @@ import { ActionAuthorizationEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="Action"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="Authorization"
             Type="textbox"
             [EditMode]="EditMode"

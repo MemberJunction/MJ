@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ActionInputEntity } from '@memberjunction/core-entities';
+import { ActionParamEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Action Inputs.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Action Params.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-actioninput-form-details',
+    selector: 'gen-actionparam-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -26,6 +26,24 @@ import { ActionInputEntity } from '@memberjunction/core-entities';
             [record]="record"
             FieldName="DefaultValue"
             Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="ValueType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="IsArray"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
@@ -52,17 +70,23 @@ import { ActionInputEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field
+            [record]="record"
+            FieldName="Action"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>
     `
 })
-export class ActionInputDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ActionInputEntity;
+export class ActionParamDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ActionParamEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadActionInputDetailsComponent() {
+export function LoadActionParamDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

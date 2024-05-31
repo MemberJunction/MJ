@@ -161,3 +161,19 @@ export function StripStopWords(inputString: string): string {
     outputString = outputString.replace(/ +/g, ' ');  // Replace multiple spaces with a single space
     return outputString;
 }
+
+
+/**
+ * Returns a system-wide standard CodeName which is a programmatically acceptable identifier for a class, variable, etc using a standard replacement strategy for characters that are not acceptable in that context from a regular name
+ */
+export function CodeNameFromString(input: string): string {
+    // the code below replaces characters invalid for SQL or TypeScript identifiers with _ and stashes the result in a private variable so we only do this once
+    // Replace all invalid characters with _
+    let codeName = input.replace(/[^a-zA-Z0-9_]/g, "_");
+
+    // Prepend an underscore if the first character is a number
+    if (/^[0-9]/.test(codeName)) {
+        codeName = "_" + codeName;
+    }
+    return codeName;
+}

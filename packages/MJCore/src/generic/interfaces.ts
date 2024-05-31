@@ -48,6 +48,9 @@ export const ProviderType = {
 
 export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
 
+/**
+ * Composite keys are used to represent database keys and can include one or more key value pairs.
+ */
 export class CompositeKey {
 
     KeyValuePairs: KeyValuePair[];
@@ -239,6 +242,15 @@ export class CompositeKey {
     }
 
     /**
+     * Loads the key from a single key value pair
+     * @param fieldName 
+     * @param value 
+     */
+    LoadFromSingleKeyValuePair(fieldName: string, value: any): void {
+        this.KeyValuePairs = [{ FieldName: fieldName, Value: value }];
+    }
+
+    /**
      * Helper method to check if the underlying key value pairs are valid or not
      * i.e. if any of the key value pairs are null or undefined
      * @returns true if all key value pairs are valid, false if any are null or undefined
@@ -313,9 +325,22 @@ export interface IEntityDataProvider {
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
 }
 
+/**
+ * Save options used when saving an entity
+ */
 export class EntitySaveOptions {
+    /**
+     * If set to true, the record will be saved to the database even if nothing is detected to be "dirty" or changed since the prior load.
+     */
     IgnoreDirtyState: boolean = false;
+    /**
+     * If set to true, an AI actions associated with the entity will be skipped during the save operation
+     */
     SkipEntityAIActions?: boolean = false;
+    /**
+     * If set to true, any Entity Actions associated with invocation types of Create or Update will be skipped during the save operation
+     */
+    SkipEntityActions?: boolean = false;
 }
 
 export class EntityRecordNameInput  {

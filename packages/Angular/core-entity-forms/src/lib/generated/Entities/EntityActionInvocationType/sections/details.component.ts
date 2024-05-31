@@ -23,6 +23,12 @@ import { EntityActionInvocationTypeEntity } from '@memberjunction/core-entities'
         ></mj-form-field>
         <mj-form-field
             [record]="record"
+            FieldName="DisplaySequence"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field
+            [record]="record"
             FieldName="CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
