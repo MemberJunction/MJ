@@ -1,52 +1,33 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ListEntity } from '@memberjunction/core-entities';
+import { ActionLibraryEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'Lists.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'Action Libraries.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-list-form-details',
+    selector: 'gen-actionlibrary-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field
             [record]="record"
-            FieldName="Name"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Description"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="EntityID"
+            FieldName="ActionID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="UserID"
+            FieldName="LibraryID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="ExternalSystemRecordID"
+            FieldName="ItemsUsed"
             Type="textbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="CompanyIntegrationID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
@@ -62,19 +43,13 @@ import { ListEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="ParentID"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field
-            [record]="record"
-            FieldName="Entity"
+            FieldName="Action"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="User"
+            FieldName="Library"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -83,12 +58,12 @@ import { ListEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ListDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ListEntity;
+export class ActionLibraryDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ActionLibraryEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadListDetailsComponent() {
+export function LoadActionLibraryDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

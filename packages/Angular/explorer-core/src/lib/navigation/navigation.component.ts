@@ -226,7 +226,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
               case EventCodes.ViewClicked:
               case EventCodes.ViewClicked:
               case EventCodes.RunSearch:
-              case EventCodes.AddListDetail:
                   // another component requested that we add something to our tab structure
                 this.AddOrSelectTab(<ResourceData>event.args);
                 break;
