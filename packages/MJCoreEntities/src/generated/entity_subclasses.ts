@@ -5082,15 +5082,15 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Field Name: CategoryID
+        * * Display Name: Category ID
         * * SQL Data Type: int
         */
-        get ParentID(): number | null {  
-            return this.Get('ParentID');
+        get CategoryID(): number | null {  
+            return this.Get('CategoryID');
         }
-        set ParentID(value: number | null) {
-            this.Set('ParentID', value);
+        set CategoryID(value: number | null) {
+            this.Set('CategoryID', value);
         }
         /**
         * * Field Name: Entity

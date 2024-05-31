@@ -421,8 +421,7 @@ Links actions to authorizations, one or more of these must be possessed by a use
 type ActionAuthorization_ {
   Action: String!
   ActionID: Int!
-  Authorization: String!
-  AuthorizationID: Int!
+  AuthorizationName: String!
   Comments: String
   CreatedAt: Timestamp!
   ID: Int!
@@ -523,6 +522,22 @@ type ActionFilter_ {
   UserDescription: String!
 }
 
+"""
+Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.
+"""
+type ActionLibrary_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """List of classes and functions used by the action from the library."""
+  ItemsUsed: String
+  Library: String!
+  LibraryID: Int!
+  UpdatedAt: Timestamp!
+}
+
 """Tracks the input and output parameters for Actions."""
 type ActionParam_ {
   Action: String!
@@ -563,6 +578,7 @@ type Action_ {
   ActionAuthorizationsArray: [ActionAuthorization_!]!
   ActionContextsArray: [ActionContext_!]!
   ActionExecutionLogsArray: [ActionExecutionLog_!]!
+  ActionLibrariesArray: [ActionLibrary_!]!
   ActionParamsArray: [ActionParam_!]!
   ActionResultCodesArray: [ActionResultCode_!]!
   Category: String
@@ -1740,7 +1756,7 @@ input CreateAccount__client_crmInput {
 
 input CreateActionAuthorizationInput {
   ActionID: Int!
-  AuthorizationID: Int!
+  AuthorizationName: String!
   Comments: String
 }
 
@@ -1793,6 +1809,12 @@ input CreateActionInput {
   Status: String!
   UserComments: String
   UserPrompt: String!
+}
+
+input CreateActionLibraryInput {
+  ActionID: Int!
+  ItemsUsed: String
+  LibraryID: Int!
 }
 
 input CreateActionParamInput {
@@ -3581,6 +3603,22 @@ input CreateItem__client_financeInput {
   Warranty_Days: Int
 }
 
+input CreateLibraryInput {
+  Description: String
+  ExportedItems: String
+  Name: String!
+  SampleCode: String
+  Status: String!
+  TypeDefinitions: String
+}
+
+input CreateListCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+  UserID: Int!
+}
+
 input CreateListDetailInput {
   ListID: Int!
   RecordID: String!
@@ -3593,6 +3631,7 @@ input CreateListInput {
   EntityID: Int
   ExternalSystemRecordID: String
   Name: String!
+  ParentID: Int
   UserID: Int!
 }
 
@@ -8099,6 +8138,46 @@ type KeyValuePairOutputType {
   Value: String!
 }
 
+"""
+Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.
+"""
+type Library_ {
+  ActionLibrariesArray: [ActionLibrary_!]!
+  CreatedAt: Timestamp!
+  Description: String
+
+  """List of classes and functions exported by the library."""
+  ExportedItems: String
+  ID: Int!
+  Name: String!
+
+  """
+  Examples of code use of the classes and/or functions from within the library
+  """
+  SampleCode: String
+
+  """
+  Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
+  """
+  Status: String!
+
+  """
+  Code showing the types and functions defined in the library to be used for reference by humans and AI
+  """
+  TypeDefinitions: String
+  UpdatedAt: Timestamp!
+}
+
+type ListCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+  UpdatedAt: Timestamp!
+  UserID: Int!
+}
+
 """Tracks the records within each list."""
 type ListDetail_ {
   ID: Int!
@@ -8122,6 +8201,7 @@ type List_ {
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
   Name: String!
+  ParentID: Int
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -8137,6 +8217,7 @@ type Mutation {
   CreateActionContextType(input: CreateActionContextTypeInput!): ActionContextType_!
   CreateActionExecutionLog(input: CreateActionExecutionLogInput!): ActionExecutionLog_!
   CreateActionFilter(input: CreateActionFilterInput!): ActionFilter_!
+  CreateActionLibrary(input: CreateActionLibraryInput!): ActionLibrary_!
   CreateActionParam(input: CreateActionParamInput!): ActionParam_!
   CreateActionResultCode(input: CreateActionResultCodeInput!): ActionResultCode_!
   CreateActivity(input: CreateActivityInput!): Activity_!
@@ -8194,7 +8275,9 @@ type Mutation {
   CreateInvoiceStatusType(input: CreateInvoiceStatusTypeInput!): InvoiceStatusType_!
   CreateItem(input: CreateItemInput!): Item_!
   CreateItem__client_finance(input: CreateItem__client_financeInput!): Item__client_finance_!
+  CreateLibrary(input: CreateLibraryInput!): Library_!
   CreateList(input: CreateListInput!): List_!
+  CreateListCategory(input: CreateListCategoryInput!): ListCategory_!
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
   CreateOrganizationLink(input: CreateOrganizationLinkInput!): OrganizationLink_!
   CreatePaymentTermsType(input: CreatePaymentTermsTypeInput!): PaymentTermsType_!
@@ -8292,6 +8375,7 @@ type Mutation {
   UpdateActionContextType(input: UpdateActionContextTypeInput!): ActionContextType_!
   UpdateActionExecutionLog(input: UpdateActionExecutionLogInput!): ActionExecutionLog_!
   UpdateActionFilter(input: UpdateActionFilterInput!): ActionFilter_!
+  UpdateActionLibrary(input: UpdateActionLibraryInput!): ActionLibrary_!
   UpdateActionParam(input: UpdateActionParamInput!): ActionParam_!
   UpdateActionResultCode(input: UpdateActionResultCodeInput!): ActionResultCode_!
   UpdateActivity(input: UpdateActivityInput!): Activity_!
@@ -8360,7 +8444,9 @@ type Mutation {
   UpdateInvoiceStatusType(input: UpdateInvoiceStatusTypeInput!): InvoiceStatusType_!
   UpdateItem(input: UpdateItemInput!): Item_!
   UpdateItem__client_finance(input: UpdateItem__client_financeInput!): Item__client_finance_!
+  UpdateLibrary(input: UpdateLibraryInput!): Library_!
   UpdateList(input: UpdateListInput!): List_!
+  UpdateListCategory(input: UpdateListCategoryInput!): ListCategory_!
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
   UpdateOrganizationLink(input: UpdateOrganizationLinkInput!): OrganizationLink_!
   UpdatePaymentTermsType(input: UpdatePaymentTermsTypeInput!): PaymentTermsType_!
@@ -8745,6 +8831,7 @@ type Query {
   ActionContextType(ID: Int!): ActionContextType_
   ActionExecutionLog(ID: Int!): ActionExecutionLog_
   ActionFilter(ID: Int!): ActionFilter_
+  ActionLibrary(ID: Int!): ActionLibrary_
   ActionParam(ID: Int!): ActionParam_
   ActionResultCode(ID: Int!): ActionResultCode_
   Activity(ID: Int!): Activity_
@@ -8861,7 +8948,9 @@ type Query {
   InvoiceStatusType(ID: Int!): InvoiceStatusType_
   Item(Item_Number: String!): Item_
   Item__client_finance(Item_Number: String!): Item__client_finance_
+  Library(ID: Int!): Library_
   List(ID: Int!): List_
+  ListCategory(ID: Int!): ListCategory_
   ListDetail(ID: Int!): ListDetail_
   OrganizationLink(OrganizationLinkID: Int!): OrganizationLink_
   OutputDeliveryType(ID: Int!): OutputDeliveryType_
@@ -8924,6 +9013,9 @@ type Query {
   RunActionFilterDynamicView(input: RunDynamicViewInput!): RunActionFilterViewResult!
   RunActionFilterViewByID(input: RunViewByIDInput!): RunActionFilterViewResult!
   RunActionFilterViewByName(input: RunViewByNameInput!): RunActionFilterViewResult!
+  RunActionLibraryDynamicView(input: RunDynamicViewInput!): RunActionLibraryViewResult!
+  RunActionLibraryViewByID(input: RunViewByIDInput!): RunActionLibraryViewResult!
+  RunActionLibraryViewByName(input: RunViewByNameInput!): RunActionLibraryViewResult!
   RunActionParamDynamicView(input: RunDynamicViewInput!): RunActionParamViewResult!
   RunActionParamViewByID(input: RunViewByIDInput!): RunActionParamViewResult!
   RunActionParamViewByName(input: RunViewByNameInput!): RunActionParamViewResult!
@@ -9149,6 +9241,12 @@ type Query {
   RunItem__client_financeDynamicView(input: RunDynamicViewInput!): RunItem__client_financeViewResult!
   RunItem__client_financeViewByID(input: RunViewByIDInput!): RunItem__client_financeViewResult!
   RunItem__client_financeViewByName(input: RunViewByNameInput!): RunItem__client_financeViewResult!
+  RunLibraryDynamicView(input: RunDynamicViewInput!): RunLibraryViewResult!
+  RunLibraryViewByID(input: RunViewByIDInput!): RunLibraryViewResult!
+  RunLibraryViewByName(input: RunViewByNameInput!): RunLibraryViewResult!
+  RunListCategoryDynamicView(input: RunDynamicViewInput!): RunListCategoryViewResult!
+  RunListCategoryViewByID(input: RunViewByIDInput!): RunListCategoryViewResult!
+  RunListCategoryViewByName(input: RunViewByNameInput!): RunListCategoryViewResult!
   RunListDetailDynamicView(input: RunDynamicViewInput!): RunListDetailViewResult!
   RunListDetailViewByID(input: RunViewByIDInput!): RunListDetailViewResult!
   RunListDetailViewByName(input: RunViewByNameInput!): RunListDetailViewResult!
@@ -9792,6 +9890,16 @@ type RunActionFilterViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [ActionFilter_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionLibraryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionLibrary_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -10596,6 +10704,26 @@ type RunItem__client_financeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Item__client_finance_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunLibraryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Library_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunListCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ListCategory_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -13982,7 +14110,7 @@ input UpdateAccount__client_crmInput {
 
 input UpdateActionAuthorizationInput {
   ActionID: Int!
-  AuthorizationID: Int!
+  AuthorizationName: String!
   Comments: String
   ID: Int!
   OldValues___: [KeyValuePairInput!]
@@ -14049,6 +14177,14 @@ input UpdateActionInput {
   Status: String!
   UserComments: String
   UserPrompt: String!
+}
+
+input UpdateActionLibraryInput {
+  ActionID: Int!
+  ID: Int!
+  ItemsUsed: String
+  LibraryID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActionParamInput {
@@ -16061,6 +16197,26 @@ input UpdateItem__client_financeInput {
   Warranty_Days: Int
 }
 
+input UpdateLibraryInput {
+  Description: String
+  ExportedItems: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  SampleCode: String
+  Status: String!
+  TypeDefinitions: String
+}
+
+input UpdateListCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
+  UserID: Int!
+}
+
 input UpdateListDetailInput {
   ID: Int!
   ListID: Int!
@@ -16077,6 +16233,7 @@ input UpdateListInput {
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
+  ParentID: Int
   UserID: Int!
 }
 
