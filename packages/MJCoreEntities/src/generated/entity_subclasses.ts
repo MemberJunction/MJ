@@ -5082,6 +5082,17 @@ import { RegisterClass } from "@memberjunction/global";
         }
         
         /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
@@ -15689,16 +15700,16 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('ActionID', value);
         }
         /**
-        * * Field Name: AuthorizationID
-        * * Display Name: Authorization ID
-        * * SQL Data Type: int
-        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.ID)
+        * * Field Name: AuthorizationName
+        * * Display Name: Authorization Name
+        * * SQL Data Type: nvarchar(100)
+        * * Related Entity/Foreign Key: Authorizations (vwAuthorizations.Name)
         */
-        get AuthorizationID(): number {  
-            return this.Get('AuthorizationID');
+        get AuthorizationName(): string {  
+            return this.Get('AuthorizationName');
         }
-        set AuthorizationID(value: number) {
-            this.Set('AuthorizationID', value);
+        set AuthorizationName(value: string) {
+            this.Set('AuthorizationName', value);
         }
         /**
         * * Field Name: Comments
@@ -15738,15 +15749,6 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get Action(): string {  
             return this.Get('Action');
-        }
-        
-        /**
-        * * Field Name: Authorization
-        * * Display Name: Authorization
-        * * SQL Data Type: nvarchar(100)
-        */
-        get Authorization(): string {  
-            return this.Get('Authorization');
         }
         
 
@@ -17075,6 +17077,399 @@ import { RegisterClass } from "@memberjunction/global";
             return this.Get('Action');
         }
         
+
+    }
+        
+    /**
+     * Action Libraries - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ActionLibrary
+     * * Base View: vwActionLibraries
+     * * @description Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Action Libraries')
+    export class ActionLibraryEntity extends BaseEntity {
+        /**
+        * Loads the Action Libraries record from the database
+        * @param ID: number - primary key value to load the Action Libraries record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ActionLibraryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Action Libraries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ActionLibraryEntity
+        * @throws {Error} - Delete is not allowed for Action Libraries, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Action Libraries, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Actions (vwActions.ID)
+        */
+        get ActionID(): number {  
+            return this.Get('ActionID');
+        }
+        set ActionID(value: number) {
+            this.Set('ActionID', value);
+        }
+        /**
+        * * Field Name: LibraryID
+        * * Display Name: Library ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Libraries (vwLibraries.ID)
+        */
+        get LibraryID(): number {  
+            return this.Get('LibraryID');
+        }
+        set LibraryID(value: number) {
+            this.Set('LibraryID', value);
+        }
+        /**
+        * * Field Name: ItemsUsed
+        * * Display Name: Items Used
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: List of classes and functions used by the action from the library.
+        */
+        get ItemsUsed(): string | null {  
+            return this.Get('ItemsUsed');
+        }
+        set ItemsUsed(value: string | null) {
+            this.Set('ItemsUsed', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(500)
+        */
+        get Action(): string {  
+            return this.Get('Action');
+        }
+        
+        /**
+        * * Field Name: Library
+        * * Display Name: Library
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Library(): string {  
+            return this.Get('Library');
+        }
+        
+
+    }
+        
+    /**
+     * Libraries - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: Library
+     * * Base View: vwLibraries
+     * * @description Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Libraries')
+    export class LibraryEntity extends BaseEntity {
+        /**
+        * Loads the Libraries record from the database
+        * @param ID: number - primary key value to load the Libraries record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof LibraryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Libraries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof LibraryEntity
+        * @throws {Error} - Delete is not allowed for Libraries, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Libraries, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: 'Pending'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * Active
+        *   * Disabled
+        * * Description: Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
+        */
+        get Status(): 'Pending' | 'Active' | 'Disabled' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'Active' | 'Disabled') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: ExportedItems
+        * * Display Name: Exported Items
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: List of classes and functions exported by the library.
+        */
+        get ExportedItems(): string | null {  
+            return this.Get('ExportedItems');
+        }
+        set ExportedItems(value: string | null) {
+            this.Set('ExportedItems', value);
+        }
+        /**
+        * * Field Name: TypeDefinitions
+        * * Display Name: Type Definitions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Code showing the types and functions defined in the library to be used for reference by humans and AI
+        */
+        get TypeDefinitions(): string | null {  
+            return this.Get('TypeDefinitions');
+        }
+        set TypeDefinitions(value: string | null) {
+            this.Set('TypeDefinitions', value);
+        }
+        /**
+        * * Field Name: SampleCode
+        * * Display Name: Sample Code
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Examples of code use of the classes and/or functions from within the library
+        */
+        get SampleCode(): string | null {  
+            return this.Get('SampleCode');
+        }
+        set SampleCode(value: string | null) {
+            this.Set('SampleCode', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * List Categories - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: ListCategory
+     * * Base View: vwListCategories
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'List Categories')
+    export class ListCategoryEntity extends BaseEntity {
+        /**
+        * Loads the List Categories record from the database
+        * @param ID: number - primary key value to load the List Categories record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof ListCategoryEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * List Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof ListCategoryEntity
+        * @throws {Error} - Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for List Categories, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
 
     }
         

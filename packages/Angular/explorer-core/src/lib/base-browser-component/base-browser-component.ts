@@ -67,7 +67,7 @@ export class BaseBrowserComponent {
         }
 
         this.items = [];
-        if(!params?.skipLoadCategoryData){
+        if(!params?.skipLoadCategoryData && this.categoryEntityName){
             const categories: Folder[] = await this.RunView(this.categoryEntityName, categoryItemFilter);
             let folderItems: Item[] = this.createItemsFromFolders(categories);
             if(params?.sortItemsAfterLoad){

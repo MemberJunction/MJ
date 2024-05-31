@@ -16,16 +16,15 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
     template: `
         <div class="toolbar-container">
             @if (!form.EditMode) {
-                @if(form.UserCanDelete){
-                    <button kendoButton (click)="toggleDeleteDialog(true)" title="Delete this Record">
-                        <span class="fa-regular fa-trash-can"></span>
-                        <span class="button-text">Delete</span>
-                    </button> 
-                }
                 @if (form.UserCanEdit) {
                     <button kendoButton (click)="form.StartEditMode()" title="Edit this Record">
                         <span class="fa-solid fa-pen-to-square"></span>
                         <span class="button-text">Edit</span>
+                    </button> 
+                }
+                @if(form.UserCanDelete){
+                    <button kendoButton (click)="toggleDeleteDialog(true)" title="Delete this Record">
+                        <span class="fa-regular fa-trash-can"></span>
                     </button> 
                 }
                 @if (form.FavoriteInitDone) {
