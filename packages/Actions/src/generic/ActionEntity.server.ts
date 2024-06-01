@@ -1,6 +1,6 @@
 import { BaseEntity, CodeNameFromString, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
 import { ActionEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
-import { CleanJSON, MJGlobal, RegisterClass } from "@memberjunction/global";
+import { CleanJSON, MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
 import { ActionEngine, ActionLibrary, GeneratedCode } from "./ActionEngine";
@@ -126,7 +126,8 @@ export class ActionEntityServerEntity extends ActionEntity {
                 const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
                 const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
                 const md = new Metadata();
-                const promises = [];
+                //const promises = [];
+                const tg = await md.CreateTransactionGroup();
                 for (const lib of librariesToAdd) {
                     const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
                     if (libMetadata) {
@@ -134,7 +135,8 @@ export class ActionEntityServerEntity extends ActionEntity {
                         newLib.ActionID = this.ID;
                         newLib.LibraryID = libMetadata.ID;
                         newLib.ItemsUsed = lib.ItemsUsed.join(',');
-                        promises.push(newLib.Save());  
+                        newLib.TransactionGroup = tg;
+                        newLib.Save();  
                     }
                 }
 
@@ -142,18 +144,29 @@ export class ActionEntityServerEntity extends ActionEntity {
                 for (const lib of librariesToUpdate) {
                     const newCode = codeLibraries.find(l => l.LibraryName.trim().toLowerCase() === lib.Library.trim().toLowerCase());
                     lib.ItemsUsed = newCode.ItemsUsed.join(',');
-                    promises.push(lib.Save());  
+                    lib.TransactionGroup = tg;
+                    lib.Save();  
                 }
 
                 // now remove the libraries that are no longer used
                 for (const lib of librariesToRemove) {
                     // each lib in this array iteration is already a BaseEntity derived object
-                    promises.push(lib.Delete());  
+                    lib.TransactionGroup = tg;
+                    lib.Delete();  
                 }
 
-                // now wait for all the promises to complete
-                const results = await Promise.all(promises);
-                return results.some(r => r === false) ? false : true;
+                // now commit the transaction
+                if (!await tg.Submit()) {
+                    return false
+                    //throw new Error('Failed to update the libraries used by the Action.');
+                }
+                else
+                    return true;
+
+
+                // // now wait for all the promises to complete
+                // const results = await Promise.all(promises);
+                // return results.some(r => r === false) ? false : true;
             }
             else 
                 return true;
@@ -162,6 +175,14 @@ export class ActionEntityServerEntity extends ActionEntity {
             return false;        
     }
 
+    protected SendMessage(message: string) {
+        MJGlobal.Instance.RaiseEvent({
+            args: { message },
+            eventCode: 'Actions',
+            event: MJEventType.ComponentEvent,
+            component: this
+        });
+    }
     /**
      * This method will generate code using a combination of the UserPrompt field as well as the overall context of how an Action gets executed. Code from the Action is later used by CodeGen to inject into
      * the mj_actions library for each user environment. The mj_actions library will have a class for each action and that class will have certain libraries imported at the top of the file and available for use.
@@ -169,6 +190,8 @@ export class ActionEntityServerEntity extends ActionEntity {
      */
     public async GenerateCode(maxAttempts: number = 3): Promise<GeneratedCode> {
         try {
+            this.SendMessage('Generating code for action ' + this.Name);
+
             const model = await AIEngine.Instance.GetHighestPowerModel(this.AIVendorName, 'llm', this.ContextCurrentUser)
             const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)); 
     
@@ -229,6 +252,7 @@ export class ActionEntityServerEntity extends ActionEntity {
             LogError(e);
             if (attemptsRemaining > 1) {
                 // try again
+                this.SendMessage(`Failed to generate code, trying again (up to ${attemptsRemaining} time${attemptsRemaining > 1 ? 's' : ''})`);
                 return await this.InternalGenerateCode(llm, chatParams, attemptsRemaining - 1);
             }
             else

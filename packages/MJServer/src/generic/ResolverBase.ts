@@ -7,6 +7,8 @@ import { DataSource } from 'typeorm';
 import { UserPayload } from '../types';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
 import { DeleteOptionsInput } from './DeleteOptionsInput';
+import { MJGlobal } from '@memberjunction/global';
+import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver';
 
 export class ResolverBase {
 
@@ -350,13 +352,35 @@ export class ResolverBase {
     return Metadata.Provider.ConfigData.MJCoreSchemaName;
   }
 
-
+  protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
+    // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
+    MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+      if (event) {
+        if (event.component === entityObject && event.args && event.args.message) {
+          // message from our entity object, relay it to the client
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            message: JSON.stringify({
+              status: 'OK',
+              type: 'EntityObjectStatusMessage',
+              entityName: entityObject.EntityInfo.Name,
+              primaryKey: entityObject.CompositeKey,
+              message: event.args.message 
+            }),
+            sessionId: userPayload.sessionId
+          });          
+        }
+      }
+    });
+  }
 
   protected async CreateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
         const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
         entityObject.NewRecord();
         entityObject.SetMany(input);
+
+        this.ListenForEntityMessages(entityObject, pubSub, userPayload);
+
         if (await entityObject.Save()) {
             // save worked, fire the AfterCreate event and then return all the data
             await this.AfterCreate(dataSource, input); // fire event
@@ -425,6 +449,8 @@ export class ResolverBase {
           // 2) set the new values from the input, not including the OldValues property
           entityObject.SetMany(clientNewValues);  
         }
+
+        this.ListenForEntityMessages(entityObject, pubSub, userPayload);
         if (await entityObject.Save()) {
           // save worked, fire afterevent and return all the data
           await this.AfterUpdate(dataSource, input); // fire event

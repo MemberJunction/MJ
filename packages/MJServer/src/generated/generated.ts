@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 5/31/2024, 8:56:34 PM
+* GENERATED: 6/1/2024, 9:03:29 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -8379,6 +8379,12 @@ export class AIActionResolver extends ResolverBase {
         return this.UpdateRecord('AI Actions', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => AIAction_)
+    async DeleteAIAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Actions', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -8504,6 +8510,12 @@ export class AIModelActionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('AI Model Actions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AIModelAction_)
+    async DeleteAIModelAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('AI Model Actions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -8689,6 +8701,12 @@ export class EntityAIActionResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity AI Actions', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityAIAction_)
+    async DeleteEntityAIAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity AI Actions', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -17509,6 +17527,12 @@ export class ActionCategoryResolver extends ResolverBase {
         return this.UpdateRecord('Action Categories', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => ActionCategory_)
+    async DeleteActionCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Categories', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17676,6 +17700,12 @@ export class EntityActionResolver extends ResolverBase {
         return this.UpdateRecord('Entity Actions', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityAction_)
+    async DeleteEntityAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Actions', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17817,6 +17847,12 @@ export class EntityActionInvocationResolver extends ResolverBase {
         return this.UpdateRecord('Entity Action Invocations', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => EntityActionInvocation_)
+    async DeleteEntityActionInvocation(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Invocations', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -17956,6 +17992,12 @@ export class ActionAuthorizationResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Authorizations', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionAuthorization_)
+    async DeleteActionAuthorization(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Authorizations', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18104,6 +18146,12 @@ export class EntityActionInvocationTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity Action Invocation Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionInvocationType_)
+    async DeleteEntityActionInvocationType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Invocation Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18421,6 +18469,12 @@ export class ActionResolver extends ResolverBase {
         return this.UpdateRecord('Actions', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => Action_)
+    async DeleteAction(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Actions', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -18565,6 +18619,12 @@ export class EntityActionFilterResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Entity Action Filters', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => EntityActionFilter_)
+    async DeleteEntityActionFilter(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Entity Action Filters', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -18723,6 +18783,12 @@ export class ActionFilterResolver extends ResolverBase {
         return this.UpdateRecord('Action Filters', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => ActionFilter_)
+    async DeleteActionFilter(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Filters', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -18860,6 +18926,12 @@ export class ActionContextTypeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Context Types', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionContextType_)
+    async DeleteActionContextType(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Context Types', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19001,6 +19073,12 @@ export class ActionResultCodeResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Result Codes', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionResultCode_)
+    async DeleteActionResultCode(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Result Codes', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19146,6 +19224,12 @@ export class ActionContextResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Contexts', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionContext_)
+    async DeleteActionContext(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Contexts', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19329,6 +19413,12 @@ export class ActionExecutionLogResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Execution Logs', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionExecutionLog_)
+    async DeleteActionExecutionLog(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Execution Logs', key, options, dataSource, userPayload, pubSub);
     }
     
 }
@@ -19519,6 +19609,12 @@ export class ActionParamResolver extends ResolverBase {
         return this.UpdateRecord('Action Params', input, dataSource, userPayload, pubSub);
     }
     
+    @Mutation(() => ActionParam_)
+    async DeleteActionParam(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Params', key, options, dataSource, userPayload, pubSub);
+    }
+    
 }
 
 //****************************************************************************
@@ -19661,6 +19757,12 @@ export class ActionLibraryResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('Action Libraries', input, dataSource, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ActionLibrary_)
+    async DeleteActionLibrary(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('Action Libraries', key, options, dataSource, userPayload, pubSub);
     }
     
 }

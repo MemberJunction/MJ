@@ -8,99 +8,8 @@ import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
 @Component({
     selector: 'mj-form-toolbar',
-    styles: [
-                `button { margin-right: 10px; }`, 
-                `.button-text { margin-left: 7px; }`, 
-                `.toolbar-container { border-bottom: solid 1px lightgray; padding-bottom: 10px; margin-bottom: 5px; }`
-            ],
-    template: `
-        <div class="toolbar-container">
-            @if (!form.EditMode) {
-                @if (form.UserCanEdit) {
-                    <button kendoButton (click)="form.StartEditMode()" title="Edit this Record">
-                        <span class="fa-solid fa-pen-to-square"></span>
-                        <span class="button-text">Edit</span>
-                    </button> 
-                }
-                @if(form.UserCanDelete){
-                    <button kendoButton (click)="toggleDeleteDialog(true)" title="Delete this Record">
-                        <span class="fa-regular fa-trash-can"></span>
-                    </button> 
-                }
-                @if (form.FavoriteInitDone) {
-                    @if (form.IsFavorite) {
-                        <button kendoButton (click)="form.RemoveFavorite()" title="Remove Favorite">
-                            <span class="fa-solid fa-star"></span>
-                        </button> 
-                    }
-                    @else {
-                        <button kendoButton (click)="form.MakeFavorite()" title="Make Favorite">
-                            <span class="fa-regular fa-star"></span>
-                        </button> 
-                    }
-                }
-            }
-            @else {
-                <button kendoButton (mouseup)="saveExistingRecord($event)" title="Save Record">
-                    <span class="fa-solid fa-floppy-disk"></span>
-                    <span class="button-text">Save</span>
-                </button> 
-                <button kendoButton (click)="form.CancelEdit()" title="Cancel Edit">
-                    <span class="fa-solid fa-rotate-left"></span>
-                    <span class="button-text">Cancel</span>
-                </button> 
-                @if (form.record.Dirty) {
-                    <button kendoButton (click)="form.ShowChanges()" title="Fields you have changed">
-                        <span class="fa-solid fa-clipboard-list"></span>
-                        <span class="button-text">Changes</span>
-                    </button> 
-                }
-            }
-            @if (form.EntityInfo?.TrackRecordChanges) {
-                <button kendoButton (click)="form.handleHistoryDialog()" title="Show History">
-                    <span class="fa-solid fa-business-time"></span>
-                    <span class="button-text">History</span>
-                </button> 
-            }
-            @if (ShowSkipChatButton) {
-                <button kendoButton (click)="ShowSkipChat()" title="Discuss this record with Skip">
-                    <span class="fa-regular fa-comment-dots"></span>
-                </button> 
-            }
-            @if (form.EntityInfo) {
-                <mj-skip-chat-with-record-window
-                    [LinkedEntityID]="form.EntityInfo.ID"
-                    [LinkedEntityCompositeKey]="LinkedEntityCompositeKey"            
-                    #mjChat
-                    [WindowOpened]="SkipChatVisible" 
-                    (WindowClosed)="ShowSkipChat()"
-                >
-                </mj-skip-chat-with-record-window>
-            }
-            @if (form.isHistoryDialogOpen) {
-                <mj-record-changes [record]="form.record" (dialogClosed)="form.handleHistoryDialog()"></mj-record-changes>
-            }
-            <kendo-dialog 
-            [minWidth]="450"
-            [width]="650"
-            class="dialog-wrapper" 
-            title="Confirm" 
-            *ngIf="showDeleteDialog" 
-            (close)="toggleDeleteDialog(false)">
-              <p class="k-m-7.5 k-text-center">
-                Are you sure you want to delete this record?
-              </p>
-              <kendo-dialog-actions class="popup-actions-btn">
-                <button class="cancel-btn" (click)="deleteRecord()" kendoButton themeColor="info">
-                  Yes, Delete
-                </button>
-                <button class="yes-btn" (click)="toggleDeleteDialog(false)" kendoButton fillMode="outline" themeColor="info">
-                  No, Cancel
-                </button>
-              </kendo-dialog-actions>
-            </kendo-dialog>
-        </div>
-    `
+    styleUrl: './form-toolbar.css',
+    templateUrl: './form-toolbar.html'
 })
 export class FormToolbarComponent implements OnInit {
     @Input() ShowSkipChatButton: boolean = true;
@@ -112,6 +21,7 @@ export class FormToolbarComponent implements OnInit {
     public SkipChatVisible: boolean = false;
     public createNewDialogTitle: string = 'Create New Record';
     public newRecord!: BaseEntity;
+    public disableToolbar: boolean = false;
 
     public get LinkedEntityCompositeKey(): CompositeKey {
         return this.form.record.CompositeKey;
@@ -122,15 +32,70 @@ export class FormToolbarComponent implements OnInit {
 
     public async ngOnInit(): Promise<void> {
     }
-
-    public saveExistingRecord(event: MouseEvent): void {
+ 
+    public async saveExistingRecord(event: MouseEvent) {
         // Ensure the button takes focus
         const button = event.target as HTMLElement;
         button.focus();
-      
-        // Proceed to call your save record function
-        this.form.SaveRecord(true);
+
+        // while we are saving the record we are editing, we need to apply a UX effect on our peer elements in the browser to ensure they are 
+        // not further edited and also disable all of the other stuff on this toolbar. So get the HTML reference to the toolbar, and disable it
+        // then get the HTML reference to the parent of the toolbar and opacity it out.
+        // Then create an HTML element that is centered horizaontall across the parent and is below the toolbar and show a status message of "Saving..." in it
+
+        // Disable the toolbar and apply the UX effect to the form parent
+        this.disableToolbar = true;
+        const toolbar = button.closest('.toolbar-container') as HTMLElement;
+        const formElement = toolbar.closest('form') as HTMLElement;
+
+        // Apply inline styles to disable interactions and set opacity
+        formElement.style.pointerEvents = 'none'; // This prevents interactions with the form
+        formElement.style.opacity = '0.75'; // This makes the form opaque
+
+        // Create and show the status message element
+        const statusMessage = document.createElement('div');
+        statusMessage.className = 'form-toolbar-status-message';
+        formElement.appendChild(statusMessage);
+
+        statusMessage.style.position = 'absolute';
+        statusMessage.style.top = `${100}px`;
+
+        // Timer variables
+        let elapsedTime = 0;
+        let serverUpdateMessage: string = "";
+        const timer = setInterval(() => {
+            elapsedTime += .1;
+            statusMessage.innerHTML = `<div>Saving...<span class="form-toolbar-elapsed-time">(${Math.floor(elapsedTime)} sec${elapsedTime === 0 || elapsedTime > 1 ? 's' : ''})</span></div>` + (serverUpdateMessage ? `<div class="form-toolbar-server-update-message">${serverUpdateMessage}</div>` : '');
+        }, 100);
+
+        try {
+            // listen for status updates from MJGlobal that come from the server
+            MJGlobal.Instance.GetEventListener(false).subscribe((event: MJEvent) => {
+                if (event.eventCode === EventCodes.PushStatusUpdates) {
+                    serverUpdateMessage = event.args?.message;
+                    console.log(event);
+                }
+            });
+
+            // Save the record
+            const result = await this.form.SaveRecord(true);
+            // Handle the result if needed
+        } finally {
+            // Re-enable the toolbar and remove the UX effect
+            this.disableToolbar = false;
+
+            formElement.style.pointerEvents = 'auto'; // This re-enables interactions with the form
+            formElement.style.opacity = '1'; // This restores the form's opacity
+
+            // Remove the status message element
+            formElement.removeChild(statusMessage);
+
+            // Clear the timer
+            clearInterval(timer);
+        }
     }
+    
+    
 
     public ShowSkipChat(): void {
         this.SkipChatVisible = !this.SkipChatVisible;

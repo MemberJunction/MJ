@@ -8,7 +8,7 @@ import { TransactionGroupBase } from './transactionGroup';
 import { LogError } from './logging';
 
 /**
- * Represents a field in an entity. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
+ * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
  */
 export class EntityField {
@@ -264,6 +264,37 @@ export class BaseEntityAIActionParams {
 }
 
 /**
+ * Used for storing the result of a Save or Delete or other transactional operation within a BaseEntity
+ */
+export class BaseEntityResult {
+    /**
+     * True if successful, false otherwise
+     */
+    Success: boolean;
+    /**
+     * A message for an end user
+     */
+    Message: string;
+    /**
+     * Optional, a structured error object with additional information
+     */
+    Error?: any;    
+    /**
+     * A copy of the values of the entity object before the operation was performed
+     */
+    Values: {FieldName: string, Value: any}[] = [];
+
+    /**
+     * Timestamp when the operation started
+     */
+    StartedAt: Date;
+    /**
+     * Timestamp when the operation ended
+     */
+    EndedAt: Date;
+}
+
+/**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity {
@@ -272,6 +303,8 @@ export abstract class BaseEntity {
     private _recordLoaded: boolean = false;
     private _contextCurrentUser: UserInfo = null;
     private _transactionGroup: TransactionGroupBase = null;
+
+    private _resultHistory: BaseEntityResult[] = [];
 
     constructor(Entity: EntityInfo) {
         this._EntityInfo = Entity;
@@ -306,6 +339,24 @@ export abstract class BaseEntity {
     set TransactionGroup(group: TransactionGroupBase) {
         this._transactionGroup = group;
     }
+
+    /**
+     * The result history shows the history of the attempted transactions (Save and Delete) for this particular entity object. This is useful for tracking the results of operations on the entity object.
+     */
+    public get ResultHistory(): BaseEntityResult[] {
+        return this._resultHistory;
+    }
+
+    /**
+     * Returns the most recent result from the result history. If there are no results in the history, this method will return null.
+     */
+    public get LatestResult(): BaseEntityResult {
+        if (this._resultHistory.length > 0)
+            return this._resultHistory[this._resultHistory.length - 1];
+        else
+            return null;
+    }
+
 
     /**
      * Access to the underlying metadata for the entity object.
@@ -533,6 +584,7 @@ export abstract class BaseEntity {
     }
 
     private init() {
+        this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
         if (this.EntityInfo)
