@@ -6,6 +6,7 @@
     margin-bottom: 12px;
     padding-top: 5px;
     padding-bottom: 5px;
+    align-items: start; /* Ensure items are aligned at the top */
 } 
   
   
@@ -14,19 +15,42 @@
     padding-right: 10px;
     width: 240px;
     margin-bottom: 0;
+    align-self: start; /* Align the label to the start (top) */
+}
+
+/*
+  Eliminate the default margin and padding for the markdown elements
+ */
+.record-form-row markdown > p,
+.record-form-row markdown > h1,
+.record-form-row markdown > h2,
+.record-form-row markdown > h3,
+.record-form-row markdown > h4,
+.record-form-row markdown > h5,
+.record-form-row markdown > h6 {
+  margin:0 !important;
+}
+
+markdown {
+  font-size: 1rem; /* Adjust this value to match your app's regular text size */
 }
 
 
-
 @media (min-width: 768px) {
-    .record-form-row {
-      flex-direction: row;
-      align-items: center;
-    }
-  
-    .record-form-row label {
-      width: 240px;
-      margin-bottom: 0;
-    }
+  .record-form-row {
+    display: grid; /* Ensure grid display is used for larger screens as well */
+    grid-template-columns: auto 1fr;
+    align-items: start; /* Keep the alignment at the top */
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-top: 5px;
+    padding-bottom: 5px;
   }
+
+  .record-form-row label {
+    width: 240px;
+    margin-bottom: 0;
+    align-self: start; /* Ensure the label is aligned to the top */
+  }
+}
   

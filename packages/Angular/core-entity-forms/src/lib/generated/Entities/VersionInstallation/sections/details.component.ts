@@ -10,71 +10,82 @@ import { VersionInstallationEntity } from '@memberjunction/core-entities';
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
-    [record]="record"
-    FieldName="MajorVersion"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MajorVersion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="MinorVersion"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="MinorVersion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="PatchVersion"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PatchVersion"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Type"
-    Type="dropdownlist"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="InstalledAt"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InstalledAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Status"
-    Type="dropdownlist"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="InstallLog"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="InstallLog"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Comments"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Comments"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="UpdatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CompleteVersion"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompleteVersion"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

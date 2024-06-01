@@ -10,30 +10,34 @@ import { ListDetailEntity } from '@memberjunction/core-entities';
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
-    [record]="record"
-    FieldName="ListID"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ListID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="RecordID"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Sequence"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Sequence"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="List"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="List"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

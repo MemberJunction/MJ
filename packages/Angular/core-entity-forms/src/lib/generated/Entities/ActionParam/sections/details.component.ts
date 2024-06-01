@@ -10,72 +10,83 @@ import { ActionParamEntity } from '@memberjunction/core-entities';
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
-    [record]="record"
-    FieldName="ActionID"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ActionID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Name"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DefaultValue"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultValue"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Type"
-    Type="dropdownlist"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Type"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ValueType"
-    Type="dropdownlist"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ValueType"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="IsArray"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsArray"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Description"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="IsRequired"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsRequired"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="UpdatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Action"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Action"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

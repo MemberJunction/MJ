@@ -105,6 +105,7 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
@@ -205,6 +206,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -392,7 +394,7 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                     else if (field.TSType === EntityFieldTSType.Number)
                         editControl = `numerictextbox`
                     else if (field.TSType === EntityFieldTSType.String) {
-                        if (field.MaxLength > 100)
+                        if (field.Length < 0 || field.MaxLength > 100) // length < 0 means nvarchar(max) or similar, so use textarea
                             editControl = `textarea`
                         else
                             editControl = `textbox`
@@ -415,11 +417,12 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
             }
             // next, generate HTML for the field, use fillContainer if we have just one field
             html += `        <mj-form-field ${section.Fields.length === 1 ? 'mjFillContainer' : ''}
-    [record]="record"
-    FieldName="${field.CodeName}"
-    Type="${editControl}"
-    [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
+            FieldName="${field.CodeName}"
+            Type="${editControl}"
+            [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}
+        ></mj-form-field>
 `
           }
       

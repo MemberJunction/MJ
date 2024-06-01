@@ -1,5 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { BaseFormComponent } from './base-form-component';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { BaseEntity, CompositeKey, Metadata, RecordDependency } from '@memberjunction/core';
 import { Router } from '@angular/router';

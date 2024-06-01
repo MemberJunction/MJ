@@ -10,60 +10,69 @@ import { PaymentTermsTypeEntity } from 'mj_generatedentities';
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
-    [record]="record"
-    FieldName="Name"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DisplayName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DisplayName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Code"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Code"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DueDateCalculation"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DueDateCalculation"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Description"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="UpdatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CompanyIntegrationID"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompanyIntegrationID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ExternalSystemRecordID"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExternalSystemRecordID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

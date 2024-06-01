@@ -10,49 +10,56 @@ import { CompanyIntegrationRecordMapEntity } from '@memberjunction/core-entities
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
-    [record]="record"
-    FieldName="CompanyIntegrationID"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CompanyIntegrationID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ExternalSystemRecordID"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExternalSystemRecordID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="EntityID"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityID"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="EntityRecordID"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityRecordID"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="UpdatedAt"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Entity"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

@@ -10,1029 +10,1199 @@ import { ProductEntity } from 'mj_generatedentities';
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_CountryofOriginIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_CountryofOriginIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_subscriptiondetailidName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_subscriptiondetailidName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Acep_PublicationIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_PublicationIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="TransactionCurrencyIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TransactionCurrencyIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="OrganizationIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OrganizationIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedByYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedByYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedByName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedByName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_OrderTypeIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_OrderTypeIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ParentProductIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentProductIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="SubjectIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SubjectIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedOnBehalfByYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedOnBehalfByYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedOnBehalfByName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedOnBehalfByName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DefaultUoMScheduleIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultUoMScheduleIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_eventproductidName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_eventproductidName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedByExternalPartyName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByExternalPartyName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedByExternalPartyYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByExternalPartyYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedByYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedByName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="PriceLevelIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PriceLevelIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_ecmeproducttypeidName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ecmeproducttypeidName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_ProductTypeIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ProductTypeIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedByExternalPartyYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedByExternalPartyYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedByExternalPartyName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedByExternalPartyName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_courseproductidName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_courseproductidName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedOnBehalfByYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedOnBehalfByYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedOnBehalfByName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedOnBehalfByName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_productidName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_productidName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_CMEActivityIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_CMEActivityIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_VariantParentIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_VariantParentIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_PublisherIdName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_PublisherIdName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_PublisherIdYomiName"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_PublisherIdYomiName"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="EntityImage_Timestamp"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityImage_Timestamp"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="EntityImage"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityImage"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="EntityImage_URL"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityImage_URL"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DefaultUoMIdName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultUoMIdName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ProductId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProductId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DefaultUoMScheduleId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultUoMScheduleId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="SubjectId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SubjectId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="OrganizationId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OrganizationId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Name"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="DefaultUoMId"
-    Type="textbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultUoMId"
+            Type="textbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="PriceLevelId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="PriceLevelId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Description"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ProductTypeCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProductTypeCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ProductUrl"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProductUrl"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Price"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Price"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="IsKit"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsKit"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ProductNumber"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProductNumber"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Size"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Size"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CurrentCost"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CurrentCost"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StockVolume"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StockVolume"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StandardCost"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StandardCost"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StockWeight"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StockWeight"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="QuantityDecimal"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="QuantityDecimal"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="QuantityOnHand"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="QuantityOnHand"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="IsStockItem"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="IsStockItem"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="SupplierName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupplierName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="VendorName"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="VendorName"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="VendorPartNumber"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="VendorPartNumber"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedOn"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedOn"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedOn"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedOn"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedBy"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedBy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StateCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StateCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedBy"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedBy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StatusCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StatusCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="VersionNumber"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="VersionNumber"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="OverriddenCreatedOn"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="OverriddenCreatedOn"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="TransactionCurrencyId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TransactionCurrencyId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ExchangeRate"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ExchangeRate"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="UTCConversionTimeZoneCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="UTCConversionTimeZoneCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ImportSequenceNumber"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ImportSequenceNumber"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="TimeZoneRuleVersionNumber"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TimeZoneRuleVersionNumber"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CurrentCost_Base"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CurrentCost_Base"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="Price_Base"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Price_Base"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StandardCost_Base"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StandardCost_Base"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="CreatedOnBehalfBy"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedOnBehalfBy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedOnBehalfBy"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedOnBehalfBy"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="EntityImageId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityImageId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ProcessId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProcessId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="StageId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="StageId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="ParentProductId"
-    Type="textbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ParentProductId"
+            Type="textbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="ProductStructure"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="VendorID"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="TraversedPath"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="ValidFromDate"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="ValidToDate"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="HierarchyPath"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="CreatedByExternalParty"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="ModifiedByExternalParty"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityDamaged"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_AllowWebQuantity"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_courseproductid"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Duration"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Print"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_subscriptiondetailid"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_IntegrationPartnerCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Online"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Issue"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_ExpireDate"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityOnOrder"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_ProductSubType"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_OrgCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityReturned"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Volume"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Frequency"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityAllocated"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_defaultquantity"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_GPOrgCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityAvailable"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_SalesTaxOptionCode"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_eventproductid"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_Date"
-    Type="datepicker"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_PublicationId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_MultiYearValue"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityOrdered"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_StatementDescription"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Acep_IncludeinSubscriptionIntegration"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_productid"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityInService"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantityInUse"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="Eone_QuantitySold"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ItemClassID"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Optional"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Selected"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_GracePeriod"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_IsSubscriptionSequential"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_IsSubscriptionSnappedtoMonth"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ProductFamily"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_CurrencyDecimal"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ShowPAC"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_UnitType"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_iscollection"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_setautorenew"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Accessibility"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ACEPRank"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_CMEActivityId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Color"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_CountryofOriginId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Dimensions"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Discontinued"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Format"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ISBN10"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ISBN13"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Language"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_Material"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ModelNumber"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_NumberofVariants"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ProductTypeId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_ProductURL"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
-        <mj-form-field 
-    [record]="record"
-    FieldName="acep_PublisherId"
-    Type="textbox"
-    [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ProductStructure"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="VendorID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TraversedPath"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ValidFromDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ValidToDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="HierarchyPath"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CreatedByExternalParty"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ModifiedByExternalParty"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityDamaged"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_AllowWebQuantity"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_courseproductid"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Duration"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Print"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_subscriptiondetailid"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_IntegrationPartnerCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Online"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Issue"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_ExpireDate"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityOnOrder"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_ProductSubType"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_OrgCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityReturned"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Volume"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Frequency"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityAllocated"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_defaultquantity"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_GPOrgCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityAvailable"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_SalesTaxOptionCode"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_eventproductid"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_Date"
+            Type="datepicker"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_PublicationId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_MultiYearValue"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityOrdered"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_StatementDescription"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Acep_IncludeinSubscriptionIntegration"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_productid"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityInService"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantityInUse"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Eone_QuantitySold"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ItemClassID"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Optional"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Selected"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_GracePeriod"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_IsSubscriptionSequential"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_IsSubscriptionSnappedtoMonth"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ProductFamily"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_CurrencyDecimal"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ShowPAC"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_UnitType"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_iscollection"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_setautorenew"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Accessibility"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ACEPRank"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_CMEActivityId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Color"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_CountryofOriginId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Dimensions"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Discontinued"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Format"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ISBN10"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ISBN13"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Language"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Material"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ModelNumber"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_NumberofVariants"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ProductTypeId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ProductURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_PublisherId"
+            Type="textbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_PurchaseURL"
-    Type="textarea"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_PurchaseURL"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_Ratings"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Ratings"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_Size"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Size"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_UNSPSC"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_UNSPSC"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_UPC"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_UPC"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_VariantParentId"
-    Type="textbox"
-    [EditMode]="EditMode"
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_VariantParentId"
+            Type="textbox"
+            [EditMode]="EditMode"
             LinkType="Record"
-></mj-form-field>
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_About"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_About"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_Compliance"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Compliance"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_ExportRestriction"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ExportRestriction"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_Price"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Price"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_price_Base"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_price_Base"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_Edition"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_Edition"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_OrderTypeId"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_OrderTypeId"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_PublishtoStore"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_PublishtoStore"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_cmecredithours"
-    Type="numerictextbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_cmecredithours"
+            Type="numerictextbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_ecmehidden"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ecmehidden"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_ecmeproducttypeid"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_ecmeproducttypeid"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_importsource"
-    Type="textbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_importsource"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_publishtolms"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_publishtolms"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
         <mj-form-field 
-    [record]="record"
-    FieldName="acep_issuecme"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="acep_issuecme"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

@@ -10,11 +10,12 @@ import { EntityEntity } from '@memberjunction/core-entities';
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field mjFillContainer
-    [record]="record"
-    FieldName="UserFormGenerated"
-    Type="checkbox"
-    [EditMode]="EditMode"
-></mj-form-field>
+            [record]="record"
+            [ShowLabel]="false"
+            FieldName="UserFormGenerated"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

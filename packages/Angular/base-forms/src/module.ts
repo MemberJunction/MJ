@@ -16,15 +16,17 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 import { SectionLoaderComponent } from './lib/section-loader-component';
-import { FormToolbarComponent } from './lib/form-toolbar';
 import { MJFormField } from './lib/base-field-component';
 import { CreateRecordComponent } from './lib/create-record/create-record.component';
+import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 
+// Markdown
+import { MarkdownModule } from 'ngx-markdown';
 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
-    FormToolbarComponent,
     MJFormField,
     CreateRecordComponent
   ],
@@ -40,11 +42,13 @@ import { CreateRecordComponent } from './lib/create-record/create-record.compone
     LinkDirectivesModule,
     AskSkipModule,
     DialogsModule,
-    IndicatorsModule
+    IndicatorsModule,
+    ContainerDirectivesModule,
+    MemberJunctionSharedModule,
+    MarkdownModule.forRoot()
   ],
   exports: [
     SectionLoaderComponent,
-    FormToolbarComponent,
     MJFormField,
     CreateRecordComponent
   ]
