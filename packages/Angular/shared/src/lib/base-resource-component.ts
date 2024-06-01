@@ -54,7 +54,7 @@ export abstract class BaseResourceComponent {
     
 
     protected ResourceRecordSaved(resourceRecordEntity: BaseEntity) {
-        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.Value;
+        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToString();
         if (this._resourceRecordSavedEvent) {
             this._resourceRecordSavedEvent(resourceRecordEntity);
         }

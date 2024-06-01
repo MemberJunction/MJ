@@ -11,8 +11,8 @@ import { BaseEntity, IEntityDataProvider, IMetadataProvider, IRunViewProvider, P
          ILocalStorageProvider, EntitySaveOptions, LogError,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, 
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult, KeyValuePair, IRunQueryProvider, RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey,  
-         LogStatus,
-         EntityDeleteOptions} from "@memberjunction/core";
+         EntityDeleteOptions,
+         BaseEntityResult} from "@memberjunction/core";
 import { UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 
@@ -332,10 +332,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: UserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
-        const pkeyName = e.PrimaryKey.CodeName;
         if (params.Fields) {
-            if (params.Fields.find(f => f.trim().toLowerCase() === pkeyName.toLowerCase()) === undefined)
-                fieldList.push(pkeyName); // always include the primary key in view run time field list
+            for (const kv of e.PrimaryKeys) {
+                if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
+                    fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+            }
 
             // now add any other fields that were passed in
             params.Fields.forEach(f => fieldList.push(f));
@@ -357,11 +358,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // would happen if we dno't check for c.EntityField? in the below
 
                 // first make sure we have the primary key field in the view column list, always should, but make sure
-                fieldList.push(pkeyName); // always include the primary key field in the result data, don't need to display the data, but we need to always provide record pkey to the caller
-                
+                for (const kv of e.PrimaryKeys) {
+                    if (fieldList.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
+                        fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                }
+                    
                 // Now: include the fields that are part of the view definition
                 v.Columns.forEach(c => {
-                    if (c.hidden === false && c.EntityField?.Name.trim().toLowerCase() !== pkeyName.toLowerCase()) // don't include hidden fields and don't include the pkey field again
+                    if (c.hidden === false && !fieldList.find(item => item.trim().toLowerCase() === c.EntityField?.Name.trim().toLowerCase())) // don't include hidden fields and don't include the pkey field again
                         fieldList.push(c.EntityField.CodeName)
                 });
             }
@@ -547,10 +551,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
+        const result = new BaseEntityResult();
         try {
-            const pKeyValue: any = entity.PrimaryKey.Value;
+            const pKeyValue = entity.PrimaryKey.HasValue;
             const vars = { input: {} };
-            const type: string = (pKeyValue) ? "Update" : "Create";
+            const type: string = pKeyValue ? "Update" : "Create";
+
+            result.StartedAt = new Date();
+            result.Type = pKeyValue ? 'create' : 'update';
+            entity.ResultHistory.push(result); // push the new result as we have started a process
 
             // Create the query for the mutation first, we will provide the specific
             // input values later in the loop below. Here we are just setting up the mutation
@@ -614,14 +623,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         // we get here whenever the transaction group does gets around to committing
                         // our query. We need to update our entity with the values that were returned
                         // from the mutation if it was successful.
+                        result.EndedAt = new Date();
                         if (success && results) { 
                             // got our data, send it back to the caller, which is the entity object
                             // and that object needs to update itself from this data.
+                            result.Success = true;
                             resolve (results)
                         }
                         else {
                             // the transaction failed, nothing to update, but we need to call Reject so the 
                             // promise resolves with a rejection so our outer caller knows
+                            result.Success = false;
+                            result.Message = 'Transaction failed';
                             reject();
                         }
                     }));
@@ -631,13 +644,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // not part of a transaction group, so just go for it and send across our GQL
                 const d = await GraphQLDataProvider.ExecuteGQL(outer, vars)
                 if (d && d[type + entity.EntityInfo.ClassName]) {
+                    result.Success = true;
+                    result.EndedAt = new Date();
                     return  d[type + entity.EntityInfo.ClassName];
                 }
                 else
-                    return null;
+                    throw new Error(`Save failed for ${entity.EntityInfo.ClassName}`);
             }
         }
         catch (e) {
+            result.Success = false;
+            result.EndedAt = new Date();
+            result.Message = e.message;
             LogError(e);
             return null;
         }
@@ -651,7 +669,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             for (let i = 0; i < CompositeKey.KeyValuePairs.length; i++) {
                 const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === CompositeKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
                 const val = CompositeKey.GetValueByIndex(i);
-                const pkeyGraphQLType: string = entity.PrimaryKey.EntityFieldInfo.GraphQLType;
+                const pkeyGraphQLType: string = field.GraphQLType;
 
                 // build up the param string for the outer query definition
                 if (pkeyOuterParamString.length > 0)
@@ -713,13 +731,19 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean> {
+        const result = new BaseEntityResult();
         try {
+            result.StartedAt = new Date();
+            result.Type = 'delete';
+            entity.ResultHistory.push(result); // push the new result as we have started a process
+
             const vars = {};
             const mutationInputTypes = [];
             let pkeyInnerParamString: string = '';
             let pkeyOuterParamString: string = '';
             let returnValues: string = '';
-            for (let pk of entity.PrimaryKeys) {
+            for (let kv of entity.PrimaryKey.KeyValuePairs) {
+                const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
                 if (pkeyInnerParamString.length > 0)
@@ -758,20 +782,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query.  
+                        result.EndedAt = new Date(); // done processing
                         if (success && results) { 
                             // success indicated by the entity.PrimaryKey.Value matching the return value of the mutation
                             let success: boolean = true;
-                            for (const pk of entity.PrimaryKeys) {
+                            for (const pk of entity.PrimaryKey.KeyValuePairs) {
                                 // check each primary key value to see if it matches the return value of the mutation
-                                if (pk.Value !== results[pk.Name]) {
+                                if (pk.Value !== results[pk.FieldName]) {
                                     success = false;
                                 }
                             }
-                            resolve (success)
+                            if (success) {
+                                result.Success = true;
+                                resolve (true)
+                            }
+                            else {
+                                // the transaction failed, nothing to update, but we need to call Reject so the 
+                                // promise resolves with a rejection so our outer caller knows
+                                result.Success = false;
+                                result.Message = 'Transaction failed to commit'
+                                reject();
+                            }
                         }
                         else {
                             // the transaction failed, nothing to update, but we need to call Reject so the 
                             // promise resolves with a rejection so our outer caller knows
+                            result.Success = false;
+                            result.Message = 'Transaction failed to commit'
                             reject();
                         }
                     }));
@@ -781,18 +818,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // no transaction just go for it
                 const d = await GraphQLDataProvider.ExecuteGQL(query, vars)
                 if (d && d[queryName]) {
-                    for (let key of entity.PrimaryKeys) {
-                        if (key.Value !== d[queryName][key.Name]) 
-                            return false;
+                    for (let key of entity.PrimaryKey.KeyValuePairs) {
+                        if (key.Value !== d[queryName][key.FieldName]) 
+                            throw new Error ('Missing primary key value in server Delete response: ' + key.FieldName);
                     }
+                    result.Success = true;
+                    result.EndedAt = new Date(); // done processing
                     return true; // all of the return values match the primary key values, so we are good and delete worked
                 }
                 else
-                    return false;    
+                    throw new Error(`Delete failed for ${entity.EntityInfo.Name}: ${entity.PrimaryKey.ToString()} `);    
             }
         }
         catch (e) {
+            result.EndedAt = new Date(); // done processing
+            result.Success = false;
+            result.Message = e.message;
             LogError(e);
+            
             return false;
         }
     }

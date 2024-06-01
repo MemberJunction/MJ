@@ -363,7 +363,7 @@ export class ResolverBase {
               status: 'OK',
               type: 'EntityObjectStatusMessage',
               entityName: entityObject.EntityInfo.Name,
-              primaryKey: entityObject.CompositeKey,
+              primaryKey: entityObject.PrimaryKey,
               message: event.args.message 
             }),
             sessionId: userPayload.sessionId

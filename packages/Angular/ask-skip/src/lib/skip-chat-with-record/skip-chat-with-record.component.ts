@@ -13,7 +13,7 @@ import { SkipAPIChatWithRecordResponse } from "@memberjunction/skip-types";
   })  
 export class SkipChatWithRecordComponent implements AfterViewInit {
   @Input() LinkedEntityID!: number;
-  @Input() LinkedCompositeKey: CompositeKey = new CompositeKey();
+  @Input() LinkedPrimaryKey: CompositeKey = new CompositeKey();
   
   @ViewChild('mjChat') mjChat!: ChatComponent;
 
@@ -57,8 +57,8 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    if(!this.LinkedCompositeKey.KeyValuePairs){
-        this.LinkedCompositeKey.KeyValuePairs = [];
+    if(!this.LinkedPrimaryKey.KeyValuePairs){
+        this.LinkedPrimaryKey.KeyValuePairs = [];
     }
     this.LoadConversation();
   }
@@ -73,7 +73,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
               const md = new Metadata();
               const result = await rv.RunView({
                   EntityName: "Conversations",
-                  ExtraFilter: "UserID=" + md.CurrentUser.ID + " AND LinkedEntityID=" + this.LinkedEntityID + " AND LinkedRecordID='" + this.LinkedCompositeKey.Values() + "'",
+                  ExtraFilter: "UserID=" + md.CurrentUser.ID + " AND LinkedEntityID=" + this.LinkedEntityID + " AND LinkedRecordID='" + this.LinkedPrimaryKey.Values() + "'",
                   OrderBy: "CreatedAt DESC" // in case there are more than one get the latest
               })
               if (result && result.Success && result.Results.length > 0) {
@@ -123,7 +123,7 @@ export class SkipChatWithRecordComponent implements AfterViewInit {
                   userQuestion: message.message, 
                   entityName: this.LinkedEntityName,
                   conversationId: this._conversationId,
-                    compositeKey: this.LinkedCompositeKey.Copy()
+                    compositeKey: this.LinkedPrimaryKey.Copy()
               });
       
               if (result?.ExecuteAskSkipRecordChat?.Success) {

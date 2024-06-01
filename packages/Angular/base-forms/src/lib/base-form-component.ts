@@ -47,13 +47,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const md: Metadata = new Metadata();
    
-      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.CompositeKey);
+      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
       // DEBUG ONLY output to console our full record info for debugging
       if (this.__debug) {
         const start = new Date().getTime();
-        console.log('Full Record Info: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
+        console.log('Full Record Info: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
         const dataObject = await this.record.GetDataObject({
           includeRelatedEntityData: true,
           oldValues: false,
@@ -164,11 +164,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const changes = this.record.GetAll(false, true);
       const oldValues = this.record.GetAll(true, true);
-      console.log('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value)
+      console.log('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString())
       console.log(changes);
       console.log('Old Values');
       console.log(oldValues);
-      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
+      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString() + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
     }
   }
 
@@ -182,7 +182,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SetFavoriteStatus(isFavorite: boolean) {
     const md: Metadata = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.CompositeKey, isFavorite)
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite)
     this._isFavorite = isFavorite;
   }
 
@@ -512,8 +512,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public async ShowDependencies() {
     // for now dump to console
     const md = new Metadata();
-    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey)
-    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
+    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey)
+    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
     console.log(dep);
 
     // if (confirm('Do you want to merge records test?') == true) {
@@ -528,7 +528,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
     const md = new Metadata();
-    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey);
+    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     return dependencies;
   }
 

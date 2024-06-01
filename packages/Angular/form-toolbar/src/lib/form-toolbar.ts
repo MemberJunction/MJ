@@ -23,8 +23,8 @@ export class FormToolbarComponent implements OnInit {
     public newRecord!: BaseEntity;
     public disableToolbar: boolean = false;
 
-    public get LinkedEntityCompositeKey(): CompositeKey {
-        return this.form.record.CompositeKey;
+    public get LinkedEntityPrimaryKey(): CompositeKey {
+        return this.form.record.PrimaryKey;
     }
 
     public constructor(private router: Router) {

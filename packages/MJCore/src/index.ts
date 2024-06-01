@@ -18,6 +18,7 @@ export * from "./generic/transactionGroup";
 export * from "./generic/util";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
+export * from "./generic/compositeKey";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;
