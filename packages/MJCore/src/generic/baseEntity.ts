@@ -677,6 +677,9 @@ export abstract class BaseEntity {
                     if (data) {
                         this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
                         this.SetMany(data);
+                        const result = this.LatestResult;
+                        if (result)
+                            result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
                         return true;
                     }
                     else

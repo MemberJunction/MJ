@@ -1084,6 +1084,11 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 // getting here means we are good to save, now check to see if we're dirty and need to save
                 // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation
                 if ( entity.Dirty || (options && options.IgnoreDirtyState) ) {
+                    entityResult.StartedAt = new Date();
+                    entityResult.Type = bNewRecord ? 'create' : 'update';
+                    entityResult.OriginalValues = entity.Fields.map(f => { return {FieldName: f.Name, Value: f.Value} }); // save the original values before we start the process
+                    entity.ResultHistory.push(entityResult); // push the new result as we have started a process        
+
                     // The assumption is that Validate() has already been called by the BaseEntity object that is invoking this provider.
                     // However, we have an extra responsibility in this situation which is to fire off the EntityActions for the Validate invocation type and
                     // make sure they clear. If they don't clear we throw an exception with the message provided.
@@ -1091,13 +1096,13 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                     if (validationResult && validationResult.length > 0) {
                         // one or more actions executed, see the reults and if any failed, concat their messages and return as exception being thrown
                         const message = validationResult.filter(v => !v.Success).map(v => v.Message).join('\n\n');
-                        if (message)
-                            throw new Error(`Action Validation Failed:\n\n${message}`);
+                        if (message) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = message;
+                            return false;
+                        }
                     }
-
-                    entityResult.StartedAt = new Date();
-                    entityResult.Type = bNewRecord ? 'create' : 'update';
-                    entity.ResultHistory.push(entityResult); // push the new result as we have started a process        
 
                     const spName = bNewRecord ? (entity.EntityInfo.spCreate && entity.EntityInfo.spCreate.length > 0 ? entity.EntityInfo.spCreate : 'spCreate' + entity.EntityInfo.BaseTable) : 
                                                 (entity.EntityInfo.spUpdate && entity.EntityInfo.spUpdate.length > 0 ? entity.EntityInfo.spUpdate : 'spUpdate' + entity.EntityInfo.BaseTable);
@@ -1527,6 +1532,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
 
             result.StartedAt = new Date();
             result.Type = 'delete';
+            result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.Name, Value: f.Value} }); // save the original values before we start the process
             entity.ResultHistory.push(result); // push the new result as we have started a process
 
             // REMEMBER - this is the provider and the BaseEntity/subclasses handle user-level permission checking already, we just make sure API was turned on for the operation

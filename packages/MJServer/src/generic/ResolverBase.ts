@@ -388,7 +388,7 @@ export class ResolverBase {
         }
         else 
             // save failed, return null
-            return null;
+            throw entityObject.LatestResult.Message;
     }
     else    
         return null;
@@ -457,7 +457,8 @@ export class ResolverBase {
           return entityObject.GetAll();
         }
         else
-          return null; // save failed, return null
+          // save failed, return null
+          throw entityObject.LatestResult?.Message;
       }
       else
           return null; // update canceled by the BeforeUpdate event, return null

@@ -553,12 +553,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         const result = new BaseEntityResult();
         try {
-            const pKeyValue = entity.PrimaryKey.HasValue;
             const vars = { input: {} };
-            const type: string = pKeyValue ? "Update" : "Create";
+            const type: string = entity.IsSaved ? "Update" : "Create";
 
             result.StartedAt = new Date();
-            result.Type = pKeyValue ? 'create' : 'update';
+            result.Type = entity.IsSaved ? 'update' : 'create';
+            result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
             entity.ResultHistory.push(result); // push the new result as we have started a process
 
             // Create the query for the mutation first, we will provide the specific
@@ -570,7 +570,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const mutationName = `${type}${entity.EntityInfo.ClassName}`
 
             // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && pKeyValue) ));
+            const filteredFields = entity.Fields.filter(f => f.SQLType.trim().toLowerCase() !== 'uniqueidentifier' && (f.ReadOnly === false || (f.IsPrimaryKey && entity.IsSaved) ));
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => f.CodeName).join("\n                    ")}
             }`
@@ -655,7 +655,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         catch (e) {
             result.Success = false;
             result.EndedAt = new Date();
-            result.Message = e.message;
+            result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
             LogError(e);
             return null;
         }
@@ -735,6 +735,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         try {
             result.StartedAt = new Date();
             result.Type = 'delete';
+            result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
             entity.ResultHistory.push(result); // push the new result as we have started a process
 
             const vars = {};
@@ -833,7 +834,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         catch (e) {
             result.EndedAt = new Date(); // done processing
             result.Success = false;
-            result.Message = e.message;
+            result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
             LogError(e);
             
             return false;
