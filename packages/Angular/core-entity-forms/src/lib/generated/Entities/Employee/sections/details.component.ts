@@ -9,101 +9,117 @@ import { EmployeeEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="BCMID"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="FirstName"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="LastName"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Title"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Email"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Email"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Phone"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Active"
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="CompanyID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="SupervisorID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="FirstLast"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Supervisor"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="SupervisorFirstName"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="SupervisorLastName"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="SupervisorEmail"
             Type="textbox"
             [EditMode]="EditMode"

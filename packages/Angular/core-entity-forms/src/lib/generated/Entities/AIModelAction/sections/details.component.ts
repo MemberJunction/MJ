@@ -9,46 +9,53 @@ import { AIModelActionEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="AIModelID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="AIActionID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="IsActive"
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="AIModel"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="AIAction"
             Type="textbox"
             [EditMode]="EditMode"

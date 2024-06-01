@@ -8,5 +8,4 @@ export * from './lib/base-form-section-component';
 export * from './lib/base-form-component';
 export * from './lib/base-field-component';
 export * from './lib/section-loader-component';
-export * from './lib/form-toolbar';
 export * from './lib/create-record/create-record.component';

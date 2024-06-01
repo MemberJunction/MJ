@@ -1602,6 +1602,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Sequence
         * * SQL Data Type: int
         * * Default Value: 0
+        * * Description: Display order of the field within the entity
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -1610,6 +1611,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field within the database table
         */
         get Name(): string {  
             return this.Get('Name');
@@ -1619,6 +1621,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: A user friendly alternative to the field name
         */
         get DisplayName(): string | null {  
             return this.Get('DisplayName');
@@ -1629,6 +1632,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: Descriptive text explaining the purpose of the field
         */
         get Description(): string | null {  
             return this.Get('Description');
@@ -1654,6 +1658,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Primary Key
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
         */
         get IsPrimaryKey(): boolean {  
             return this.Get('IsPrimaryKey');
@@ -1666,6 +1671,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Unique
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: Indicates if the field must have unique values within the entity.
         */
         get IsUnique(): boolean {  
             return this.Get('IsUnique');
@@ -1677,6 +1683,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
+        * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -1687,6 +1694,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Type
         * * SQL Data Type: nvarchar(100)
+        * * Description: SQL Data type (auto maintained by CodeGen)
         */
         get Type(): string {  
             return this.Get('Type');
@@ -1695,6 +1703,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Length
         * * SQL Data Type: int
+        * * Description: SQL data length (auto maintained by CodeGen)
         */
         get Length(): number | null {  
             return this.Get('Length');
@@ -1703,6 +1712,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Precision
         * * SQL Data Type: int
+        * * Description: SQL precision (auto maintained by CodeGen)
         */
         get Precision(): number | null {  
             return this.Get('Precision');
@@ -1711,6 +1721,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Scale
         * * SQL Data Type: int
+        * * Description: SQL scale (auto maintained by CodeGen)
         */
         get Scale(): number | null {  
             return this.Get('Scale');
@@ -1721,6 +1732,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allows Null
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: Does the column allow null or not (auto maintained by CodeGen)
         */
         get AllowsNull(): boolean {  
             return this.Get('AllowsNull');
@@ -1730,6 +1742,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(255)
+        * * Description: If a default value is defined for the field it is stored here (auto maintained by CodeGen)
         */
         get DefaultValue(): string | null {  
             return this.Get('DefaultValue');
@@ -1740,6 +1753,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Auto Increment
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
         */
         get AutoIncrement(): boolean {  
             return this.Get('AutoIncrement');
@@ -1755,6 +1769,7 @@ import { RegisterClass } from "@memberjunction/global";
         *   * None
         *   * List
         *   * ListOrUserEntry
+        * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
         */
         get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {  
             return this.Get('ValueListType');
@@ -1766,18 +1781,55 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Email
+        *   * URL
+        *   * Tel
+        *   * SMS
+        *   * Geo
+        *   * WhatsApp
+        *   * FaceTime
+        *   * Skype
+        *   * SIP
+        *   * MSTeams
+        *   * ZoomMtg
+        *   * Other
+        *   * Code
+        * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
         */
-        get ExtendedType(): string | null {  
+        get ExtendedType(): 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null {  
             return this.Get('ExtendedType');
         }
-        set ExtendedType(value: string | null) {
+        set ExtendedType(value: 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null) {
             this.Set('ExtendedType', value);
+        }
+        /**
+        * * Field Name: CodeType
+        * * Display Name: Code Type
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * TypeScript
+        *   * SQL
+        *   * HTML
+        *   * CSS
+        *   * JavaScript
+        *   * Other
+        * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
+        */
+        get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null {  
+            return this.Get('CodeType');
+        }
+        set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null) {
+            this.Set('CodeType', value);
         }
         /**
         * * Field Name: DefaultInView
         * * Display Name: Default In View
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If set to 1, this field will be included by default in any new view created by a user.
         */
         get DefaultInView(): boolean {  
             return this.Get('DefaultInView');
@@ -1789,6 +1841,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ViewCellTemplate
         * * Display Name: View Cell Template
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: NULL
         */
         get ViewCellTemplate(): string | null {  
             return this.Get('ViewCellTemplate');
@@ -1800,6 +1853,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultColumnWidth
         * * Display Name: Default Column Width
         * * SQL Data Type: int
+        * * Description: Determines the default width for this field when included in a view
         */
         get DefaultColumnWidth(): number | null {  
             return this.Get('DefaultColumnWidth');
@@ -1812,6 +1866,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
         */
         get AllowUpdateAPI(): boolean {  
             return this.Get('AllowUpdateAPI');
@@ -1824,6 +1879,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Allow Update In View
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
         */
         get AllowUpdateInView(): boolean {  
             return this.Get('AllowUpdateInView');
@@ -1836,6 +1892,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Include In User Search API
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search
         */
         get IncludeInUserSearchAPI(): boolean {  
             return this.Get('IncludeInUserSearchAPI');
@@ -1848,6 +1905,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
         */
         get FullTextSearchEnabled(): boolean {  
             return this.Get('FullTextSearchEnabled');
@@ -1859,6 +1917,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserSearchParamFormatAPI
         * * Display Name: User Search Param Format API
         * * SQL Data Type: nvarchar(500)
+        * * Description: NULL
         */
         get UserSearchParamFormatAPI(): string | null {  
             return this.Get('UserSearchParamFormatAPI');
@@ -1871,6 +1930,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Include In Generated Form
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
         */
         get IncludeInGeneratedForm(): boolean {  
             return this.Get('IncludeInGeneratedForm');
@@ -1883,11 +1943,17 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Generated Form Section
         * * SQL Data Type: nvarchar(10)
         * * Default Value: N'Details'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Top
+        *   * Category
+        *   * Details
+        * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
         */
-        get GeneratedFormSection(): string {  
+        get GeneratedFormSection(): 'Top' | 'Category' | 'Details' {  
             return this.Get('GeneratedFormSection');
         }
-        set GeneratedFormSection(value: string) {
+        set GeneratedFormSection(value: 'Top' | 'Category' | 'Details') {
             this.Set('GeneratedFormSection', value);
         }
         /**
@@ -1895,6 +1961,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: NULL
         */
         get IsVirtual(): boolean {  
             return this.Get('IsVirtual');
@@ -1905,6 +1972,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Is Name Field
         * * SQL Data Type: bit
         * * Default Value: 0
+        * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
         */
         get IsNameField(): boolean {  
             return this.Get('IsNameField');
@@ -1917,6 +1985,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: RelatedEntity ID
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)
         */
         get RelatedEntityID(): number | null {  
             return this.Get('RelatedEntityID');
@@ -1928,6 +1997,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RelatedEntityFieldName
         * * Display Name: Related Entity Field Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
         */
         get RelatedEntityFieldName(): string | null {  
             return this.Get('RelatedEntityFieldName');
@@ -1940,6 +2010,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Include Related Entity Name Field In Base View
         * * SQL Data Type: bit
         * * Default Value: 1
+        * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
         */
         get IncludeRelatedEntityNameFieldInBaseView(): boolean {  
             return this.Get('IncludeRelatedEntityNameFieldInBaseView');

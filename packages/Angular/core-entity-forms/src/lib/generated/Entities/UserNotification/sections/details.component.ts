@@ -9,69 +9,80 @@ import { UserNotificationEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UserID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Title"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Message"
-            Type="textbox"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="ResourceTypeID"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="ResourceRecordID"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="ResourceConfiguration"
-            Type="textbox"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Unread"
             Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="ReadAt"
             Type="datepicker"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"

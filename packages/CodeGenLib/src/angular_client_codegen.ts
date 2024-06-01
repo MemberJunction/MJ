@@ -105,6 +105,7 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
@@ -205,6 +206,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -343,6 +345,8 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
       protected generateSectionHTMLForAngular(entity: EntityInfo, section: AngularFormSectionInfo): string {
           let html: string = ''
       
+          // figure out which fields will be in this section first
+          section.Fields = [];
           for (const field of entity.Fields) {
               if (field.IncludeInGeneratedForm) {
                   let bMatch: boolean = false;
@@ -360,62 +364,66 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
                   }
                   if (bMatch && field.Name.toLowerCase() !== 'id') {
                       section.Fields.push(field) // add the field to the section fields array
-      
-                    let editControl = 'textbox'; // default to textbox
-                    if (!field.ReadOnly) {
-                        // first, check to see if we have a ValueListType != None, if so, generate a dropdown. 
-                        // If value list type is ListOrUserEntry, then generate a combobox, if ValueListType = List, then generate a dropdown
-                        if (field.ValueListTypeEnum !== EntityFieldValueListType.None) {
-                            // build the possible values list
-                            if (field.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
-                                // combo box
-                                editControl = `combobox`  
-                            }
-                            else if (field.ValueListTypeEnum === EntityFieldValueListType.List) {
-                                // dropdown
-                                editControl = `dropdownlist`  
-                            }
-                        }
-                        else {
-                            // no value list, generate a text box, checkbox, or date picker
-                            if (field.TSType === EntityFieldTSType.Boolean)
-                                editControl = `checkbox`
-                            else if (field.TSType === EntityFieldTSType.Date)
-                                editControl = `datepicker`  
-                            else if (field.TSType === EntityFieldTSType.Number)
-                                editControl = `numerictextbox`
-                            else if (field.TSType === EntityFieldTSType.String) {
-                                if (field.MaxLength > 100)
-                                    editControl = `textarea`
-                                else
-                                    editControl = `textbox`
-                            }
-                        }
-                    }
+                  }
+              }
+          }
 
-                    let linkType = null;
-                    if (field.RelatedEntity && field.RelatedEntity.length > 0)
-                        linkType = 'Record'
-                    else if (field.ExtendedType && field.ExtendedType.length > 0) { 
-                        switch (field.ExtendedType.trim().toLowerCase()) {
-                            case 'url':
-                                linkType = 'URL'
-                                break;
-                            case 'email':
-                                linkType = 'Email'
-                                break;
-                        }
+          // now iterate through the selected fields for the section
+          for (const field of section.Fields) {
+            let editControl = 'textbox'; // default to textbox
+            if (!field.ReadOnly) {
+                // first, check to see if we have a ValueListType != None, if so, generate a dropdown. 
+                // If value list type is ListOrUserEntry, then generate a combobox, if ValueListType = List, then generate a dropdown
+                if (field.ValueListTypeEnum !== EntityFieldValueListType.None) {
+                    // build the possible values list
+                    if (field.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
+                        // combo box
+                        editControl = `combobox`  
                     }
-                    // next, generate HTML for the field
-                    html += `        <mj-form-field
+                    else if (field.ValueListTypeEnum === EntityFieldValueListType.List) {
+                        // dropdown
+                        editControl = `dropdownlist`  
+                    }
+                }
+                else {
+                    // no value list, generate a text box, checkbox, or date picker
+                    if (field.TSType === EntityFieldTSType.Boolean)
+                        editControl = `checkbox`
+                    else if (field.TSType === EntityFieldTSType.Date)
+                        editControl = `datepicker`  
+                    else if (field.TSType === EntityFieldTSType.Number)
+                        editControl = `numerictextbox`
+                    else if (field.TSType === EntityFieldTSType.String) {
+                        if (field.Length < 0 || field.MaxLength > 100) // length < 0 means nvarchar(max) or similar, so use textarea
+                            editControl = `textarea`
+                        else
+                            editControl = `textbox`
+                    }
+                }
+            }
+
+            let linkType = null;
+            if (field.RelatedEntity && field.RelatedEntity.length > 0)
+                linkType = 'Record'
+            else if (field.ExtendedType && field.ExtendedType.length > 0) { 
+                switch (field.ExtendedType.trim().toLowerCase()) {
+                    case 'url':
+                        linkType = 'URL'
+                        break;
+                    case 'email':
+                        linkType = 'Email'
+                        break;
+                }
+            }
+            // next, generate HTML for the field, use fillContainer if we have just one field
+            html += `        <mj-form-field ${section.Fields.length === 1 ? 'mjFillContainer' : ''}
             [record]="record"
+            [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
             FieldName="${field.CodeName}"
             Type="${editControl}"
             [EditMode]="EditMode"${linkType ? `\n            LinkType="${linkType}"` : ''}
         ></mj-form-field>
 `
-                  }
-              }
           }
       
           return html;

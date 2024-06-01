@@ -27,8 +27,11 @@
     "@memberjunction/core": "~1.4.0",
     "@memberjunction/core-entities": "~1.4.0",
     "@memberjunction/ng-explorer-core": "~1.4.0",
+    "@memberjunction/ng-base-forms": "~1.4.0",
+    "@memberjunction/ng-form-toolbar": "~1.4.0",
     "@memberjunction/ng-tabstrip": "~1.4.0",
     "@memberjunction/ng-container-directives": "~1.4.0",
+    "@memberjunction/ng-code-editor": "~1.4.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "tslib": "^2.3.0"

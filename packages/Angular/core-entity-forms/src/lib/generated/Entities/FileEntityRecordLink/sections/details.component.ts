@@ -9,46 +9,53 @@ import { FileEntityRecordLinkEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="FileID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="EntityID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="RecordID"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UpdatedAt"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="File"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="Entity"
             Type="textbox"
             [EditMode]="EditMode"

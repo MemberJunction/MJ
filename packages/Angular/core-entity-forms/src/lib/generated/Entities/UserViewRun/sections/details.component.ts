@@ -9,34 +9,39 @@ import { UserViewRunEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UserViewID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="RunAt"
             Type="datepicker"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="RunByUserID"
             Type="numerictextbox"
             [EditMode]="EditMode"
             LinkType="Record"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="UserView"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
-        <mj-form-field
+        <mj-form-field 
             [record]="record"
+            [ShowLabel]="true"
             FieldName="RunByUser"
             Type="textbox"
             [EditMode]="EditMode"

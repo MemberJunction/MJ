@@ -9,7 +9,17 @@
         <label *ngIf="ShowLabel">{{DisplayName}}</label>
         @switch (LinkType) {
             @case ('None') {
-                <span>{{FormatValue(FieldName, 0)}}</span>
+                @if (ExtendedType === 'Code') {
+                    <pre>{{record.Get(FieldName)}}</pre>
+                }
+                @else if (FieldInfo.Length === -1) {
+                    <!-- this is a varchar(max) type of field -->
+                    <markdown #markdown [data]="record.Get(FieldName)"></markdown>
+                    <!-- <span [innerHTML]="record.Get(FieldName) | formatText"></span> -->
+                }
+                @else {
+                    <span>{{FormatValue(FieldName, 0)}}</span>
+                }
             }
             @case ('Email') {
                 <span mjEmailLink [field]="record.GetFieldByName(FieldName)" >{{FormatValue(FieldName, 0)}}</span>
@@ -23,13 +33,15 @@
         }
     </div>         
     <div class="record-form-row" *ngIf="EditMode && !IsFieldReadOnly">
-        <label *ngIf="ShowLabel">{{DisplayName}}</label>
+        @if (ShowLabel) {
+            <label>{{DisplayName}}</label>
+        }
         @switch (Type) {
             @case ('textbox') {
                 <kendo-textbox [(ngModel)]="Value"  />   
             }
             @case ('textarea') {
-                <kendo-textarea [(ngModel)]="Value" ></kendo-textarea>
+                <kendo-textarea [(ngModel)]="Value" mjFillContainer [fillWidth]="ShowLabel ? false : true" [fillHeight]="ShowLabel ? false : true" ></kendo-textarea>
             }
             @case ('numerictextbox') {
                 <kendo-numerictextbox [(value)]="Value"  />   

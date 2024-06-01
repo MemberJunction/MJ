@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
@@ -129,6 +130,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -173,6 +175,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -217,6 +220,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -251,6 +255,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,

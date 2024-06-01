@@ -9,8 +9,9 @@ import { EntityEntity } from '@memberjunction/core-entities';
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
-        <mj-form-field
+        <mj-form-field mjFillContainer
             [record]="record"
+            [ShowLabel]="false"
             FieldName="UserFormGenerated"
             Type="checkbox"
             [EditMode]="EditMode"
