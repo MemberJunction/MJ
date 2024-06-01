@@ -8428,7 +8428,19 @@ type Mutation {
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   Createclient_membership(input: Createclient_membershipInput!): client_membership_!
+  DeleteAIAction(ID: Int!, options___: DeleteOptionsInput!): AIAction_!
+  DeleteAIModelAction(ID: Int!, options___: DeleteOptionsInput!): AIModelAction_!
   DeleteAccount(ID: Int!, options___: DeleteOptionsInput!): Account_!
+  DeleteAction(ID: Int!, options___: DeleteOptionsInput!): Action_!
+  DeleteActionAuthorization(ID: Int!, options___: DeleteOptionsInput!): ActionAuthorization_!
+  DeleteActionCategory(ID: Int!, options___: DeleteOptionsInput!): ActionCategory_!
+  DeleteActionContext(ID: Int!, options___: DeleteOptionsInput!): ActionContext_!
+  DeleteActionContextType(ID: Int!, options___: DeleteOptionsInput!): ActionContextType_!
+  DeleteActionExecutionLog(ID: Int!, options___: DeleteOptionsInput!): ActionExecutionLog_!
+  DeleteActionFilter(ID: Int!, options___: DeleteOptionsInput!): ActionFilter_!
+  DeleteActionLibrary(ID: Int!, options___: DeleteOptionsInput!): ActionLibrary_!
+  DeleteActionParam(ID: Int!, options___: DeleteOptionsInput!): ActionParam_!
+  DeleteActionResultCode(ID: Int!, options___: DeleteOptionsInput!): ActionResultCode_!
   DeleteApplication(ID: Int!, options___: DeleteOptionsInput!): Application_!
   DeleteApplicationEntity(ID: Int!, options___: DeleteOptionsInput!): ApplicationEntity_!
   DeleteApplicationSetting(ID: Int!, options___: DeleteOptionsInput!): ApplicationSetting_!
@@ -8442,6 +8454,11 @@ type Mutation {
   DeleteDealForecastCategory(ID: Int!, options___: DeleteOptionsInput!): DealForecastCategory_!
   DeleteEmployee(ID: Int!, options___: DeleteOptionsInput!): Employee_!
   DeleteEntity(ID: Int!, options___: DeleteOptionsInput!): Entity_!
+  DeleteEntityAIAction(ID: Int!, options___: DeleteOptionsInput!): EntityAIAction_!
+  DeleteEntityAction(ID: Int!, options___: DeleteOptionsInput!): EntityAction_!
+  DeleteEntityActionFilter(ID: Int!, options___: DeleteOptionsInput!): EntityActionFilter_!
+  DeleteEntityActionInvocation(ID: Int!, options___: DeleteOptionsInput!): EntityActionInvocation_!
+  DeleteEntityActionInvocationType(ID: Int!, options___: DeleteOptionsInput!): EntityActionInvocationType_!
   DeleteEntityBehavior(ID: Int!, options___: DeleteOptionsInput!): EntityBehavior_!
   DeleteEntityBehaviorType(ID: Int!, options___: DeleteOptionsInput!): EntityBehaviorType_!
   DeleteEntityField(ID: Int!, options___: DeleteOptionsInput!): EntityField_!

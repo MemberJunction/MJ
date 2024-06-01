@@ -56,7 +56,7 @@ export class CreateRecordComponent implements OnInit {
             if(saveResult){
                 this.toggleCreateDialog(false);
                 SharedService.Instance.CreateSimpleNotification(`Successfully created new ${this.EntityObjectName} record`, 'success', 1000);
-                this.router.navigate(['resource', 'record', this.record.CompositeKey.ToURLSegment()], { queryParams: { Entity: this.EntityObjectName } });
+                this.router.navigate(['resource', 'record', this.record.PrimaryKey.ToURLSegment()], { queryParams: { Entity: this.EntityObjectName } });
             }
             else{
                 SharedService.Instance.CreateSimpleNotification(`Failed to create new ${this.EntityObjectName} record`, 'error', 1000);

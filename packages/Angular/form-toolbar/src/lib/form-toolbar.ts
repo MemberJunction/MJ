@@ -23,8 +23,8 @@ export class FormToolbarComponent implements OnInit {
     public newRecord!: BaseEntity;
     public disableToolbar: boolean = false;
 
-    public get LinkedEntityCompositeKey(): CompositeKey {
-        return this.form.record.CompositeKey;
+    public get LinkedEntityPrimaryKey(): CompositeKey {
+        return this.form.record.PrimaryKey;
     }
 
     public constructor(private router: Router) {
@@ -79,7 +79,8 @@ export class FormToolbarComponent implements OnInit {
 
             // Save the record
             const result = await this.form.SaveRecord(true);
-            // Handle the result if needed
+            if (!result)
+                alert(this.form.record.LatestResult.Message);
         } finally {
             // Re-enable the toolbar and remove the UX effect
             this.disableToolbar = false;

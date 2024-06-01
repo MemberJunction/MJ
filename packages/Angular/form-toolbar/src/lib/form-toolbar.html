@@ -55,7 +55,7 @@
     @if (form.EntityInfo) {
         <mj-skip-chat-with-record-window
             [LinkedEntityID]="form.EntityInfo.ID"
-            [LinkedEntityCompositeKey]="LinkedEntityCompositeKey"            
+            [LinkedEntityPrimaryKey]="LinkedEntityPrimaryKey"            
             #mjChat
             [WindowOpened]="SkipChatVisible" 
             (WindowClosed)="ShowSkipChat()"

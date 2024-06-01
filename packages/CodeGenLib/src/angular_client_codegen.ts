@@ -36,7 +36,7 @@ export class AngularClientGeneratorBase {
           for (let i:number = 0; i < entities.length; ++i) {
               const entity = entities[i];
       
-              if (entity.PrimaryKey && entity.IncludeInAPI) {
+              if (entity.PrimaryKeys && entity.PrimaryKeys.length > 0 && entity.IncludeInAPI) {
                   const thisEntityPath = path.join(entityPath, entity.ClassName);
                   if (!fs.existsSync(thisEntityPath))
                       fs.mkdirSync(thisEntityPath, { recursive: true }); // create the directory if it doesn't exist

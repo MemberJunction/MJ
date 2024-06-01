@@ -57,7 +57,7 @@ export class FieldLink extends BaseLink implements OnInit {
           // requires a server round trip and hitting the DB, so we try to avoid this
 
           let compositeKey: CompositeKey = new CompositeKey([{
-            FieldName: this._targetEntityInfo.PrimaryKey.Name, // AT THE MOMENT - we only support foreign keys with a single value
+            FieldName: this._targetEntityInfo.FirstPrimaryKey.Name, // AT THE MOMENT - we only support foreign keys with a single value
             Value: this.field.Value
           }]);
           md.GetEntityRecordName(relatedEntity, compositeKey).then(recordName => {
@@ -79,7 +79,7 @@ export class FieldLink extends BaseLink implements OnInit {
       throw new Error('targetEntityInfo not set');
 
     // AT THE MOMENT - we only support foreign keys with a single value
-    const keyVals = `${this._targetEntityInfo.PrimaryKey.Name}|${this._targetRecordID}`
+    const keyVals = `${this._targetEntityInfo.FirstPrimaryKey.Name}|${this._targetRecordID}`
     this.router.navigate(['resource', 'record', keyVals], { queryParams: { Entity: this._targetEntity } })
   }  
 

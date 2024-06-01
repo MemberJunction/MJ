@@ -198,7 +198,7 @@ export class AIEngine {
                     const newRecord = await md.GetEntityObject(entityAction.OutputEntity);
                     newRecord.NewRecord();
                     newRecord.Set('EntityID', params.entityRecord.EntityInfo.ID);
-                    newRecord.Set('RecordID', params.entityRecord.PrimaryKey.Value);
+                    newRecord.Set('RecordID', params.entityRecord.FirstPrimaryKey.Value);
                     newRecord.Set(entityAction.OutputField, sOutput);
                     await newRecord.Save();
                 }
