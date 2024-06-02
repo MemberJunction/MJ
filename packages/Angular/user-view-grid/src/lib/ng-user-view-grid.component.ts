@@ -612,7 +612,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           cols = this._entityInfo?.Fields.filter((f: EntityFieldInfo) => f.DefaultInView ).map((f: EntityFieldInfo) => {
                                                                                                   return {
                                                                                                     ID: f.ID,
-                                                                                                    Name: f.Name,
+                                                                                                    Name: f.CodeName,
                                                                                                     DisplayName: f.DisplayName,
                                                                                                     EntityField: f,
                                                                                                     hidden: false,
