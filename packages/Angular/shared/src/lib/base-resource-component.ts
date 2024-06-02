@@ -14,6 +14,7 @@ export abstract class BaseResourceComponent {
         return this._loadStarted;
     }
 
+    
     private _loadCompleteEvent: any = null;
     public get LoadCompleteEvent(): any {
         return this._loadCompleteEvent
@@ -51,6 +52,7 @@ export abstract class BaseResourceComponent {
             this._loadStartedEvent();
         }
     }
+ 
     
 
     protected ResourceRecordSaved(resourceRecordEntity: BaseEntity) {

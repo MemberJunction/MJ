@@ -44,7 +44,7 @@
         @for(tab of tabs; track tab.id; let i = $index) {
           <mj-tab-body>
             <mj-resource [Data]="tab.data" [isVisible]="activeTabIndex - 1 === i"
-              (ResourceRecordSaved)="SaveSingleWorkspaceItem(tab)"
+              (ResourceRecordSaved)="HandleResourceRecordSaved(tab, $event)"
               (ContentLoadingStarted)="setTabContentLoadingStatus(tab, true)"
               (ContentLoadingComplete)="setTabContentLoadingStatus(tab, false)"
               mjFillContainer

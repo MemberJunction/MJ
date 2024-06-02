@@ -2,7 +2,7 @@ import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, Host
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
-import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus, BaseEntity } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -509,9 +509,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     else {
       existingTab = this.tabs.find(t => {
         if (t.data.ResourceTypeID === data.ResourceTypeID && 
-            t.data.ResourceRecordID === data.ResourceRecordID &&
-            data.ResourceRecordID // make sure that we don't match on null/undefined ResourceRecordID's - these should always be NEW tabs
-           ) {
+            t.data.ResourceRecordID === data.ResourceRecordID  ) {
             // we now have to do one more check, we have to make sure that all of the values within the Configuration object match as well
             let bMatch = true;
             const keys = Object.keys(data.Configuration);
@@ -572,8 +570,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // select the new tab
       this.activeTabIndex = this.tabs.length; // this is intentionally past array boundary because ActiveTabIndex includes the Home tab that is not part of the tabs array
-      //this.tabstrip.selectTab(this.activeTabIndex);
-      //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
 
       this.sharedService.InvokeManualResize();
       this.scrollIntoView();
@@ -634,7 +630,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         url += `/query/${data.ResourceRecordID}`;
         break;
       case 'records':
-        url += `/record/${data.ResourceRecordID}?Entity=${data.Configuration.Entity}`;
+        const recIDAsString: string = data.ResourceRecordID !== null && data.ResourceRecordID !== undefined ? (typeof data.ResourceRecordID === "string" ? data.ResourceRecordID : data.ResourceRecordID.toString()) : "";
+        url += `/record/${recIDAsString.trim()}?Entity=${data.Configuration.Entity}`;
         break;
       case 'search results':
         url += `/search/${data.Configuration.SearchInput}?Entity=${data.Configuration.Entity}`;
@@ -720,6 +717,23 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     return bSuccess;
   }
 
+
+  public async HandleResourceRecordSaved(tab: Tab, resourceRecord: BaseEntity): Promise<boolean> {
+    const oldId = tab.data.ResourceRecordID;
+    tab.data.ResourceRecordID = resourceRecord.PrimaryKey.ToURLSegment();
+    
+    // we need to update the label in case the "Name" of the record changed, or if it was new and no longer is new
+    tab.label = await this.GetWorkspaceItemDisplayName(tab.data); 
+
+    // now check to see if the old id and the new ID are any different
+    // check for tab names that start with New as well...
+    // and if so we need to replace the state in the URL for Angular so that we don't have a New Record situation in the URL but have the actual ID now
+//    if (oldId !== tab.data.ResourceRecordID || tab.label?.toLowerCase().trim().startsWith('new') ) {
+      this.updateBrowserURL(tab, tab.data);
+  //  }
+
+    return await this.SaveSingleWorkspaceItem(tab);
+  }
   /**
    * Saves a single workspace item to the database.
    * @param tab 
