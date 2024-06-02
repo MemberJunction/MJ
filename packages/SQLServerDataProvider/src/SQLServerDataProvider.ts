@@ -2022,14 +2022,14 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
             }
             else {
                 // got our field, create a SQL Query
-                let sql: string = `SELECT ${f.Name} FROM [${e.SchemaName}].[${e.BaseView}] WHERE `
+                let sql: string = `SELECT [${f.Name}] FROM [${e.SchemaName}].[${e.BaseView}] WHERE `
                 let where: string = '';
                 for (let pkv of CompositeKey.KeyValuePairs) {
                     const pk = e.PrimaryKeys.find(pk => pk.Name === pkv.FieldName);
                     const quotes = pk.NeedsQuotes ? "'" : '';
                     if (where.length > 0)
                         where += ' AND ';
-                    where += `${pkv.FieldName}=${quotes}${pkv.Value}${quotes}`;
+                    where += `[${pkv.FieldName}]=${quotes}${pkv.Value}${quotes}`;
                 }
                 return sql + where;
             }
