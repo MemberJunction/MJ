@@ -10,14 +10,14 @@ export function LoadRecordResource() {
 @RegisterClass(BaseResourceComponent, 'Records')
 @Component({
     selector: 'mj-record-resource',
-    template: `<mj-single-record [CompositeKey]="this.CompositeKey" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()" mjFillContainer></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" mjFillContainer></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
-    public get CompositeKey(): CompositeKey {
-        return EntityRecordResource.GetCompositeKey(this.Data);
+    public get PrimaryKey(): CompositeKey {
+        return EntityRecordResource.GetPrimaryKey(this.Data);
     }
 
-    public static GetCompositeKey(data: ResourceData): CompositeKey {
+    public static GetPrimaryKey(data: ResourceData): CompositeKey {
         const md = new Metadata();
         const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
         if (!e){
@@ -35,10 +35,14 @@ export class EntityRecordResource extends BaseResourceComponent {
         }
         else {
             const md = new Metadata();
-            let compositeKey: CompositeKey = EntityRecordResource.GetCompositeKey(data);
-            const name = await md.GetEntityRecordName(data.Configuration.Entity, compositeKey);
-            const displayId = compositeKey.KeyValuePairs.length > 1 ? compositeKey.Values() : compositeKey.GetValueByIndex(0);         
-            return (name ? name : data.Configuration.Entity) + ` (${displayId})`;
+            let pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data);
+            if (pk.HasValue) {
+                const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
+                const displayId = pk.KeyValuePairs.length > 1 ? pk.Values() : pk.GetValueByIndex(0);         
+                return (name ? name : data.Configuration.Entity) + ` (${displayId})`;    
+            }
+            else 
+                return `New ${data.Configuration.Entity} Record`;
         }
     }
 }

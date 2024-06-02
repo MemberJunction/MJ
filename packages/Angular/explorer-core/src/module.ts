@@ -42,7 +42,6 @@ import { FilesComponent } from './lib/files/files.component';
 import { GenericBrowseListComponent } from './lib/generic-browse-list/generic-browse-list.component';
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
-import { SectionLoaderComponent } from './lib/generic/section-loader-component';
 import { HeaderComponent } from './lib/header/header.component';
 import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
 import { HomeComponent } from './lib/home-component/home.component';
@@ -79,7 +78,6 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
 @NgModule({
   declarations: [
     FormToolbarComponent,
-    SectionLoaderComponent,
     ResourceContainerComponent,
     AuthButtonComponent,
     DashboardBrowserComponent,
@@ -163,7 +161,6 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
   ],
   exports: [
     FormToolbarComponent,
-    SectionLoaderComponent,
     ResourceContainerComponent,
     AuthButtonComponent,
     DashboardBrowserComponent,
