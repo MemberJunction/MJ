@@ -9641,6 +9641,26 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -9740,7 +9760,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
-        * * SQL Data Type: nvarchar(255)
+        * * SQL Data Type: nvarchar(2000)
         */
         get ResourceRecordID(): string | null {  
             return this.Get('ResourceRecordID');
@@ -9770,6 +9790,26 @@ import { RegisterClass } from "@memberjunction/global";
         set Configuration(value: string | null) {
             this.Set('Configuration', value);
         }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        * * Default Value: getdate()
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
         /**
         * * Field Name: WorkSpace
         * * Display Name: Work Space

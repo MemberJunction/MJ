@@ -2,14 +2,15 @@ import { Component } from '@angular/core';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { EntityFormComponent } from '../../generated/Entities/Entity/entity.form.component';
 
-@RegisterClass(BaseFormComponent, 'Entities', 1) // Register with priority of 1, so ABOVE the generated form
+@RegisterClass(BaseFormComponent, 'Entities') 
 @Component({
     selector: 'mj-entities-form',
     templateUrl: './entities-form.component.html',
     styleUrls: ['../../../shared/form-styles.css']
 })
-export class EntitiesFormComponent extends BaseFormComponent {
+export class CustomEntityFormComponent extends EntityFormComponent {
     public record!: EntityEntity;
 } 
  

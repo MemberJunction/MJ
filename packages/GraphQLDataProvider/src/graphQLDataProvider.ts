@@ -609,12 +609,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     const val = f.OldValue ? (typeof f.OldValue === 'string' ? f.OldValue : f.OldValue.toString()) : null;
                     ov.push({Key: f.CodeName, Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
-                vars.input['OldValues___'] = ov;
+                vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
             
             if (entity.TransactionGroup) {
                 return new Promise((resolve, reject) => {
-                    const mutationInputTypes = [{varName: 'input', inputType: mutationName + 'Input!'}]
+                    const mutationInputTypes = [
+                        {
+                            varName: 'input', 
+                            inputType: mutationName + 'Input!'
+                        }
+                    ];
+
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
                     entity.TransactionGroup.AddTransaction(new TransactionItem(inner, vars, {mutationName, 
@@ -760,6 +766,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 returnValues += `${pk.CodeName}`;
             }
 
+            mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
             vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
 
             const queryName: string = 'Delete' + entity.EntityInfo.ClassName;
@@ -775,7 +782,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (entity.TransactionGroup) {
                 // we have a transaction group, need to play nice and be part of it
                 return new Promise((resolve, reject) => {
-
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
                     entity.TransactionGroup.AddTransaction(new TransactionItem(inner, vars, {mutationName: queryName, 
