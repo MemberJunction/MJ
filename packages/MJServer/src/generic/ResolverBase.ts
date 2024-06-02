@@ -2,6 +2,7 @@ import { BaseEntity, CompositeKey, EntityFieldTSType, EntityPermissionType, Meta
 import { AuditLogEntity, UserViewEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
+import { GraphQLError } from 'graphql';
 import { DataSource } from 'typeorm';
 
 import { UserPayload } from '../types';
@@ -456,9 +457,12 @@ export class ResolverBase {
           await this.AfterUpdate(dataSource, input); // fire event
           return entityObject.GetAll();
         }
-        else
+        else {
           // save failed, return null
-          throw entityObject.LatestResult?.Message;
+          throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+            extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
+          });
+        }
       }
       else
           return null; // update canceled by the BeforeUpdate event, return null
