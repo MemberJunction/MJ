@@ -111,7 +111,6 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
         const categoryIDFilter: string = this.selectedFolderID ? `CategoryID=${this.selectedFolderID}` : 'CategoryID IS NULL';
         const userViewFilter: string = `UserID = ${md.CurrentUser.ID} AND EntityID = ${appEntityButton.Data.EntityID} AND ` + categoryIDFilter;
 
-        LogStatus("categoryFilter: " + categoryFilter + " userViewFilter: " + userViewFilter);
         await super.LoadData({
             sortItemsAfterLoad: true, 
             categoryItemFilter: categoryFilter, 
