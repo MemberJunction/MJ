@@ -17,7 +17,7 @@
       "strictMetadataEmit": true,
       "enableResourceInlining": true,
       "strictTemplates": true
-    },
+    }, 
     "include": [
       "src/**/*.ts"
     ]

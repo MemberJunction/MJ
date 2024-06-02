@@ -13,11 +13,9 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 import { SectionLoaderComponent } from './lib/section-loader-component';
 import { MJFormField } from './lib/base-field-component';
-import { CreateRecordComponent } from './lib/create-record/create-record.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 
@@ -28,7 +26,6 @@ import { MarkdownModule } from 'ngx-markdown';
   declarations: [
     SectionLoaderComponent,
     MJFormField,
-    CreateRecordComponent
   ],
   imports: [
     CommonModule,
@@ -40,7 +37,6 @@ import { MarkdownModule } from 'ngx-markdown';
     DateInputsModule,
     DropDownsModule,
     LinkDirectivesModule,
-    AskSkipModule,
     DialogsModule,
     IndicatorsModule,
     ContainerDirectivesModule,
@@ -50,7 +46,6 @@ import { MarkdownModule } from 'ngx-markdown';
   exports: [
     SectionLoaderComponent,
     MJFormField,
-    CreateRecordComponent
   ]
 })
 export class BaseFormsModule { }

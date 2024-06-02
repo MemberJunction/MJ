@@ -12,9 +12,11 @@ import { Keys } from '@progress/kendo-angular-common';
 
 import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
-import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
+import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
 
 
 export type GridRowClickedEvent = {
@@ -47,6 +49,15 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @Input() InEditMode: boolean = false;
   @Input() EditMode: "None" | "Save" | "Queue" = "None"
   @Input() AutoNavigate: boolean = true;
+  /**
+   * If set to true, the Create New Record button will be displayed if the user is allowed to create new records for the entity being shown. If set to false, the Create New Record button will be hidden.
+   */
+  @Input() ShowCreateNewRecordButton: boolean = true;
+
+  /**
+   * When set to Dialog, the Create New Record button will open a dialog to create a new record. When set to Tab, the Create New Record button will open a new tab to create a new record.
+   */
+  @Input() CreateRecordMode: "Dialog" | "Tab" = "Tab";
 
   @Output() rowClicked = new EventEmitter<GridRowClickedEvent>();
   @Output() rowEdited = new EventEmitter<GridRowEditedEvent>();
@@ -107,6 +118,19 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       return this.Params.ViewID;
     else
       return 0;
+  }
+
+  /**
+   * This property is true if the user has the ability to create a new record which is a combination of the user-level permission coupled with the
+   * entity-level setting AllowCreateAPI being set to 1.
+   */
+  public get UserCanCreateNewRecord(): boolean {
+    if (this._entityInfo && this._entityInfo.AllowCreateAPI) {
+      const perm = this._entityInfo.GetUserPermisions(new Metadata().CurrentUser)
+      return perm.CanCreate;
+    }
+    else
+      return false;
   }
 
   protected StartEditMode() {
@@ -202,7 +226,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  constructor(private formBuilder: FormBuilder, 
+  constructor(private elementRef: ElementRef,
+              private formBuilder: FormBuilder, 
               private router: Router,
               private renderer: Renderer2) {
 
@@ -509,10 +534,44 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   }
 
+
+
   ngAfterViewInit(): void {
     //this.setGridHeight();
     if (this.Params)
       this.Refresh(this.Params);
+
+    // setup event listener for MJGlobal because we might have a parent component that sends us messages
+    MJGlobal.Instance.GetEventListener(false).subscribe((e: MJEvent) => {
+      switch (e.event) {
+        case MJEventType.ComponentEvent:
+          if (e.eventCode === BaseFormComponentEventCodes.BASE_CODE) {
+            // we have an event from a BaseFormComponent, now we need to determine if WE are a descendant of that component
+            const event: BaseFormComponentEvent = e.args as BaseFormComponentEvent;
+            if (SharedService.IsDescendant(event.elementRef, this.elementRef)) {
+              // we are a descendant of the component that sent the event, so we need to handle it
+              switch (event.subEventCode) {
+                case BaseFormComponentEventCodes.EDITING_COMPLETE:
+                  this.EditingComplete();
+                  break;
+                case BaseFormComponentEventCodes.REVERT_PENDING_CHANGES:
+                  this.RevertPendingChanges();
+                  break;
+                case BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS:
+                  // provide all of our pending records back to the caller
+                  this.PendingRecords.forEach((r: GridPendingRecordItem) => {
+                    const arr = event.returnValue?.pendingRecords;
+                    if (arr && typeof arr.push === 'function') {
+                      event.returnValue?.pendingRecords?.push(r.record);
+                    }
+                  });
+                  break;
+              }
+            }
+           }
+          break;
+      }
+    });
   }
 
   private _movedToBody: boolean = false;
@@ -902,6 +961,38 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     else  
       throw new Error("Unable to get export data");    
+  }
+
+
+  @ViewChild('entityFormDialog') entityFormDialog: EntityFormDialogComponent | null = null;
+  
+  /**
+   * This method will create a new record of the given entity type. It will only work if the User has the ability to create records of 
+   * this entity type and also if the entity level setting AllowCreateAPI is set to 1. If either of these conditions are not met, then
+   * this method will do nothing.
+   */
+  public async doCreateNewRecord() {
+    // creates a new record either using a dialog or with the router
+    if (this.UserCanCreateNewRecord && this._entityInfo) {
+      if (this.CreateRecordMode === 'Tab') {
+        // route to a resource/record with a blank string for the 3rd segment which is normally the pkey value
+        // here we don't provide the pkey value so the record component will know to create a new record
+        this.router.navigate(['resource', 'record',''], { queryParams: { Entity: this._entityInfo.Name } });
+      }
+      else {
+        // configured to display a dialog instead, we'll use the entity-form-dialog for this
+        if (this.entityFormDialog) {
+          const md = new Metadata();
+          const newRecord = await md.GetEntityObject(this._entityInfo.Name);
+          this.entityFormDialog.Record = newRecord;
+          this.entityFormDialog.Visible = true; // show the form
+        }
+        else {
+          // don't have the dialog reference, throw an error
+          throw new Error("Unable to create new record, entity-form-dialog is not available")
+        }
+      }
+    }
   }
 }
  

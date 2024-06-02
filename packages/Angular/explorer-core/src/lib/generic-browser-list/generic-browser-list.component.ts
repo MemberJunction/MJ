@@ -1,13 +1,12 @@
-import { Component, EventEmitter, Input, OnInit, Output, ViewChild, input } from '@angular/core';
-import { Router } from '@angular/router'
+import { Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType  } from '../../generic/Item.types';
 import { BaseEntity, Metadata, KeyValuePair, RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { AfterAddFolderEvent, AfterAddItemEvent, AfterDeleteFolderEvent, AfterDeleteItemEvent, AfterUpdateFolderEvent, AfterUpdateItemEvent, BaseEvent, BeforeAddFolderEvent, BeforeAddItemEvent, BeforeDeleteFolderEvent, BeforeDeleteItemEvent, BeforeUpdateFolderEvent, BeforeUpdateItemEvent, EventTypes } from '../../generic/Events.types';
-import { Subscription, Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime } from 'rxjs';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { ResourceTypeEntity } from '@memberjunction/core-entities';
-import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
+import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 
 @Component({
   selector: 'app-generic-browser-list',
@@ -15,7 +14,7 @@ import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
   styleUrls: ['./generic-browser-list.component.css', '../../shared/first-tab-styles.css']
 })
 export class GenericBrowserListComponent implements OnInit{
-  @ViewChild('createRecordDialog') createRecordDialogRef: CreateRecordComponent | undefined;
+  @ViewChild('entityFormDialog') entityFormDialogRef: EntityFormDialogComponent | undefined;
 
   @Input() public showLoader: boolean = true;
   @Input() public itemType: string = '';
@@ -459,8 +458,12 @@ export class GenericBrowserListComponent implements OnInit{
       this.addResourceButtonClicked();
     }
     else if(data.text === this.createNewRecordName){
-      if(this.createRecordDialogRef){
-        this.createRecordDialogRef.toggleCreateDialog(true);
+      if(this.entityFormDialogRef){
+        // create a new record for the given entity
+        const md = new Metadata();
+        const newRecord = await md.GetEntityObject(this.entityObjectName);  
+        this.entityFormDialogRef.Record = newRecord;
+        this.entityFormDialogRef.ShowForm();
       }
     }
   }
