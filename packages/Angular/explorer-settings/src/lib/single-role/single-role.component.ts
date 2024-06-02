@@ -3,7 +3,7 @@ import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
+import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 
 @RegisterClass(BaseEntity, 'User Roles', 10) // register this with a high priority so we are used here, we just need to extend it to add a property as a flag to know if it's in the database or not
 export class UserRoleEntity_Ext extends UserRoleEntity {
@@ -48,7 +48,7 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
 export class SingleRoleComponent implements OnInit {
   @Input() RoleName!: string;
 
-  @ViewChild('entityForm') entityFormComponent!: EntityFormDialog;
+  @ViewChild('entityForm') entityFormComponent!: EntityFormDialogComponent;
 
   public gridHeight: number = 750;
   public isLoading: boolean = false;

@@ -5,26 +5,22 @@ import { CommonModule } from '@angular/common';
 import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 
-import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
-import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FormsModule } from '@angular/forms';
-import { EntityFormDialog } from './entity-form-dialog/entity-form-dialog.component';
+import { EntityFormDialogComponent } from './entity-form-dialog/entity-form-dialog.component';
 
 @NgModule({
   declarations: [
-    EntityFormDialog
+    EntityFormDialogComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     DialogsModule,
-    CompareRecordsModule,
-    ContainerDirectivesModule,
     ButtonsModule,
     DialogsModule,
   ],
   exports: [
-    EntityFormDialog
+    EntityFormDialogComponent
   ]
 })
 export class EntityFormDialogModule { }

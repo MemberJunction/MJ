@@ -21,11 +21,11 @@
   "peerDependencies": {
     "@angular/common": "~17.2.2",
     "@angular/core": "~17.2.2",
-    "@angular/forms": "~17.2.2",
-    "@progress/kendo-angular-grid": "~15.1.0"
+    "@angular/forms": "~17.2.2"
   },
   "dependencies": {
     "@memberjunction/core": "~1.4.0",
+    "@progress/kendo-angular-grid": "~15.1.0",
     "@memberjunction/core-entities": "~1.4.0",
     "tslib": "^2.3.0"
   },

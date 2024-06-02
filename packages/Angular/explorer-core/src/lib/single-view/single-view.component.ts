@@ -7,7 +7,6 @@ import { distinctUntilChanged, Subject} from "rxjs";
 import { debounceTime} from "rxjs/operators";
 import { UserViewEntity, ViewInfo } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
-import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
 
 @Component({
   selector: 'mj-single-view',
@@ -16,7 +15,6 @@ import { CreateRecordComponent } from '@memberjunction/ng-base-forms';
 })
 export class SingleViewComponent implements AfterViewInit, OnInit  {
   @ViewChild(UserViewGridWithAnalysisComponent, {static: true}) viewGridWithAnalysis!: UserViewGridWithAnalysisComponent;
-  @ViewChild('createRecordDialog') createRecordDialogRef: CreateRecordComponent | undefined;
 
   @Input() public viewId: number | null = null;
   @Input() public viewName: string| null = null;
@@ -29,7 +27,6 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
   public selectedEntity: EntityInfo | null = null;
   public showSearch: boolean = false;
   public searchText: string = '';
-  public createNewText: string = 'Create New Record';
   public entityObjectName: string = '';
   public canCreateRecord: boolean = false;
   private searchDebounce$: Subject<string> = new Subject();
@@ -81,7 +78,6 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
     }
 
     if(this.selectedEntity) {
-      this.createNewText = `Create New ${this.selectedEntity.DisplayName}`;
       const entityObj: BaseEntity = await md.GetEntityObject(this.selectedEntity.Name);
       this.canCreateRecord = entityObj.CheckPermissions(EntityPermissionType.Create, false);
       this.entityObjectName = this.selectedEntity.Name;
@@ -93,14 +89,6 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
     this.router.navigate(['resource', 'record', args.CompositeKey.ToURLSegment()], { queryParams: { Entity: args.entityName } })
   }
 
-  public createNewRecord(): void {
-    if(this.createRecordDialogRef){
-      this.createRecordDialogRef.toggleCreateDialog(true);
-    }
-    else{
-      LogError("Create Record Dialog Ref not found");
-    }
-  }
 
   public async LoadView(viewInfo: UserViewEntity) {
     // load up the view

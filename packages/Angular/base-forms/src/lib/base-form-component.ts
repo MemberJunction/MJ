@@ -4,12 +4,11 @@ import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
 import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType, 
          EntityRelationshipInfo, Metadata, RunViewParams, LogError, 
          RecordDependency} from '@memberjunction/core';
-import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
 import { BaseRecordComponent } from './base-record-component';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
-import { TabStripComponent } from '@progress/kendo-angular-layout';
 import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 @Directive() // this isn't really a directive, BUT we are doing this to avoid Angular compile errors that require a decorator in order to implement the lifecycle interfaces
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
@@ -72,6 +71,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       }
     }
   }
+ 
 
   @ViewChild('topArea') topArea!: ElementRef;
   ngAfterViewInit(): void {
@@ -134,8 +134,6 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       this.resizeSub.unsubscribe();
     }
   }
-
-  @ViewChildren(UserViewGridComponent) userViewGridComponents!: QueryList<UserViewGridComponent>;
 
   protected get PendingRecords(): BaseEntity[] {
     return this._pendingRecords;
@@ -298,17 +296,39 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return valResults
   }
 
+  protected RaiseEvent(eventCode: BaseFormComponentEventCodes) {
+    const p: BaseEntity[] = [];
+
+    const event: BaseFormComponentEvent = {
+      subEventCode: eventCode,
+      elementRef: this.elementRef,
+      returnValue: {
+        pendingRecords: p
+      }
+    }
+
+    MJGlobal.Instance.RaiseEvent({
+      event: MJEventType.ComponentEvent,
+      component: this,
+      eventCode: BaseFormComponentEventCodes.BASE_CODE,
+      args: event
+    })
+    
+    return event.returnValue; // if the recipients of the event provided any values, we have them now 
+  }
   public async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
     try {
       try {
         // atempt to blur the active element to force any pending changes to be committed
         (document.activeElement as HTMLElement).blur(); 
-        if (this.userViewGridComponents.length > 0) {
-          // tell all our grids to finish up their editing
-          // if we have grids, create a slight delay, ensuring focus is lost on components that require that to update the model
-          this.userViewGridComponents.forEach(grid => {grid.EditingComplete()});
-          await this.Wait(100);
-        }
+        // notify child components of this component that they must stop editing with an EDITING_COMPLETE message via MJ_global
+        this.RaiseEvent('EDITING_COMPLETE');
+        // if (this.userViewGridComponents.length > 0) {
+        //   // tell all our grids to finish up their editing
+        //   // if we have grids, create a slight delay, ensuring focus is lost on components that require that to update the model
+        //   this.userViewGridComponents.forEach(grid => {grid.EditingComplete()});
+        //   await this.Wait(100);
+        // }
       }
       catch (e2) {
         // ignore
@@ -366,12 +386,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
                     p.Revert();
                 });
             }
-            if (this.userViewGridComponents && this.userViewGridComponents.length > 0) {
-                // we have grids, so we need to revert them as well
-                this.userViewGridComponents.forEach(grid => {
-                    grid.RevertPendingChanges();
-                });
-            }
+            this.RaiseEvent('REVERT_PENDING_CHANGES');
+            // if (this.userViewGridComponents && this.userViewGridComponents.length > 0) {
+            //     // we have grids, so we need to revert them as well
+            //     this.userViewGridComponents.forEach(grid => {
+            //         grid.RevertPendingChanges();
+            //     });
+            // }
         }
 
         // if we get here we are good to go
@@ -393,22 +414,29 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   protected async PopulatePendingRecords(): Promise<void> {
     // this method is called by the parent class at the right time to populate all of the pending records for a transaction
-    // all we do is talk to all of our grids and get their pending records and xfer them over to the PendingRecords array
+    // all we do is talk to all of our child compoennts and get their pending records and xfer them over to the PendingRecords array
     // the parent class will then take care of the rest...
+
     this._pendingRecords = []; // wipe out our array first
-    const grids = this.userViewGridComponents;
-    if (grids && grids.length > 0) {
-      for (let i = 0; i < grids.length; i++) {
-        const grid = grids.get(i);
-        if (grid) {
-          await grid.EditingComplete() // need to check this and wait for it to make sure grid editing is done before we try to save
-          grid.PendingRecords.forEach(p => {
-            // populate our pending grids array from the composite of all the grids
-            this.PendingRecords.push(p.record)
-          })  
-        }
-      }
+    this.RaiseEvent('EDITING_COMPLETE'); // first tell the child components to finish up their editing
+    const result = this.RaiseEvent('POPULATE_PENDING_RECORDS');
+    if (result && result.pendingRecords) {
+      for (const p of result.pendingRecords) 
+        this.PendingRecords.push(p);
     }
+    // const grids = this.userViewGridComponents;
+    // if (grids && grids.length > 0) {
+    //   for (let i = 0; i < grids.length; i++) {
+    //     const grid = grids.get(i);
+    //     if (grid) {
+    //       await grid.EditingComplete() // need to check this and wait for it to make sure grid editing is done before we try to save
+    //       grid.PendingRecords.forEach(p => {
+    //         // populate our pending grids array from the composite of all the grids
+    //         this.PendingRecords.push(p.record)
+    //       })  
+    //     }
+    //   }
+    // }
   }
 
 
@@ -496,17 +524,6 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
   public splitterLayoutChange(): void {
     this.splitterLayoutChangeSubject.next();
-  }
-
-  protected ResizeGrids(): void {
-    // do with a little timeout to let the visible grid show up and the DOM settle
-    setTimeout(() => {
-      if (this.userViewGridComponents && this.userViewGridComponents.length > 0) {
-        this.userViewGridComponents.forEach(grid => {
-          //grid.ResizeGrid(); // automatic now via mjFillContainer
-        });
-      }
-    }, 10);
   }
 
   public async ShowDependencies() {

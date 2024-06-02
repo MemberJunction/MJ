@@ -74,6 +74,7 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
 import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
+import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 
 @NgModule({
   declarations: [
@@ -158,6 +159,7 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     FileStorageModule,
     UserViewPropertiesDialogModule,
     MJTabStripModule,
+    EntityFormDialogModule
   ],
   exports: [
     FormToolbarComponent,

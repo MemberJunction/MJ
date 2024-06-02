@@ -1,8 +1,8 @@
-import { Component, OnInit, Input, SimpleChanges, OnChanges, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular/core';
 
-import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
-import { RoleEntity, UserEntity, UserRoleEntity } from '@memberjunction/core-entities';
-import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
+import { Metadata, RunViewParams } from '@memberjunction/core';
+import { UserEntity } from '@memberjunction/core-entities';
+import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 
  
 @Component({
@@ -13,7 +13,7 @@ import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
 export class SingleUserComponent implements OnInit {
   @Input() UserID!: number;
 
-  @ViewChild('entityForm') entityFormComponent!: EntityFormDialog;
+  @ViewChild('entityForm') entityFormComponent!: EntityFormDialogComponent;
 
   public gridHeight: number = 750;
   public isLoading: boolean = false;

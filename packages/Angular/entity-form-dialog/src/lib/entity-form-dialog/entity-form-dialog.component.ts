@@ -5,25 +5,51 @@ import { SharedService } from '@memberjunction/ng-shared'
 import { ClassRegistration, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
  
- 
+
+/**
+ * This dialog will display the form for a given entity. Using the configuration settings you can display the entire form
+ * or a specific section of the form. You can also control the visibility of the Save and Cancel buttons, and the behavior
+ * of the Save and Cancel buttons.
+ */
 @Component({
   selector: 'mj-entity-form-dialog',
   templateUrl: './entity-form-dialog.component.html',
   styleUrls: ['./entity-form-dialog.component.css']
 })
-export class EntityFormDialog {
+export class EntityFormDialogComponent {
   /**
    * The title of the dialog
    */
   @Input() Title: string = '';
+  /**
+   * If set to true the Save button will be displayed. If set to false, the Save button will be hidden.
+   */
   @Input() ShowSaveButton: boolean = true;
+  /**
+   * If set to true the Cancel button will be displayed. If set to false, the Cancel button will be hidden.
+   */
   @Input() ShowCancelButton: boolean = true;
 
+  /**
+   * Initial width of the dialog
+   */
   @Input() Width: number = 800;
+  /**
+   * Initial height of the dialog
+   */
   @Input() Height: number = 600;
 
+  /**
+   * When set to complete, the entire form will be displayed. When set to section, only the specified section of the form will be displayed that is specified in the SectionName property.
+   */
   @Input() Mode: 'complete' | 'section' = 'complete';
+  /**
+   * If Mode is set to section, this property will specify the name of the section to display. This property is ignored if Mode is set to complete.
+   */
   @Input() SectionName: string = '';
+  /**
+   * The record to display in the form. This property is required. The record must be an instance a BaseEntity derived class.
+   */
   @Input() Record: BaseEntity | null = null;
 
   /**
@@ -35,16 +61,22 @@ export class EntityFormDialog {
    */
   @Input() AutoRevertOnCancel: boolean = true;
 
-  @Output() close: EventEmitter<'Save' | 'Cancel'> = new EventEmitter<'Save' | 'Cancel'>();
+  /**
+   * This event will be emitted when the dialog is closed. The event will contain the status of the dialog, which will be either 'Save' or 'Cancel'.
+   */
+  @Output() DialogClosed: EventEmitter<'Save' | 'Cancel'> = new EventEmitter<'Save' | 'Cancel'>();
 
   private _visible = false;
+  /**
+   * Controls the visibility of the dialog. When set to true, the dialog will be displayed. When set to false, the dialog will be hidden.
+   */
   @Input()
   set Visible(val: boolean) {
     this._visible = val;
     if (val) {
       Promise.resolve().then(() => {
         // At this point, the DOM should be updated, and `this.container` should be available.
-        this.showForm();
+        this.ShowForm();
       });  
     }
   }
@@ -54,7 +86,15 @@ export class EntityFormDialog {
 
   @ViewChild('dynamicFormContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
 
-  public showForm() {
+  /**
+   * This method can be called to show the form.  
+   */
+  public ShowForm() {
+    if (!this.Visible) {
+      this.Visible = true; // set to visible and bail as the rest will end up calling this function again but after a promise which will allow Angular to update the DOM
+      return;
+    }
+    
     if (!this.container) 
       throw new Error('Container not found');
     if (!this.Record)
@@ -86,7 +126,11 @@ export class EntityFormDialog {
     }
   }
 
-  public async closeWindow(status: 'Save' | 'Cancel') {
+  /**
+   * This method can be called to close the dialog. It will emit the 'close' event with the status of the dialog.
+   * @param status 
+   */
+  public async CloseWindow(status: 'Save' | 'Cancel') {
     this.Visible = false;
     if (this.Record) {
       if (this.HandleSave && status === 'Save') {
@@ -99,6 +143,6 @@ export class EntityFormDialog {
         this.Record.Revert();
       }
     }
-    this.close.emit(status);
+    this.DialogClosed.emit(status);
   }
 }
