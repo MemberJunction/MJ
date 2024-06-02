@@ -333,8 +333,7 @@ export abstract class BaseEntity {
      * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
      */
     get IsSaved(): boolean {
-        const v = this.PrimaryKey.HasValue;
-        return v !== null && v !== undefined; // if the primary key (or first primary key) value is null/undefined, we haven't saved yet
+        return this.PrimaryKey.HasValue;
     }
 
     /**

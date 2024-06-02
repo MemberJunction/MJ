@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, Host, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, Host, ChangeDetectorRef, ElementRef } from '@angular/core';
 import { MJTabBase } from '../tab.base';
 import { MJTabStripComponent } from '../tab-strip/tab-strip.component';
 
@@ -34,7 +34,9 @@ export class MJTabComponent extends MJTabBase {
   public get TabStrip(): MJTabStripComponent {
     return this.tabstrip;
   }
-  constructor(@Host() private tabstrip: MJTabStripComponent, private cdr: ChangeDetectorRef) {
+  constructor(@Host() private tabstrip: MJTabStripComponent, 
+              private cdr: ChangeDetectorRef,
+              public elementRef: ElementRef) {
     super();
   }
 

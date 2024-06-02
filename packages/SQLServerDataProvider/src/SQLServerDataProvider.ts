@@ -374,25 +374,26 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
         // convert the clause to lower case to make the keyword search case-insensitive
         const lowerClause = clause.toLowerCase();
     
-        // check for forbidden keywords and characters
-        const forbiddenPatterns = [
-            'insert', 
-            'update', 
-            'delete', 
-            'exec', 
-            'execute',
-            'drop',
-            '--',
-            '/*',
-            '*/',
-            'union', 
-            'cast',
-            'xp_',
-            ';'
+        // Define forbidden keywords and characters as whole words using regular expressions
+        const forbiddenPatterns: RegExp[] = [
+            /\binsert\b/,
+            /\bupdate\b/,
+            /\bdelete\b/,
+            /\bexec\b/,
+            /\bexecute\b/,
+            /\bdrop\b/,
+            /--/,
+            /\/\*/,
+            /\*\//,
+            /\bunion\b/,
+            /\bcast\b/,
+            /\bxp_/,
+            /;/
         ];
-    
+
+        // Check for forbidden patterns
         for (const pattern of forbiddenPatterns) {
-            if (lowerClause.includes(pattern)) {
+            if (pattern.test(lowerClause)) {
                 return false;
             }
         }

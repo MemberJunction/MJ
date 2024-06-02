@@ -19482,6 +19482,7 @@ type Workflow_ {
 """Tracks the resources that are active within a given worksapce"""
 type WorkspaceItem_ {
   Configuration: String
+  CreatedAt: Timestamp!
   Description: String
   ID: Int!
   Name: String!
@@ -19489,15 +19490,18 @@ type WorkspaceItem_ {
   ResourceType: String!
   ResourceTypeID: Int!
   Sequence: Int!
+  UpdatedAt: Timestamp!
   WorkSpace: String!
   WorkSpaceID: Int!
 }
 
 """A user can have one or more workspaces"""
 type Workspace_ {
+  CreatedAt: Timestamp!
   Description: String
   ID: Int!
   Name: String!
+  UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
   WorkspaceItemsArray: [WorkspaceItem_!]!
