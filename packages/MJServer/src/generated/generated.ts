@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/1/2024, 9:03:29 AM
+* GENERATED: 6/2/2024, 8:09:07 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -10559,6 +10559,14 @@ export class Workspace_ {
     UserID: number;
           
     @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
     @MaxLength(200)
     User: string;
         
@@ -10712,7 +10720,7 @@ export class WorkspaceItem_ {
     ResourceTypeID: number;
           
     @Field({nullable: true}) 
-    @MaxLength(510)
+    @MaxLength(4000)
     ResourceRecordID?: string;
           
     @Field(() => Int) 
@@ -10720,6 +10728,14 @@ export class WorkspaceItem_ {
           
     @Field({nullable: true}) 
     Configuration?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
           
     @Field() 
     @MaxLength(510)
