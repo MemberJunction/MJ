@@ -6,6 +6,9 @@ import { DataSource } from 'typeorm';
 
 import { UserPayload } from '../types';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver';
+import { DeleteOptionsInput } from './DeleteOptionsInput';
+import { MJGlobal } from '@memberjunction/global';
+import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver';
 
 export class ResolverBase {
 
@@ -349,13 +352,35 @@ export class ResolverBase {
     return Metadata.Provider.ConfigData.MJCoreSchemaName;
   }
 
-
+  protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
+    // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
+    MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+      if (event) {
+        if (event.component === entityObject && event.args && event.args.message) {
+          // message from our entity object, relay it to the client
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            message: JSON.stringify({
+              status: 'OK',
+              type: 'EntityObjectStatusMessage',
+              entityName: entityObject.EntityInfo.Name,
+              primaryKey: entityObject.PrimaryKey,
+              message: event.args.message 
+            }),
+            sessionId: userPayload.sessionId
+          });          
+        }
+      }
+    });
+  }
 
   protected async CreateRecord(entityName: string, input: any, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeCreate(dataSource, input)) { // fire event and proceed if it wasn't cancelled
         const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
         entityObject.NewRecord();
         entityObject.SetMany(input);
+
+        this.ListenForEntityMessages(entityObject, pubSub, userPayload);
+
         if (await entityObject.Save()) {
             // save worked, fire the AfterCreate event and then return all the data
             await this.AfterCreate(dataSource, input); // fire event
@@ -363,7 +388,7 @@ export class ResolverBase {
         }
         else 
             // save failed, return null
-            return null;
+            throw entityObject.LatestResult.Message;
     }
     else    
         return null;
@@ -424,13 +449,16 @@ export class ResolverBase {
           // 2) set the new values from the input, not including the OldValues property
           entityObject.SetMany(clientNewValues);  
         }
+
+        this.ListenForEntityMessages(entityObject, pubSub, userPayload);
         if (await entityObject.Save()) {
           // save worked, fire afterevent and return all the data
           await this.AfterUpdate(dataSource, input); // fire event
           return entityObject.GetAll();
         }
         else
-          return null; // save failed, return null
+          // save failed, return null
+          throw entityObject.LatestResult?.Message;
       }
       else
           return null; // update canceled by the BeforeUpdate event, return null
@@ -525,12 +553,12 @@ export class ResolverBase {
     entityObject.SetMany(clientNewValues);
   }
 
-  protected async DeleteRecord(entityName: string, key: CompositeKey, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
+  protected async DeleteRecord(entityName: string, key: CompositeKey, options: DeleteOptionsInput, dataSource: DataSource, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeDelete(dataSource, key)) { // fire event and proceed if it wasn't cancelled
         const entityObject = await new Metadata().GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
         await entityObject.InnerLoad(key);
         const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
-        if (await entityObject.Delete()) {
+        if (await entityObject.Delete(options)) {
             await this.AfterDelete(dataSource, key); // fire event
             return returnValue;
         }

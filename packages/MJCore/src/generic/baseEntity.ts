@@ -1,14 +1,15 @@
 import { MJGlobal } from '@memberjunction/global';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo, KeyValuePair } from './entityInfo';
-import { CompositeKey, EntitySaveOptions, IEntityDataProvider } from './interfaces';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogError } from './logging';
+import { CompositeKey } from './compositeKey';
 
 /**
- * Represents a field in an entity. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
+ * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
  */
 export class EntityField {
@@ -264,6 +265,45 @@ export class BaseEntityAIActionParams {
 }
 
 /**
+ * Used for storing the result of a Save or Delete or other transactional operation within a BaseEntity
+ */
+export class BaseEntityResult {
+    /**
+     * True if successful, false otherwise
+     */
+    Success: boolean;
+    /**
+     * The type of operation that was performed
+     */
+    Type: 'create' | 'update' | 'delete';
+    /**
+     * A message for an end user
+     */
+    Message: string;
+    /**
+     * Optional, a structured error object with additional information
+     */
+    Error?: any;    
+    /**
+     * A copy of the values of the entity object BEFORE the operation was performed
+     */
+    OriginalValues: {FieldName: string, Value: any}[] = [];
+    /**
+     * A copy of the values of the entity object AFTER the operation was performed
+     */
+    NewValues: {FieldName: string, Value: any}[] = [];
+
+    /**
+     * Timestamp when the operation started
+     */
+    StartedAt: Date;
+    /**
+     * Timestamp when the operation ended
+     */
+    EndedAt: Date;
+}
+
+/**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity {
@@ -272,6 +312,8 @@ export abstract class BaseEntity {
     private _recordLoaded: boolean = false;
     private _contextCurrentUser: UserInfo = null;
     private _transactionGroup: TransactionGroupBase = null;
+
+    private _resultHistory: BaseEntityResult[] = [];
 
     constructor(Entity: EntityInfo) {
         this._EntityInfo = Entity;
@@ -291,7 +333,7 @@ export abstract class BaseEntity {
      * Returns true if the record has been saved to the database, false otherwise. This is a useful property to check to determine if the record is a "New Record" or an existing one.
      */
     get IsSaved(): boolean {
-        const v = this.PrimaryKey?.Value;
+        const v = this.PrimaryKey.HasValue;
         return v !== null && v !== undefined; // if the primary key (or first primary key) value is null/undefined, we haven't saved yet
     }
 
@@ -306,6 +348,24 @@ export abstract class BaseEntity {
     set TransactionGroup(group: TransactionGroupBase) {
         this._transactionGroup = group;
     }
+
+    /**
+     * The result history shows the history of the attempted transactions (Save and Delete) for this particular entity object. This is useful for tracking the results of operations on the entity object.
+     */
+    public get ResultHistory(): BaseEntityResult[] {
+        return this._resultHistory;
+    }
+
+    /**
+     * Returns the most recent result from the result history. If there are no results in the history, this method will return null.
+     */
+    public get LatestResult(): BaseEntityResult {
+        if (this._resultHistory.length > 0)
+            return this._resultHistory[this._resultHistory.length - 1];
+        else
+            return null;
+    }
+
 
     /**
      * Access to the underlying metadata for the entity object.
@@ -327,20 +387,11 @@ export abstract class BaseEntity {
         return this.Fields.find(f => f.Name.trim().toLowerCase() == fieldName.trim().toLowerCase());
     }
     
+    /**
+     * Returns true if the object is Dirty, meaning something has changed since it was last saved to the database, and false otherwise. For new records, this will always return true.
+     */
     get Dirty(): boolean {
         return !this.IsSaved || this.Fields.some(f => f.Dirty);
-    }
-
-    /**
-     * Returns the primary key field for the entity. If the entity has a composite primary key, this method will return the first primary key field.  
-     */
-    get PrimaryKey(): EntityField {
-        const fieldInfo = this.EntityInfo.PrimaryKey;
-        if (fieldInfo) {
-            return this.GetFieldByName(fieldInfo.Name);
-        }
-        else
-            return null;
     }
 
     /**
@@ -351,10 +402,24 @@ export abstract class BaseEntity {
         return this.EntityInfo.PrimaryKeys.map(pk => this.GetFieldByName(pk.Name));
     }
 
-    get CompositeKey(): CompositeKey {
-        const ck = new CompositeKey();
-        ck.LoadFromEntityFields(this.PrimaryKeys);
-        return ck;
+    private _compositeKey: CompositeKey = null;
+    /**
+     * Returns the primary key for the record. The CompositeKey class is a multi-valued key that can have any number of key/value pairs within it. Always traverse the full
+     * set of key/value pairs to get the full primary key for the record.  
+     */
+    get PrimaryKey (): CompositeKey {
+        if (this._compositeKey === null) {
+            this._compositeKey = new CompositeKey();            
+            this._compositeKey.LoadFromEntityFields(this.PrimaryKeys);
+        }
+        return this._compositeKey;
+    }
+
+    /**
+     * Helper method to return just the first Primary Key
+     */
+    get FirstPrimaryKey(): EntityField {
+        return this.PrimaryKeys[0];
     }
 
     /**
@@ -533,6 +598,8 @@ export abstract class BaseEntity {
     }
 
     private init() {
+        this._compositeKey = null;
+        this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
         if (this.EntityInfo)
@@ -610,6 +677,9 @@ export abstract class BaseEntity {
                     if (data) {
                         this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
                         this.SetMany(data);
+                        const result = this.LatestResult;
+                        if (result)
+                            result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
                         return true;
                     }
                     else
@@ -700,7 +770,9 @@ export abstract class BaseEntity {
         }
         else{
             const start = new Date().getTime();
-            this.ValidateCompositeKey(CompositeKey);
+            const valResult = CompositeKey.Validate();
+            if (!valResult || !valResult.IsValid)
+                throw new Error(`Invalid CompositeKey passed to BaseEntity.Load(${this.EntityInfo.Name})`);
 
             this.CheckPermissions(EntityPermissionType.Read, true); // this will throw an error and exit out if we don't have permission
 
@@ -724,34 +796,9 @@ export abstract class BaseEntity {
                 }
             }
             this._recordLoaded = true;
-
-            // const end = new Date().getTime();
-            // const time = end - start;
-            // LogStatus(`BaseEntity.Load(${this.EntityInfo.Name}, ID: ${ID}, EntityRelationshipsToLoad.length: ${EntityRelationshipsToLoad ? EntityRelationshipsToLoad.length : 0 }), took ${time}ms`);
+            this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
             return true;
-        }
-    }
-
-    protected ValidateCompositeKey(compositeKey: CompositeKey) {
-        // make sure that KeyValuePairs is an array of 1+ objects, and that each object has a FieldName and Value property and that the FieldName is a valid field on the entity that has IsPrimaryKey set to true
-        if (!compositeKey || !compositeKey.KeyValuePairs || compositeKey.KeyValuePairs.length === 0)
-            throw new Error('KeyValuePairs cannot be null or empty');
-        else {
-            // now loop through the array and make sure each object has a FieldName and Value property
-            // and that the field name is a valid field on the entity that has IsPrimaryKey set to true
-            for (let i = 0; i < compositeKey.KeyValuePairs.length; i++) {
-                const pk = compositeKey.KeyValuePairs[i];
-                if (!pk.FieldName || pk.FieldName.trim().length === 0)
-                    throw new Error(`KeyValuePairs[${i}].FieldName cannot be null, empty, or whitespace`);
-                if (pk.Value === null || pk.Value === undefined)
-                    throw new Error(`KeyValuePairs[${i}].Value cannot be null or undefined`);
-                const field = this.Fields.find(f => f.Name.trim().toLowerCase() === pk.FieldName.trim().toLowerCase());
-                if (!field)
-                    throw new Error(`KeyValuePairs[${i}].FieldName of ${pk.FieldName} does not exist on ${this.EntityInfo.Name}`);
-                if (!field.IsPrimaryKey)
-                    throw new Error(`KeyValuePairs[${i}].FieldName of ${pk.FieldName} is not a primary key field on ${this.EntityInfo.Name}`);
-            }
         }
     }
 
@@ -793,14 +840,14 @@ export abstract class BaseEntity {
      * This method deletes a record from the database. You must call Load() first in order to load the context of the record you are deleting. 
      * @returns 
      */
-    public async Delete() : Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
         if (BaseEntity.Provider == null) {    
             throw new Error('No provider set');
         }
         else{
             this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
             
-            if (await BaseEntity.Provider.Delete(this, this.ActiveUser)) {
+            if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
                 // record deleted correctly
                 // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
                 this.NewRecord();
@@ -849,7 +896,7 @@ export abstract class BaseEntity {
      */
     public get RecordChanges(): Promise<RecordChange[]> {
         if (this.IsSaved){
-            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.CompositeKey);
+            return BaseEntity.GetRecordChanges(this.EntityInfo.Name, this.PrimaryKey);
         }
         else{
             throw new Error('Cannot get record changes for a record that has not been saved yet');

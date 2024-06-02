@@ -5,7 +5,7 @@ import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { LogError } from "./logging"
-import { CompositeKey } from "./interfaces"
+import { CompositeKey } from "./compositeKey"
 
 /**
  * The possible status values for a record change
@@ -483,16 +483,6 @@ export class EntityFieldInfo extends BaseInfo {
 
 
 
-
-/**
- * Primary Key Value object is used to pass in a primary key field/value pairs to BaseEntity.Load() and other methods that need to load a record by primary key
- */
-export class KeyValuePair {
-    FieldName: string
-    Value: any
-}
-
-
 /**
  * Entity Document Type Info object has information about the document types that exist across all entities. When Entity Documents are created they are associated with a document type.
  */
@@ -600,10 +590,10 @@ export class EntityInfo extends BaseInfo {
     _floatCount: number = 0
 
     /**
-     * Returns the primary key for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
-    get PrimaryKey(): EntityFieldInfo {
+    get FirstPrimaryKey(): EntityFieldInfo {
         return this.Fields.find((f) => f.IsPrimaryKey);
     }
 
@@ -808,8 +798,10 @@ export class EntityInfo extends BaseInfo {
             quotes = record.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === relationship.EntityKeyField.trim().toLowerCase()).NeedsQuotes ? "'" : '';
         }
         else {
-            keyValue = record.PrimaryKey.Value;
-            quotes = record.PrimaryKey.NeedsQuotes ? "'" : '';
+            // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
+            const firstKey = record.FirstPrimaryKey;
+            keyValue = firstKey.Value;
+            quotes = firstKey.NeedsQuotes ? "'" : '';
         }
         if (relationship.Type.trim().toLowerCase() === 'one to many') {
             // one to many

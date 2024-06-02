@@ -435,7 +435,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           Object.assign(dataItem, formGroup.value);
   
           const md = new Metadata();
-          const pkey = this._entityInfo.PrimaryKey.Name;
+          // JONATHAN FIX THIS TO USE MULTI-COLUMN PRIMARY KEYS
+          alert('Jonathan, fix this to use multi-column primary keys - all commented out now til you fix')
+//          const pkey = this._entityInfo.PrimaryKey.Name;
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
@@ -445,11 +447,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
-            if (!bSaved)
-              this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
+            // if (!bSaved)
+            //   this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
           }
           else {
-            record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
+            // JS - fix this too
+            // record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
               let compositeKey: CompositeKey = new CompositeKey();
@@ -749,7 +752,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
-            return r.CompositeKey;
+            return r.PrimaryKey;
           }).filter((compositeKey: CompositeKey) => {
             if (!this.recordCompareComponent){
               return false;

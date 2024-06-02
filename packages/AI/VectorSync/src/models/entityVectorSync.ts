@@ -67,7 +67,7 @@ export class EntityVectorSyncer extends VectorBase {
                         let erdEntity: EntityRecordDocumentEntity = await super.Metadata.GetEntityObject("Entity Record Documents");
                         erdEntity.NewRecord();
                         erdEntity.EntityID = entityDocument.EntityID;
-                        erdEntity.RecordID = batch[index].PrimaryKey.Value;
+                        erdEntity.RecordID = batch[index].PrimaryKey.ToString();
                         erdEntity.DocumentText = templates[index];
                         erdEntity.VectorID = vectorRecord.id;
                         erdEntity.VectorJSON = JSON.stringify(vectorRecord.values);

@@ -73,6 +73,8 @@ import { ExpansionPanelComponent } from './lib/expansion-panel-component/expansi
 import { ApplicationViewComponent } from './lib/app-view/application-view.component';
 import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-properties';
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
+import { ListViewComponent } from './lib/list-view/list-view.component';  
+import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
 
 @NgModule({
   declarations: [
@@ -113,6 +115,8 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
     QueryResource,
     ExpansionPanelComponent,
     ApplicationViewComponent,
+    ListViewComponent,
+    SingleListDetailComponent
   ],
   imports: [
     AppRoutingModule,
@@ -191,6 +195,8 @@ import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
     UserNotificationsComponent,
     ExpansionPanelComponent,
     ApplicationViewComponent,
+    ListViewComponent,
+    SingleListDetailComponent
   ],
   providers: [{ provide: RouteReuseStrategy, useClass: CustomReuseStrategy }],
 })

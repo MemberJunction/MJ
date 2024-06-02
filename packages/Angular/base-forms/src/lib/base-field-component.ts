@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { BaseEntity, EntityFieldTSType } from '@memberjunction/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, Renderer2, ChangeDetectorRef } from '@angular/core';
+import { BaseEntity, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
+import { MarkdownComponent } from 'ngx-markdown';
 
 
 /**
@@ -14,7 +15,7 @@ import { BaseRecordComponent } from './base-record-component';
     styleUrl: './base-field-component.css',
     templateUrl: './base-field-component.html'
 })
-export class MJFormField extends BaseRecordComponent {
+export class MJFormField extends BaseRecordComponent implements AfterViewInit {
     /**
      * The record object that contains the field to be rendered. This object should be an instance of BaseEntity or a derived class.
      */
@@ -60,6 +61,10 @@ export class MJFormField extends BaseRecordComponent {
     // use the custom value
     public set DisplayName(newValue: string) {
         this._displayName = newValue;
+    }
+
+    public get ExtendedType(): string {
+        return this.record.GetFieldByName(this.FieldName)?.EntityFieldInfo.ExtendedType
     }
 
     private _possibleValues: string[] | null = null;
@@ -114,4 +119,93 @@ export class MJFormField extends BaseRecordComponent {
         else
             throw new Error(`Field ${this.FieldName} not found in record ${this.record.EntityInfo.Name}`);
     }
+
+    public get FieldInfo(): EntityFieldInfo {
+        const f = this.record.Fields.find(f => f.Name == this.FieldName);
+        if (f)
+            return f.EntityFieldInfo;
+        else
+            throw new Error(`Field ${this.FieldName} not found in record ${this.record.EntityInfo.Name}`);
+    }
+
+
+    @ViewChild('markdown', { static: false }) markdown: MarkdownComponent | undefined;
+    private observer: MutationObserver | undefined;
+
+    constructor(private renderer: Renderer2, private cdr: ChangeDetectorRef) {
+        super();
+    }
+
+    ngAfterViewInit(): void {
+      if (this.markdown) {
+        // Create a MutationObserver to watch for changes in the markdown component
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+              // Get the first child element inside the markdown component
+              const el = this.markdown?.element.nativeElement.firstChild as HTMLElement;
+              if (el) {
+                // Apply styles using Renderer2
+                this.renderer.setStyle(el, 'margin-top', '0');
+                this.renderer.setStyle(el, 'margin-bottom', '0');
+                // only apply font size if the element is a paragraph
+                if (el.tagName === 'P')
+                    this.renderer.setStyle(el, 'font-size', '14px');
+              }
+            }
+          });
+        });
+  
+        // Start observing the markdown component for child node additions
+        observer.observe(this.markdown.element.nativeElement, { childList: true });
+      }
+    }
+
+    // private tryApplyObserver(): void {
+    //     if (this.FieldInfo.Length === -1) {
+    //         // only do this for markdown fields (large fields)
+    //         if (this.markdown && !this.observer) {
+    //             this.applyObserver();
+    //         } 
+    //         else if (!this.markdown) {
+    //             setTimeout(() => {
+    //                 this.cdr.detectChanges();
+    //                 this.tryApplyObserver();
+    //             }, 2000); // Retry after 50ms
+    //         }      
+    //     }
+    //   }
+    
+    //   private applyObserver(): void {
+    //     if (this.markdown) {
+    //       // Create a MutationObserver to watch for changes in the markdown component
+    //       this.observer = new MutationObserver((mutations) => {
+    //         mutations.forEach((mutation) => {
+    //           if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+    //             // Get the first child element inside the markdown component
+    //             const el = this.markdown?.element.nativeElement.firstChild as HTMLElement;
+    //             if (el) {
+    //               // Apply styles using Renderer2
+    //               this.renderer.setStyle(el, 'margin-top', '0');
+    //               this.renderer.setStyle(el, 'margin-bottom', '0');
+    //                 if (el.tagName === 'P')
+    //                     this.renderer.setStyle(el, 'font-size', '14px');
+
+    //             }
+    //           }
+    //         });
+    //       });
+    
+    //       // Start observing the markdown component for child node additions
+    //       this.observer.observe(this.markdown.element.nativeElement, { childList: true });
+    //     }
+    //   }
+
+    // ngAfterViewInit(): void {
+    //     this.tryApplyObserver();
+    // }
+
+    // ngAfterViewChecked(): void {
+    //     this.tryApplyObserver();
+    // }
 }

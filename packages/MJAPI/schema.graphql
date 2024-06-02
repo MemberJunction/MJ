@@ -421,8 +421,7 @@ Links actions to authorizations, one or more of these must be possessed by a use
 type ActionAuthorization_ {
   Action: String!
   ActionID: Int!
-  Authorization: String!
-  AuthorizationID: Int!
+  AuthorizationName: String!
   Comments: String
   CreatedAt: Timestamp!
   ID: Int!
@@ -523,6 +522,22 @@ type ActionFilter_ {
   UserDescription: String!
 }
 
+"""
+Tracks the list of libraries that a given Action uses, including a list of classes/functions for each library.
+"""
+type ActionLibrary_ {
+  Action: String!
+  ActionID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """List of classes and functions used by the action from the library."""
+  ItemsUsed: String
+  Library: String!
+  LibraryID: Int!
+  UpdatedAt: Timestamp!
+}
+
 """Tracks the input and output parameters for Actions."""
 type ActionParam_ {
   Action: String!
@@ -563,6 +578,7 @@ type Action_ {
   ActionAuthorizationsArray: [ActionAuthorization_!]!
   ActionContextsArray: [ActionContext_!]!
   ActionExecutionLogsArray: [ActionExecutionLog_!]!
+  ActionLibrariesArray: [ActionLibrary_!]!
   ActionParamsArray: [ActionParam_!]!
   ActionResultCodesArray: [ActionResultCode_!]!
   Category: String
@@ -1740,7 +1756,7 @@ input CreateAccount__client_crmInput {
 
 input CreateActionAuthorizationInput {
   ActionID: Int!
-  AuthorizationID: Int!
+  AuthorizationName: String!
   Comments: String
 }
 
@@ -1793,6 +1809,12 @@ input CreateActionInput {
   Status: String!
   UserComments: String
   UserPrompt: String!
+}
+
+input CreateActionLibraryInput {
+  ActionID: Int!
+  ItemsUsed: String
+  LibraryID: Int!
 }
 
 input CreateActionParamInput {
@@ -3198,6 +3220,7 @@ input CreateEntityFieldInput {
   AllowUpdateInView: Boolean!
   AutoUpdateDescription: Boolean!
   Category: String
+  CodeType: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
   Description: String
@@ -3581,6 +3604,22 @@ input CreateItem__client_financeInput {
   Warranty_Days: Int
 }
 
+input CreateLibraryInput {
+  Description: String
+  ExportedItems: String
+  Name: String!
+  SampleCode: String
+  Status: String!
+  TypeDefinitions: String
+}
+
+input CreateListCategoryInput {
+  Description: String
+  Name: String!
+  ParentID: Int
+  UserID: Int!
+}
+
 input CreateListDetailInput {
   ListID: Int!
   RecordID: String!
@@ -3588,6 +3627,7 @@ input CreateListDetailInput {
 }
 
 input CreateListInput {
+  CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
   EntityID: Int
@@ -7097,6 +7137,11 @@ type Deal_ {
   Value: Float
 }
 
+input DeleteOptionsInput {
+  SkipEntityAIActions: Boolean!
+  SkipEntityActions: Boolean!
+}
+
 type DuplicateRunDetailMatch_ {
   Action: String!
   ApprovalStatus: String!
@@ -7433,9 +7478,22 @@ type EntityFieldValue_ {
 
 """List of all fields within each entity with metadata about each field"""
 type EntityField_ {
+  """
+  If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
+  """
   AllowUpdateAPI: Boolean!
+
+  """
+  If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
+  """
   AllowUpdateInView: Boolean!
+
+  """Does the column allow null or not (auto maintained by CodeGen)"""
   AllowsNull: Boolean!
+
+  """
+  If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
+  """
   AutoIncrement: Boolean!
 
   """
@@ -7444,48 +7502,135 @@ type EntityField_ {
   AutoUpdateDescription: Boolean!
   BaseTable: String!
   BaseView: String!
+
+  """
+  Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
+  """
   Category: String
+
+  """
+  The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
+  """
+  CodeType: String
   CreatedAt: Timestamp!
+
+  """Determines the default width for this field when included in a view"""
   DefaultColumnWidth: Int
+
+  """
+  If set to 1, this field will be included by default in any new view created by a user.
+  """
   DefaultInView: Boolean!
+
+  """
+  If a default value is defined for the field it is stored here (auto maintained by CodeGen)
+  """
   DefaultValue: String
+
+  """Descriptive text explaining the purpose of the field"""
   Description: String
+
+  """A user friendly alternative to the field name"""
   DisplayName: String
   Entity: String!
   EntityClassName: String
   EntityCodeName: String
   EntityFieldValuesArray: [EntityFieldValue_!]!
   EntityID: Int!
+
+  """
+  Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
+  """
   ExtendedType: String
+
+  """
+  If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
+  """
   FullTextSearchEnabled: Boolean!
+
+  """
+  When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
+  """
   GeneratedFormSection: String!
   ID: Int!
+
+  """
+  If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
+  """
   IncludeInGeneratedForm: Boolean!
+
+  """
+  If set to 1, this column will be included in user search queries for both traditional and full text search
+  """
   IncludeInUserSearchAPI: Boolean!
+
+  """
+  If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
+  """
   IncludeRelatedEntityNameFieldInBaseView: Boolean!
+
+  """
+  If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
+  """
   IsNameField: Boolean!
+
+  """
+  Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
+  """
   IsPrimaryKey: Boolean!
+
+  """Indicates if the field must have unique values within the entity."""
   IsUnique: Boolean!
+
+  """NULL"""
   IsVirtual: Boolean!
+
+  """SQL data length (auto maintained by CodeGen)"""
   Length: Int
+
+  """Name of the field within the database table"""
   Name: String!
+
+  """SQL precision (auto maintained by CodeGen)"""
   Precision: Int
   RelatedEntity: String
   RelatedEntityBaseTable: String
   RelatedEntityBaseView: String
   RelatedEntityClassName: String
   RelatedEntityCodeName: String
+
+  """
+  Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
+  """
   RelatedEntityFieldName: String
+
+  """
+  Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)
+  """
   RelatedEntityID: Int
   RelatedEntityNameFieldMap: String
   RelatedEntitySchemaName: String
+
+  """SQL scale (auto maintained by CodeGen)"""
   Scale: Int
   SchemaName: String!
+
+  """Display order of the field within the entity"""
   Sequence: Int!
+
+  """SQL Data type (auto maintained by CodeGen)"""
   Type: String!
   UpdatedAt: Timestamp!
+
+  """NULL"""
   UserSearchParamFormatAPI: String
+
+  """
+  Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
+  """
   ValueListType: String!
+
+  """NULL"""
   ViewCellTemplate: String
 }
 
@@ -8099,6 +8244,46 @@ type KeyValuePairOutputType {
   Value: String!
 }
 
+"""
+Stores information about the available libraries, including a list of classes/functions, type definitions, and sample code. You can add additional custom libraries here to make them avaialable to code generation features within the system.
+"""
+type Library_ {
+  ActionLibrariesArray: [ActionLibrary_!]!
+  CreatedAt: Timestamp!
+  Description: String
+
+  """List of classes and functions exported by the library."""
+  ExportedItems: String
+  ID: Int!
+  Name: String!
+
+  """
+  Examples of code use of the classes and/or functions from within the library
+  """
+  SampleCode: String
+
+  """
+  Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
+  """
+  Status: String!
+
+  """
+  Code showing the types and functions defined in the library to be used for reference by humans and AI
+  """
+  TypeDefinitions: String
+  UpdatedAt: Timestamp!
+}
+
+type ListCategory_ {
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+  ParentID: Int
+  UpdatedAt: Timestamp!
+  UserID: Int!
+}
+
 """Tracks the records within each list."""
 type ListDetail_ {
   ID: Int!
@@ -8112,6 +8297,7 @@ type ListDetail_ {
 Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.
 """
 type List_ {
+  CategoryID: Int
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
@@ -8137,6 +8323,7 @@ type Mutation {
   CreateActionContextType(input: CreateActionContextTypeInput!): ActionContextType_!
   CreateActionExecutionLog(input: CreateActionExecutionLogInput!): ActionExecutionLog_!
   CreateActionFilter(input: CreateActionFilterInput!): ActionFilter_!
+  CreateActionLibrary(input: CreateActionLibraryInput!): ActionLibrary_!
   CreateActionParam(input: CreateActionParamInput!): ActionParam_!
   CreateActionResultCode(input: CreateActionResultCodeInput!): ActionResultCode_!
   CreateActivity(input: CreateActivityInput!): Activity_!
@@ -8194,7 +8381,9 @@ type Mutation {
   CreateInvoiceStatusType(input: CreateInvoiceStatusTypeInput!): InvoiceStatusType_!
   CreateItem(input: CreateItemInput!): Item_!
   CreateItem__client_finance(input: CreateItem__client_financeInput!): Item__client_finance_!
+  CreateLibrary(input: CreateLibraryInput!): Library_!
   CreateList(input: CreateListInput!): List_!
+  CreateListCategory(input: CreateListCategoryInput!): ListCategory_!
   CreateListDetail(input: CreateListDetailInput!): ListDetail_!
   CreateOrganizationLink(input: CreateOrganizationLinkInput!): OrganizationLink_!
   CreatePaymentTermsType(input: CreatePaymentTermsTypeInput!): PaymentTermsType_!
@@ -8239,44 +8428,61 @@ type Mutation {
   CreateWorkspace(input: CreateWorkspaceInput!): Workspace_!
   CreateWorkspaceItem(input: CreateWorkspaceItemInput!): WorkspaceItem_!
   Createclient_membership(input: Createclient_membershipInput!): client_membership_!
-  DeleteAccount(ID: Int!): Account_!
-  DeleteApplication(ID: Int!): Application_!
-  DeleteApplicationEntity(ID: Int!): ApplicationEntity_!
-  DeleteApplicationSetting(ID: Int!): ApplicationSetting_!
-  DeleteCompany(ID: Int!): Company_!
-  DeleteConversation(ID: Int!): Conversation_!
-  DeleteConversationDetail(ID: Int!): ConversationDetail_!
-  DeleteDashboard(ID: Int!): Dashboard_!
-  DeleteDashboardCategory(ID: Int!): DashboardCategory_!
-  DeleteDataContext(ID: Int!): DataContext_!
-  DeleteDataContextItem(ID: Int!): DataContextItem_!
-  DeleteDealForecastCategory(ID: Int!): DealForecastCategory_!
-  DeleteEmployee(ID: Int!): Employee_!
-  DeleteEntity(ID: Int!): Entity_!
-  DeleteEntityBehavior(ID: Int!): EntityBehavior_!
-  DeleteEntityBehaviorType(ID: Int!): EntityBehaviorType_!
-  DeleteEntityField(ID: Int!): EntityField_!
-  DeleteEntityPermission(ID: Int!): EntityPermission_!
-  DeleteEntityRelationship(ID: Int!): EntityRelationship_!
-  DeleteFile(ID: Int!): File_!
-  DeleteFileCategory(ID: Int!): FileCategory_!
-  DeleteList(ID: Int!): List_!
-  DeleteListDetail(ID: Int!): ListDetail_!
-  DeleteQueryCategory(ID: Int!): QueryCategory_!
-  DeleteReport(ID: Int!): Report_!
-  DeleteReportCategory(ID: Int!): ReportCategory_!
-  DeleteReportSnapshot(ID: Int!): ReportSnapshot_!
-  DeleteRole(ID: Int!): Role_!
-  DeleteUser(ID: Int!): User_!
-  DeleteUserApplication(ID: Int!): UserApplication_!
-  DeleteUserApplicationEntity(ID: Int!): UserApplicationEntity_!
-  DeleteUserFavorite(ID: Int!): UserFavorite_!
-  DeleteUserNotification(ID: Int!): UserNotification_!
-  DeleteUserRole(ID: Int!): UserRole_!
-  DeleteUserView(ID: Int!): UserView_!
-  DeleteUserViewCategory(ID: Int!): UserViewCategory_!
-  DeleteWorkspace(ID: Int!): Workspace_!
-  DeleteWorkspaceItem(ID: Int!): WorkspaceItem_!
+  DeleteAIAction(ID: Int!, options___: DeleteOptionsInput!): AIAction_!
+  DeleteAIModelAction(ID: Int!, options___: DeleteOptionsInput!): AIModelAction_!
+  DeleteAccount(ID: Int!, options___: DeleteOptionsInput!): Account_!
+  DeleteAction(ID: Int!, options___: DeleteOptionsInput!): Action_!
+  DeleteActionAuthorization(ID: Int!, options___: DeleteOptionsInput!): ActionAuthorization_!
+  DeleteActionCategory(ID: Int!, options___: DeleteOptionsInput!): ActionCategory_!
+  DeleteActionContext(ID: Int!, options___: DeleteOptionsInput!): ActionContext_!
+  DeleteActionContextType(ID: Int!, options___: DeleteOptionsInput!): ActionContextType_!
+  DeleteActionExecutionLog(ID: Int!, options___: DeleteOptionsInput!): ActionExecutionLog_!
+  DeleteActionFilter(ID: Int!, options___: DeleteOptionsInput!): ActionFilter_!
+  DeleteActionLibrary(ID: Int!, options___: DeleteOptionsInput!): ActionLibrary_!
+  DeleteActionParam(ID: Int!, options___: DeleteOptionsInput!): ActionParam_!
+  DeleteActionResultCode(ID: Int!, options___: DeleteOptionsInput!): ActionResultCode_!
+  DeleteApplication(ID: Int!, options___: DeleteOptionsInput!): Application_!
+  DeleteApplicationEntity(ID: Int!, options___: DeleteOptionsInput!): ApplicationEntity_!
+  DeleteApplicationSetting(ID: Int!, options___: DeleteOptionsInput!): ApplicationSetting_!
+  DeleteCompany(ID: Int!, options___: DeleteOptionsInput!): Company_!
+  DeleteConversation(ID: Int!, options___: DeleteOptionsInput!): Conversation_!
+  DeleteConversationDetail(ID: Int!, options___: DeleteOptionsInput!): ConversationDetail_!
+  DeleteDashboard(ID: Int!, options___: DeleteOptionsInput!): Dashboard_!
+  DeleteDashboardCategory(ID: Int!, options___: DeleteOptionsInput!): DashboardCategory_!
+  DeleteDataContext(ID: Int!, options___: DeleteOptionsInput!): DataContext_!
+  DeleteDataContextItem(ID: Int!, options___: DeleteOptionsInput!): DataContextItem_!
+  DeleteDealForecastCategory(ID: Int!, options___: DeleteOptionsInput!): DealForecastCategory_!
+  DeleteEmployee(ID: Int!, options___: DeleteOptionsInput!): Employee_!
+  DeleteEntity(ID: Int!, options___: DeleteOptionsInput!): Entity_!
+  DeleteEntityAIAction(ID: Int!, options___: DeleteOptionsInput!): EntityAIAction_!
+  DeleteEntityAction(ID: Int!, options___: DeleteOptionsInput!): EntityAction_!
+  DeleteEntityActionFilter(ID: Int!, options___: DeleteOptionsInput!): EntityActionFilter_!
+  DeleteEntityActionInvocation(ID: Int!, options___: DeleteOptionsInput!): EntityActionInvocation_!
+  DeleteEntityActionInvocationType(ID: Int!, options___: DeleteOptionsInput!): EntityActionInvocationType_!
+  DeleteEntityBehavior(ID: Int!, options___: DeleteOptionsInput!): EntityBehavior_!
+  DeleteEntityBehaviorType(ID: Int!, options___: DeleteOptionsInput!): EntityBehaviorType_!
+  DeleteEntityField(ID: Int!, options___: DeleteOptionsInput!): EntityField_!
+  DeleteEntityPermission(ID: Int!, options___: DeleteOptionsInput!): EntityPermission_!
+  DeleteEntityRelationship(ID: Int!, options___: DeleteOptionsInput!): EntityRelationship_!
+  DeleteFile(ID: Int!, options___: DeleteOptionsInput!): File_!
+  DeleteFileCategory(ID: Int!, options___: DeleteOptionsInput!): FileCategory_!
+  DeleteList(ID: Int!, options___: DeleteOptionsInput!): List_!
+  DeleteListDetail(ID: Int!, options___: DeleteOptionsInput!): ListDetail_!
+  DeleteQueryCategory(ID: Int!, options___: DeleteOptionsInput!): QueryCategory_!
+  DeleteReport(ID: Int!, options___: DeleteOptionsInput!): Report_!
+  DeleteReportCategory(ID: Int!, options___: DeleteOptionsInput!): ReportCategory_!
+  DeleteReportSnapshot(ID: Int!, options___: DeleteOptionsInput!): ReportSnapshot_!
+  DeleteRole(ID: Int!, options___: DeleteOptionsInput!): Role_!
+  DeleteUser(ID: Int!, options___: DeleteOptionsInput!): User_!
+  DeleteUserApplication(ID: Int!, options___: DeleteOptionsInput!): UserApplication_!
+  DeleteUserApplicationEntity(ID: Int!, options___: DeleteOptionsInput!): UserApplicationEntity_!
+  DeleteUserFavorite(ID: Int!, options___: DeleteOptionsInput!): UserFavorite_!
+  DeleteUserNotification(ID: Int!, options___: DeleteOptionsInput!): UserNotification_!
+  DeleteUserRole(ID: Int!, options___: DeleteOptionsInput!): UserRole_!
+  DeleteUserView(ID: Int!, options___: DeleteOptionsInput!): UserView_!
+  DeleteUserViewCategory(ID: Int!, options___: DeleteOptionsInput!): UserViewCategory_!
+  DeleteWorkspace(ID: Int!, options___: DeleteOptionsInput!): Workspace_!
+  DeleteWorkspaceItem(ID: Int!, options___: DeleteOptionsInput!): WorkspaceItem_!
   MergeRecords(request: RecordMergeRequest!): RecordMergeResult!
   SetRecordFavoriteStatus(params: UserFavoriteSetParams!): UserFavoriteResult!
   UpdateAIAction(input: UpdateAIActionInput!): AIAction_!
@@ -8292,6 +8498,7 @@ type Mutation {
   UpdateActionContextType(input: UpdateActionContextTypeInput!): ActionContextType_!
   UpdateActionExecutionLog(input: UpdateActionExecutionLogInput!): ActionExecutionLog_!
   UpdateActionFilter(input: UpdateActionFilterInput!): ActionFilter_!
+  UpdateActionLibrary(input: UpdateActionLibraryInput!): ActionLibrary_!
   UpdateActionParam(input: UpdateActionParamInput!): ActionParam_!
   UpdateActionResultCode(input: UpdateActionResultCodeInput!): ActionResultCode_!
   UpdateActivity(input: UpdateActivityInput!): Activity_!
@@ -8360,7 +8567,9 @@ type Mutation {
   UpdateInvoiceStatusType(input: UpdateInvoiceStatusTypeInput!): InvoiceStatusType_!
   UpdateItem(input: UpdateItemInput!): Item_!
   UpdateItem__client_finance(input: UpdateItem__client_financeInput!): Item__client_finance_!
+  UpdateLibrary(input: UpdateLibraryInput!): Library_!
   UpdateList(input: UpdateListInput!): List_!
+  UpdateListCategory(input: UpdateListCategoryInput!): ListCategory_!
   UpdateListDetail(input: UpdateListDetailInput!): ListDetail_!
   UpdateOrganizationLink(input: UpdateOrganizationLinkInput!): OrganizationLink_!
   UpdatePaymentTermsType(input: UpdatePaymentTermsTypeInput!): PaymentTermsType_!
@@ -8745,6 +8954,7 @@ type Query {
   ActionContextType(ID: Int!): ActionContextType_
   ActionExecutionLog(ID: Int!): ActionExecutionLog_
   ActionFilter(ID: Int!): ActionFilter_
+  ActionLibrary(ID: Int!): ActionLibrary_
   ActionParam(ID: Int!): ActionParam_
   ActionResultCode(ID: Int!): ActionResultCode_
   Activity(ID: Int!): Activity_
@@ -8861,7 +9071,9 @@ type Query {
   InvoiceStatusType(ID: Int!): InvoiceStatusType_
   Item(Item_Number: String!): Item_
   Item__client_finance(Item_Number: String!): Item__client_finance_
+  Library(ID: Int!): Library_
   List(ID: Int!): List_
+  ListCategory(ID: Int!): ListCategory_
   ListDetail(ID: Int!): ListDetail_
   OrganizationLink(OrganizationLinkID: Int!): OrganizationLink_
   OutputDeliveryType(ID: Int!): OutputDeliveryType_
@@ -8924,6 +9136,9 @@ type Query {
   RunActionFilterDynamicView(input: RunDynamicViewInput!): RunActionFilterViewResult!
   RunActionFilterViewByID(input: RunViewByIDInput!): RunActionFilterViewResult!
   RunActionFilterViewByName(input: RunViewByNameInput!): RunActionFilterViewResult!
+  RunActionLibraryDynamicView(input: RunDynamicViewInput!): RunActionLibraryViewResult!
+  RunActionLibraryViewByID(input: RunViewByIDInput!): RunActionLibraryViewResult!
+  RunActionLibraryViewByName(input: RunViewByNameInput!): RunActionLibraryViewResult!
   RunActionParamDynamicView(input: RunDynamicViewInput!): RunActionParamViewResult!
   RunActionParamViewByID(input: RunViewByIDInput!): RunActionParamViewResult!
   RunActionParamViewByName(input: RunViewByNameInput!): RunActionParamViewResult!
@@ -9149,6 +9364,12 @@ type Query {
   RunItem__client_financeDynamicView(input: RunDynamicViewInput!): RunItem__client_financeViewResult!
   RunItem__client_financeViewByID(input: RunViewByIDInput!): RunItem__client_financeViewResult!
   RunItem__client_financeViewByName(input: RunViewByNameInput!): RunItem__client_financeViewResult!
+  RunLibraryDynamicView(input: RunDynamicViewInput!): RunLibraryViewResult!
+  RunLibraryViewByID(input: RunViewByIDInput!): RunLibraryViewResult!
+  RunLibraryViewByName(input: RunViewByNameInput!): RunLibraryViewResult!
+  RunListCategoryDynamicView(input: RunDynamicViewInput!): RunListCategoryViewResult!
+  RunListCategoryViewByID(input: RunViewByIDInput!): RunListCategoryViewResult!
+  RunListCategoryViewByName(input: RunViewByNameInput!): RunListCategoryViewResult!
   RunListDetailDynamicView(input: RunDynamicViewInput!): RunListDetailViewResult!
   RunListDetailViewByID(input: RunViewByIDInput!): RunListDetailViewResult!
   RunListDetailViewByName(input: RunViewByNameInput!): RunListDetailViewResult!
@@ -9792,6 +10013,16 @@ type RunActionFilterViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [ActionFilter_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunActionLibraryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ActionLibrary_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -10596,6 +10827,26 @@ type RunItem__client_financeViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Item__client_finance_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunLibraryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [Library_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunListCategoryViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [ListCategory_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -13982,7 +14233,7 @@ input UpdateAccount__client_crmInput {
 
 input UpdateActionAuthorizationInput {
   ActionID: Int!
-  AuthorizationID: Int!
+  AuthorizationName: String!
   Comments: String
   ID: Int!
   OldValues___: [KeyValuePairInput!]
@@ -14049,6 +14300,14 @@ input UpdateActionInput {
   Status: String!
   UserComments: String
   UserPrompt: String!
+}
+
+input UpdateActionLibraryInput {
+  ActionID: Int!
+  ID: Int!
+  ItemsUsed: String
+  LibraryID: Int!
+  OldValues___: [KeyValuePairInput!]
 }
 
 input UpdateActionParamInput {
@@ -15624,6 +15883,7 @@ input UpdateEntityFieldInput {
   AllowUpdateInView: Boolean!
   AutoUpdateDescription: Boolean!
   Category: String
+  CodeType: String
   DefaultColumnWidth: Int
   DefaultInView: Boolean!
   Description: String
@@ -16061,6 +16321,26 @@ input UpdateItem__client_financeInput {
   Warranty_Days: Int
 }
 
+input UpdateLibraryInput {
+  Description: String
+  ExportedItems: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  SampleCode: String
+  Status: String!
+  TypeDefinitions: String
+}
+
+input UpdateListCategoryInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
+  UserID: Int!
+}
+
 input UpdateListDetailInput {
   ID: Int!
   ListID: Int!
@@ -16070,6 +16350,7 @@ input UpdateListDetailInput {
 }
 
 input UpdateListInput {
+  CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
   EntityID: Int

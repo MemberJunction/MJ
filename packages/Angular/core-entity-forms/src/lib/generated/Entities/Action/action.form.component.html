@@ -1,9 +1,13 @@
 <div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
     <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
         <mj-form-toolbar [form]="this"></mj-form-toolbar>
+        <kendo-splitter orientation="vertical" (layoutChange)="splitterLayoutChange()" mjFillContainer>
+            <kendo-splitter-pane [collapsible]="true" [size]="TopAreaHeight">
                 <div #topArea class="record-form-group">
-                    
+                    <mj-form-section Entity="Actions" Section="top-area" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                 </div>
+            </kendo-splitter-pane>
+            <kendo-splitter-pane>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
                     
                     <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
@@ -12,24 +16,31 @@
                     <mj-tab-body>
                         <mj-form-section Entity="Actions" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                     </mj-tab-body>
+               
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Code')">
+                        Code
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section Entity="Actions" Section="code" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                    </mj-tab-body>
                      
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Authorizations')">
-                        Action Authorizations
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Authorizations')">
+                        Authorizations
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Authorizations')"  
-                            [AllowLoad]="this.IsCurrentTab('Action Authorizations')"  
+                            [AllowLoad]="this.IsCurrentTab('Authorizations')"  
                             [EditMode]="this.GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
  
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Result Codes')">
-                        Action Result Codes
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Result Codes')">
+                        Result Codes
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Result Codes')"  
-                            [AllowLoad]="this.IsCurrentTab('Action Result Codes')"  
+                            [AllowLoad]="this.IsCurrentTab('Result Codes')"  
                             [EditMode]="this.GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
@@ -57,28 +68,41 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
  
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Execution Logs')">
-                        Action Execution Logs
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Execution Logs')">
+                        Execution Logs
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Execution Logs')"  
-                            [AllowLoad]="this.IsCurrentTab('Action Execution Logs')"  
+                            [AllowLoad]="this.IsCurrentTab('Execution Logs')"  
                             [EditMode]="this.GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
  
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Action Params')">
-                        Action Params
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Params')">
+                        Params
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Params')"  
-                            [AllowLoad]="this.IsCurrentTab('Action Params')"  
+                            [AllowLoad]="this.IsCurrentTab('Params')"  
+                            [EditMode]="this.GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+ 
+                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Libraries')">
+                        Libraries
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Action Libraries')"  
+                            [AllowLoad]="this.IsCurrentTab('Libraries')"  
                             [EditMode]="this.GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
                 </mj-tabstrip>
+            </kendo-splitter-pane>
+        </kendo-splitter>
     </form>
 </div>
         

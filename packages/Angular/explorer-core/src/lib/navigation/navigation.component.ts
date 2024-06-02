@@ -211,6 +211,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
             this._earlyEvents.push({event, args});
           }
           else {
+            console.log('event:', event);
             // we're logged in so go ahead and handle normally
             switch (event.eventCode) {
               case EventCodes.ViewNotifications: 
@@ -943,6 +944,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // Files
     await this.loadFiles();
 
+    // Lists
+    await this.loadLists();
+
     // Settings
     await this.loadSettings(md);
 
@@ -982,6 +986,16 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     this.drawerItems.push(drawerItem);
   }
 
+  protected async loadLists() {
+    const drawerItem = {
+      id: 'Lists',
+      selected: false,
+      text: 'Lists',
+      path: '/lists',
+      icon: "fa-solid fa-list"
+    }
+    this.drawerItems.push(drawerItem);
+  }
 
   protected async loadFiles() {
     const rv = new RunView();

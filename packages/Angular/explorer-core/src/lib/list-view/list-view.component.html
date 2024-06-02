@@ -1,0 +1,21 @@
+<app-generic-browser-list 
+title="Lists"
+itemType="list"
+iconName="graph" 
+[items]="items"
+addText="Create New List"
+ItemEntityName="Lists"
+CategoryEntityName="List Categories" 
+(itemClickEvent)="itemClick($event)"
+(AfterAddFolderEvent)="onEvent($event)"
+(AfterAddItemEvent)="onEvent($event)"
+(AfterDeleteItemEvent)="onEvent($event)"
+(AfterDeleteFolderEvent)="onEvent($event)"
+[selectedFolderID]="selectedFolderID"
+[showLoader]="showLoader"
+[disableAddButton]="true"
+[disableEditButton]="true"
+(viewModeChangeEvent)="onViewModeChange($event)"
+(BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
+/>
+<!-- creation of reports are disabled because they need a conversation ID before theyre made -->
