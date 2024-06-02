@@ -7,6 +7,7 @@ import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogError } from './logging';
 import { CompositeKey } from './compositeKey';
+import { Subject, Subscription } from 'rxjs';
 
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
@@ -304,6 +305,15 @@ export class BaseEntityResult {
 }
 
 /**
+ * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
+ */
+export class BaseEntityEvent {
+    type: 'new_record' | 'save' | 'delete' | 'other';
+    payload: any;
+    baseEntity: BaseEntity;
+}
+
+/**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity {
@@ -312,12 +322,31 @@ export abstract class BaseEntity {
     private _recordLoaded: boolean = false;
     private _contextCurrentUser: UserInfo = null;
     private _transactionGroup: TransactionGroupBase = null;
-
+    private _eventSubject: Subject<BaseEntityEvent>;
     private _resultHistory: BaseEntityResult[] = [];
 
     constructor(Entity: EntityInfo) {
+        this._eventSubject = new Subject<BaseEntityEvent>();
         this._EntityInfo = Entity;
         this.init();
+    }
+
+    /**
+     * This method can be used to register a callback for events that will be raised by the instance of the BaseEntity object. The callback will be called with a 
+     * BaseEntityEvent object that contains the type of event and any payload that is associated with the event. Subclasses of the BaseEntity can define their 
+     * own event types and payloads as needed.
+     * @param callback 
+     * @returns 
+     */
+    public RegisterEventHandler(callback: (event: BaseEntityEvent) => void): Subscription {
+        return this._eventSubject.asObservable().subscribe(callback);
+    }
+
+    /**
+     * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
+     */
+    protected RaiseEvent(type: 'new_record' | 'save' | 'delete' | 'other', payload: any) {
+        this._eventSubject.next({type: type, payload: payload, baseEntity: this});
     }
 
     /**
@@ -652,6 +681,7 @@ export abstract class BaseEntity {
      */
     public NewRecord() : boolean {
         this.init();
+        this.RaiseEvent('new_record', null)
         return true;
     }
 
@@ -679,6 +709,8 @@ export abstract class BaseEntity {
                         const result = this.LatestResult;
                         if (result)
                             result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
+
+                        this.RaiseEvent('save', null)
                         return true;
                     }
                     else
@@ -849,7 +881,8 @@ export abstract class BaseEntity {
             if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
                 // record deleted correctly
                 // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                this.NewRecord();
+                this.RaiseEvent('delete', null);
+                this.NewRecord(); // will trigger a new record event here too
                 return true;
             }
             else // record didn't save, return false, but also don't wipe out the entity like we do if the Delete() worked

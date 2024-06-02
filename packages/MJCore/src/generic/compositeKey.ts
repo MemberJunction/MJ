@@ -77,7 +77,7 @@ export class CompositeKey {
         return this.KeyValuePairs.map((keyValue: KeyValuePair) => {
             return {
                 FieldName: keyValue.FieldName,
-                Value: keyValue.Value.toString()
+                Value: keyValue.Value? keyValue.Value.toString() : ""
             }
         });
     }
