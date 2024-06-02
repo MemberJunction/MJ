@@ -507,10 +507,25 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
     else {
-      existingTab = this.tabs.find(t => t.data.ResourceTypeID === data.ResourceTypeID && 
-                                              t.data.ResourceRecordID === data.ResourceRecordID &&
-                                              data.ResourceRecordID  // make sure that we don't match on null/undefined ResourceRecordID's - these should always be NEW tabs
-                                        )
+      existingTab = this.tabs.find(t => {
+        if (t.data.ResourceTypeID === data.ResourceTypeID && 
+            t.data.ResourceRecordID === data.ResourceRecordID &&
+            data.ResourceRecordID // make sure that we don't match on null/undefined ResourceRecordID's - these should always be NEW tabs
+           ) {
+            // we now have to do one more check, we have to make sure that all of the values within the Configuration object match as well
+            let bMatch = true;
+            const keys = Object.keys(data.Configuration);
+            for (const key of keys) {
+              if (data.Configuration[key] !== t.data.Configuration[key]) {
+                bMatch = false;
+                break;
+              }
+            }
+            return bMatch;
+          }  
+          else
+            return false;
+      });
     }
     return existingTab;
   }
