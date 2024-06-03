@@ -1,5 +1,5 @@
-import { Injectable } from '@angular/core';
-import { EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
+import { ElementRef, Injectable } from '@angular/core';
+import { BaseEntity, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
 import { ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, DisplaySimpleNotificationRequestData } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -210,6 +210,23 @@ export class SharedService {
   }
 
   /**
+   * Utility method that returns true if child is a descendant of parent, false otherwise. 
+   */
+  public static IsDescendant(parent: ElementRef, child: ElementRef) {
+    if (parent && child && parent.nativeElement && child.nativeElement) {
+      let node = child.nativeElement.parentNode;
+      while (node != null) {
+        if (node == parent.nativeElement) {
+          return true;
+        }
+        node = node.parentNode;
+      }
+    }
+    return false;
+  }
+
+
+  /**
    * Creates a notification in the database and refreshes the UI. Returns the notification object.
    * @param title 
    * @param message 
@@ -345,3 +362,17 @@ export const EventCodes = {
 } as const;
 
 export type EventCodes = typeof EventCodes[keyof typeof EventCodes];
+
+export const BaseFormComponentEventCodes = {
+  BASE_CODE: 'BaseFormComponent_Event',
+  EDITING_COMPLETE: 'EDITING_COMPLETE',
+  REVERT_PENDING_CHANGES: 'REVERT_PENDING_CHANGES',
+  POPULATE_PENDING_RECORDS: 'POPULATE_PENDING_RECORDS'
+} as const
+export type BaseFormComponentEventCodes = typeof BaseFormComponentEventCodes[keyof typeof BaseFormComponentEventCodes];
+
+export class BaseFormComponentEvent {
+  subEventCode!: string
+  elementRef: any
+  returnValue: any
+}

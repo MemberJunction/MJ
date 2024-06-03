@@ -15,6 +15,7 @@ import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
 import { UserViewGridComponent } from './lib/ng-user-view-grid.component';
+import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 
 @NgModule({
   declarations: [
@@ -33,6 +34,7 @@ import { UserViewGridComponent } from './lib/ng-user-view-grid.component';
     ContainerDirectivesModule,
     LayoutModule,
     InputsModule,
+    EntityFormDialogModule
   ],
   exports: [
     UserViewGridComponent

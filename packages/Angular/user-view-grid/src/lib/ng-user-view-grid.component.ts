@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -12,9 +12,11 @@ import { Keys } from '@progress/kendo-angular-common';
 
 import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
-import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
+import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
+import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
 
 
 export type GridRowClickedEvent = {
@@ -42,11 +44,29 @@ export type GridPendingRecordItem = {
 })
 export class UserViewGridComponent implements OnInit, AfterViewInit {
   title = 'UserViewGrid';
+  /**
+   * Parameters for running the view
+   */
   @Input() Params: RunViewParams | undefined;
   @Input() BottomMargin: number = 0;
   @Input() InEditMode: boolean = false;
   @Input() EditMode: "None" | "Save" | "Queue" = "None"
   @Input() AutoNavigate: boolean = true;
+
+
+  /**
+   * If you enable the ShowCreateNewRecordButton and the user has permission, when they click the New button, these values from this object will auto-populate the new record form
+   */
+  @Input() NewRecordValues: any;
+  /**
+   * If set to true, the Create New Record button will be displayed if the user is allowed to create new records for the entity being shown. If set to false, the Create New Record button will be hidden.
+   */
+  @Input() ShowCreateNewRecordButton: boolean = true;
+
+  /**
+   * When set to Dialog, the Create New Record button will open a dialog to create a new record. When set to Tab, the Create New Record button will open a new tab to create a new record.
+   */
+  @Input() CreateRecordMode: "Dialog" | "Tab" = "Tab";
 
   @Output() rowClicked = new EventEmitter<GridRowClickedEvent>();
   @Output() rowEdited = new EventEmitter<GridRowEditedEvent>();
@@ -88,6 +108,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public mergeMode: boolean = false;
   public duplicateMode: boolean = false;
 
+  public showNewRecordDialog: boolean = false;
+
   public selectableSettings: SelectableSettings = {
     enabled: false
   };
@@ -107,6 +129,19 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       return this.Params.ViewID;
     else
       return 0;
+  }
+
+  /**
+   * This property is true if the user has the ability to create a new record which is a combination of the user-level permission coupled with the
+   * entity-level setting AllowCreateAPI being set to 1.
+   */
+  public get UserCanCreateNewRecord(): boolean {
+    if (this._entityInfo && this._entityInfo.AllowCreateAPI) {
+      const perm = this._entityInfo.GetUserPermisions(new Metadata().CurrentUser)
+      return perm.CanCreate;
+    }
+    else
+      return false;
   }
 
   protected StartEditMode() {
@@ -202,7 +237,8 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  constructor(private formBuilder: FormBuilder, 
+  constructor(private elementRef: ElementRef,
+              private formBuilder: FormBuilder, 
               private router: Router,
               private renderer: Renderer2) {
 
@@ -435,7 +471,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           Object.assign(dataItem, formGroup.value);
   
           const md = new Metadata();
-          const pkey = this._entityInfo.PrimaryKey.Name;
+          // JONATHAN FIX THIS TO USE MULTI-COLUMN PRIMARY KEYS
+          alert('Jonathan, fix this to use multi-column primary keys - all commented out now til you fix')
+//          const pkey = this._entityInfo.PrimaryKey.Name;
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           if (this.EditMode === "Save") {
@@ -445,11 +483,12 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
-            if (!bSaved)
-              this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
+            // if (!bSaved)
+            //   this.CreateSimpleNotification("Error saving record: " + record.Get(pkey), 'error', 5000)
           }
           else {
-            record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
+            // JS - fix this too
+            // record = this._pendingRecords.find((r: GridPendingRecordItem) => r.record.Get(pkey) === dataItem[pkey])?.record;
             if (!record) { // haven't edited this one before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
               let compositeKey: CompositeKey = new CompositeKey();
@@ -506,10 +545,44 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   }
 
+
+
   ngAfterViewInit(): void {
     //this.setGridHeight();
     if (this.Params)
       this.Refresh(this.Params);
+
+    // setup event listener for MJGlobal because we might have a parent component that sends us messages
+    MJGlobal.Instance.GetEventListener(false).subscribe((e: MJEvent) => {
+      switch (e.event) {
+        case MJEventType.ComponentEvent:
+          if (e.eventCode === BaseFormComponentEventCodes.BASE_CODE) {
+            // we have an event from a BaseFormComponent, now we need to determine if WE are a descendant of that component
+            const event: BaseFormComponentEvent = e.args as BaseFormComponentEvent;
+            if (SharedService.IsDescendant(event.elementRef, this.elementRef)) {
+              // we are a descendant of the component that sent the event, so we need to handle it
+              switch (event.subEventCode) {
+                case BaseFormComponentEventCodes.EDITING_COMPLETE:
+                  this.EditingComplete();
+                  break;
+                case BaseFormComponentEventCodes.REVERT_PENDING_CHANGES:
+                  this.RevertPendingChanges();
+                  break;
+                case BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS:
+                  // provide all of our pending records back to the caller
+                  this.PendingRecords.forEach((r: GridPendingRecordItem) => {
+                    const arr = event.returnValue?.pendingRecords;
+                    if (arr && typeof arr.push === 'function') {
+                      event.returnValue?.pendingRecords?.push(r.record);
+                    }
+                  });
+                  break;
+              }
+            }
+           }
+          break;
+      }
+    });
   }
 
   private _movedToBody: boolean = false;
@@ -609,7 +682,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
           cols = this._entityInfo?.Fields.filter((f: EntityFieldInfo) => f.DefaultInView ).map((f: EntityFieldInfo) => {
                                                                                                   return {
                                                                                                     ID: f.ID,
-                                                                                                    Name: f.Name,
+                                                                                                    Name: f.CodeName,
                                                                                                     DisplayName: f.DisplayName,
                                                                                                     EntityField: f,
                                                                                                     hidden: false,
@@ -749,7 +822,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
           RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
-            return r.CompositeKey;
+            return r.PrimaryKey;
           }).filter((compositeKey: CompositeKey) => {
             if (!this.recordCompareComponent){
               return false;
@@ -899,6 +972,52 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
     else  
       throw new Error("Unable to get export data");    
+  }
+
+
+  @ViewChild('entityFormDialog') entityFormDialog: EntityFormDialogComponent | null = null;
+  
+  /**
+   * This method will create a new record of the given entity type. It will only work if the User has the ability to create records of 
+   * this entity type and also if the entity level setting AllowCreateAPI is set to 1. If either of these conditions are not met, then
+   * this method will do nothing.
+   */
+  public async doCreateNewRecord() {
+    // creates a new record either using a dialog or with the router
+    if (this.UserCanCreateNewRecord && this._entityInfo) {
+      if (this.CreateRecordMode === 'Tab') {
+        // route to a resource/record with a blank string for the 3rd segment which is normally the pkey value
+        // here we don't provide the pkey value so the record component will know to create a new record
+        this.router.navigate(
+                              ['resource', 'record',''/*add this 3rd param that's blank so the route validates*/], 
+                              { queryParams: 
+                                { 
+                                  Entity: this._entityInfo.Name,
+                                  NewRecordValues: this.NewRecordValues ? FieldValueCollection.FromObject(this.NewRecordValues)?.ToURLSegment() : null
+                                } 
+                              }
+                            );
+      }
+      else {
+        // configured to display a dialog instead, we'll use the entity-form-dialog for this
+        if (this.entityFormDialog) {
+          const md = new Metadata();
+          const newRecord = await md.GetEntityObject(this._entityInfo.Name);
+          if (this.NewRecordValues) {
+            // we have new record values in a simple JS object, so grab the key/values from the object and set the values in the new record for non null/undefined values
+            Object.keys(this.NewRecordValues).filter((key: string) => this.NewRecordValues[key] !== null && this.NewRecordValues[key] !== undefined).forEach((key: string) => {
+              newRecord.Set(key, this.NewRecordValues[key]);
+            });
+          }
+          this.entityFormDialog.Record = newRecord;
+          this.showNewRecordDialog = true;
+        }
+        else {
+          // don't have the dialog reference, throw an error
+          throw new Error("Unable to create new record, entity-form-dialog is not available")
+        }
+      }
+    }
   }
 }
  

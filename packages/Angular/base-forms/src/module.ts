@@ -13,20 +13,19 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 
 import { SectionLoaderComponent } from './lib/section-loader-component';
-import { FormToolbarComponent } from './lib/form-toolbar';
 import { MJFormField } from './lib/base-field-component';
-import { CreateRecordComponent } from './lib/create-record/create-record.component';
+import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
+import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 
+// Markdown
+import { MarkdownModule } from 'ngx-markdown';
 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
-    FormToolbarComponent,
     MJFormField,
-    CreateRecordComponent
   ],
   imports: [
     CommonModule,
@@ -38,15 +37,15 @@ import { CreateRecordComponent } from './lib/create-record/create-record.compone
     DateInputsModule,
     DropDownsModule,
     LinkDirectivesModule,
-    AskSkipModule,
     DialogsModule,
-    IndicatorsModule
+    IndicatorsModule,
+    ContainerDirectivesModule,
+    MemberJunctionSharedModule,
+    MarkdownModule.forRoot()
   ],
   exports: [
     SectionLoaderComponent,
-    FormToolbarComponent,
     MJFormField,
-    CreateRecordComponent
   ]
 })
 export class BaseFormsModule { }

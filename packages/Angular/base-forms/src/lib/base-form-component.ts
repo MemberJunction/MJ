@@ -1,20 +1,19 @@
-import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild } from '@angular/core';
+import { AfterViewInit, OnInit, OnDestroy, Directive, ViewChildren, QueryList, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
 
 import { Subject, Subscription, debounceTime, fromEvent } from 'rxjs';
 import { EntityInfo, ValidationResult, BaseEntity, EntityPermissionType, 
          EntityRelationshipInfo, Metadata, RunViewParams, LogError, 
-         RecordDependency} from '@memberjunction/core';
-import { UserViewGridComponent } from '@memberjunction/ng-user-view-grid';
+         RecordDependency,
+         BaseEntityEvent,
+         CompositeKey} from '@memberjunction/core';
 import { BaseRecordComponent } from './base-record-component';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseFormComponentEvent, BaseFormComponentEventCodes, SharedService } from '@memberjunction/ng-shared';
 import { ActivatedRoute, Router } from '@angular/router';
-import { TabStripComponent } from '@progress/kendo-angular-layout';
-import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
+import { MJTabStripComponent, TabEvent } from '@memberjunction/ng-tabstrip';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 @Directive() // this isn't really a directive, BUT we are doing this to avoid Angular compile errors that require a decorator in order to implement the lifecycle interfaces
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
-  public activeTabIndex = 0;
-  public selectedTab = 0;
   public EditMode: boolean = false;
   public BottomMargin: number = 10;
   public TabHeight: string = '500px';
@@ -34,26 +33,31 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   private _pendingRecords: BaseEntity[] = [];
   private _updatingBrowserUrl: boolean = false;
 
-
   private __debug: boolean = false;
 
-  constructor(protected elementRef: ElementRef, protected sharedService: SharedService, protected router: Router, protected route: ActivatedRoute) {
+  constructor(protected elementRef: ElementRef, protected sharedService: SharedService, protected router: Router, protected route: ActivatedRoute, protected cdr: ChangeDetectorRef) {
     super();
     this.setupSplitterLayoutDebounce();
   }
   @ViewChild(MJTabStripComponent, { static: false }) tabComponent!: MJTabStripComponent;
 
+  @ViewChildren(MJTabStripComponent) tabStrips!: QueryList<MJTabStripComponent>;
+
+  public get TabStripComponent(): MJTabStripComponent {
+    return this.tabComponent;
+  }
+
   async ngOnInit() {
     if (this.record) {
       const md: Metadata = new Metadata();
    
-      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.CompositeKey);
+      this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
       // DEBUG ONLY output to console our full record info for debugging
       if (this.__debug) {
         const start = new Date().getTime();
-        console.log('Full Record Info: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
+        console.log('Full Record Info: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
         const dataObject = await this.record.GetDataObject({
           includeRelatedEntityData: true,
           oldValues: false,
@@ -83,12 +87,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         const tabName = params['tab'];
         if (tabName && tabName.length > 0) {
           // Select the proper tab based on the tabName
-          const tabIndex = this.GetTabIndex(tabName);
-          if (tabIndex >=0) {
-            // found the tab index, if we don't find it, do nothing
-            this.activeTabIndex = tabIndex;
-            this.tabComponent.SelectedTabIndex = tabIndex;
-          }
+          this.tabComponent?.SelectTabByName(tabName);
         }
       }
       // now resize after a pause to allow the UI to settle
@@ -98,12 +97,6 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     });
 
     this.CalcTopAreaHeight();
-
-    // finally, set a timer to set the SelectedTabIndex = SelectedTabIndex to force the tab to refresh
-    setTimeout(() => {
-      if (this.tabComponent)
-        this.tabComponent.SelectedTabIndex = this.activeTabIndex;
-    }, 100);
   }
 
   /**
@@ -135,20 +128,16 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     }
   }
 
-  @ViewChildren(UserViewGridComponent) userViewGridComponents!: QueryList<UserViewGridComponent>;
-
   protected get PendingRecords(): BaseEntity[] {
     return this._pendingRecords;
   }   
  
-  public onTabSelect(tabIndex: any) {
-    this.activeTabIndex = tabIndex;
+  public onTabSelect(e: any) {
     this.sharedService.InvokeManualResize();
 
     // now that we've updated our state and re-sized, also update the browser URL to add the tab name as a query parameter to the URL
-    const tabName = this._tabIndexes[this.activeTabIndex];
     this._updatingBrowserUrl = true;
-    this.router.navigate([], { queryParams: { tab: tabName }, queryParamsHandling: 'merge' });
+    this.router.navigate([], { queryParams: { tab: e.tab?.Name }, queryParamsHandling: 'merge' });
     this._updatingBrowserUrl = true;
   }
 
@@ -164,11 +153,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (this.record) {
       const changes = this.record.GetAll(false, true);
       const oldValues = this.record.GetAll(true, true);
-      console.log('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value)
+      console.log('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString())
       console.log(changes);
       console.log('Old Values');
       console.log(oldValues);
-      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
+      alert('Changes for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString() + '\n\n' + JSON.stringify(changes, null, 2) + '\n\nOld Values\n\n' + JSON.stringify(oldValues, null, 2));
     }
   }
 
@@ -182,7 +171,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async SetFavoriteStatus(isFavorite: boolean) {
     const md: Metadata = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.CompositeKey, isFavorite)
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite)
     this._isFavorite = isFavorite;
   }
 
@@ -220,51 +209,60 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this.EditMode ? "Queue" : "None";
   }
 
-  private _tabIndexes: string[] = [];
-  public GetTabIndex(tabName: string): number {
-    return this._tabIndexes.indexOf(tabName);
-  }
-
-  public RegisterTabs(tabs: string[]) {
-    // copy the array, clear existing array and copy all elements
-    this._tabIndexes.splice(0, this._tabIndexes.length);
-    for (let i = 0; i < tabs.length; i++) 
-      this.RegisterTab(tabs[i]);
-  }
-
-  public RegisterTab(tabName: string): number {
-    const currentIndex = this._tabIndexes.indexOf(tabName);
-    if (currentIndex === -1) {
-      this._tabIndexes.push(tabName);
-      return this._tabIndexes.length - 1;
-    }
-    else
-      return currentIndex;
-  }
-
+   /**
+   * Returns true if the tabName specified is the currently displayed tab, otherwise returns false
+   * @param tabName 
+   * @returns 
+   */
   public IsCurrentTab(tabName: string): boolean {
-    if (this._tabIndexes.length === 0 || this._tabIndexes.indexOf(tabName) === -1)
-      return false;
-    else
-      return this.activeTabIndex === this.GetTabIndex(tabName);
+    const tab = this.tabComponent?.GetTabByName(tabName);
+    return tab?.index === this.tabComponent?.SelectedTabIndex;
   }
 
-  public RegisterAndCheckIfCurrentTab(tabName: string): boolean {
-    this.RegisterTab(tabName);
-    return this.IsCurrentTab(tabName);
-  }
-
-  protected BuildRelationshipViewParams(item: EntityRelationshipInfo): RunViewParams {
+  public BuildRelationshipViewParams(item: EntityRelationshipInfo): RunViewParams {
     return EntityInfo.BuildRelationshipViewParams(this.record, item); // new helper method in EntityInfo
   }
 
+  /**
+   * Builds a RunViewParams object for a related entity based on the relationship between the current entity and the related entity
+   * @param relatedEntityName 
+   * @returns 
+   */
   public BuildRelationshipViewParamsByEntityName(relatedEntityName: string): RunViewParams {
+    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
+    if (eri)
+      return this.BuildRelationshipViewParams(eri);
+    else
+      return {}
+  }
+
+  /**
+   * Looks up and returns the EntityRelationshipInfo object for the related entity name
+   * @param relatedEntityName 
+   * @returns 
+   */
+  public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string): EntityRelationshipInfo | undefined {
     if (this.record) {
-      const eri = (<BaseEntity>this.record).EntityInfo.RelatedEntities.find(x => x.RelatedEntity === relatedEntityName);
-      if (eri)
-        return this.BuildRelationshipViewParams(eri);
+      return (<BaseEntity>this.record).EntityInfo.RelatedEntities.find(x => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
     }
-    return {};
+    return undefined;
+  }
+
+  /**
+   * Builds new record values for a related entity based on the relationship between the current entity and the related entity
+   * @param relatedEntityName 
+   * @returns 
+   */
+  public NewRecordValues(relatedEntityName: string): any { 
+    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
+    if (eri)
+      return this.NewRecordValuesByEntityRelationship(eri);
+    else
+      return {}
+  }
+
+  public NewRecordValuesByEntityRelationship(item: EntityRelationshipInfo): any {
+    return EntityInfo.BuildRelationshipNewRecordValues(this.record, item); // new helper method in EntityInfo
   }
  
   public GetRelatedEntityTabDisplayName(relatedEntityName: string): string {
@@ -298,17 +296,33 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return valResults
   }
 
+  protected RaiseEvent(eventCode: BaseFormComponentEventCodes) {
+    const p: BaseEntity[] = [];
+
+    const event: BaseFormComponentEvent = {
+      subEventCode: eventCode,
+      elementRef: this.elementRef,
+      returnValue: {
+        pendingRecords: p
+      }
+    }
+
+    MJGlobal.Instance.RaiseEvent({
+      event: MJEventType.ComponentEvent,
+      component: this,
+      eventCode: BaseFormComponentEventCodes.BASE_CODE,
+      args: event
+    })
+    
+    return event.returnValue; // if the recipients of the event provided any values, we have them now 
+  }
   public async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
     try {
       try {
         // atempt to blur the active element to force any pending changes to be committed
         (document.activeElement as HTMLElement).blur(); 
-        if (this.userViewGridComponents.length > 0) {
-          // tell all our grids to finish up their editing
-          // if we have grids, create a slight delay, ensuring focus is lost on components that require that to update the model
-          this.userViewGridComponents.forEach(grid => {grid.EditingComplete()});
-          await this.Wait(100);
-        }
+        // notify child components of this component that they must stop editing with an EDITING_COMPLETE message via MJ_global
+        this.RaiseEvent('EDITING_COMPLETE');
       }
       catch (e2) {
         // ignore
@@ -366,12 +380,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
                     p.Revert();
                 });
             }
-            if (this.userViewGridComponents && this.userViewGridComponents.length > 0) {
-                // we have grids, so we need to revert them as well
-                this.userViewGridComponents.forEach(grid => {
-                    grid.RevertPendingChanges();
-                });
-            }
+            this.RaiseEvent('REVERT_PENDING_CHANGES');
         }
 
         // if we get here we are good to go
@@ -393,21 +402,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   protected async PopulatePendingRecords(): Promise<void> {
     // this method is called by the parent class at the right time to populate all of the pending records for a transaction
-    // all we do is talk to all of our grids and get their pending records and xfer them over to the PendingRecords array
+    // all we do is talk to all of our child compoennts and get their pending records and xfer them over to the PendingRecords array
     // the parent class will then take care of the rest...
+
     this._pendingRecords = []; // wipe out our array first
-    const grids = this.userViewGridComponents;
-    if (grids && grids.length > 0) {
-      for (let i = 0; i < grids.length; i++) {
-        const grid = grids.get(i);
-        if (grid) {
-          await grid.EditingComplete() // need to check this and wait for it to make sure grid editing is done before we try to save
-          grid.PendingRecords.forEach(p => {
-            // populate our pending grids array from the composite of all the grids
-            this.PendingRecords.push(p.record)
-          })  
-        }
-      }
+    this.RaiseEvent('EDITING_COMPLETE'); // first tell the child components to finish up their editing
+    const result = this.RaiseEvent('POPULATE_PENDING_RECORDS');
+    if (result && result.pendingRecords) {
+      for (const p of result.pendingRecords) 
+        this.PendingRecords.push(p);
     }
   }
 
@@ -498,22 +501,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     this.splitterLayoutChangeSubject.next();
   }
 
-  protected ResizeGrids(): void {
-    // do with a little timeout to let the visible grid show up and the DOM settle
-    setTimeout(() => {
-      if (this.userViewGridComponents && this.userViewGridComponents.length > 0) {
-        this.userViewGridComponents.forEach(grid => {
-          //grid.ResizeGrid(); // automatic now via mjFillContainer
-        });
-      }
-    }, 10);
-  }
-
   public async ShowDependencies() {
     // for now dump to console
     const md = new Metadata();
-    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey)
-    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.Value);
+    const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey)
+    console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
     console.log(dep);
 
     // if (confirm('Do you want to merge records test?') == true) {
@@ -528,7 +520,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
     const md = new Metadata();
-    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.CompositeKey);
+    const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     return dependencies;
   }
 

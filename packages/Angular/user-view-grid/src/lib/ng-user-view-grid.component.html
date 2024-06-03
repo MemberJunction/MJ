@@ -25,11 +25,17 @@
           (sortChange)="sortChanged($event)"
           >
           <ng-template kendoGridToolbarTemplate>
-             
-              <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" >
-                <span class="fa-regular fa-file-excel"></span>
-                  Export to Excel
-              </button>
+            @if(ShowCreateNewRecordButton && UserCanCreateNewRecord) {
+                <button kendoButton (click)="doCreateNewRecord()" >
+                    <span class="fa-regular fa-plus"></span>
+                    New {{entityRecord?.EntityInfo?.Name}}
+                </button>                                        
+            }
+            
+            <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" >
+            <span class="fa-regular fa-file-excel"></span>
+                Export to Excel
+            </button>
 
               <!-- 3 buttons for duplicate. First one only shows when duplication is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending duple.  -->
             <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="(!compareMode && !mergeMode && !duplicateMode)" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
@@ -101,66 +107,72 @@
               <kendo-excelexport-column *ngFor="let exportCol of exportColumns" [field]="exportCol.Name" [title]="exportCol.Name">
               </kendo-excelexport-column>
           </kendo-excelexport>
-      </kendo-grid>
+    </kendo-grid>
       
-      <div #compareDialogContainer>
-          <div *ngIf="isCompareDialogOpened">
-              <div class="k-overlay"></div>
-              <kendo-window
-                  [minHeight]="300"
-                  [minWidth]="800"
-                  [top]="100"
-                  [left]="100"
-                  [width]="1200"
-                  [height]="675"
-                  [resizable]="true"
-                  (close)="closeCompareDialog($event)"
-                  title="Compare Records"
-                  *ngIf="isCompareDialogOpened"
-              >
-                  <div mjFillContainer [fillHeight]="true" [bottomMargin]="100">
-                      <mj-compare-records
-                          #recordCompareRef
-                          [entityName]="_entityInfo ? _entityInfo.Name : ''"
-                          [recordsToCompare]="recordsToCompare" 
-                          [visibleColumns]="visibleColumns" 
-                          [selectionMode]="mergeMode ? true : false"
-                      >
-                      </mj-compare-records>
-                  </div>
-                  <div class="k-actions k-actions-end">
-                    <button *ngIf="mergeMode" kendoButton themeColor="primary" type="button" (click)="closeCompareDialog('merge')">
-                        Merge Records
+    <div #compareDialogContainer>
+        <div *ngIf="isCompareDialogOpened">
+            <div class="k-overlay"></div>
+            <kendo-window
+                [minHeight]="300"
+                [minWidth]="800"
+                [top]="100"
+                [left]="100"
+                [width]="1200"
+                [height]="675"
+                [resizable]="true"
+                (close)="closeCompareDialog($event)"
+                title="Compare Records"
+                *ngIf="isCompareDialogOpened"
+            >
+                <div mjFillContainer [fillHeight]="true" [bottomMargin]="100">
+                    <mj-compare-records
+                        #recordCompareRef
+                        [entityName]="_entityInfo ? _entityInfo.Name : ''"
+                        [recordsToCompare]="recordsToCompare" 
+                        [visibleColumns]="visibleColumns" 
+                        [selectionMode]="mergeMode ? true : false"
+                    >
+                    </mj-compare-records>
+                </div>
+                <div class="k-actions k-actions-end">
+                <button *ngIf="mergeMode" kendoButton themeColor="primary" type="button" (click)="closeCompareDialog('merge')">
+                    Merge Records
+                </button>
+                <button *ngIf="duplicateMode" kendoButton themeColor="primary" type="button" (click)="findDuplicateRecords()">
+                    Search for Duplicates
+                </button>
+                <button *ngIf="compareMode" kendoButton type="button" (click)="closeCompareDialog('close')">
+                    Close
+                </button>
+                <button *ngIf="mergeMode || duplicateMode" kendoButton type="button" (click)="closeCompareDialog('cancel')">
+                    Cancel
+                </button>
+                </div>      
+                <kendo-dialog
+                    title="Confirm Choice"
+                    *ngIf="isConfirmDialogOpen"
+                    (close)="closeConfirmMergeDialog('cancel')"
+                    [minWidth]="250"
+                    [width]="450"
+                >
+                    <p style="margin: 30px; text-align: center;">
+                    Are you sure you want to merge the records? This action cannot be undone. If you select "Yes", the records will be merged and the duplicate records will be deleted.
+                    </p>
+                    <kendo-dialog-actions>
+                    <button kendoButton (click)="closeConfirmMergeDialog('no')">No</button>
+                    <button kendoButton (click)="closeConfirmMergeDialog('yes')" themeColor="primary">
+                        Yes
                     </button>
-                    <button *ngIf="duplicateMode" kendoButton themeColor="primary" type="button" (click)="findDuplicateRecords()">
-                        Search for Duplicates
-                    </button>
-                    <button *ngIf="compareMode" kendoButton type="button" (click)="closeCompareDialog('close')">
-                        Close
-                    </button>
-                    <button *ngIf="mergeMode || duplicateMode" kendoButton type="button" (click)="closeCompareDialog('cancel')">
-                        Cancel
-                    </button>
-                  </div>      
-                  <kendo-dialog
-                      title="Confirm Choice"
-                      *ngIf="isConfirmDialogOpen"
-                      (close)="closeConfirmMergeDialog('cancel')"
-                      [minWidth]="250"
-                      [width]="450"
-                  >
-                      <p style="margin: 30px; text-align: center;">
-                      Are you sure you want to merge the records? This action cannot be undone. If you select "Yes", the records will be merged and the duplicate records will be deleted.
-                      </p>
-                      <kendo-dialog-actions>
-                      <button kendoButton (click)="closeConfirmMergeDialog('no')">No</button>
-                      <button kendoButton (click)="closeConfirmMergeDialog('yes')" themeColor="primary">
-                          Yes
-                      </button>
-                      </kendo-dialog-actions>
-                  </kendo-dialog>
-              </kendo-window>
-          </div>            
-      </div>
-  </div>
+                    </kendo-dialog-actions>
+                </kendo-dialog>
+            </kendo-window>
+        </div>            
+    </div>
+</div>
   
+<!-- Entity Form Dialog Component here for future use as needed -->
+<mj-entity-form-dialog
+    #entityFormDialog
+    Mode="complete"
+    [Visible]="showNewRecordDialog"
+></mj-entity-form-dialog>

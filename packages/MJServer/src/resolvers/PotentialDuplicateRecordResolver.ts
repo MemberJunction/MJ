@@ -1,12 +1,12 @@
 import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from "type-graphql";
 import { PotentialDuplicateRequest, PotentialDuplicateResponse, PotentialDuplicate, Metadata, KeyValuePair, LogError, CompositeKey, PotentialDuplicateResult } from '@memberjunction/core';
-import {KeyValuePairInputType, KeyValuePairOutputType} from './MergeRecordsResolver'
 import { AppContext } from "../types";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 //load the default vectorDB and embedding model
 import {LoadMistralEmbedding} from '@memberjunction/ai-mistral';
 import {LoadPineconeVectorDB} from '@memberjunction/ai-vectors-pinecone';
+import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from "../generic/KeyInputOutputTypes";
 LoadMistralEmbedding();
 LoadPineconeVectorDB();
 
@@ -26,18 +26,6 @@ export class PotentialDuplicateRequestType extends PotentialDuplicateRequest {
   
   @Field(() => Int)
   ListID: number;
-}
-
-@InputType()
-export class CompositeKeyInputType extends CompositeKey {
-  @Field(() => [KeyValuePairInputType])
-  KeyValuePairs: KeyValuePair[];
-}
-
-@ObjectType()
-export class CompositeKeyOutputType extends CompositeKey {
-  @Field(() => [KeyValuePairOutputType])
-  KeyValuePairs: KeyValuePair[];
 }
 
 @ObjectType()

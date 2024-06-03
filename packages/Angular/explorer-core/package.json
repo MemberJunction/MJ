@@ -41,6 +41,7 @@
     "@memberjunction/ng-auth-services": "~1.4.0",
     "@memberjunction/ng-explorer-settings": "~1.4.0",
     "@memberjunction/ng-base-forms": "~1.4.0",
+    "@memberjunction/ng-entity-form-dialog": "~1.4.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-listview": "~15.1.0",

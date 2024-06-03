@@ -1,17 +1,6 @@
-/* TransactionGroup is a class that handles the bundling of multiple transactions into a single request. The provider handles
-   the implementation details. If a transaction group is provided to the baseEntity object before either Save() or Delete() is called
-   instead of just immediately executing its SQL or GQL, it provides the instructions to the TransactionGroup object instead.
-
-   Then, whenever the TransactionGroup object instance has its Submit() method called, all of the requests will be bundled into a single
-   request and handled. For example in the case of the GraphQLDataProvider, we queue up all of the GQL statements for all of the 
-   mutations and send them across as a single GraphQL request. The GraphQL server handles the actual DB transaction stuff.
-
-   TransactionGroup will call a callback function, if provided, after the transaction has either completed succesfully or failed. 
-   If it is succesful, for Save() method calls, the latest data for that record will be provided back. 
-   For Delete() method calls, the callback will be called with no data.
-
-*/
-
+/**
+ * Internal class used by TransactionGroupBase and sub-classes to manage individual transactions
+ */
 export class TransactionItem {
     private _instruction: string; // gql or sql or similar having the actual instructions to execute
     private _vars: any; // variables to pass to the gql or sql
@@ -39,6 +28,9 @@ export class TransactionItem {
     }
 }
 
+/**
+ * Tracks the individual transactions within a transaction group and their commit results
+ */
 export class TransactionResult {
     Transaction: TransactionItem;
     Result: any;
@@ -51,6 +43,21 @@ export class TransactionResult {
     }
 }
 
+/**
+ * TransactionGroup is a class that handles the bundling of multiple transactions into a single request. The provider handles
+ * the implementation details. If a transaction group is provided to the baseEntity object before either Save() or Delete() is called
+ * instead of just immediately executing its SQL or GQL, it provides the instructions to the TransactionGroup object instead.
+ *
+ * Then, whenever the TransactionGroup object instance has its Submit() method called, all of the requests will be bundled into a single
+ * request and handled. For example in the case of the GraphQLDataProvider, we queue up all of the GQL statements for all of the 
+ * mutations and send them across as a single GraphQL request. The GraphQL server handles the actual DB transaction stuff.
+ * 
+ * TransactionGroup will call a callback function, if provided, after the transaction has either completed succesfully or failed. 
+ * If it is succesful, for Save() method calls, the latest data for that record will be provided back. 
+ * For Delete() method calls, the callback will be called with no data.
+ * 
+ * This class is the base class for managing a group of transactions and submitting it to the provider so it can be handled as an ATOMic transaction
+ */
 export abstract class TransactionGroupBase {
     private _pendingTransactions: TransactionItem[] = [];
 
@@ -58,12 +65,21 @@ export abstract class TransactionGroupBase {
         return this._pendingTransactions;
     }
 
+    /**
+     * This is used by the BaseEntity/Provider objects to manage transactions on your behalf. Do not directly interact with this method. Instead use the TransactionGroup property on
+     * the @BaseEntity class to make an entity object part of a transaction group.
+     * @param transaction 
+     */
     public AddTransaction(transaction: TransactionItem): void {
         this._pendingTransactions.push(transaction);
     }
 
     protected abstract HandleSubmit(item: TransactionItem[]): Promise<TransactionResult[]>;
 
+    /**
+     * Submits the transaction group to the provider for handling. The provider will handle the actual transaction and call the callback functions
+     * @returns true if the transaction was successful, false if it failed
+     */
     public async Submit(): Promise<boolean> {
         try {
             if (this._pendingTransactions.length > 0) {

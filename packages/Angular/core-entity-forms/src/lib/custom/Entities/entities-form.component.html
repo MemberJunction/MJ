@@ -8,8 +8,8 @@
                 </div>
             </kendo-splitter-pane>
             <kendo-splitter-pane>
-                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Fields')">
+                <mj-tabstrip (TabSelected)="onTabSelect($event)" mjFillContainer>
+                    <mj-tab Name="Fields">
                         Fields
                     </mj-tab>
                     <mj-tab-body>
@@ -20,7 +20,7 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
 
-                    <mj-tab  [TabSelected]="this.RegisterAndCheckIfCurrentTab('Permissions')">
+                    <mj-tab Name="Permissions">
                         Permissions
                     </mj-tab>
                     <mj-tab-body>
@@ -31,21 +31,21 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                    <mj-tab Name="Details">
                         Details
                     </mj-tab>
                     <mj-tab-body>
                         <mj-form-section Entity="Entities" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                     </mj-tab-body>
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Audit')">
+                    <mj-tab Name="Audit">
                         Audit
                     </mj-tab>
                     <mj-tab-body>
                         <mj-form-section Entity="Entities" Section="audit" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                     </mj-tab-body>
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('API')">
+                    <mj-tab Name="API">
                         API
                     </mj-tab>
                     <mj-tab-body>
@@ -53,21 +53,21 @@
                     </mj-tab-body>
 
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('DB')">
+                    <mj-tab Name="DB">
                         DB
                     </mj-tab>
                     <mj-tab-body>
                         <mj-form-section Entity="Entities" Section="db" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                     </mj-tab-body>
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('UI')">
+                    <mj-tab Name="UI">
                         UI
                     </mj-tab>
                     <mj-tab-body>
                         <mj-form-section Entity="Entities" Section="ui" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
                     </mj-tab-body>
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Relationships')">
+                    <mj-tab Name="Relationships" [Visible]="record.IsSaved">
                         Relationships
                     </mj-tab>
                     <mj-tab-body>
@@ -79,7 +79,7 @@
                     </mj-tab-body>
 
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('AI Actions')">
+                    <mj-tab Name="AI Actions" [Visible]="record.IsSaved">
                         AI Actions
                     </mj-tab>
                     <mj-tab-body>
@@ -91,7 +91,7 @@
                     </mj-tab-body>
 
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Application Entities')">
+                    <mj-tab Name="Application Entities" [Visible]="record.IsSaved">
                         Application Entities
                     </mj-tab>
                     <mj-tab-body>
@@ -102,7 +102,7 @@
                         </mj-user-view-grid>
                     </mj-tab-body>
 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('User Views')">
+                    <mj-tab Name="User Views" [Visible]="record.IsSaved">
                         User Views
                     </mj-tab>
                     <mj-tab-body>
@@ -113,7 +113,7 @@
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Dataset Items')">
+                    <mj-tab Name="Dataset Items" [Visible]="record.IsSaved">
                         Dataset Items
                     </mj-tab>
                     <mj-tab-body>
@@ -124,7 +124,7 @@
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Entity Documents')">
+                    <mj-tab Name="Entity Documents" [Visible]="record.IsSaved">
                         Entity Documents
                     </mj-tab>
                     <mj-tab-body>
@@ -135,7 +135,7 @@
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Entity Record Documents')">
+                    <mj-tab Name="Entity Record Documents" [Visible]="record.IsSaved">
                         Entity Record Documents
                     </mj-tab>
                     <mj-tab-body>
@@ -146,7 +146,7 @@
                         </mj-user-view-grid>
                     </mj-tab-body> 
                 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('File Entity Record Links')">
+                    <mj-tab Name="File Entity Record Links" [Visible]="record.IsSaved">
                         File Entity Record Links
                     </mj-tab>
                     <mj-tab-body>

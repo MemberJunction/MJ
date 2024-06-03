@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-entity-form-dialog",
   "version": "1.4.0",
-  "description": "MemberJunction: Dialog component that is able to display any entity form in a modal dialog",
+  "description": "MemberJunction: Dialog component that is able to display a form for display and/or editing for any record from any entity in MemberJunction.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [

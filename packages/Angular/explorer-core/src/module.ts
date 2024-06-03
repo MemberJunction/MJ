@@ -42,7 +42,6 @@ import { FilesComponent } from './lib/files/files.component';
 import { GenericBrowseListComponent } from './lib/generic-browse-list/generic-browse-list.component';
 import { FormToolbarComponent } from './lib/generic/form-toolbar';
 import { ResourceContainerComponent } from './lib/generic/resource-container-component';
-import { SectionLoaderComponent } from './lib/generic/section-loader-component';
 import { HeaderComponent } from './lib/header/header.component';
 import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
 import { HomeComponent } from './lib/home-component/home.component';
@@ -75,11 +74,11 @@ import { UserViewPropertiesDialogModule } from '@memberjunction/ng-user-view-pro
 import { AppRoutingModule, CustomReuseStrategy } from './app-routing.module';
 import { ListViewComponent } from './lib/list-view/list-view.component';  
 import { SingleListDetailComponent } from './lib/single-list-detail/single-list-detail.component';
+import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 
 @NgModule({
   declarations: [
     FormToolbarComponent,
-    SectionLoaderComponent,
     ResourceContainerComponent,
     AuthButtonComponent,
     DashboardBrowserComponent,
@@ -160,10 +159,10 @@ import { SingleListDetailComponent } from './lib/single-list-detail/single-list-
     FileStorageModule,
     UserViewPropertiesDialogModule,
     MJTabStripModule,
+    EntityFormDialogModule
   ],
   exports: [
     FormToolbarComponent,
-    SectionLoaderComponent,
     ResourceContainerComponent,
     AuthButtonComponent,
     DashboardBrowserComponent,

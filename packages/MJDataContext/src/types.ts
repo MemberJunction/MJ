@@ -167,7 +167,7 @@ export class DataContextItem {
     public static FromSingleRecord(singleRecord: BaseEntity) {
         const instance = DataContext.CreateDataContextItem();
         instance.Type = 'single_record';
-        instance.RecordID = singleRecord.PrimaryKey.Value;
+        instance.RecordID = singleRecord.PrimaryKey.ToString();
         instance.EntityID = singleRecord.EntityInfo.ID;
         instance.EntityName = singleRecord.EntityInfo.Name;
         instance.SingleRecord = singleRecord;

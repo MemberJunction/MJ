@@ -5,43 +5,59 @@
                     
                 </div>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                    
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                    <mj-tab Name="Details">
                         Details
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-form-section Entity="Applications" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        <mj-form-section 
+                            Entity="Applications" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
                     </mj-tab-body>
-                     
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Entities')">
+                    
+                    <mj-tab Name="Entities" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 23}">
                         Entities
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Application Entities')"  
-                            [AllowLoad]="this.IsCurrentTab('Entities')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Entities')"  
+                            [NewRecordValues]="NewRecordValues('Application Entities')"
+                            [AllowLoad]="IsCurrentTab('Entities')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
- 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('User Applications')">
+
+                    <mj-tab Name="User Applications" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 92}">
                         User Applications
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('User Applications')"  
-                            [AllowLoad]="this.IsCurrentTab('User Applications')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('User Applications')"  
+                            [NewRecordValues]="NewRecordValues('User Applications')"
+                            [AllowLoad]="IsCurrentTab('User Applications')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
- 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Application Settings')">
+
+                    <mj-tab Name="Application Settings" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 205}">
                         Application Settings
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Application Settings')"  
-                            [AllowLoad]="this.IsCurrentTab('Application Settings')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Application Settings')"  
+                            [NewRecordValues]="NewRecordValues('Application Settings')"
+                            [AllowLoad]="IsCurrentTab('Application Settings')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>

@@ -2,7 +2,7 @@ import { Component, ElementRef, ViewChild, OnInit, OnDestroy, HostListener, Host
 import { Location } from '@angular/common';
 import { Router, NavigationEnd, Event, NavigationSkipped, ActivatedRoute } from '@angular/router';
 import { DrawerItem, DrawerSelectEvent, DrawerComponent, DrawerMode, TabCloseEvent, TabStripComponent, SelectEvent } from "@progress/kendo-angular-layout";
-import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, EntityInfo, RunView, RunViewParams, LogError, TransactionGroupBase, ApplicationEntityInfo, LogStatus, BaseEntity } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
@@ -23,7 +23,7 @@ export interface Tab {
 }
 
 @Component({
-  selector: 'app-navigation',
+  selector: 'mj-navigation',
   templateUrl: './navigation.component.html',
   styleUrls: ['./navigation.component.css']
 })
@@ -48,9 +48,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   public tabs: any[] = [];
   public closedTabs: any[] = []; // should always be empty after using it
   private tabQueryParams: any = {};
-  // public activeTabIndex: number = 0;
-  // public selectedTabIndex: number = 0;
-  private workSpace: any = {};
+  private workSpace: WorkspaceEntity | undefined = undefined;
   private workSpaceItems: WorkspaceItemEntity[] = [];
   public panelItems: TreeItem[] = [];
 
@@ -63,7 +61,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild(DrawerComponent, { static: false }) drawer!: DrawerComponent;
   @ViewChild('mjTabstrip') mjTabStrip!: MJTabStripComponent;
   @ViewChild('drawerWrapper', { static: false }) drawerWrapper!: ElementRef;
-  //@ViewChild("tabstrip", { static: false }) public tabstrip !: TabStripComponent;
   @ViewChild('container', { static: true, read: ElementRef }) container !: ElementRef;
 
   @HostListener('window:resize')
@@ -189,7 +186,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       switch (event.event) {
         case MJEventType.LoggedIn:
           await this.loadApp();
-          await this.getWorkspace();
+          await this.loadWorkspace();
           this._loggedIn = true;
           // check for early events and replay them now that we're logged in
           for (let i = 0; i < this._earlyEvents.length; ++i) {
@@ -211,7 +208,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
             this._earlyEvents.push({event, args});
           }
           else {
-            console.log('event:', event);
             // we're logged in so go ahead and handle normally
             switch (event.eventCode) {
               case EventCodes.ViewNotifications: 
@@ -220,7 +216,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
               case EventCodes.ViewCreated:
               case EventCodes.AddDashboard:
               case EventCodes.AddReport:
-
               case EventCodes.AddQuery:
               case EventCodes.EntityRecordClicked:
               case EventCodes.ViewClicked:
@@ -306,12 +301,12 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       // come back to this tab
       const urlParts = this.router.url.split('?');
       if (urlParts.length > 1) {
-        // we have query params, so stash em
+        // we have query params, so stash them
         const params = new URLSearchParams(urlParts[1]);
-        const keys = params.keys();
         const queryParams: any = {};
-        for (const key of keys) {
-          queryParams[key] = params.get(key);
+
+        for (const [key, value] of params.entries()) {
+          queryParams[key] = value;
         }
         this.tabQueryParams['tab_' + this.activeTabIndex] = queryParams;
       }
@@ -390,40 +385,54 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     }, 10);
   }
 
-  private async getWorkspace() {
+  /**
+   * This method will load the user's workspace and all the workspace items that are part of the workspace from the database.
+   */
+  protected async loadWorkspace() {
     const md = new Metadata();
     const rv = new RunView();
     const workspaceParams: RunViewParams = {
       EntityName: "Workspaces",
-      ExtraFilter: `UserID=${md.CurrentUser.ID}`
+      ExtraFilter: `UserID=${md.CurrentUser.ID}`,
+      OrderBy: "UpdatedAt DESC", // by default get the workspace that was most recently updated
+      ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
     }
     const workspaces = await rv.RunView(workspaceParams);
     if (workspaces.Success) {
-      const workspaceRecord = <WorkspaceEntity>await md.GetEntityObject("Workspaces");
       if (workspaces.Results.length) {
-        const workspace: any = workspaces.Results.find((workspace: any) => workspace.UserID === md.CurrentUser.ID);
-        await workspaceRecord.Load(workspace.ID);
-      } else {
-        workspaceRecord.NewRecord();
-        workspaceRecord.Name = `${md.CurrentUser.Name || md.CurrentUser.ID}'s Workspace`;
-        workspaceRecord.UserID = md.CurrentUser.ID;
-        await workspaceRecord.Save();
+        this.workSpace = workspaces.Results[0]; // by default get the first one, and since we are sorting by UpdatedAt DESC above, will be most recently modified one. Future feature for multi-workspace support we'll have to adjust this
+      } 
+      else {
+        // no matching record found, so create a new one
+        this.workSpace = await md.GetEntityObject<WorkspaceEntity>('Workspaces');
+        this.workSpace.NewRecord();
+        this.workSpace.Name = `${md.CurrentUser.Name || md.CurrentUser.ID}'s Workspace`;
+        this.workSpace.UserID = md.CurrentUser.ID;
+        await this.workSpace.Save();
       }
-      this.workSpace = workspaceRecord;
+      if (!this.workSpace)
+        throw new Error('Error loading workspace');
+
       const workspaceItemParams: RunViewParams = {
         EntityName: "Workspace Items",
         ExtraFilter: `WorkspaceID='${this.workSpace.ID}'`,
+        OrderBy: "Sequence ASC", // get them in order
         ResultType: "entity_object" /*we want entity objects back so that we can modify them as needed*/
       }
       const workspaceItems = await rv.RunView(workspaceItemParams);
       if (workspaceItems.Success) {
         this.workSpaceItems = workspaceItems.Results;
-        await this.LoadWorkSpace();
+        await this.LoadWorkspaceItems();
       }
     }
+    else
+      throw new Error('Error loading workspace');
   }
 
-  public async LoadWorkSpace(): Promise<void> {
+  /**
+   * This method will load all the workspace items that are part of the workspace currently set in the workSpace member variable 
+   */
+  protected async LoadWorkspaceItems(): Promise<void> {
     const md = new Metadata();
     this.tabs = []; // first clear out the tabs - this is often already the state but in case this is a full refresh, make sure we do this.
     for (let item of this.workSpaceItems) {
@@ -447,7 +456,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.internalAddTab(newTab);
 
       setTimeout(async () => {
-        // non-blocking, load dynamically
+        // non-blocking, load the resource names dynamically as this requires additional DB lookups
         newTab.label = await this.GetWorkspaceItemDisplayName(resourceData)
         newTab.labelLoading = false;
 
@@ -465,7 +474,13 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       this.titleService.setTitle(title + ' (' + this.applicationName + ')');
   }
 
-  protected checkForExistingTab(data: ResourceData): Tab | null {
+
+  /**
+   * This method is responsible for searching for a matching tab in the existing tab structure of the loaded workspace. It returns either a Tab object or null if one isn't found that matches the ResourceData provided.
+   * @param data 
+   * @returns 
+   */
+  protected findExistingTab(data: ResourceData): Tab | null {
     let existingTab;
     if (data.ResourceType.trim().toLowerCase() === 'search results') {
       // we have a different matching logic for search results because we want to match on the search input as well as the entity
@@ -492,19 +507,37 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
     else {
-      existingTab = this.tabs.find(t => t.data.ResourceTypeID === data.ResourceTypeID && 
-                                              t.data.ResourceRecordID === data.ResourceRecordID &&
-                                              data.ResourceRecordID  // make sure that we don't match on null/undefined ResourceRecordID's - these should always be NEW tabs
-                                        )
+      existingTab = this.tabs.find(t => {
+        if (t.data.ResourceTypeID === data.ResourceTypeID && 
+            t.data.ResourceRecordID === data.ResourceRecordID  ) {
+            // we now have to do one more check, we have to make sure that all of the values within the Configuration object match as well
+            let bMatch = true;
+            // ignore keys that start with an underscore or are the NewRecordValues key
+            const keys = Object.keys(data.Configuration).filter(k => !k.startsWith('_') && k.trim().toLowerCase() !== 'newrecordvalues'); 
+            for (const key of keys) {
+              if (data.Configuration[key] !== t.data.Configuration[key]) {
+                bMatch = false;
+                break;
+              }
+            }
+            return bMatch;
+          }  
+          else
+            return false;
+      });
     }
     return existingTab;
   }
 
+  /**
+   * This utility method is used to either Add a tab if a matching tab for the given data parameter isn't found, or to select the existing tab if it already exists.
+   * @param data 
+   */
   protected async AddOrSelectTab(data: ResourceData) {
     const t = this.tabs;
     this.loader = true;
 
-    const existingTab = this.checkForExistingTab(data);
+    const existingTab = this.findExistingTab(data);
 
     if (existingTab) {
       const index = this.tabs.indexOf(existingTab);
@@ -538,8 +571,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // select the new tab
       this.activeTabIndex = this.tabs.length; // this is intentionally past array boundary because ActiveTabIndex includes the Home tab that is not part of the tabs array
-      //this.tabstrip.selectTab(this.activeTabIndex);
-      //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
 
       this.sharedService.InvokeManualResize();
       this.scrollIntoView();
@@ -600,7 +631,11 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
         url += `/query/${data.ResourceRecordID}`;
         break;
       case 'records':
-        url += `/record/${data.ResourceRecordID}?Entity=${data.Configuration.Entity}`;
+        const recIDAsString: string = data.ResourceRecordID !== null && data.ResourceRecordID !== undefined ? (typeof data.ResourceRecordID === "string" ? data.ResourceRecordID : data.ResourceRecordID.toString()) : "";
+        url += `/record/${recIDAsString.trim()}?Entity=${data.Configuration.Entity}`;
+        if (data.Configuration.NewRecordValues) {
+          url += `&NewRecordValues=${data.Configuration.NewRecordValues}`;
+        }
         break;
       case 'search results':
         url += `/search/${data.Configuration.SearchInput}?Entity=${data.Configuration.Entity}`;
@@ -659,14 +694,11 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   scrollIntoView() {
-    // const containerElement = this.tabstrip.wrapper.nativeElement;
-    // setTimeout(() => {
-    //   const newTabElement = containerElement.querySelector(`li:nth-child(${this.activeTabIndex + 1})`);
-    //   newTabElement.scrollIntoView({ inline: 'nearest' });
-    // }, 200);
+    if (this.mjTabStrip)  
+      this.mjTabStrip.scrollIntoView(this.activeTabIndex);
   }
 
-  async GetWorkspaceItemDisplayName(data: ResourceData): Promise<string> {
+  public async GetWorkspaceItemDisplayName(data: ResourceData): Promise<string> {
     const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, data.ResourceType);
     if (resourceReg) {
       const resource = <BaseResourceComponent>new resourceReg.SubClass();
@@ -676,7 +708,11 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       return `Workspace Item ${data.ID}`;
   }
 
-  async SaveWorkspace(): Promise<boolean> {
+  /**
+   * Saves the workspace to the database.
+   * @returns 
+   */
+  public async SaveWorkspace(): Promise<boolean> {
     let bSuccess: boolean = true;
     for (let i = 0; i < this.tabs.length; ++i) {
       const tab = this.tabs[i];
@@ -685,8 +721,33 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     return bSuccess;
   }
 
-  async SaveSingleWorkspaceItem(tab: Tab): Promise<boolean> {
+
+  public async HandleResourceRecordSaved(tab: Tab, resourceRecord: BaseEntity): Promise<boolean> {
+    const oldId = tab.data.ResourceRecordID;
+    tab.data.ResourceRecordID = resourceRecord.PrimaryKey.ToURLSegment();
+    
+    // we need to update the label in case the "Name" of the record changed, or if it was new and no longer is new
+    tab.label = await this.GetWorkspaceItemDisplayName(tab.data); 
+
+    // now check to see if the old id and the new ID are any different
+    // check for tab names that start with New as well...
+    // and if so we need to replace the state in the URL for Angular so that we don't have a New Record situation in the URL but have the actual ID now
+//    if (oldId !== tab.data.ResourceRecordID || tab.label?.toLowerCase().trim().startsWith('new') ) {
+      this.updateBrowserURL(tab, tab.data);
+  //  }
+
+    return await this.SaveSingleWorkspaceItem(tab);
+  }
+  /**
+   * Saves a single workspace item to the database.
+   * @param tab 
+   * @returns 
+   */
+  public async SaveSingleWorkspaceItem(tab: Tab): Promise<boolean> {
     try {
+      if (!this.workSpace)
+        throw new Error('No workspace loaded');
+
       let index = this.tabs.indexOf(tab);
       if (index < 0)
         index = this.tabs.length; // this situation occurs when the tab hasn't yet been added to the tabs collection so the index will be = the length of the tabs collection
@@ -832,8 +893,6 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
     // make sure that the first tab is selected since this is showing stuff in the Home/Nav tab
     if (this.activeTabIndex !== 0) {
       this.activeTabIndex = 0;
-      //this.tabstrip.selectTab(0);
-      //this.renderer.selectRootElement(this.tabstrip.wrapper.nativeElement).focus()
     }
 
     this.setAppTitle(ev.item.text);
@@ -852,10 +911,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   public getEntityItemFromViewItem(viewItem: DrawerItem): DrawerItem | null {
-    let entityItem = null
-
     for (let item of this.drawerItems) {
-      if (item.id == viewItem.parentId) {
+      if (item.id === viewItem.parentId) {
         // got the parent, this is the entity
         return item;
       }

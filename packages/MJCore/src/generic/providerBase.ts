@@ -1,12 +1,14 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, CompositeKey, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal } from "@memberjunction/global";
 import { LogError, LogStatus } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
+import { LibraryInfo } from "./libraryInfo";
+import { CompositeKey } from "./compositeKey";
 
 /**
  * AllMetadata is used to pass all metadata around in a single object for convenience and type safety.
@@ -26,6 +28,7 @@ export class AllMetadata {
     AllQueryFields: QueryFieldInfo[] = [];
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
+    AllLibraries: LibraryInfo[] = [];
 
     // Create a new instance of AllMetadata from a simple object
     public static FromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
@@ -60,7 +63,8 @@ export const AllMetadataArrays = [
     { key: 'AllQueries', class: QueryInfo },
     { key: 'AllQueryFields', class: QueryFieldInfo },
     { key: 'AllQueryPermissions', class: QueryPermissionInfo },
-    { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo }
+    { key: 'AllEntityDocumentTypes', class: EntityDocumentTypeInfo },
+    { key: 'AllLibraries', class: LibraryInfo }
 ];
 
 
@@ -263,6 +267,9 @@ export abstract class ProviderBase implements IMetadataProvider {
     }
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
+    }
+    public get Libraries(): LibraryInfo[] {
+        return this._localMetadata.AllLibraries;
     }
 
     public async Refresh(): Promise<boolean> {

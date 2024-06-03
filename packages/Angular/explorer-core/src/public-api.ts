@@ -4,7 +4,6 @@
 
 export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
-export * from './lib/generic/section-loader-component';
 
 export * from './lib/auth-button/auth-button.component'
 export * from './lib/dashboard-browser-component/dashboard-browser.component'

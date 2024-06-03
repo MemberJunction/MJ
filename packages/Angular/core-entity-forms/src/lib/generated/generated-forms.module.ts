@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
@@ -246,6 +247,8 @@ import { EntityActionInvocationDetailsComponent, LoadEntityActionInvocationDetai
 import { ActionAuthorizationDetailsComponent, LoadActionAuthorizationDetailsComponent } from "./Entities/ActionAuthorization/sections/details.component"
 import { EntityActionInvocationTypeDetailsComponent, LoadEntityActionInvocationTypeDetailsComponent } from "./Entities/EntityActionInvocationType/sections/details.component"
 import { ActionDetailsComponent, LoadActionDetailsComponent } from "./Entities/Action/sections/details.component"
+import { ActionTopComponent, LoadActionTopComponent } from "./Entities/Action/sections/top.component"
+import { ActionCodeComponent, LoadActionCodeComponent } from "./Entities/Action/sections/code.component"
 import { EntityActionFilterDetailsComponent, LoadEntityActionFilterDetailsComponent } from "./Entities/EntityActionFilter/sections/details.component"
 import { ActionFilterDetailsComponent, LoadActionFilterDetailsComponent } from "./Entities/ActionFilter/sections/details.component"
 import { ActionContextTypeDetailsComponent, LoadActionContextTypeDetailsComponent } from "./Entities/ActionContextType/sections/details.component"
@@ -290,6 +293,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -334,6 +338,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -378,6 +383,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -422,6 +428,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -466,6 +473,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -510,6 +518,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -554,6 +563,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -598,6 +608,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -642,6 +653,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -686,6 +698,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -730,6 +743,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -745,6 +759,8 @@ export class GeneratedForms_SubModule_10 { }
 @NgModule({
 declarations: [
     ActionDetailsComponent,
+    ActionTopComponent,
+    ActionCodeComponent,
     EntityActionFilterDetailsComponent,
     ActionFilterDetailsComponent,
     ActionContextTypeDetailsComponent,
@@ -765,6 +781,7 @@ imports: [
     UserViewGridModule,
     LinkDirectivesModule,
     BaseFormsModule,
+    FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
@@ -1024,6 +1041,8 @@ export function LoadCoreGeneratedForms() {
     LoadActionAuthorizationDetailsComponent();
     LoadEntityActionInvocationTypeDetailsComponent();
     LoadActionDetailsComponent();
+    LoadActionTopComponent();
+    LoadActionCodeComponent();
     LoadEntityActionFilterDetailsComponent();
     LoadActionFilterDetailsComponent();
     LoadActionContextTypeDetailsComponent();

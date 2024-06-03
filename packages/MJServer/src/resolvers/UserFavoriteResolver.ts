@@ -1,10 +1,9 @@
 import { Metadata, KeyValuePair, CompositeKey } from '@memberjunction/core';
-import { AppContext, Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, KeyValuePairInputType, KeyValuePairOutputType, Query, Resolver } from '@memberjunction/server';
+import { AppContext, Arg, CompositeKeyInputType, CompositeKeyOutputType, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver } from '@memberjunction/server';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { UserFavoriteEntity } from '@memberjunction/core-entities';
 
 import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated';
-import { CompositeKeyInputType, CompositeKeyOutputType } from './PotentialDuplicateRecordResolver';
 
 //****************************************************************************
 // INPUT TYPE for User Favorite Queries
@@ -15,7 +14,7 @@ export class UserFavoriteSearchParams {
   EntityID: number;
 
   @Field(() => CompositeKeyInputType)
-  CompositeKey: CompositeKey;
+  CompositeKey: CompositeKeyInputType;
 
   @Field(() => Int)
   UserID: number;
@@ -27,7 +26,7 @@ export class UserFavoriteSetParams {
   EntityID: number;
 
   @Field(() => CompositeKeyInputType)
-  CompositeKey: CompositeKey;
+  CompositeKey: CompositeKeyInputType;
 
   @Field(() => Int)
   UserID: number;
@@ -42,7 +41,7 @@ export class UserFavoriteResult {
   EntityID: number;
 
   @Field(() => CompositeKeyOutputType)
-  CompositeKey: CompositeKey;
+  CompositeKey: CompositeKeyOutputType;
 
   @Field(() => Int)
   UserID: number;
@@ -69,13 +68,15 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
   @Query(() => UserFavoriteResult)
   async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {}: AppContext) {
     const md = new Metadata();
+    const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
+
     const e = md.Entities.find((e) => e.ID === params.EntityID);
     if (e)
       return {
         EntityID: params.EntityID,
         UserID: params.UserID,
-        CompositeKey: params.CompositeKey,
-        IsFavorite: await md.GetRecordFavoriteStatus(params.UserID, e.Name, params.CompositeKey),
+        CompositeKey: pk,
+        IsFavorite: await md.GetRecordFavoriteStatus(params.UserID, e.Name, pk),
         Success: true,
       };
     else throw new Error(`Entity ID:${params.EntityID} not found`);
@@ -84,10 +85,11 @@ export class UserFavoriteResolver extends UserFavoriteResolverBase {
   @Mutation(() => UserFavoriteResult)
   SetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams, @Ctx() { userPayload }: AppContext) {
     const md = new Metadata();
+    const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
     const e = md.Entities.find((e) => e.ID === params.EntityID);
     const u = UserCache.Users.find((u) => u.ID === userPayload.userRecord.ID);
     if (e) {
-      md.SetRecordFavoriteStatus(params.UserID, e.Name, params.CompositeKey, params.IsFavorite, u);
+      md.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {
         Success: true,
         EntityID: params.EntityID,

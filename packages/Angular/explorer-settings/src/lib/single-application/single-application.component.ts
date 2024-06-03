@@ -2,7 +2,7 @@ import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular
 
 import { Metadata } from '@memberjunction/core';
 import { ApplicationEntity } from '@memberjunction/core-entities';
-import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
+import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 
  
 @Component({
@@ -13,7 +13,7 @@ import { EntityFormDialog } from '@memberjunction/ng-entity-form-dialog';
 export class SingleApplicationComponent implements OnInit {
   @Input() ApplicationName!: string;
 
-  @ViewChild('entityForm') entityFormComponent!: EntityFormDialog;
+  @ViewChild('entityForm') entityFormComponent!: EntityFormDialogComponent;
 
   public gridHeight: number = 750;
   public isLoading: boolean = false;

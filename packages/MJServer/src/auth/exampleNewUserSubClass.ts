@@ -52,7 +52,7 @@ export class ExampleNewUserSubClass extends NewUserBase {
                 //p.Email = email;
                 //p.Status = 'active';
                 if (await p.Save()) {
-                    personId = p.PrimaryKey.Value; // if we had a strongly typed sub-class above, we could use this code p.ID;
+                    personId = p.FirstPrimaryKey.Value; // if we had a strongly typed sub-class above, we could use this code p.ID;
                 }   
                 else {
                     LogError(`Failed to create new person ${firstName} ${lastName} ${email}`)

@@ -10,7 +10,7 @@ import { MSFTUserImageService } from './MSFT_UserImageService';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
 
 @Component({
-    selector: 'app-header-component',
+    selector: 'mj-header-component',
     templateUrl: './header.component.html',
     styleUrls: ['header.component.css']
 })

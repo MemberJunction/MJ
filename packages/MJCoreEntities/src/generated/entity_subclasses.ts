@@ -84,7 +84,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -94,7 +93,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -156,7 +154,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BCMID
         * * Display Name: BCMID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
         */
         get BCMID(): string {  
             return this.Get('BCMID');
@@ -217,7 +214,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get Active(): boolean {  
             return this.Get('Active');
@@ -253,7 +249,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -263,7 +258,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -394,7 +388,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -404,7 +397,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -527,7 +519,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -539,7 +530,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -549,7 +539,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -636,7 +625,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -646,7 +634,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -742,7 +729,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -752,7 +738,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -856,7 +841,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -866,7 +850,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -963,7 +946,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -973,7 +955,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1221,7 +1202,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BatchMaxRequestCount
         * * Display Name: Batch Max Request Count
         * * SQL Data Type: int
-        * * Default Value: -1
         */
         get BatchMaxRequestCount(): number {  
             return this.Get('BatchMaxRequestCount');
@@ -1233,7 +1213,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BatchRequestWaitTime
         * * Display Name: Batch Request Wait Time
         * * SQL Data Type: int
-        * * Default Value: -1
         */
         get BatchRequestWaitTime(): number {  
             return this.Get('BatchRequestWaitTime');
@@ -1245,7 +1224,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1255,7 +1233,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1396,7 +1373,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1406,7 +1382,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -1427,7 +1402,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsExternalSystemReadOnly
         * * Display Name: Is External System Read Only
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsExternalSystemReadOnly(): boolean {  
             return this.Get('IsExternalSystemReadOnly');
@@ -1601,7 +1575,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
+        * * Description: Display order of the field within the entity
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -1610,6 +1584,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field within the database table
         */
         get Name(): string {  
             return this.Get('Name');
@@ -1619,6 +1594,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplayName
         * * Display Name: Display Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: A user friendly alternative to the field name
         */
         get DisplayName(): string | null {  
             return this.Get('DisplayName');
@@ -1629,6 +1605,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Description
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: Descriptive text explaining the purpose of the field
         */
         get Description(): string | null {  
             return this.Get('Description');
@@ -1640,7 +1617,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoUpdateDescription
         * * Display Name: Auto Update Description
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
         */
         get AutoUpdateDescription(): boolean {  
@@ -1653,7 +1629,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsPrimaryKey
         * * Display Name: Is Primary Key
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: Indicates if the field is part of the primary key for the entity (auto maintained by CodeGen)
         */
         get IsPrimaryKey(): boolean {  
             return this.Get('IsPrimaryKey');
@@ -1665,7 +1641,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsUnique
         * * Display Name: Is Unique
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: Indicates if the field must have unique values within the entity.
         */
         get IsUnique(): boolean {  
             return this.Get('IsUnique');
@@ -1677,6 +1653,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Category
         * * Display Name: Category
         * * SQL Data Type: nvarchar(255)
+        * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
         */
         get Category(): string | null {  
             return this.Get('Category');
@@ -1687,6 +1664,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Type
         * * SQL Data Type: nvarchar(100)
+        * * Description: SQL Data type (auto maintained by CodeGen)
         */
         get Type(): string {  
             return this.Get('Type');
@@ -1695,6 +1673,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Length
         * * SQL Data Type: int
+        * * Description: SQL data length (auto maintained by CodeGen)
         */
         get Length(): number | null {  
             return this.Get('Length');
@@ -1703,6 +1682,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Precision
         * * SQL Data Type: int
+        * * Description: SQL precision (auto maintained by CodeGen)
         */
         get Precision(): number | null {  
             return this.Get('Precision');
@@ -1711,6 +1691,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Scale
         * * SQL Data Type: int
+        * * Description: SQL scale (auto maintained by CodeGen)
         */
         get Scale(): number | null {  
             return this.Get('Scale');
@@ -1720,7 +1701,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowsNull
         * * Display Name: Allows Null
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: Does the column allow null or not (auto maintained by CodeGen)
         */
         get AllowsNull(): boolean {  
             return this.Get('AllowsNull');
@@ -1730,6 +1711,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultValue
         * * Display Name: Default Value
         * * SQL Data Type: nvarchar(255)
+        * * Description: If a default value is defined for the field it is stored here (auto maintained by CodeGen)
         */
         get DefaultValue(): string | null {  
             return this.Get('DefaultValue');
@@ -1739,7 +1721,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoIncrement
         * * Display Name: Auto Increment
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If this field automatically increments within the table, this field is set to 1 (auto maintained by CodeGen)
         */
         get AutoIncrement(): boolean {  
             return this.Get('AutoIncrement');
@@ -1749,12 +1731,12 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ValueListType
         * * Display Name: Value List Type
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'None'
         * * Value List Type: List
         * * Possible Values 
         *   * None
         *   * List
         *   * ListOrUserEntry
+        * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
         */
         get ValueListType(): 'None' | 'List' | 'ListOrUserEntry' {  
             return this.Get('ValueListType');
@@ -1766,18 +1748,54 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExtendedType
         * * Display Name: Extended Type
         * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Email
+        *   * URL
+        *   * Tel
+        *   * SMS
+        *   * Geo
+        *   * WhatsApp
+        *   * FaceTime
+        *   * Skype
+        *   * SIP
+        *   * MSTeams
+        *   * ZoomMtg
+        *   * Other
+        *   * Code
+        * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
         */
-        get ExtendedType(): string | null {  
+        get ExtendedType(): 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null {  
             return this.Get('ExtendedType');
         }
-        set ExtendedType(value: string | null) {
+        set ExtendedType(value: 'Email' | 'URL' | 'Tel' | 'SMS' | 'Geo' | 'WhatsApp' | 'FaceTime' | 'Skype' | 'SIP' | 'MSTeams' | 'ZoomMtg' | 'Other' | 'Code' | null) {
             this.Set('ExtendedType', value);
+        }
+        /**
+        * * Field Name: CodeType
+        * * Display Name: Code Type
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * TypeScript
+        *   * SQL
+        *   * HTML
+        *   * CSS
+        *   * JavaScript
+        *   * Other
+        * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
+        */
+        get CodeType(): 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null {  
+            return this.Get('CodeType');
+        }
+        set CodeType(value: 'TypeScript' | 'SQL' | 'HTML' | 'CSS' | 'JavaScript' | 'Other' | null) {
+            this.Set('CodeType', value);
         }
         /**
         * * Field Name: DefaultInView
         * * Display Name: Default In View
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, this field will be included by default in any new view created by a user.
         */
         get DefaultInView(): boolean {  
             return this.Get('DefaultInView');
@@ -1789,6 +1807,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ViewCellTemplate
         * * Display Name: View Cell Template
         * * SQL Data Type: nvarchar(MAX)
+        * * Description: NULL
         */
         get ViewCellTemplate(): string | null {  
             return this.Get('ViewCellTemplate');
@@ -1800,6 +1819,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultColumnWidth
         * * Display Name: Default Column Width
         * * SQL Data Type: int
+        * * Description: Determines the default width for this field when included in a view
         */
         get DefaultColumnWidth(): number | null {  
             return this.Get('DefaultColumnWidth');
@@ -1811,7 +1831,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUpdateAPI
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
         */
         get AllowUpdateAPI(): boolean {  
             return this.Get('AllowUpdateAPI');
@@ -1823,7 +1843,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUpdateInView
         * * Display Name: Allow Update In View
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
         */
         get AllowUpdateInView(): boolean {  
             return this.Get('AllowUpdateInView');
@@ -1835,7 +1855,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInUserSearchAPI
         * * Display Name: Include In User Search API
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search
         */
         get IncludeInUserSearchAPI(): boolean {  
             return this.Get('IncludeInUserSearchAPI');
@@ -1847,7 +1867,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextSearchEnabled
         * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
         */
         get FullTextSearchEnabled(): boolean {  
             return this.Get('FullTextSearchEnabled');
@@ -1859,6 +1879,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserSearchParamFormatAPI
         * * Display Name: User Search Param Format API
         * * SQL Data Type: nvarchar(500)
+        * * Description: NULL
         */
         get UserSearchParamFormatAPI(): string | null {  
             return this.Get('UserSearchParamFormatAPI');
@@ -1870,7 +1891,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInGeneratedForm
         * * Display Name: Include In Generated Form
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
         */
         get IncludeInGeneratedForm(): boolean {  
             return this.Get('IncludeInGeneratedForm');
@@ -1882,19 +1903,24 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: GeneratedFormSection
         * * Display Name: Generated Form Section
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Details'
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Top
+        *   * Category
+        *   * Details
+        * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
         */
-        get GeneratedFormSection(): string {  
+        get GeneratedFormSection(): 'Top' | 'Category' | 'Details' {  
             return this.Get('GeneratedFormSection');
         }
-        set GeneratedFormSection(value: string) {
+        set GeneratedFormSection(value: 'Top' | 'Category' | 'Details') {
             this.Set('GeneratedFormSection', value);
         }
         /**
         * * Field Name: IsVirtual
         * * Display Name: Is Virtual
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: NULL
         */
         get IsVirtual(): boolean {  
             return this.Get('IsVirtual');
@@ -1904,7 +1930,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsNameField
         * * Display Name: Is Name Field
         * * SQL Data Type: bit
-        * * Default Value: 0
+        * * Description: If set to 1, this column will be used as the "Name" field for the entity and will be used to display the name of the record in various places in the UI.
         */
         get IsNameField(): boolean {  
             return this.Get('IsNameField');
@@ -1917,6 +1943,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: RelatedEntity ID
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
+        * * Description: Link to the entity this field points to if it is a foreign key (auto maintained by CodeGen)
         */
         get RelatedEntityID(): number | null {  
             return this.Get('RelatedEntityID');
@@ -1928,6 +1955,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RelatedEntityFieldName
         * * Display Name: Related Entity Field Name
         * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)
         */
         get RelatedEntityFieldName(): string | null {  
             return this.Get('RelatedEntityFieldName');
@@ -1939,7 +1967,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeRelatedEntityNameFieldInBaseView
         * * Display Name: Include Related Entity Name Field In Base View
         * * SQL Data Type: bit
-        * * Default Value: 1
+        * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
         */
         get IncludeRelatedEntityNameFieldInBaseView(): boolean {  
             return this.Get('IncludeRelatedEntityNameFieldInBaseView');
@@ -1962,7 +1990,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -1972,7 +1999,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2173,7 +2199,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoUpdateDescription
         * * Display Name: Auto Update Description
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
         */
         get AutoUpdateDescription(): boolean {  
@@ -2206,7 +2231,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BaseViewGenerated
         * * Display Name: Base View Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 0, CodeGen no longer generates a base view for the entity.
         */
         get BaseViewGenerated(): boolean {  
@@ -2219,7 +2243,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SchemaName
         * * Display Name: Schema Name
         * * SQL Data Type: nvarchar(255)
-        * * Default Value: N'dbo'
         */
         get SchemaName(): string {  
             return this.Get('SchemaName');
@@ -2229,7 +2252,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: VirtualEntity
         * * Display Name: Virtual Entity
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get VirtualEntity(): boolean {  
             return this.Get('VirtualEntity');
@@ -2241,7 +2263,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TrackRecordChanges
         * * Display Name: Track Record Changes
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1, changes made via the MemberJunction architecture will result in tracking records being created in the RecordChange table
         */
         get TrackRecordChanges(): boolean {  
@@ -2254,7 +2275,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuditRecordAccess
         * * Display Name: Audit Record Access
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1, accessing a record by an end-user will result in an Audit Log record being created
         */
         get AuditRecordAccess(): boolean {  
@@ -2267,7 +2287,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AuditViewRuns
         * * Display Name: Audit View Runs
         * * SQL Data Type: bit
-        * * Default Value: 1
         * * Description: When set to 1, users running a view against this entity will result in an Audit Log record being created.
         */
         get AuditViewRuns(): boolean {  
@@ -2280,7 +2299,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInAPI
         * * Display Name: Include In API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 0, the entity will not be available at all in the GraphQL API or the object model.
         */
         get IncludeInAPI(): boolean {  
@@ -2293,7 +2311,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowAllRowsAPI
         * * Display Name: Allow All Rows API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 1, a GraphQL query will be enabled that allows access to all rows in the entity.
         */
         get AllowAllRowsAPI(): boolean {  
@@ -2306,7 +2323,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUpdateAPI
         * * Display Name: Allow Update API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Global flag controlling if updates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowUpdateAPI(): boolean {  
@@ -2319,7 +2335,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowCreateAPI
         * * Display Name: Allow Create API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Global flag controlling if creates are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowCreateAPI(): boolean {  
@@ -2332,7 +2347,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowDeleteAPI
         * * Display Name: Allow Delete API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Global flag controlling if deletes are allowed for any user, or not. If set to 1, a GraqhQL mutation and stored procedure are created. Permissions are still required to perform the action but if this flag is set to 0, no user will be able to perform the action.
         */
         get AllowDeleteAPI(): boolean {  
@@ -2345,7 +2359,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CustomResolverAPI
         * * Display Name: Custom Resolver API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Set to 1 if a custom resolver has been created for the entity.
         */
         get CustomResolverAPI(): boolean {  
@@ -2358,7 +2371,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AllowUserSearchAPI
         * * Display Name: Allow User Search API
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: Enabling this bit will result in search being possible at the API and UI layers
         */
         get AllowUserSearchAPI(): boolean {  
@@ -2371,7 +2383,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextSearchEnabled
         * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get FullTextSearchEnabled(): boolean {  
             return this.Get('FullTextSearchEnabled');
@@ -2394,7 +2405,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextCatalogGenerated
         * * Display Name: Full Text Catalog Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get FullTextCatalogGenerated(): boolean {  
             return this.Get('FullTextCatalogGenerated');
@@ -2417,7 +2427,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextIndexGenerated
         * * Display Name: Full Text Index Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get FullTextIndexGenerated(): boolean {  
             return this.Get('FullTextIndexGenerated');
@@ -2440,7 +2449,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: FullTextSearchFunctionGenerated
         * * Display Name: Full Text Search Function Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get FullTextSearchFunctionGenerated(): boolean {  
             return this.Get('FullTextSearchFunctionGenerated');
@@ -2452,7 +2460,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserViewMaxRows
         * * Display Name: User View Max Rows
         * * SQL Data Type: int
-        * * Default Value: 1000
         */
         get UserViewMaxRows(): number | null {  
             return this.Get('UserViewMaxRows');
@@ -2497,7 +2504,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: spCreateGenerated
         * * Display Name: sp CreateGenerated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get spCreateGenerated(): boolean {  
             return this.Get('spCreateGenerated');
@@ -2509,7 +2515,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: spUpdateGenerated
         * * Display Name: sp Update Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get spUpdateGenerated(): boolean {  
             return this.Get('spUpdateGenerated');
@@ -2521,7 +2526,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: spDeleteGenerated
         * * Display Name: sp Delete Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get spDeleteGenerated(): boolean {  
             return this.Get('spDeleteGenerated');
@@ -2533,7 +2537,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CascadeDeletes
         * * Display Name: Cascade Deletes
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: When set to 1, the deleted spDelete will pre-process deletion to related entities that have 1:M cardinality with this entity. This does not have effect if spDeleteGenerated = 0
         */
         get CascadeDeletes(): boolean {  
@@ -2558,7 +2561,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UserFormGenerated
         * * Display Name: User Form Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get UserFormGenerated(): boolean {  
             return this.Get('UserFormGenerated');
@@ -2592,7 +2594,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2602,7 +2603,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2774,7 +2774,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -2786,7 +2785,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LinkedRecordType
         * * Display Name: Linked Record Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'None'
         */
         get LinkedRecordType(): string {  
             return this.Get('LinkedRecordType');
@@ -2833,7 +2831,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -2843,7 +2840,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -2960,7 +2956,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Sequence
         * * Display Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown
         */
         get Sequence(): number {  
@@ -2985,7 +2980,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: BundleInAPI
         * * Display Name: Bundle In API
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get BundleInAPI(): boolean {  
             return this.Get('BundleInAPI');
@@ -2997,7 +2991,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IncludeInParentAllQuery
         * * Display Name: Include In Parent All Query
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IncludeInParentAllQuery(): boolean {  
             return this.Get('IncludeInParentAllQuery');
@@ -3008,7 +3001,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Type
         * * SQL Data Type: nchar(20)
-        * * Default Value: N'One To Many'
         * * Value List Type: List
         * * Possible Values 
         *   * One To Many
@@ -3079,7 +3071,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplayInForm
         * * Display Name: Display In Form
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get DisplayInForm(): boolean {  
             return this.Get('DisplayInForm');
@@ -3112,7 +3103,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -3122,7 +3112,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -3317,7 +3306,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: EarliestAt
         * * Display Name: Earliest At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get EarliestAt(): Date {  
             return this.Get('EarliestAt');
@@ -3329,7 +3317,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LatestAt
         * * Display Name: Latest At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get LatestAt(): Date {  
             return this.Get('LatestAt');
@@ -3341,7 +3328,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TotalCount
         * * Display Name: Total Count
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get TotalCount(): number {  
             return this.Get('TotalCount');
@@ -3482,7 +3468,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: GUID
         * * Display Name: GUID
         * * SQL Data Type: uniqueidentifier
-        * * Default Value: newid()
         */
         get GUID(): string {  
             return this.Get('GUID');
@@ -3514,7 +3499,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsShared
         * * Display Name: Is Shared
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsShared(): boolean {  
             return this.Get('IsShared');
@@ -3526,7 +3510,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsDefault
         * * Display Name: Is Default
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsDefault(): boolean {  
             return this.Get('IsDefault');
@@ -3560,7 +3543,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CustomFilterState
         * * Display Name: Custom Filter State
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CustomFilterState(): boolean {  
             return this.Get('CustomFilterState');
@@ -3572,7 +3554,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SmartFilterEnabled
         * * Display Name: Smart Filter Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get SmartFilterEnabled(): boolean {  
             return this.Get('SmartFilterEnabled');
@@ -3628,7 +3609,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CustomWhereClause
         * * Display Name: Custom Where Clause
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CustomWhereClause(): boolean {  
             return this.Get('CustomWhereClause');
@@ -3651,7 +3631,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date | null {  
             return this.Get('CreatedAt');
@@ -3661,7 +3640,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date | null {  
             return this.Get('UpdatedAt');
@@ -3950,7 +3928,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExecutedAt
         * * Display Name: Executed At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ExecutedAt(): Date {  
             return this.Get('ExecutedAt');
@@ -3962,7 +3939,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsSuccess
         * * Display Name: Is Success
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsSuccess(): boolean {  
             return this.Get('IsSuccess');
@@ -4096,7 +4072,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4106,7 +4081,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedBy
         * * Display Name: Created By
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: suser_name()
         */
         get CreatedBy(): string | null {  
             return this.Get('CreatedBy');
@@ -4209,7 +4183,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4219,7 +4192,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -4304,7 +4276,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DefaultForNewUser
         * * Display Name: Default For New User
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get DefaultForNewUser(): boolean {  
             return this.Get('DefaultForNewUser');
@@ -4316,7 +4287,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4326,7 +4296,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -4453,7 +4422,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanCreate
         * * Display Name: Can Create
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanCreate(): boolean {  
             return this.Get('CanCreate');
@@ -4465,7 +4433,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanRead
         * * Display Name: Can Read
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanRead(): boolean {  
             return this.Get('CanRead');
@@ -4477,7 +4444,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanUpdate
         * * Display Name: Can Update
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanUpdate(): boolean {  
             return this.Get('CanUpdate');
@@ -4489,7 +4455,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CanDelete
         * * Display Name: Can Delete
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get CanDelete(): boolean {  
             return this.Get('CanDelete');
@@ -4549,7 +4514,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -4559,7 +4523,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -4685,7 +4648,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -4787,7 +4749,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -4799,7 +4760,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -4893,7 +4853,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ExecutedAt
         * * Display Name: Executed At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ExecutedAt(): Date {  
             return this.Get('ExecutedAt');
@@ -4905,7 +4864,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsSuccess
         * * Display Name: Is Success
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsSuccess(): boolean {  
             return this.Get('IsSuccess');
@@ -5065,7 +5023,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -5075,7 +5032,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -5177,7 +5133,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -5494,7 +5449,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Status
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -5647,7 +5601,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -5657,7 +5610,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -5667,7 +5619,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AutoRunEnabled
         * * Display Name: Auto Run Enabled
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
         */
         get AutoRunEnabled(): boolean {  
@@ -5827,7 +5778,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -5837,7 +5787,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -5935,7 +5884,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ChangedAt
         * * Display Name: Changed At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ChangedAt(): Date {  
             return this.Get('ChangedAt');
@@ -5979,7 +5927,6 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Status
         * * SQL Data Type: nchar(15)
-        * * Default Value: N'Complete'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -6088,7 +6035,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6098,7 +6044,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6215,7 +6160,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6225,7 +6169,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6324,7 +6267,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: N'Allow'
         * * Value List Type: List
         * * Possible Values 
         *   * Success
@@ -6385,7 +6327,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6395,7 +6336,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6511,7 +6451,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -6523,7 +6462,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UseAuditLog
         * * Display Name: Use Audit Log
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get UseAuditLog(): boolean {  
             return this.Get('UseAuditLog');
@@ -6546,7 +6484,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6556,7 +6493,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6664,7 +6600,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'grant'
         * * Value List Type: List
         * * Possible Values 
         *   * Allow - User allowed to execute tasks linked to this authorization
@@ -6680,7 +6615,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6690,7 +6624,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6811,7 +6744,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6821,7 +6753,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -6973,7 +6904,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -6983,7 +6913,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7099,7 +7028,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7168,7 +7096,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -7178,7 +7105,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7225,19 +7151,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * AI Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof AIActionEntity
-        * @throws {Error} - Delete is not allowed for AI Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for AI Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7296,7 +7210,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7308,7 +7221,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -7318,7 +7230,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7365,19 +7276,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * AI Model Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof AIModelActionEntity
-        * @throws {Error} - Delete is not allowed for AI Model Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for AI Model Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7415,7 +7314,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7427,7 +7325,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -7437,7 +7334,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -7493,19 +7389,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Entity AI Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof EntityAIActionEntity
-        * @throws {Error} - Delete is not allowed for Entity AI Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Entity AI Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -7577,7 +7461,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: TriggerEvent
         * * Display Name: Trigger Event
         * * SQL Data Type: nchar(15)
-        * * Default Value: N'After Save'
         * * Value List Type: List
         * * Possible Values 
         *   * after save
@@ -7604,7 +7487,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: OutputType
         * * Display Name: Output Type
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'FIeld'
         * * Value List Type: List
         * * Possible Values 
         *   * entity
@@ -7631,7 +7513,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SkipIfOutputFieldNotEmpty
         * * Display Name: Skip If Output Field Not Empty
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get SkipIfOutputFieldNotEmpty(): boolean {  
             return this.Get('SkipIfOutputFieldNotEmpty');
@@ -7887,7 +7768,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -7987,7 +7867,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -8120,7 +7999,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: LastHeartbeat
         * * Display Name: Last Heartbeat
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get LastHeartbeat(): Date {  
             return this.Get('LastHeartbeat');
@@ -8132,7 +8010,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -8142,7 +8019,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -8226,7 +8102,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * In Progress
@@ -8805,7 +8680,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: SharingScope
         * * Display Name: Sharing Scope
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Personal'
         * * Value List Type: List
         * * Possible Values 
         *   * None
@@ -8951,7 +8825,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -8961,7 +8834,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -9116,7 +8988,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -9277,7 +9148,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -9287,7 +9157,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -9606,6 +9475,24 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('UserID', value);
         }
         /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)
@@ -9705,7 +9592,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: ResourceRecordID
         * * Display Name: Resource Record ID
-        * * SQL Data Type: nvarchar(255)
+        * * SQL Data Type: nvarchar(2000)
         */
         get ResourceRecordID(): string | null {  
             return this.Get('ResourceRecordID');
@@ -9735,6 +9622,24 @@ import { RegisterClass } from "@memberjunction/global";
         set Configuration(value: string | null) {
             this.Set('Configuration', value);
         }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
         /**
         * * Field Name: WorkSpace
         * * Display Name: Work Space
@@ -9845,7 +9750,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -9855,7 +9759,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -9954,7 +9857,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Sequence
         * * Display Name: Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Sequence(): number {  
             return this.Get('Sequence');
@@ -10011,7 +9913,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10021,7 +9922,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10104,7 +10004,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Role
         * * Display Name: Role
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: user_name()
         * * Value List Type: List
         * * Possible Values 
         *   * User
@@ -10143,7 +10042,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: HiddenToUser
         * * Display Name: Hidden To User
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get HiddenToUser(): boolean {  
             return this.Get('HiddenToUser');
@@ -10155,7 +10053,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10165,7 +10062,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10270,7 +10166,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)
-        * * Default Value: N'Skip'
         */
         get Type(): string {  
             return this.Get('Type');
@@ -10282,7 +10177,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsArchived
         * * Display Name: Is Archived
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsArchived(): boolean {  
             return this.Get('IsArchived');
@@ -10328,7 +10222,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10338,7 +10231,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10474,7 +10366,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Unread
         * * Display Name: Unread
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get Unread(): boolean {  
             return this.Get('Unread');
@@ -10497,7 +10388,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10507,7 +10397,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10624,7 +10513,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10634,7 +10522,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10743,7 +10630,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10753,7 +10639,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -10860,7 +10745,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovalStatus
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -10888,7 +10772,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ProcessingStatus
         * * Display Name: Processing Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Started
@@ -10905,7 +10788,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ProcessingStartedAt
         * * Display Name: Processing Started At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get ProcessingStartedAt(): Date {  
             return this.Get('ProcessingStartedAt');
@@ -10950,7 +10832,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -10960,7 +10841,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date | null {  
             return this.Get('UpdatedAt');
@@ -11064,7 +10944,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(10)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -11092,7 +10971,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11102,7 +10980,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11257,7 +11134,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsComputed
         * * Display Name: Is Computed
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsComputed(): boolean {  
             return this.Get('IsComputed');
@@ -11280,7 +11156,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsSummary
         * * Display Name: Is Summary
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsSummary(): boolean {  
             return this.Get('IsSummary');
@@ -11303,7 +11178,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11313,7 +11187,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11416,7 +11289,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11426,7 +11298,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11587,7 +11458,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -11605,7 +11475,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: QualityRank
         * * Display Name: Quality Rank
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get QualityRank(): number | null {  
             return this.Get('QualityRank');
@@ -11617,7 +11486,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11627,7 +11495,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11723,7 +11590,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11733,7 +11599,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11842,7 +11707,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11852,7 +11716,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -11955,7 +11818,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -11965,7 +11827,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12062,7 +11923,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -12080,7 +11940,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12090,7 +11949,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12206,7 +12064,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12216,7 +12073,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12357,7 +12213,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12367,7 +12222,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12476,7 +12330,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(15)
-        * * Default Value: N'Active'
         * * Value List Type: List
         * * Possible Values 
         *   * Active
@@ -12527,7 +12380,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: PotentialMatchThreshold
         * * Display Name: Potential Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
         * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
         */
         get PotentialMatchThreshold(): number {  
@@ -12540,7 +12392,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: AbsoluteMatchThreshold
         * * Display Name: Absolute Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
         * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
         */
         get AbsoluteMatchThreshold(): number {  
@@ -12553,7 +12404,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12563,7 +12413,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12752,7 +12601,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12762,7 +12610,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12895,7 +12742,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -12905,7 +12751,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -12999,7 +12844,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13009,7 +12853,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13136,7 +12979,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13146,7 +12988,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13261,7 +13102,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13271,7 +13111,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13408,7 +13247,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Priority
         * * Display Name: Priority
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get Priority(): number {  
             return this.Get('Priority');
@@ -13420,7 +13258,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsActive
         * * Display Name: Is Active
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsActive(): boolean {  
             return this.Get('IsActive');
@@ -13432,7 +13269,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13442,7 +13278,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13561,7 +13396,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Description: Pending, Uploading, Uploaded, Deleting, Deleted
         */
         get Status(): string {  
@@ -13574,7 +13408,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13584,7 +13417,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13687,7 +13519,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13697,7 +13528,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13804,7 +13634,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -13814,7 +13643,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -13928,7 +13756,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'System'
         * * Value List Type: List
         * * Possible Values 
         *   * New
@@ -13956,7 +13783,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -13999,7 +13825,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14009,7 +13834,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14093,7 +13917,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchSource
         * * Display Name: Match Source
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Vector'
         * * Value List Type: List
         * * Possible Values 
         *   * SP
@@ -14121,7 +13944,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchProbability
         * * Display Name: Match Probability
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 0
         * * Description: Value between 0 and 1 designating the computed probability of a match
         */
         get MatchProbability(): number {  
@@ -14134,7 +13956,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchedAt
         * * Display Name: Matched At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get MatchedAt(): Date {  
             return this.Get('MatchedAt');
@@ -14146,7 +13967,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Ignore'
         */
         get Action(): string {  
             return this.Get('Action');
@@ -14158,7 +13978,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovalStatus
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Rejected
@@ -14175,7 +13994,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MergeStatus
         * * Display Name: Merge Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Error
@@ -14192,7 +14010,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MergedAt
         * * Display Name: Merged At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get MergedAt(): Date {  
             return this.Get('MergedAt');
@@ -14216,7 +14033,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14226,7 +14042,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14334,7 +14149,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14344,7 +14158,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14461,7 +14274,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14471,7 +14283,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14567,7 +14378,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get StartedAt(): Date {  
             return this.Get('StartedAt');
@@ -14590,7 +14400,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ApprovalStatus
         * * Display Name: Approval Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Rejected
@@ -14630,7 +14439,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ProcessingStatus
         * * Display Name: Processing Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Failed
@@ -14671,7 +14479,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14681,7 +14488,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14803,7 +14609,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MatchStatus
         * * Display Name: Match Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Error
@@ -14845,7 +14650,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: MergeStatus
         * * Display Name: Merge Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: N'Not Applicable'
         * * Value List Type: List
         * * Possible Values 
         *   * Error
@@ -14874,7 +14678,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -14884,7 +14687,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -14972,7 +14774,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: RegenerateCode
         * * Display Name: Regenerate Code
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: This bit field is automatically turned on whenever the Description field is changed so that a future server process will pick it up and regenerate the code. This might happen asynchronously or synchronously depending on system setup.
         */
         get RegenerateCode(): boolean {  
@@ -15009,7 +14810,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CodeGenerated
         * * Display Name: Code Generated
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get CodeGenerated(): boolean {  
             return this.Get('CodeGenerated');
@@ -15021,7 +14821,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15031,7 +14830,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15124,7 +14922,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15220,7 +15017,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15230,7 +15026,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15268,19 +15063,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Categories - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionCategoryEntity
-        * @throws {Error} - Delete is not allowed for Action Categories, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Categories, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -15331,7 +15114,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Disabled
@@ -15349,7 +15131,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15359,7 +15140,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15406,19 +15186,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Entity Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof EntityActionEntity
-        * @throws {Error} - Delete is not allowed for Entity Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Entity Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -15456,7 +15224,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Disabled
@@ -15474,7 +15241,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15484,7 +15250,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15502,7 +15267,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -15540,19 +15305,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Entity Action Invocations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof EntityActionInvocationEntity
-        * @throws {Error} - Delete is not allowed for Entity Action Invocations, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Entity Action Invocations, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -15590,7 +15343,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Disabled
@@ -15608,7 +15360,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15618,7 +15369,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15665,19 +15415,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Authorizations - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionAuthorizationEntity
-        * @throws {Error} - Delete is not allowed for Action Authorizations, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Authorizations, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -15726,7 +15464,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15736,7 +15473,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15745,7 +15481,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -15783,19 +15519,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Entity Action Invocation Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof EntityActionInvocationTypeEntity
-        * @throws {Error} - Delete is not allowed for Entity Action Invocation Types, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Entity Action Invocation Types, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -15833,7 +15557,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: DisplaySequence
         * * Display Name: Display Sequence
         * * SQL Data Type: int
-        * * Default Value: 0
         */
         get DisplaySequence(): number {  
             return this.Get('DisplaySequence');
@@ -15845,7 +15568,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -15855,7 +15577,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -15893,19 +15614,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Actions - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionEntity
-        * @throws {Error} - Delete is not allowed for Actions, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Actions, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -15930,7 +15639,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Name
         * * Display Name: Name
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Name(): string {  
             return this.Get('Name');
@@ -15988,7 +15697,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CodeApprovalStatus
         * * Display Name: Code Approval Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Rejected
@@ -16043,7 +15751,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: ForceCodeGeneration
         * * Display Name: Force Code Generation
         * * SQL Data Type: bit
-        * * Default Value: 0
         * * Description: If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.
         */
         get ForceCodeGeneration(): boolean {  
@@ -16068,7 +15775,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Disabled
@@ -16086,7 +15792,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16096,7 +15801,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16152,19 +15856,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Entity Action Filters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof EntityActionFilterEntity
-        * @throws {Error} - Delete is not allowed for Entity Action Filters, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Entity Action Filters, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -16214,7 +15906,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Disabled
@@ -16232,7 +15923,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16242,7 +15932,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16280,19 +15969,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Filters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionFilterEntity
-        * @throws {Error} - Delete is not allowed for Action Filters, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Filters, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -16350,7 +16027,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16360,7 +16036,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16398,19 +16073,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Context Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionContextTypeEntity
-        * @throws {Error} - Delete is not allowed for Action Context Types, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Context Types, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -16448,7 +16111,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16458,7 +16120,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16496,19 +16157,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Result Codes - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionResultCodeEntity
-        * @throws {Error} - Delete is not allowed for Action Result Codes, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Result Codes, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -16557,7 +16206,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16567,7 +16215,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16576,7 +16223,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16614,19 +16261,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Contexts - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionContextEntity
-        * @throws {Error} - Delete is not allowed for Action Contexts, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Contexts, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -16664,7 +16299,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Disabled
@@ -16682,7 +16316,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16692,7 +16325,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16701,7 +16333,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16748,19 +16380,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Execution Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionExecutionLogEntity
-        * @throws {Error} - Delete is not allowed for Action Execution Logs, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Execution Logs, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -16786,7 +16406,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: StartedAt
         * * Display Name: Started At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         * * Description: Timestamp of when the action started execution.
         */
         get StartedAt(): Date {  
@@ -16857,7 +16476,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -16867,7 +16485,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -16876,7 +16493,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -16923,19 +16540,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Params - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionParamEntity
-        * @throws {Error} - Delete is not allowed for Action Params, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Params, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -17017,7 +16622,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsArray
         * * Display Name: Is Array
         * * SQL Data Type: bit
-        * * Default Value: 0
         */
         get IsArray(): boolean {  
             return this.Get('IsArray');
@@ -17040,7 +16644,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: IsRequired
         * * Display Name: Is Required
         * * SQL Data Type: bit
-        * * Default Value: 1
         */
         get IsRequired(): boolean {  
             return this.Get('IsRequired');
@@ -17052,7 +16655,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -17062,7 +16664,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -17071,7 +16672,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17109,19 +16710,7 @@ import { RegisterClass } from "@memberjunction/global";
             compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
             return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
         }
-            
-        /**
-        * Action Libraries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
-        * @public
-        * @method
-        * @override
-        * @memberof ActionLibraryEntity
-        * @throws {Error} - Delete is not allowed for Action Libraries, to enable it set AllowDeleteAPI to 1 in the database.
-        */
-        public async Delete(): Promise<boolean> {
-            throw new Error('Delete is not allowed for Action Libraries, to enable it set AllowDeleteAPI to 1 in the database.');
-        } 
-            
+        
             /**
         * * Field Name: ID
         * * Display Name: ID
@@ -17171,7 +16760,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -17181,7 +16769,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');
@@ -17190,7 +16777,7 @@ import { RegisterClass } from "@memberjunction/global";
         /**
         * * Field Name: Action
         * * Display Name: Action
-        * * SQL Data Type: nvarchar(500)
+        * * SQL Data Type: nvarchar(425)
         */
         get Action(): string {  
             return this.Get('Action');
@@ -17285,7 +16872,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
-        * * Default Value: 'Pending'
         * * Value List Type: List
         * * Possible Values 
         *   * Pending
@@ -17339,7 +16925,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get CreatedAt(): Date {  
             return this.Get('CreatedAt');
@@ -17349,7 +16934,6 @@ import { RegisterClass } from "@memberjunction/global";
         * * Field Name: UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetime
-        * * Default Value: getdate()
         */
         get UpdatedAt(): Date {  
             return this.Get('UpdatedAt');

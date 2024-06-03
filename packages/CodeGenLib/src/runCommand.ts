@@ -22,7 +22,14 @@ export class RunCommandsBase {
       const results: CommandExecutionResult[] = [];
   
       for (const command of commands) {
-        results.push(await this.runCommand(command));
+        try {
+          // do this in a safe way so that if one command fails, the others can still run
+          results.push(await this.runCommand(command));
+        }
+        catch (e) {
+          // LOG but do not throw because we want to continue running the other commands
+          logError(e);
+        }
       }
   
       return results  

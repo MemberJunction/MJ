@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2} from '@angular/core';
+import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2, ChangeDetectorRef} from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
 import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
@@ -54,8 +54,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   @ViewChild('outerDialogContainer') private outerDialogContainer!: ElementRef;
 
 
-  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2) {
-    super(elRef, ss, router, route);
+  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2, protected cdr: ChangeDetectorRef) {
+    super(elRef, ss, router, route, cdr);
     this.BottomMargin = 75; 
 
   }
@@ -236,7 +236,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   public async saveProperties() : Promise<void> {
 
-    const bNewRecord = !(this.record.PrimaryKey.Value)
+    const bNewRecord = !this.record.IsSaved;
     this.showloader = true;
     const lfs = JSON.stringify(this.localFilterState);
     this.record.FilterState = JSON.stringify(this.localFilterState); // pass this along as as string, not directly bound since Kendo Filter is bound to a local object we need to translate to a string
@@ -281,7 +281,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
           eventCode: EventCodes.ViewUpdated,
           args: new ResourceData({ 
                                   ResourceTypeID: this.sharedService.ViewResourceType.ID,
-                                  ResourceRecordID: this.record.PrimaryKey.Value, 
+                                  ResourceRecordID: this.record.FirstPrimaryKey.Value, 
                                   Configuration: {
                                     ViewEntity: this.record
                                   }
@@ -290,7 +290,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
         });
       else{
         // we route to the new view using the router
-        this.router.navigate(['resource', 'view', this.record.PrimaryKey.Value])
+        this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
       }
     }
     else {

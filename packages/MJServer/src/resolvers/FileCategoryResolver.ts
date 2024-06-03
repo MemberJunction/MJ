@@ -1,12 +1,12 @@
 import { CompositeKey, EntityPermissionType, Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity, FileEntity } from '@memberjunction/core-entities';
-import { AppContext, Arg, Ctx, Int, Mutation } from '@memberjunction/server';
+import { AppContext, Arg, Ctx, DeleteOptionsInput, Int, Mutation } from '@memberjunction/server';
 import { mj_core_schema } from '../config';
 import { FileCategoryResolver as FileCategoryResolverBase, FileCategory_ } from '../generated/generated';
 
 export class FileResolver extends FileCategoryResolverBase {
   @Mutation(() => FileCategory_)
-  async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext) {
+  async DeleteFileCategory(@Arg('ID', () => Int) ID: number, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { dataSource, userPayload }: AppContext) {
     const key = new CompositeKey();
     key.LoadFromSingleKeyValuePair('ID', ID);
     if (!(await this.BeforeDelete(dataSource, key))) {
