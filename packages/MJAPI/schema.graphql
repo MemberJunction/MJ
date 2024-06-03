@@ -3626,12 +3626,12 @@ input CreateListDetailInput {
 }
 
 input CreateListInput {
+  CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
   EntityID: Int
   ExternalSystemRecordID: String
   Name: String!
-  ParentID: Int
   UserID: Int!
 }
 
@@ -8191,6 +8191,7 @@ type ListDetail_ {
 Static lists are useful for controlling a set of data for a given entity. These can be used programatically for applications like logging and tracking long-running tasks and also by end users for tracking any particular list of records they want to directly control the set.
 """
 type List_ {
+  CategoryID: Int
   CompanyIntegrationID: Int
   CreatedAt: Timestamp!
   Description: String
@@ -8201,7 +8202,6 @@ type List_ {
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
   Name: String!
-  ParentID: Int
   UpdatedAt: Timestamp!
   User: String!
   UserID: Int!
@@ -16226,6 +16226,7 @@ input UpdateListDetailInput {
 }
 
 input UpdateListInput {
+  CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
   EntityID: Int
@@ -16233,7 +16234,6 @@ input UpdateListInput {
   ID: Int!
   Name: String!
   OldValues___: [KeyValuePairInput!]
-  ParentID: Int
   UserID: Int!
 }
 

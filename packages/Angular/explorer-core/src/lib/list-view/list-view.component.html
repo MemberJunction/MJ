@@ -6,6 +6,7 @@ iconName="graph"
 addText="Create New List"
 ItemEntityName="Lists"
 CategoryEntityName="List Categories" 
+resourceName = "List"
 (itemClickEvent)="itemClick($event)"
 (AfterAddFolderEvent)="onEvent($event)"
 (AfterAddItemEvent)="onEvent($event)"
@@ -13,9 +14,61 @@ CategoryEntityName="List Categories"
 (AfterDeleteFolderEvent)="onEvent($event)"
 [selectedFolderID]="selectedFolderID"
 [showLoader]="showLoader"
-[disableAddButton]="true"
-[disableEditButton]="true"
 (viewModeChangeEvent)="onViewModeChange($event)"
 (BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
+(BeforeAddItemEvent)="onBeforeAddItemEvent($event)"
 />
-<!-- creation of reports are disabled because they need a conversation ID before theyre made -->
+<kendo-dialog
+title="Create New List"
+*ngIf="showCreateDialog"
+(close)="toggleCreateDialog(false)"
+[minWidth]="250"
+[width]="650"
+[height]="550"
+>
+    <div class="col-xs-12 col-sm-6 example-col">
+        <kendo-label text="Name">
+            <kendo-textbox  
+                class="mt-10"
+                placeholder="Enter List Name" 
+                [(ngModel)]="listName">
+            </kendo-textbox>
+        </kendo-label>
+        <div class="mt-10">
+            <kendo-label text="Description">
+                <kendo-textarea
+                    class="mt-10"
+                    placeholder="Enter Description"
+                    [rows]="3"
+                    resizable="vertical"
+                    [(ngModel)]="listDescription"
+                ></kendo-textarea>
+            </kendo-label>
+        </div>
+        <div class="mt-10">
+            <kendo-label text="Select an Entity">
+                <kendo-dropdownlist 
+                    [data]="entities"
+                    class="mt-10"
+                    textField="DisplayName"
+                    valueField="ID"
+                    [data]="entities"
+                    [(ngModel)]="selectedEntity"
+                />
+            </kendo-label>
+        </div>
+    </div>
+    <kendo-dialog-actions>
+        <div class="k-actions k-actions-end customBtn popup-actions">
+            <button kendoButton [disabled]="!listName || !selectedEntity" (click)="createList()" themeColor="info">
+                <span>
+                    <span class="fa-solid fa-plus"></span>
+                    Save 
+                </span>
+            </button>
+            <button fillMode="outline" themeColor="info" kendoButton (click)="toggleCreateDialog(false)">
+                Cancel
+            </button>
+        </div>
+    </kendo-dialog-actions>
+</kendo-dialog>
