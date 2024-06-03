@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2} from '@angular/core';
+import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2, ChangeDetectorRef} from '@angular/core';
 import { ActivatedRoute, Router } from "@angular/router";
 import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType } from "@memberjunction/core";
 import { DragEndEvent} from '@progress/kendo-angular-sortable';
@@ -54,8 +54,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   @ViewChild('outerDialogContainer') private outerDialogContainer!: ElementRef;
 
 
-  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2) {
-    super(elRef, ss, router, route);
+  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2, protected cdr: ChangeDetectorRef) {
+    super(elRef, ss, router, route, cdr);
     this.BottomMargin = 75; 
 
   }
