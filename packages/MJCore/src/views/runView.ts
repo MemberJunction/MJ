@@ -166,4 +166,35 @@ export class RunView  {
             throw new Error('No global object store, so we cant set the static provider');
     }
 
+
+    /**
+     * Utility method that calculates the entity name for a given RunViewParams object by looking at the EntityName property as well as the ViewID/ViewName/ViewEntity properties as needed.
+     * @param params 
+     * @returns 
+     */
+    public static async GetEntityNameFromRunViewParams(params: RunViewParams): Promise<string> {
+        if (params.EntityName)
+            return params.EntityName;
+        else if (params.ViewEntity) {
+            const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
+            const md = new Metadata();
+            const entity = md.Entities.find(e => e.ID === entityID);
+            if (entity)
+                return entity.Name
+        }
+        else if (params.ViewID || params.ViewName) {
+            // we don't have a view entity loaded, so load it up now
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: "User Views",
+                ExtraFilter: params.ViewID ? `ID = ${params.ViewID}` : `Name = '${params.ViewName}'`,
+                ResultType: 'entity_object'
+            });
+            if (result && result.Success && result.Results.length > 0) {
+                return result.Results[0].Entity; // virtual field in the User Views entity called Entity
+            }
+        }
+        else
+            return null;
+    }
 }
