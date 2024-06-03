@@ -44,8 +44,5 @@
             (BeforeUpdateItemEvent)="editView($event)"
         />
     </div>
-    <!--
-    <mj-user-view-properties-dialog [EntityName]="this.entityName" [ShowPropertiesButton]="false"
-    (dialogClosed)="viewPropertiesClosed($event)"></mj-user-view-properties-dialog>
-    -->
+    <mj-user-view-properties-dialog #userViewDialog [ShowPropertiesButton]="false"(dialogClosed)="OnViewPropertiesDialogClose($event)"></mj-user-view-properties-dialog>
 </div>
