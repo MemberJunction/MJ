@@ -15,13 +15,32 @@ export class FormToolbarComponent implements OnInit {
     @Input() ShowSkipChatButton: boolean = true;
     @Input() form!: BaseFormComponent;
 
-    public showLoader: boolean = false;
-    public showCreateDialog: boolean = false;
-    public showDeleteDialog: boolean = false;
-    public SkipChatVisible: boolean = false;
-    public createNewDialogTitle: string = 'Create New Record';
-    public newRecord!: BaseEntity;
-    public disableToolbar: boolean = false;
+
+    /**
+     * This property does not get modified by the toolbar as things change within its state, it is the global setting you can change to disable the toolbar
+     */
+    public Disabled: boolean = false;
+
+    /**
+     * Determines if the toolbar is enabled or disabled.
+     */
+    public get CurrentlyDisabled(): boolean {
+        return this.Disabled && this._currentlyDisabled;
+    }
+
+    /**
+     * Internal property that changes over time based on the state of the record being managed. Don't access this directly, use the CurrentlyDisabled property instead.
+     */
+    public _currentlyDisabled: boolean = false;
+
+    /**
+     * Internal property used to determine if the delete record confirmation dialog is currently displayed or not
+     */
+    public _deleteDialogVisible: boolean = false;
+    /**
+     * Internal property used to determine if the skip chat window is currently displayed or not
+     */
+    public _skipChatDialogVisible: boolean = false;
 
     public get LinkedEntityPrimaryKey(): CompositeKey {
         return this.form.record.PrimaryKey;
@@ -44,7 +63,7 @@ export class FormToolbarComponent implements OnInit {
         // Then create an HTML element that is centered horizaontall across the parent and is below the toolbar and show a status message of "Saving..." in it
 
         // Disable the toolbar and apply the UX effect to the form parent
-        this.disableToolbar = true;
+        this._currentlyDisabled = true;
         const toolbar = button.closest('.toolbar-container') as HTMLElement;
         const formElement = toolbar.closest('form') as HTMLElement;
 
@@ -83,7 +102,7 @@ export class FormToolbarComponent implements OnInit {
                 alert(this.form.record.LatestResult.Message);
         } finally {
             // Re-enable the toolbar and remove the UX effect
-            this.disableToolbar = false;
+            this._currentlyDisabled = false;
 
             formElement.style.pointerEvents = 'auto'; // This re-enables interactions with the form
             formElement.style.opacity = '1'; // This restores the form's opacity
@@ -97,14 +116,16 @@ export class FormToolbarComponent implements OnInit {
     }
     
     
-
+    /**
+     * This method is called internally when the user clicks on the Skip button, and also can be invoked manually in code to show the Skip dialog.
+     */
     public ShowSkipChat(): void {
-        this.SkipChatVisible = !this.SkipChatVisible;
+        this._skipChatDialogVisible = !this._skipChatDialogVisible;
         SharedService.Instance.InvokeManualResize();
     }
     
     public toggleDeleteDialog(show: boolean): void {
-        this.showDeleteDialog = show;
+        this._deleteDialogVisible = show;
     }
     
     public async deleteRecord(): Promise<void> {
