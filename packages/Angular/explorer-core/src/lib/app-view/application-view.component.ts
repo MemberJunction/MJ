@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router'
-import { ApplicationEntityInfo, Metadata, LogStatus } from '@memberjunction/core';
+import { ApplicationEntityInfo, Metadata, LogStatus, LogError } from '@memberjunction/core';
 import { UserFavoriteEntity, UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Folder, Item, ItemType } from '../../generic/Item.types';
@@ -17,7 +17,7 @@ import { BeforeAddItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.
 export class ApplicationViewComponent extends BaseBrowserComponent implements OnInit {
 
     @ViewChild('entityRow') entityRowRef: Element | undefined;
-    @ViewChild(UserViewPropertiesDialogComponent, { static: true }) viewPropertiesDialog!: UserViewPropertiesDialogComponent;
+    @ViewChild('userViewDialog') viewPropertiesDialog!: UserViewPropertiesDialogComponent;
 
     public appNameFromURL: string = '';
     public appName: string = ''
@@ -183,13 +183,24 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
 
     createNewView(event: BeforeAddItemEvent) {
         event.Cancel = true;
-        this.viewPropertiesDialog.CreateView(this.appName);
+        if(this.viewPropertiesDialog){
+            console.log("Creating new view", this.appName);
+            this.viewPropertiesDialog.CreateView(this.appName);
+        }
+        else{
+            LogError("View Properties Dialog not found");
+        }
     }
     
     public async editView(event: BeforeUpdateItemEvent): Promise<void> {
         event.Cancel = true;
-        let data: UserViewEntity = event.Item.Data;
-        this.viewPropertiesDialog.Open(data.ID);
+        if(this.viewPropertiesDialog){
+            let data: UserViewEntity = event.Item.Data;
+            this.viewPropertiesDialog.Open(data.ID);
+        }
+        else{
+            LogError("View Properties Dialog not found");
+        }
     }
 
     public async OnViewPropertiesDialogClose(args: {Saved?: boolean, ViewEntity?: UserViewEntityExtended, Cancel?: boolean, bNewRecord?: boolean}): Promise<void> {

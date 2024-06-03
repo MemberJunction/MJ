@@ -180,6 +180,7 @@ export class UserViewEntityExtended extends UserViewEntity  {
             this.GridState = JSON.stringify({}); // blank object initially
             this.CustomFilterState = false;
             this.CustomWhereClause = false;
+            this.SmartFilterEnabled = false;
         }
         return result
     }
