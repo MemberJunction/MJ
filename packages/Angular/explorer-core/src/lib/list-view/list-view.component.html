@@ -26,49 +26,48 @@ title="Create New List"
 [width]="650"
 [height]="550"
 >
-    <div class="col-xs-12 col-sm-6 example-col">
-        <kendo-label text="Name">
-            <kendo-textbox  
-                class="mt-10"
-                placeholder="Enter List Name" 
-                [(ngModel)]="listName">
-            </kendo-textbox>
-        </kendo-label>
-        <div class="mt-10">
-            <kendo-label text="Description">
-                <kendo-textarea
+    @if(showCreateLoader){
+        <kendo-loader type="converging-spinner"></kendo-loader>
+    }
+    @else {
+        <div class="col-xs-12 col-sm-6 example-col">
+            <kendo-label text="Name">
+                <kendo-textbox  
                     class="mt-10"
-                    placeholder="Enter Description"
-                    [rows]="3"
-                    resizable="vertical"
-                    [(ngModel)]="listDescription"
-                ></kendo-textarea>
+                    placeholder="Enter List Name" 
+                    [(ngModel)]="listName">
+                </kendo-textbox>
             </kendo-label>
+            <div class="mt-10">
+                <kendo-label text="Description">
+                    <kendo-textarea
+                        class="mt-10"
+                        placeholder="Enter Description"
+                        [rows]="3"
+                        resizable="vertical"
+                        [(ngModel)]="listDescription"
+                    ></kendo-textarea>
+                </kendo-label>
+            </div>
+            <div class="mt-10">
+                <kendo-label text="Select an Entity">
+                    <kendo-dropdownlist 
+                        class="mt-10"
+                        [data]="entityNames"
+                        [filterable]="true"
+                        (filterChange)="onFilterChange($event)"
+                        (selectionChange)="onSelectionChange($event)"
+                    />
+                </kendo-label>
+            </div>
         </div>
-        <div class="mt-10">
-            <kendo-label text="Select an Entity">
-                <kendo-dropdownlist 
-                    [data]="entities"
-                    class="mt-10"
-                    textField="DisplayName"
-                    valueField="ID"
-                    [data]="entities"
-                    [(ngModel)]="selectedEntity"
-                />
-            </kendo-label>
-        </div>
-    </div>
-    <kendo-dialog-actions>
-        <div class="k-actions k-actions-end customBtn popup-actions">
-            <button kendoButton [disabled]="!listName || !selectedEntity" (click)="createList()" themeColor="info">
-                <span>
-                    <span class="fa-solid fa-plus"></span>
-                    Save 
-                </span>
-            </button>
-            <button fillMode="outline" themeColor="info" kendoButton (click)="toggleCreateDialog(false)">
-                Cancel
-            </button>
-        </div>
+    }
+    <kendo-dialog-actions class="popup-actions-btn">
+        <button class="cancel-btn" (click)="createList()" [disabled]="!listName || !selectedEntity || showCreateLoader" kendoButton themeColor="info">
+          Create
+        </button>
+        <button  class="yes-btn" (click)="toggleCreateDialog(false)" [disabled]="showCreateLoader" kendoButton fillMode="outline" themeColor="info">
+          Cancel
+        </button>
     </kendo-dialog-actions>
 </kendo-dialog>

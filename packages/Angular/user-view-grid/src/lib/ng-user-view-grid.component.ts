@@ -663,6 +663,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       else
         throw new Error("Invalid configuration, we need to receive either a ViewEntity, ViewID, ViewName, or EntityName and ExtraFilter in order to run a view")
 
+        console.log("params?", params);
       const rvResult = await rv.RunView(params);
       if (!rvResult.Success) {
         // it failed
@@ -671,6 +672,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       else {
         // it worked
         this.viewData = rvResult.Results;
+        console.log("viewData", this.viewData);
 
         this.totalRowCount = rvResult.TotalRowCount;
         this.formattedData = new Array(this.viewData.length);
