@@ -18,8 +18,7 @@ import { registerEnumType } from "type-graphql";
 import { MJGlobal, CopyScalarsAndArrays } from '@memberjunction/global';
 import { sendPostRequest } from '../util';
 import { GetAIAPIKey } from '@memberjunction/ai';
-import { KeyValuePairInputType } from './MergeRecordsResolver';
-import { CompositeKeyInputType } from './PotentialDuplicateRecordResolver';
+import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes';
 
 
 enum SkipResponsePhase {
@@ -74,7 +73,7 @@ export class AskSkipResolver {
   async ExecuteAskSkipRecordChat(@Arg('UserQuestion', () => String) UserQuestion: string,
                                  @Arg('ConversationId', () => Int) ConversationId: number,
                                  @Arg('EntityName', () => String) EntityName: string,
-                                 @Arg('CompositeKey', () => CompositeKeyInputType) CompositeKey: CompositeKeyInputType,
+                                 @Arg('CompositeKey', () => CompositeKeyInputType) compositeKey: CompositeKeyInputType,
                                  @Ctx() { dataSource, userPayload }: AppContext,
                                  @PubSub() pubSub: PubSubEngine) {
     // In this function we're simply going to call the Skip API and pass along the message from the user
@@ -97,7 +96,9 @@ export class AskSkipResolver {
       dci.DataContextID = dataContext.ID;
       dci.Type = 'single_record';
       dci.EntityID = md.Entities.find((e) => e.Name === EntityName)?.ID;
-      dci.RecordID = CompositeKey.Values();
+      const ck = new CompositeKey();
+      ck.KeyValuePairs = compositeKey.KeyValuePairs;
+      dci.RecordID = ck.Values();
       await dci.Save();
   
       await dataContext.Load(dataContext.ID, dataSource, false, true, 10, user); // load again because we added a new data context item  
@@ -105,7 +106,7 @@ export class AskSkipResolver {
 
       // also, in the situation for a new convo, we need to update the Conversation ID to have a LinkedEntity and LinkedRecord
       convoEntity.LinkedEntityID = dci.EntityID;
-      convoEntity.LinkedRecordID = CompositeKey.Values();
+      convoEntity.LinkedRecordID = ck.Values();
       convoEntity.DataContextID = dataContext.ID;
       await convoEntity.Save();
     } 

@@ -16,18 +16,15 @@ export class KeyValuePair {
     Value: any
 }
 
-
 /**
- * Composite keys are used to represent database keys and can include one or more key value pairs.
+ * Base class for tracking a collection of field name(key)/value pair combinations with utility methods for working with them.
  */
-export class CompositeKey {
-
+export class FieldValueCollection {
     KeyValuePairs: KeyValuePair[];
 
     constructor(keyValuePairs?: KeyValuePair[]) {
         this.KeyValuePairs = keyValuePairs || [];
     }
-
 
     /**
      * returns the value of the key value pair for the specified field name
@@ -123,43 +120,6 @@ export class CompositeKey {
         });
     }
 
-    /**
-    * Utility function to compare the key primary key of this object to another sets to see if they are the same or not
-    * @param kvPairs the primary key values to compare against
-    * @returns true if the primary key values are the same, false if they are different
-    */
-    EqualsKey(kvPairs: KeyValuePair[]): boolean {
-        if(!kvPairs || kvPairs.length === 0){
-            return false;
-        }
-
-        if (kvPairs.length !== this.KeyValuePairs.length){
-            return false;
-        }
-
-        for( const [index, kvPair] of kvPairs.entries()){
-            const sourcekvPair = this.KeyValuePairs[index];
-            if(kvPair.FieldName !== sourcekvPair.FieldName || kvPair.Value !== sourcekvPair.Value){
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-    * Utility function to compare this composite key to another
-    * @param compositeKey the composite key to compare against
-    * @returns true if the primary key values are the same, false if they are different
-    */
-    Equals(compositeKey: CompositeKey): boolean {
-        if(!compositeKey){
-            return false;
-        }
-
-        return this.EqualsKey(compositeKey.KeyValuePairs);
-    }
-
     LoadFromEntityFields(fields: EntityField[]): void {
         this.KeyValuePairs = fields.map((field) => {
             return {
@@ -203,23 +163,42 @@ export class CompositeKey {
         }).join(segment || "||");
     }
 
-    LoadFromURLSegment(entity: EntityInfo, routeSegment: string, segment?: string): void {
+    private readonly _field_delimiter = '||'
+    private readonly _value_delimiter = '|';
+
+    /**
+     * Parses a provided routeSegment using the provided delimiter and loads the key value pairs from it
+     */
+    LoadFromURLSegment(entity: EntityInfo, routeSegment: string): void {
         if (!routeSegment.includes('|')) {
           // If not, return a single element array with a default field name
           this.KeyValuePairs = [{ FieldName: entity.FirstPrimaryKey.Name, Value: routeSegment }];
         }
         else {
-          const parts = segment ? routeSegment.split(segment) : routeSegment.split('||');
-          const pkVals: KeyValuePair[] = [];
-          for (let p of parts) {
-            const kv = p.split('|');
-            pkVals.push({ FieldName: kv[0], Value: kv[1] });
-          }
-
-          this.KeyValuePairs = pkVals;
+            this.SimpleLoadFromURLSegment(routeSegment);
         }
     }
 
+    /**
+     * Parses the provided routeSegment and assumes the field names are included in the segment
+     * @param urlSegment 
+     * @param delimiter 
+     */
+    SimpleLoadFromURLSegment(urlSegment: string): void {
+        if (urlSegment.includes(this._value_delimiter)) {
+            const parts = urlSegment.split(this._field_delimiter);
+            const pkVals: KeyValuePair[] = [];
+            for (let p of parts) {
+              const kv = p.split('|');
+              pkVals.push({ FieldName: kv[0], Value: kv[1] });
+            }
+  
+            this.KeyValuePairs = pkVals;  
+        }
+        else {
+            // do nothing
+        }            
+    }
     /**
      * Loads the key from a single key value pair
      * @param fieldName 
@@ -228,6 +207,47 @@ export class CompositeKey {
     LoadFromSingleKeyValuePair(fieldName: string, value: any): void {
         this.KeyValuePairs = [{ FieldName: fieldName, Value: value }];
     }
+
+    /**
+     * Loads from a simple object by extracting the key value pairs from the object
+     * @param obj 
+     */
+    LoadFromSimpleObject(obj: any): void {
+        this.KeyValuePairs = Object.keys(obj).map((key) => {
+            return { FieldName: key, Value: obj[key] };
+        });
+    }
+
+    /**
+     * Static helper method to instantiate a FieldValueCollection from a simple object
+     * @param obj 
+     * @returns 
+     */
+    public static FromObject(obj: any): FieldValueCollection {
+        let fvc = new FieldValueCollection();
+        fvc.LoadFromSimpleObject(obj);
+        return fvc;
+    }
+}
+
+
+/**
+ * Composite keys are used to represent database keys and can include one or more key value pairs.
+ */
+export class CompositeKey extends FieldValueCollection {
+    /**
+    * Utility function to compare this composite key to another
+    * @param compositeKey the composite key to compare against
+    * @returns true if the primary key values are the same, false if they are different
+    */
+    Equals(compositeKey: CompositeKey): boolean {
+        if(!compositeKey){
+            return false;
+        }
+
+        return this.EqualsKey(compositeKey.KeyValuePairs);
+    }
+
 
     /**
      * Helper method to check if the underlying key value pairs are valid or not
@@ -265,5 +285,30 @@ export class CompositeKey {
         catch (e) {
             return {IsValid: false, ErrorMessage: e.message};
         }
+    }
+
+
+    /**
+    * Utility function to compare the key primary key of this object to another sets to see if they are the same or not
+    * @param kvPairs the primary key values to compare against
+    * @returns true if the primary key values are the same, false if they are different
+    */
+    EqualsKey(kvPairs: KeyValuePair[]): boolean {
+        if(!kvPairs || kvPairs.length === 0){
+            return false;
+        }
+
+        if (kvPairs.length !== this.KeyValuePairs.length){
+            return false;
+        }
+
+        for( const [index, kvPair] of kvPairs.entries()){
+            const sourcekvPair = this.KeyValuePairs[index];
+            if(kvPair.FieldName !== sourcekvPair.FieldName || kvPair.Value !== sourcekvPair.Value){
+                return false;
+            }
+        }
+
+        return true;
     }
 }

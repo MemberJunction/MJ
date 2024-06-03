@@ -6,7 +6,7 @@ import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogError } from './logging';
-import { CompositeKey } from './compositeKey';
+import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
 import { Subject, Subscription } from 'rxjs';
 
 /**
@@ -677,11 +677,18 @@ export abstract class BaseEntity {
 
     /**
      * This method will create a new state for the object that is equivalent to a new record including default values.
+     * @param newValues - optional parameter to set the values of the fields to something other than the default values. The expected parameter is an object that has properties that map to field names in this entity.
+     * This is the same as creating a NewRecord and then using SetMany(), but it is a convenience/helper approach.
      * @returns 
      */
-    public NewRecord() : boolean {
+    public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
-        this.RaiseEvent('new_record', null)
+        if (newValues) {
+            newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
+                this.Set(kv.FieldName, kv.Value);                
+            });
+        }
+        this.RaiseEvent('new_record', null)        
         return true;
     }
 

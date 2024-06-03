@@ -830,6 +830,21 @@ export class EntityInfo extends BaseInfo {
         return params;
     }
     
+    /**
+     * Builds a simple javascript object that will pre-populate a new record in the related entity with values that link back to the specified record. 
+     * This is useful, for example, when creating a new contact from an account, we want to pre-populate the account ID in the new contact record
+     */
+    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): any {
+        // we want to build a simple javascript object that will pre-populate a new record in the related entity with values that link
+        // abck to the current record. This is useful for example when creating a new contact from an account, we want to pre-populate the
+        // account ID in the new contact record
+        const obj: any = {};
+        if (record && relationship) {
+            const keyField = relationship.EntityKeyField && relationship.EntityKeyField.trim().length > 0 ? relationship.EntityKeyField : record.FirstPrimaryKey.Name;
+            obj[relationship.RelatedEntityJoinField] = record.Get(keyField);
+        }
+        return obj;
+    }
 
 
     constructor(initData: any = null) {

@@ -5,12 +5,16 @@
                     
                 </div>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                    
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                    <mj-tab Name="Details">
                         Details
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-form-section Entity="Vector Indexes" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        <mj-form-section 
+                            Entity="Vector Indexes" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
                     </mj-tab-body>
                     
                 </mj-tabstrip>

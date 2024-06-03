@@ -23,6 +23,53 @@ export class MJTabComponent extends MJTabBase {
     this.cdr.detectChanges(); // Manually trigger change detection to update the view
   }
 
+  private _visible: boolean = true;
+  @Input() get Visible(): boolean {
+    return this._visible;
+  }
+  public set Visible(value: boolean) {
+    this._visible = value;
+    // whenever the visible property changes we need to set the display style to none if it is not visible and make sure
+    // we're not selected and set to tab index of 0 if we're selected
+
+    // Step 1 - get the elementRef and set our display to none
+    if (!this._visible)
+      this.elementRef.nativeElement.style.display = value ? "" : "none";
+    else
+      this.elementRef.nativeElement.style.display = "";
+
+    // Step 2 - if we're not visible, make sure we're not selected
+    if (!this._visible)
+      this.tabstrip.SelectedTabIndex = 0;
+  }
+
+  private _name: string = ""
+  @Input() get Name(): string {
+    return this._name;
+  }
+  public set Name(value: string) {
+    this._name = value;
+  }
+
+  private _id: any = null;
+  @Input() get ID(): any {
+    return this._id;
+  }
+  public set ID(value: any) {
+    this._id = value;
+  }
+
+  private _props: any = null;
+  /**
+   * A property bag that can be used to store any additional properties that you want to associate with this tab.
+   */
+  @Input() get Props(): any {
+    return this._props;
+  }
+  public set Props(value: any) {
+    this._props = value;
+  }
+
   /**
    * Determines if the tab can be closed by a user, or not. Defaults to false.
    */

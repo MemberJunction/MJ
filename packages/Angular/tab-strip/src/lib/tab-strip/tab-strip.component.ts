@@ -61,25 +61,50 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
         body: index !== null && this.tabBodies ? this.tabBodies.toArray()[index] : null,
         cancel: false
       };
-      this.BeforeTabSelected.emit(props);
-      if (!props.cancel) {
-        this._selectedTabIndex = index;
-
-        this.innerRefreshTabVisibility(index);      
-
-        const afterProps = {
-          index: index!,
-          tab: props.tab,
-          body: props.body
-        }
-        this.TabSelected.emit(afterProps);  
+      if (props.tab?.Visible) {
+        this.BeforeTabSelected.emit(props);
+        if (!props.cancel) {
+          this._selectedTabIndex = index;
+  
+          this.innerRefreshTabVisibility(index);      
+  
+          const afterProps = {
+            index: index!,
+            tab: props.tab,
+            body: props.body
+          }
+          this.TabSelected.emit(afterProps);  
+        }  
       }
+      else
+        throw new Error(`Tab index ${index} is not visible and cannot be selected.`);
     }
     else {
       // always do this even if we're not firing event since we're already on the right tab
       this.innerRefreshTabVisibility(index);      
     }
   }
+
+  /**
+   * This method will attempt to set the current tab by name. If the tab is found, it will be selected and the method will return the tab object. If the tab is not found, the method will return undefined.
+   * @param tabName 
+   * @returns 
+   */
+  public SelectTabByName(tabName: string): MJTabComponent | undefined {
+    const tab = this.GetTabByName(tabName);
+    if (tab) {
+      if (tab.Visible)
+        this.SelectedTabIndex = tab.index;
+      else
+        throw new Error(`Tab ${tabName} is not visible and cannot be selected.`);
+    }
+    return tab;
+  }
+
+  public GetTabByName(tabName: string): MJTabComponent | undefined {
+    return this.tabs.find(t => t.Name?.trim().toLowerCase() === tabName.trim().toLowerCase());
+  }
+
   protected innerRefreshTabVisibility(index: number) {
     Promise.resolve().then(() => {
       MJTabStripComponent.OutputDebugMessage(`MJTabStripComponent.innerRefreshTabVisibility(${index})`);
@@ -131,7 +156,8 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
 
   @ContentChildren(MJTabComponent) tabs!: QueryList<MJTabComponent>;
   @ContentChildren(MJTabBodyComponent) tabBodies!: QueryList<MJTabBodyComponent>;
-  
+   
+
   private _viewInitialized: boolean = false;
   ngAfterViewInit() {
     this._viewInitialized = true;
@@ -145,6 +171,16 @@ export class MJTabStripComponent implements AfterContentInit, AfterContentChecke
   ngAfterContentChecked(): void {
     this.syncTabIndexes();
     this.checkTabScrollButtons();
+  }
+
+  /**
+   * Call this method if you are ever dynamically adding or removing tabs from the component over time using @if or *ngIf or other similar methods. This will force the tab strip to 
+   * re-evaluate the tabs and tab bodies and update the display accordingly.
+   */
+  public RefreshTabs() {
+    this.cdr.detectChanges();
+    this.syncTabIndexes();
+    this.innerRefreshTabVisibility(this.SelectedTabIndex);
   }
 
   protected syncTabIndexes() {

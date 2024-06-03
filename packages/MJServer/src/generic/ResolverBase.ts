@@ -486,16 +486,16 @@ export class ResolverBase {
       if ( (val === null || val === undefined) && field.DefaultValue !== null && field.DefaultValue !== undefined) 
         val = field.DefaultValue; // set default value as the field was never set
 
-      if (field && val !== null && val !== undefined) {
+      if (field) {
         switch (field.TSType) {
           case EntityFieldTSType.Number:
-            val =  parseInt(val);
+            val = val !== null && val !== undefined ? parseInt(val) : null;
             break;
           case EntityFieldTSType.Boolean:
-            val = val === 'false' || val === '0' || parseInt(val) === 0 ? false : true;
+            val = (val === null || val === undefined || val === 'false' || val === '0' || parseInt(val) === 0) ? false : true;
             break;
           case EntityFieldTSType.Date:
-            val = new Date(val);
+            val = val !== null && val !== undefined ? new Date(val) : null;
             break;
           default:
             break; // already a string
