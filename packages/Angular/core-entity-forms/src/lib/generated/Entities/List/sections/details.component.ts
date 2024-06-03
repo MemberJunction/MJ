@@ -62,7 +62,7 @@ import { ListEntity } from '@memberjunction/core-entities';
         ></mj-form-field>
         <mj-form-field
             [record]="record"
-            FieldName="ParentID"
+            FieldName="CategoryID"
             Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
