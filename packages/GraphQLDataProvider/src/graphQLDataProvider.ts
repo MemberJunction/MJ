@@ -384,11 +384,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return ProviderType.Network;
     }
 
-    public async GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]> {
+    public async GetRecordChanges(entityName: string, primaryKey: CompositeKey): Promise<RecordChange[]> {
         try {
             const p: RunViewParams = {
                 EntityName: 'Record Changes',
-                ExtraFilter: `RecordID = '${CompositeKey.Values()}' AND Entity = '${entityName}'`,
+                ExtraFilter: `RecordID = '${primaryKey.Values()}' AND Entity = '${entityName}'`,
                 //OrderBy: 'ChangedAt DESC',
             }
             const result = await this.RunView(p);
@@ -416,7 +416,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param entityName the name of the entity to check
      * @param KeyValuePairs the KeyValuePairs of the record to check
      */
-    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey): Promise<RecordDependency[]> { 
+    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> { 
         try {
             // execute the gql query to get the dependencies
             const query = gql`query GetRecordDependenciesQuery ($entityName: String!, $CompositeKey: CompositeKeyInputType!) {
@@ -436,7 +436,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // now we have our query built, execute it
             const vars = {
                 entityName: entityName,
-                CompositeKey: compositeKey.Copy()
+                CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs}
             };
             const data = await GraphQLDataProvider.ExecuteGQL(query, vars);
 
@@ -518,9 +518,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }`
 
             // create a new request that is compatible with the server's expectations where field maps and also the primary key values are all strings
-            const newRequest: RecordMergeRequest = {
+            const newRequest = {
                 EntityName: request.EntityName,
-                SurvivingRecordCompositeKey: request.SurvivingRecordCompositeKey.Copy(),
+                SurvivingRecordCompositeKey: {KeyValuePairs: request.SurvivingRecordCompositeKey.KeyValuePairs},
                 FieldMap: request.FieldMap?.map(fm => {
                     return {
                         FieldName: fm.FieldName,
@@ -666,15 +666,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return null;
         }
     }
-    public async Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
+    public async Load(entity: BaseEntity, primaryKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
             const vars = {};
             let pkeyInnerParamString: string = '';
             let pkeyOuterParamString: string = '';
 
-            for (let i = 0; i < CompositeKey.KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === CompositeKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
-                const val = CompositeKey.GetValueByIndex(i);
+            for (let i = 0; i < primaryKey.KeyValuePairs.length; i++) {
+                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === primaryKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const val = primaryKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = field.GraphQLType;
 
                 // build up the param string for the outer query definition
@@ -689,7 +689,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
-                    if (isNaN(CompositeKey.GetValueByIndex(i)))
+                    if (isNaN(primaryKey.GetValueByIndex(i)))
                         throw new Error(`Primary Key value ${val} (${field.Name}) is not a valid number`);
                     vars[field.CodeName] =  parseInt(val); // converting to number here for graphql type to work properly
                 }
@@ -926,7 +926,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return new GraphQLTransactionGroup();
     }
 
-    public async GetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey): Promise<boolean> {
+    public async GetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey): Promise<boolean> {
+        const valResult = primaryKey.Validate();
+        if (!valResult.IsValid)
+            return false;
+
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -941,7 +945,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {params: {
                                                                             UserID: userId, 
                                                                             EntityID: e.ID, 
-                                                                            CompositeKey: compositeKey.Copy()
+                                                                            CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs}
                                                                             } 
                                                                   }
                                                          );
@@ -949,7 +953,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.GetRecordFavoriteStatus.IsFavorite;        
     }
 
-    public async SetRecordFavoriteStatus(userId: number, entityName: string, compositeKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
+    public async SetRecordFavoriteStatus(userId: number, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
         const e = this.Entities.find(e => e.Name === entityName)
         if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);
@@ -964,7 +968,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  { params: {
                                                                                 UserID: userId, 
                                                                                 EntityID: e.ID, 
-                                                                                CompositeKey: compositeKey.Copy(),
+                                                                                CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs},
                                                                                 IsFavorite: isFavorite} 
                                                                  }
                                                          );
@@ -972,8 +976,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data.SetRecordFavoriteStatus.Success;        
     }
 
-    public async GetEntityRecordName(entityName: string, compositeKey: CompositeKey): Promise<string> {
-        if (!entityName || !compositeKey || compositeKey.KeyValuePairs?.length === 0){
+    public async GetEntityRecordName(entityName: string, primaryKey: CompositeKey): Promise<string> {
+        if (!entityName || !primaryKey || primaryKey.KeyValuePairs?.length === 0){
             return null;
         }
 
@@ -987,7 +991,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    CompositeKey: compositeKey.Copy()
+                                                                    CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs}
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -1015,7 +1019,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
             return { 
                      EntityName: i.EntityName, 
-                     CompositeKey: i.CompositeKey.Copy()
+                     CompositeKey: {KeyValuePairs: i.CompositeKey.KeyValuePairs}
                     } 
                 })});
         if (data && data.GetEntityRecordNames)

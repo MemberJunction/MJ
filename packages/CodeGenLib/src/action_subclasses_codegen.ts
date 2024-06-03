@@ -4,7 +4,7 @@ import path from 'path';
 import { makeDir } from './util';
 import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
-import { logError } from './logging';
+import { logError, logStatus } from './logging';
 import { mkdirSync } from 'fs-extra';
 import { ActionEngine, ActionEntityServerEntity } from '@memberjunction/actions';
 
@@ -88,6 +88,10 @@ export function LoadGeneratedActions() {
      * @returns 
      */
     public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
+        if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved') {
+            logStatus(`    Skipping action ${action.Name} because Status <> Active and/or CodeApprovalStatus <> Approved --- Status: ${action.Status}, Code Approval Status: ${action.CodeApprovalStatus}`);
+        }
+
         try {
             const codeName = CodeNameFromString(action.Name);
             const actionClassName = codeName + '_Action';

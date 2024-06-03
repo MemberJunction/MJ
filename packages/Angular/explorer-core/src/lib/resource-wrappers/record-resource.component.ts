@@ -10,7 +10,7 @@ export function LoadRecordResource() {
 @RegisterClass(BaseResourceComponent, 'Records')
 @Component({
     selector: 'mj-record-resource',
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" mjFillContainer></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" mjFillContainer></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     public get PrimaryKey(): CompositeKey {

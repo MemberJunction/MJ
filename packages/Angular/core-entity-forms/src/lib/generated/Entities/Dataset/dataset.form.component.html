@@ -5,21 +5,29 @@
                     
                 </div>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                    
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                    <mj-tab Name="Details">
                         Details
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-form-section Entity="Datasets" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        <mj-form-section 
+                            Entity="Datasets" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
                     </mj-tab-body>
-                     
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Dataset Items')">
+                    
+                    <mj-tab Name="Dataset Items" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 119}">
                         Dataset Items
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Dataset Items')"  
-                            [AllowLoad]="this.IsCurrentTab('Dataset Items')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Dataset Items')"  
+                            [NewRecordValues]="NewRecordValues('Dataset Items')"
+                            [AllowLoad]="IsCurrentTab('Dataset Items')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>

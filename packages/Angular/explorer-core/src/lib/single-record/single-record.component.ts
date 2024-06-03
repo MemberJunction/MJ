@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router'
-import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -15,6 +15,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
   @ViewChild(Container, {static: true}) formContainer!: Container;
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
+  @Input() public newRecordValues: string | null = '';
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
@@ -63,6 +64,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
           await record.InnerLoad(primaryKey);
         else {
           record.NewRecord();
+          this.SetNewRecordValues(record);          
         }
 
         record.RegisterEventHandler((eventType: BaseEntityEvent) => {
@@ -86,5 +88,37 @@ export class SingleRecordComponent implements OnInit, AfterViewInit {
 
 
     this.loading = false;
+  }
+
+  protected SetNewRecordValues(record: BaseEntity) {
+    if (this.newRecordValues && this.newRecordValues.length > 0) {
+      // we have some provided new record values to apply
+      const fv = new FieldValueCollection();
+      fv.SimpleLoadFromURLSegment(this.newRecordValues);
+      // now apply the values to the record
+      fv.KeyValuePairs.filter(kvp => kvp.Value !== null && kvp.Value !== undefined).forEach(kvp => {
+        const f = record.Fields.find(f => f.Name.trim().toLowerCase() === kvp.FieldName.trim().toLowerCase());
+        if (f) {
+          // make sure we set the value to the right type based on the f.TSType property
+          switch (f.EntityFieldInfo.TSType) {
+            case EntityFieldTSType.String:
+              record.Set(kvp.FieldName, kvp.Value);
+              break;
+            case EntityFieldTSType.Number:
+              record.Set(kvp.FieldName, parseFloat(kvp.Value));
+              break;
+            case EntityFieldTSType.Boolean:
+              if (kvp.Value === 'false' || kvp.Value === '0' || kvp.Value.toString().trim().length === 0 )
+                record.Set(kvp.FieldName, false);
+              else
+                record.Set(kvp.FieldName, true);
+              break;
+            case EntityFieldTSType.Date:
+              record.Set(kvp.FieldName, new Date(kvp.Value));
+              break;
+          }
+        }
+      });
+    }    
   }
 }

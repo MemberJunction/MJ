@@ -122,7 +122,8 @@ export class ResourceResolver implements Resolve<void> {
         case 'records':
           code = EventCodes.EntityRecordClicked;
           data.Configuration.Entity = route.queryParams['Entity'] || route.queryParams['entity']; // Entity or entity is specified for this resource type since resource record id isn't good enough
-
+          data.Configuration.NewRecordValues = route.queryParams['NewRecordValues'] || route.queryParams['newRecordValues'];
+          data.Configuration.___rawQueryParams = route.queryParams;
           if (data.Configuration.Entity === undefined || data.Configuration.Entity === null) {
             LogError('No Entity provided in the URL, must have Entity as a query parameter for this resource type');
             return; // should handle the error better - TO-DO

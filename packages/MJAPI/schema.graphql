@@ -875,7 +875,7 @@ type Company_ {
 }
 
 input CompositeKeyInputType {
-  KeyValuePairs: [KeyValuePairInputType!]! = []
+  KeyValuePairs: [KeyValuePairInputType!]!
 }
 
 type CompositeKeyOutputType {

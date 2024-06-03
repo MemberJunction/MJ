@@ -48,6 +48,7 @@ export * from './generic/PushStatusResolver';
 export * from './generic/ResolverBase';
 export * from './generic/RunViewResolver';
 export * from './generic/KeyValuePairInput';
+export * from './generic/KeyInputOutputTypes'
 export * from './generic/DeleteOptionsInput';
 
 export * from './resolvers/AskSkipResolver';

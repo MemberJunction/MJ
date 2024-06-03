@@ -301,12 +301,12 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       // come back to this tab
       const urlParts = this.router.url.split('?');
       if (urlParts.length > 1) {
-        // we have query params, so stash em
+        // we have query params, so stash them
         const params = new URLSearchParams(urlParts[1]);
-        const keys = params.keys();
         const queryParams: any = {};
-        for (const key of keys) {
-          queryParams[key] = params.get(key);
+
+        for (const [key, value] of params.entries()) {
+          queryParams[key] = value;
         }
         this.tabQueryParams['tab_' + this.activeTabIndex] = queryParams;
       }
@@ -512,7 +512,8 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
             t.data.ResourceRecordID === data.ResourceRecordID  ) {
             // we now have to do one more check, we have to make sure that all of the values within the Configuration object match as well
             let bMatch = true;
-            const keys = Object.keys(data.Configuration);
+            // ignore keys that start with an underscore or are the NewRecordValues key
+            const keys = Object.keys(data.Configuration).filter(k => !k.startsWith('_') && k.trim().toLowerCase() !== 'newrecordvalues'); 
             for (const key of keys) {
               if (data.Configuration[key] !== t.data.Configuration[key]) {
                 bMatch = false;
@@ -632,6 +633,9 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'records':
         const recIDAsString: string = data.ResourceRecordID !== null && data.ResourceRecordID !== undefined ? (typeof data.ResourceRecordID === "string" ? data.ResourceRecordID : data.ResourceRecordID.toString()) : "";
         url += `/record/${recIDAsString.trim()}?Entity=${data.Configuration.Entity}`;
+        if (data.Configuration.NewRecordValues) {
+          url += `&NewRecordValues=${data.Configuration.NewRecordValues}`;
+        }
         break;
       case 'search results':
         url += `/search/${data.Configuration.SearchInput}?Entity=${data.Configuration.Entity}`;

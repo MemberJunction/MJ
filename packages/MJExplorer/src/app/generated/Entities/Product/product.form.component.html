@@ -5,43 +5,59 @@
                     
                 </div>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
-                    
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Details')">
+                    <mj-tab Name="Details">
                         Details
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-form-section Entity="Products" Section="details" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        <mj-form-section 
+                            Entity="Products" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
                     </mj-tab-body>
-                     
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Products')">
+                    
+                    <mj-tab Name="Products" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 232}">
                         Products
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Products')"  
-                            [AllowLoad]="this.IsCurrentTab('Products')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Products')"  
+                            [NewRecordValues]="NewRecordValues('Products')"
+                            [AllowLoad]="IsCurrentTab('Products')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
- 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Sales Order Details')">
+
+                    <mj-tab Name="Sales Order Details" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 233}">
                         Sales Order Details
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Sales Order Details')"  
-                            [AllowLoad]="this.IsCurrentTab('Sales Order Details')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Sales Order Details')"  
+                            [NewRecordValues]="NewRecordValues('Sales Order Details')"
+                            [AllowLoad]="IsCurrentTab('Sales Order Details')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>
- 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('Product Price Levels')">
+
+                    <mj-tab Name="Product Price Levels" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 234}">
                         Product Price Levels
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('Product Price Levels')"  
-                            [AllowLoad]="this.IsCurrentTab('Product Price Levels')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Product Price Levels')"  
+                            [NewRecordValues]="NewRecordValues('Product Price Levels')"
+                            [AllowLoad]="IsCurrentTab('Product Price Levels')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>

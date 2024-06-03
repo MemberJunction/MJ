@@ -1,7 +1,7 @@
 import { LogError, Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
-import { CompositeKeyInputType, CompositeKeyOutputType } from './PotentialDuplicateRecordResolver';
+import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
 
 @ObjectType()
 export class EntityDependencyResult {
@@ -35,25 +35,6 @@ export class EntityDependencyResolver {
  
 }
 
-
-@InputType()
-export class KeyValuePairInputType {
-  @Field(() => String)
-  FieldName: string;
-
-  @Field(() => String)
-  Value: string;
-}
-
-@ObjectType()
-export class KeyValuePairOutputType {
-  @Field(() => String)
-  FieldName: string;
-
-  @Field(() => String)
-  Value: string;
-}
- 
 
 @ObjectType()
 export class RecordDependencyResult {

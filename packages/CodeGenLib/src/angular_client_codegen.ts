@@ -286,6 +286,7 @@ export function Load${entity.ClassName}FormComponent() {
           }
       
           // now we have a distinct list of section names set, generate HTML for each section 
+          let sectionIndex = 0;
           for (const section of sections) {
               let sectionName: string = ''
               if (section.Type === GeneratedFormSectionType.Top) {
@@ -298,12 +299,16 @@ export function Load${entity.ClassName}FormComponent() {
                   else if (section.Type === GeneratedFormSectionType.Details)
                       sectionName = 'details';
       
-                  section.TabCode = `
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${section.Name}')">
+                  section.TabCode = `${sectionIndex++ > 0 ? '\n                    ' : ''}<mj-tab Name="${section.Name}">
                         ${section.Name}
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-form-section Entity="${entity.Name}" Section="${this.stripWhiteSpace(section.Name.toLowerCase())}" [record]="record" [EditMode]="this.EditMode"></mj-form-section>
+                        <mj-form-section 
+                            Entity="${entity.Name}" 
+                            Section="${this.stripWhiteSpace(section.Name.toLowerCase())}" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
                     </mj-tab-body>`
               }
       
@@ -434,14 +439,17 @@ export function Load${entity.ClassName}${this.stripWhiteSpace(section.Name)}Comp
           let index = startIndex;
           for (const relatedEntity of entity.RelatedEntities) {
               const tabName: string = relatedEntity.DisplayName ? relatedEntity.DisplayName : relatedEntity.RelatedEntity
-                  tabs.push(` 
-                    <mj-tab [TabSelected]="this.RegisterAndCheckIfCurrentTab('${tabName}')">
+                  tabs.push(`${index > 0 ? '\n' : ''}                    <mj-tab Name="${tabName}" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: ${relatedEntity.ID}}">
                         ${tabName}
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-user-view-grid [Params]="this.BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
-                            [AllowLoad]="this.IsCurrentTab('${tabName}')"  
-                            [EditMode]="this.GridEditMode()"  
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('${relatedEntity.RelatedEntity}')"  
+                            [NewRecordValues]="NewRecordValues('${relatedEntity.RelatedEntity}')"
+                            [AllowLoad]="IsCurrentTab('${tabName}')"  
+                            [EditMode]="GridEditMode()"  
                             [BottomMargin]="GridBottomMargin">
                         </mj-user-view-grid>
                     </mj-tab-body>`)
