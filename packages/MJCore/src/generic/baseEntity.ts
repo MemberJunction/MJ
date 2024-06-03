@@ -698,38 +698,58 @@ export abstract class BaseEntity {
      * @returns 
      */
     public async Save(options?: EntitySaveOptions) : Promise<boolean> {
-        const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
-        const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
-        this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
+        const currentResultCount = this.ResultHistory.length;
+        const newResult = new BaseEntityResult();
+        newResult.StartedAt = new Date();
 
-        if (_options.IgnoreDirtyState || this.Dirty) {
-            if (BaseEntity.Provider == null) {    
-                throw new Error('No provider set');
-            }
-            else  {
-                const valResult = this.Validate();
-                if (valResult.Success) {
-                    const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
-                    if (data) {
-                        this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-                        this.SetMany(data);
-                        const result = this.LatestResult;
-                        if (result)
-                            result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
+        try {
+            const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
 
-                        this.RaiseEvent('save', null)
-                        return true;
+            const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;            
+            this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
+    
+            if (_options.IgnoreDirtyState || this.Dirty) {
+                if (BaseEntity.Provider == null) {    
+                    throw new Error('No provider set');
+                }
+                else  {
+                    const valResult = this.Validate();
+                    if (valResult.Success) {
+                        const data = await BaseEntity.Provider.Save(this, this.ActiveUser, _options)
+                        if (data) {
+                            this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
+                            this.SetMany(data);
+                            const result = this.LatestResult;
+                            if (result)
+                                result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
+    
+                            this.RaiseEvent('save', null)
+                            return true;
+                        }
+                        else
+                            return false;
                     }
-                    else
-                        return false;
-                }
-                else {
-                    throw valResult; // pass this along to the caller
+                    else {
+                        throw valResult; // pass this along to the caller
+                    }
                 }
             }
+            else    
+                return true; // nothing to save since we're not dirty
         }
-        else    
-            return true; // nothing to save since we're not dirty
+        catch (e) {
+            if (currentResultCount === this.ResultHistory.length) {
+                // this means that NO new results were added to the history anywhere 
+                // so we need to add a new result to the history here
+                newResult.Success = false;
+                newResult.Type = this.IsSaved ? 'update' : 'create';
+                newResult.Message = e.message;
+                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                newResult.EndedAt = new Date();               
+                this.ResultHistory.push(newResult);
+            }
+            return false;
+        }
     }
 
     /**
@@ -879,21 +899,40 @@ export abstract class BaseEntity {
      * @returns 
      */
     public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
-        if (BaseEntity.Provider == null) {    
-            throw new Error('No provider set');
-        }
-        else{
-            this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
-            
-            if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
-                // record deleted correctly
-                // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                this.RaiseEvent('delete', null);
-                this.NewRecord(); // will trigger a new record event here too
-                return true;
+        const currentResultCount = this.ResultHistory.length;
+        const newResult = new BaseEntityResult();
+        newResult.StartedAt = new Date();
+        
+        try {
+            if (BaseEntity.Provider == null) {    
+                throw new Error('No provider set');
             }
-            else // record didn't save, return false, but also don't wipe out the entity like we do if the Delete() worked
-                return false;
+            else{
+                this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
+                
+                if (await BaseEntity.Provider.Delete(this, options, this.ActiveUser)) {
+                    // record deleted correctly
+                    // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
+                    this.RaiseEvent('delete', null);
+                    this.NewRecord(); // will trigger a new record event here too
+                    return true;
+                }
+                else // record didn't save, return false, but also don't wipe out the entity like we do if the Delete() worked
+                    return false;
+            }
+        }
+        catch (e) {
+            if (currentResultCount === this.ResultHistory.length) {
+                // this means that NO new results were added to the history anywhere 
+                // so we need to add a new result to the history here
+                newResult.Success = false;
+                newResult.Type = 'delete'
+                newResult.Message = e.message;
+                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                newResult.EndedAt = new Date();               
+                this.ResultHistory.push(newResult);
+            }
+            return false;
         }
     }
 
