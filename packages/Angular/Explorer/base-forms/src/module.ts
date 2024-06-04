@@ -21,11 +21,13 @@ import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 
 // Markdown
 import { MarkdownModule } from 'ngx-markdown';
+import { MJLinkField } from './lib/link-field.component';
 
 @NgModule({
   declarations: [
     SectionLoaderComponent,
     MJFormField,
+    MJLinkField
   ],
   imports: [
     CommonModule,
@@ -46,6 +48,7 @@ import { MarkdownModule } from 'ngx-markdown';
   exports: [
     SectionLoaderComponent,
     MJFormField,
+    MJLinkField
   ]
 })
 export class BaseFormsModule { }

@@ -1,9 +1,0 @@
-.app-container {
-    padding: 10px;
-}
-
-.flex-display-row-header {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-}

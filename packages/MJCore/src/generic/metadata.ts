@@ -54,6 +54,22 @@ export class Metadata {
         return Metadata.Provider.Entities;
     }
 
+    /**
+     * Helper method to find an entity by name in a case insensitive manner.  
+     * @param entityName 
+     */
+    public EntityByName(entityName: string): EntityInfo {
+        return this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
+    }
+    /**
+     * Helper method to find an entity by ID
+     * @param entityID 
+     * @returns 
+     */
+    public EntityByID(entityID: number): EntityInfo {
+        return this.Entities.find(e => e.ID === entityID);
+    }
+
     public get Queries(): QueryInfo[] {
         return Metadata.Provider.Queries;
     }

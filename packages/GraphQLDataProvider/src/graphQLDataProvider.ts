@@ -991,7 +991,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         const data = await GraphQLDataProvider.ExecuteGQL(query, {
                                                                     EntityName: entityName, 
-                                                                    CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs}
+                                                                    CompositeKey: {KeyValuePairs: primaryKey.KeyValuePairs.map(kv => {
+                                                                                            return {FieldName: kv.FieldName, Value: kv.Value.toString()}
+                                                                                        })}
                                                                 });
         if (data && data.GetEntityRecordName && data.GetEntityRecordName.Success)
             return data.GetEntityRecordName.RecordName;
@@ -1019,7 +1021,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const data = await GraphQLDataProvider.ExecuteGQL(query,  {info: info.map(i => { 
             return { 
                      EntityName: i.EntityName, 
-                     CompositeKey: {KeyValuePairs: i.CompositeKey.KeyValuePairs}
+                     CompositeKey: {KeyValuePairs: i.CompositeKey.KeyValuePairs.map(kv => {
+                                    return {FieldName: kv.FieldName, Value: kv.Value.toString()}
+                                })}
                     } 
                 })});
         if (data && data.GetEntityRecordNames)
