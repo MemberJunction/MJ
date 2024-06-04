@@ -4,6 +4,7 @@
   "description": "Generated action subclasses maintained by the CodeGen utility.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "private": true,
   "files": [
     "/dist"
   ],
