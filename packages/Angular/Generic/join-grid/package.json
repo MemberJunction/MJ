@@ -29,6 +29,7 @@
     "@memberjunction/global": "~1.4.0",
     "@memberjunction/core": "~1.4.0",
     "@memberjunction/ng-shared": "~1.4.0",
+    "@memberjunction/ng-container-directives": "~1.4.0",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-dialog": "~15.1.0",
     "@progress/kendo-angular-layout": "~15.1.0",

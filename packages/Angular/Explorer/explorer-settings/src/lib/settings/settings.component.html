@@ -10,6 +10,27 @@
 
     <!-- Display container -->
     <div class="display-container" mjFillContainer [fillWidth]="false">
+        <mj-join-grid
+            RowsEntityName="Entities"
+            RowsEntityDisplayField="Name"
+            RowsEntityDataSource="FullEntity"
+            RowsExtraFilter="SchemaName <> '__mj' AND (Name like 'a%' or Name like 'p%')"
+            RowsOrderBy="Name"
+            ColumnsEntityName="Actions"
+            ColumnsEntityDisplayField="Name"
+            ColumnsEntityDataSource= "FullEntity"
+            ColumnsMode="Entity"
+            ColumnsExtraFilter="Name like 'v%' or Name like 'd%' or Name like 'test%'"
+            ColumnsOrderBy="Name"
+            JoinEntityName="Entity Actions"
+            JoinEntityRowForeignKey="EntityID"
+            JoinEntityColumnForeignKey="ActionID"
+            CheckBoxValueMode="RecordExists"
+
+            style="height: 750px; width: 800px;"
+        >
+
+        </mj-join-grid>
         @switch (currentItem) {
             @case ('EntityPermissions') {
                 <mj-entity-permissions-selector-with-grid></mj-entity-permissions-selector-with-grid>

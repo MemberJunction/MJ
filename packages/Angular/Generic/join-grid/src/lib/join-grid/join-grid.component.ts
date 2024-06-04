@@ -1,9 +1,16 @@
-import { Component, OnInit, Input, EventEmitter, Output, AfterViewInit } from '@angular/core';
+import { Component, Input, AfterViewInit } from '@angular/core';
 
-import { BaseEntity, EntityInfo, Metadata, RunView } from '@memberjunction/core';
-import { Router } from '@angular/router';
+import { BaseEntity, EntityInfo, Metadata, RunView, RunViewParams } from '@memberjunction/core';
  
  
+export class JoinGridRow {
+  FirstColValue: any;
+  JoinExists: boolean = false;
+  JoinEntityRowForeignKey: any;
+  JoinEntityColumnForeignKey: any;
+  ColumnData: {index: number, ColumnForeignKey: any, data: BaseEntity | undefined}[] = []
+}
+
 @Component({
   selector: 'mj-join-grid',
   templateUrl: './join-grid.component.html',
@@ -20,9 +27,32 @@ export class JoinGridComponent implements AfterViewInit {
    */
   @Input() RowsEntityDisplayField!: string
   /**
+   * Determines how the row data will be fetched. 
+   * * When set to FullEntity, all rows in the specified RowEntityName will be used.
+   * * When set to ViewName, the RowsEntityViewName will be used to fetch the rows from a defined User View
+   * * When set to Array, the RowsEntityData array will be used to fetch the rows
+   */
+  @Input() RowsEntityDataSource: 'FullEntity' | 'ViewName' | 'Array' = 'FullEntity'
+
+  /**
+   * For RowsEntityDataSource = FullEntity or ViewName, this is the extra filter to apply to the rows entity when fetching data. This is optional.
+   */
+  @Input() RowsExtraFilter?: string
+
+  /**
+   * For RowsEntityDataSource = FullEntity or ViewName, this is the order by clause to apply to the rows entity when fetching data. This is optional.
+   */
+  @Input() RowsOrderBy?: string
+
+  /**
+   * Used when RowsEntityDataSource = ViewName, this will be the name of the User View for the specified RowsEntity to run to get data
+   */
+  @Input() RowsEntityViewName?: string
+
+  /**
    * Required: provide an array of BaseEntity objects that will be used to display the rows in the grid.
    */
-  @Input() RowsEntityData?: BaseEntity[];
+  @Input() RowsEntityArray?: BaseEntity[];
 
   /**
    * When set to Entity, the ColumnsEntity and related settings will be used to build the columns in the grid. When set to Fields, fields from the JoinEntity will be used to build the columns in the grid.
@@ -40,9 +70,32 @@ export class JoinGridComponent implements AfterViewInit {
   @Input() ColumnsEntityDisplayField!: string
 
   /**
+   * Determines how the column data will be fetched.
+   * * When set to FullEntity, all columns in the specified ColumnsEntityName will be used.
+   * * When set to ViewName, the ColumnsEntityViewName will be used to fetch the columns from a defined User View
+   * * When set to Array, the ColumnsEntityArray array will be used to fetch the columns
+   */
+  @Input() ColumnsEntityDataSource: 'FullEntity' | 'ViewName' | 'Array' = 'FullEntity'
+
+  /**
+   * For ColumnsEntityDataSource = FullEntity or ViewName, this is the extra filter to apply to the columns entity when fetching data. This is optional.
+   */
+  @Input() ColumnsExtraFilter?: string
+
+  /**
+   * For ColumnsEntityDataSource = FullEntity or ViewName, this is the order by clause to apply to the columns entity when fetching data. This is optional.
+   */
+  @Input() ColumnsOrderBy?: string
+
+  /**
+   * Used when ColumnsEntityDataSource = ViewName, this will be the name of the User View for the specified ColumnsEntity to run to get data
+   */
+  @Input() ColumnsEntityViewName?: string
+
+  /**
    * Required when ColumnsMode is set to Entity: provide an array of BaseEntity objects that will be used to display the columns in the grid.
    */ 
-  @Input() ColumnsEntityData?: BaseEntity[] 
+  @Input() ColumnsEntityArray?: BaseEntity[] 
 
   /**
    * The name of the entity that will be used for joining the RowsEntity and ColumnsEntity. Or, in the case of ColumnsMode = Fields, there is no true "joining" happening but we are joining the data from the RowsEntity and JoinEntity together.
@@ -72,7 +125,7 @@ export class JoinGridComponent implements AfterViewInit {
    *  * When a user checks the checkbox in the grid, a value in the JoinEntity will be set to true in the CheckBoxValueField field.
    *  * When a user unchecks the checkbox in the grid, the value in the JoinEntity will be set to false in the CheckBoxValueField field.
    */
-  @Input() CheckBoxValueMode: 'JoinRecordExists' | 'ColumnValue' = 'JoinRecordExists'
+  @Input() CheckBoxValueMode: 'RecordExists' | 'ColumnValue' = 'RecordExists'
 
   /**
    * Required when CheckBoxValueMode is set to ColumnValue: the name of the field in the JoinEntity that will be used to store the value of the checkbox.
@@ -86,17 +139,38 @@ export class JoinGridComponent implements AfterViewInit {
 
 
   /*The below members are public because the Angular template needs access to them, but by naming convention we prefix with an _ so that it is clear they are not to be used outside of the component */
-  public _GridData: any[] = [];
-  public _ShowLoader: boolean = false;
+  public _GridData: JoinGridRow[] = [];
+  public _IsLoading: boolean = false;
+  public _NumDirtyRecords: number = 0;
 
   /* protected internal members */
   protected _rowsEntityInfo: EntityInfo | null = null;
   protected _columnsEntityInfo: EntityInfo | null = null;
+  protected _columnsEntityData: BaseEntity[] | undefined = undefined;
+  protected _rowsEntityData: BaseEntity[] | undefined = undefined;
+
+  /**
+   * Saves all of the changes made in the grid. This includes adding new records, updating existing records, and deleting records.
+   */
+  public async Save(): Promise<boolean> {
+    return true;
+  }
+
+  /**
+   * Cancels any changes and reverts to the prior state of the grid that reflects the last saved state.
+   */
+  public async CancelEdit() {
+  }
+
+  public IsRecordReallyDirty(row: JoinGridRow): boolean {
+    return false;
+  }
 
   /**
    * This method is called automatically when the component is first loaded. Call the method anytime if you want to refresh the grid.
    */
   public async Refresh() {
+    this._IsLoading = true;
     // we are provided an array of Column and Row objects. We need to get the rows from the JoinEntity that link them up.
     const md = new Metadata();
     this._rowsEntityInfo = md.EntityByName(this.RowsEntityName);
@@ -106,14 +180,15 @@ export class JoinGridComponent implements AfterViewInit {
     if (!this._columnsEntityInfo)
       throw new Error('Invalid entity name provided for columns entity.');
 
-    const rv = new RunView();
+    await this.PopulateRowsAndColsData();
 
     const rowQuotes = this._rowsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-    let filter = `${this.JoinEntityRowForeignKey} IN (${this.RowsEntityData!.map(obj => `${rowQuotes}${obj.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name)}${rowQuotes}`).join(',')})` 
+    let filter = `${this.JoinEntityRowForeignKey} IN (${this._rowsEntityData!.map(obj => `${rowQuotes}${obj.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name)}${rowQuotes}`).join(',')})` 
     if (this.ColumnsMode === 'Entity') {
       const colQuotes = this._columnsEntityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-      filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this.ColumnsEntityData!.map(obj => `${colQuotes}${obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)}${colQuotes}`).join(',')})`;
+      filter += ` AND ${this.JoinEntityColumnForeignKey} IN (${this._columnsEntityData!.map(obj => `${colQuotes}${obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name)}${colQuotes}`).join(',')})`;
     }
+    const rv = new RunView();
     const result = await rv.RunView(
       { 
         EntityName: this.JoinEntityName, 
@@ -122,35 +197,70 @@ export class JoinGridComponent implements AfterViewInit {
       });
     if (result && result.Success) {
       // we have the data, now we need to build the grid
-      this.BuildGrid(result.Results);
+      this.PopulateGridData(result.Results);
+    }
+    this._IsLoading = false;
+  }
+
+  protected async PopulateRowsAndColsData() {
+    const rv = new RunView();
+    if (this.ColumnsEntityDataSource === 'Array') {
+      this._columnsEntityData = this.ColumnsEntityArray;
+    }
+    else {
+      this._columnsEntityData = await this.RunColumnsOrRowsView(this.ColumnsEntityDataSource, this.ColumnsEntityName, this.ColumnsEntityViewName, this.ColumnsExtraFilter, this.ColumnsOrderBy);
+    }
+    if (this.RowsEntityDataSource === 'Array') {
+      this._rowsEntityData = this.RowsEntityArray;
+    }
+    else {
+      this._rowsEntityData = await this.RunColumnsOrRowsView(this.RowsEntityDataSource, this.RowsEntityName, this.RowsEntityViewName, this.RowsExtraFilter, this.RowsOrderBy);
     }
   }
 
-  protected async BuildGrid(data: BaseEntity[]) {
+  protected async RunColumnsOrRowsView(dataSource: 'FullEntity' | 'ViewName', entityName: string, viewName?: string, extraFilter?: string, orderBy?: string): Promise<BaseEntity[]> {
+    const rv = new RunView();
+    const params: RunViewParams = dataSource === 'FullEntity' ? { EntityName: entityName } : { ViewName: viewName };
+    if (extraFilter)
+      params.ExtraFilter = extraFilter;
+    if (orderBy)  
+      params.OrderBy = orderBy;
+
+    params.ResultType = 'entity_object';
+    const data = await rv.RunView(params);
+    if (data && data.Success) {
+      return data.Results; 
+    }
+    else {
+      return [];
+    }
+  }
+
+  protected async PopulateGridData(joinEntityData: BaseEntity[]) {
     // we have the data, now we need to build the grid
     // we need to build the grid data
     const gridData: any[] = [];
-    this.RowsEntityData!.forEach(row => {
-      let rowData: any = {
-        first: row.Get(this.RowsEntityDisplayField)
+    this._rowsEntityData!.forEach(row => {
+      let rowData: JoinGridRow = {
+        FirstColValue: row.Get(this.RowsEntityDisplayField),
+        JoinExists: false,
+        JoinEntityRowForeignKey: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name),
+        JoinEntityColumnForeignKey: null,
+        ColumnData: [] // start off with an empty array
       };
 
       // for the mode where we are using columns, do the following
       if (this.ColumnsMode === 'Entity') {
-        this.ColumnsEntityData!.forEach(column => {
-          const join = data.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
-          if (join) {
-            rowData = { 
-              ...rowData, 
-              [column.Get(this.ColumnsEntityDisplayField)]: true,
-              [this.JoinEntityColumnForeignKey]: join.Get(this.JoinEntityColumnForeignKey), 
-              [this.JoinEntityRowForeignKey]: join.Get(this.JoinEntityRowForeignKey),
-              [this.JoinEntityName]: join.Get(this.JoinEntityName)
-             };
-          } else {
-            rowData[column.Get(this.ColumnsEntityDisplayField)] = false;
-          }
-        });  
+        for (let i = 0; i < this._columnsEntityData!.length; i++) {
+          const column = this._columnsEntityData![i];
+          const join = joinEntityData.find(j => j.Get(this.JoinEntityRowForeignKey) === row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name) && 
+                                                j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
+          rowData.ColumnData.push({
+            index: i,
+            ColumnForeignKey: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name),
+            data: join          
+          });
+        }
       }
       else {
         // we are display the values from the JoinEntity as columns from the JoinEntityDisplayColumns array
@@ -159,129 +269,54 @@ export class JoinGridComponent implements AfterViewInit {
     });
     this._GridData = gridData;
   }
-}
 
-/* 
-import { AfterViewInit, Component, Input, OnInit } from '@angular/core';
-import { RunView } from '@memberjunction/core';
-import { Subscription, debounceTime, fromEvent } from 'rxjs';
+  public _IsColumnChecked(row: JoinGridRow, colRecord: BaseEntity): boolean {
+    // check to see if there is a matching object in the row's data array that links to the colRecord's primary key value
+    const pkey = colRecord.FirstPrimaryKey.Value;
+    const item = row.ColumnData.find(item => item.ColumnForeignKey === pkey)
+    if (item?.data)
+      return true;
+    else
+      return false;
+  }
 
-@Component({
-  selector: 'app-join-grid',
-  templateUrl: './join-grid.component.html',
-  styleUrls: ['./join-grid.component.css']
-})
-export class JoinGridComponent implements OnInit, AfterViewInit {
-  @Input() RowsEntity: string = '';
-  @Input() ColumnsEntity: string = '';
-  @Input() JoinEntity: string = '';
-  @Input() JoinRowForeignKey: string = '';
-  @Input() JoinColumunForeignKey: string = '';
-  @Input() RowsFilter: string = '';
-  @Input() ColumnsFilter: string = '';
-  @Input() EditMode: boolean = false;
-  public showloader: boolean = false;
-  public viewData: any[] = [];
-  public visibleColumns: any[] = [];
-  public ShowError: boolean = false;
-  public ErrorMessage: string = '';
-  public gridHeight: number = 750;
-  private resizeSub: Subscription | null = null;
+  protected _pendingDeletes: BaseEntity[] = [];
+  protected _pendingInserts: BaseEntity[] = [];
 
-  constructor() { }
+  public async _FlipRecord(row: JoinGridRow, colRecord: BaseEntity, stopPropagation: boolean = false) {
+    const pkey = colRecord.FirstPrimaryKey.Value;
+    const item = row.ColumnData.find(item => item.ColumnForeignKey === pkey)
+    if (item && item.data) {
+      // if this is a record that is saved, put into an array of pending deletes
+      // now add the item to the array of stuff to delete, we can remove it from the array if the user unchecks the box
+      if (item.data.IsSaved)
+        this._pendingDeletes.push(item.data!);
 
-  ngOnInit(): void {
-    if (!this.RowsEntity || !this.ColumnsEntity || !this.JoinEntity || !this.JoinRowForeignKey || !this.JoinColumunForeignKey) {
-      this.ShowError = true;
-      this.ErrorMessage = 'Missing required parameters';
-    } else {
-      this.LoadData();
+      // now take data off the item
+      item.data = undefined;
+    } 
+    else {
+      // we need to add the record, first see if the record is in the _pendingDeletes array
+      let record = this._pendingDeletes.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === pkey && obj.Get(this.JoinEntityRowForeignKey) === row.JoinEntityRowForeignKey);
+      if (!record) {
+        const md = new Metadata();
+        record = await md.GetEntityObject(this.JoinEntityName);
+        record.Set(this.JoinEntityRowForeignKey, row.JoinEntityRowForeignKey);
+        record.Set(this.JoinEntityColumnForeignKey, pkey);
+      }
+      if (item)
+        item.data = record;
+      else
+        row.ColumnData.push({
+          index: this._columnsEntityData!.findIndex(obj => obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name) === pkey),
+          ColumnForeignKey: pkey,
+          data: record
+        });
+
+      // if a new record, put into pending so that we can easily remove it if the user unchecks the box
+      if (!record.IsSaved)
+        this._pendingInserts.push(record);
     }
-  }
-
-  ngAfterViewInit(): void {
-    this.setGridHeight();
-  }
-
-  async LoadData() {
-    const rv = new RunView();
-    this.showloader = true;
-    const promises = [];
-    promises.push(rv.RunView({ EntityName: this.RowsEntity, ExtraFilter: this.RowsFilter }));
-    promises.push(rv.RunView({ EntityName: this.ColumnsEntity, ExtraFilter: this.ColumnsFilter }));
-    const responses = await Promise.all(promises);
-    if (responses[0].Success && responses[1].Success) {
-      this.getJoinData(responses[0].Results, responses[1].Results);
-    } else {
-      this.ShowError = true;
-      this.ErrorMessage = responses[0].ErrorMessage || responses[1].ErrorMessage;
-    }
-  }
-
-  async getJoinData(rows: any[], columns: any[]) {
-    const rv = new RunView();
-    // getting the relations between rows and columns
-    const res = await rv.RunView({ EntityName: this.JoinEntity, ExtraFilter: `${this.JoinRowForeignKey} IN (${rows.map(obj => obj.ID).join(',')}) AND ${this.JoinColumunForeignKey} IN (${columns.map(obj => obj.ID).join(',')})` });
-    if (res.Success) {
-      this.prepareGridData(rows, columns, res.Results);
-    } else {
-      this.showloader = false;
-      this.ShowError = true;
-      this.ErrorMessage = res.ErrorMessage;
-    }
-  }
-
-  prepareGridData(rows: any[], columns: any[], joinEntities: any[]) {
-    const gridData: any[] = [];
-    this.visibleColumns = [{ field: 'first', title: '', width: 80 }];
-    columns.forEach(column => {
-      this.visibleColumns.push({ field: column.Name, title: column.Name, width: 80  });
-    });
-    rows.forEach(row => {
-      let rowData: any = {
-        first: row.Name
-      };
-      columns.forEach(column => {
-        const join = joinEntities.find(j => j[this.JoinColumunForeignKey] === column.ID && j[this.JoinRowForeignKey] === row.ID);
-        if (join) {
-          rowData = { 
-            ...rowData, 
-            [column.Name]: true,
-            [this.JoinColumunForeignKey]: join[this.JoinColumunForeignKey], 
-            [this.JoinRowForeignKey]: join[this.JoinRowForeignKey],
-            [this.JoinEntity]: join[this.JoinEntity]
-           };
-        } else {
-          rowData[column.Name] = false;
-        }
-      });
-      gridData.push(rowData);
-    });
-    this.showloader = false;
-    this.viewData = gridData;
-  }
-
-  private _gridMargin = 150;
-  setGridHeight(): void {
-    // Subscribe to the window resize event
-    this.resizeSub = fromEvent(window, 'resize').pipe(
-      debounceTime(100) // Debounce the resize event to avoid frequent updates
-    ).subscribe(() => {
-      // Update the grid height when the window is resized
-      this.ResizeGrid();
-    });
-
-    // Set the initial grid height with a slight delay to allow stuff to get set
-    setTimeout(() => {
-      this.ResizeGrid();
-    }, 100);
-  }
-
-  public ResizeGrid(): void {
-    // this._gridMargin = this.getGridTopPosition();
-    this.gridHeight = window.innerHeight - this._gridMargin;  
   }
 }
-
-
-*/
+ 

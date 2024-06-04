@@ -1,44 +1,80 @@
 <div mjFillContainer class="wrapper"> 
-    <kendo-grid
-        #kendoGrid
-        [resizable]="true"
-        [data]="_GridData"
-        scrollable="virtual"
-        [rowHeight]="36"
-        [loading]="_ShowLoader"
-    >
-
-    </kendo-grid>
-    <!-- <kendo-grid 
-        #kendoGrid 
-        [resizable]="true" 
-        [data]="viewData" 
-        scrollable="virtual" 
-        [rowHeight]="36"
-        [loading]="showloader"
-        [height]="gridHeight"
-        [sortable]="true"
-        [resizable]="true"
-        [reorderable]="true"
-        [selectable]="true">
-
-        <ng-template kendoGridToolbarTemplate *ngIf="EditMode">
-            <button kendoButton>Save</button>
-        </ng-template>
-
-        <kendo-grid-column *ngFor="let item of visibleColumns; let i = index" field="{{item.field}}"
-            title="{{item.title}}" [width]="item.width"
-            [headerStyle]="{ 'font-weight' : 'bold', 'background-color': '#a9c2af' }">
-            <ng-template *ngIf="i === 0" kendoGridCellTemplate let-dataItem>
-                {{dataItem[item.field]}}
-            </ng-template>
-            <ng-template kendoGridCellTemplate let-dataItem>
-                <input type="checkbox" [checked]="dataItem[item.field]" [disabled]="!EditMode" />
-            </ng-template>
-            <ng-template *ngIf="i === 0" kendoGridFooterTemplate>
-                {{this.viewData.length}} records
-            </ng-template>
-        </kendo-grid-column>
-
-    </kendo-grid> -->
+    @if (_IsLoading) {
+        <div><kendo-loader></kendo-loader></div>
+    }
+    <button [disabled]="_NumDirtyRecords === 0" kendoButton (click)="Save()">Save</button>
+    <button [disabled]="_NumDirtyRecords === 0" kendoButton (click)="CancelEdit()">Cancel</button>
+    @if (!_IsLoading) {
+        <table class="grid">
+            <thead>
+                <tr>
+                    <!-- First column is the name of the Rows Entity -->
+                    <th>{{RowsEntityName}}</th>
+                    @if (ColumnsMode === 'Entity') {
+                        @for (colRecord of this._columnsEntityData; track colRecord) {
+                            <th>{{colRecord.Get(this.ColumnsEntityDisplayField)}}</th>
+                        }
+                    }
+                    @else {
+                        <!-- we need one column for each of the fields in the JoinEntityDisplayColumns array -->
+                        @for (colName of JoinEntityDisplayColumns; track colName) {
+                            <th>{{colName}}</th>
+                        }
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (row of _GridData; track row) {
+                    <tr [ngClass]="IsRecordReallyDirty(row) ? 'dirty-row' : ''">
+                        <td class="first-column">
+                            <span>{{row.FirstColValue}}</span>
+                        </td>
+                        @if (ColumnsMode === 'Fields') {
+                            <td *ngFor="let colName of JoinEntityDisplayColumns">
+                                <input type="checkbox" kendoCheckBox>
+                            </td>
+                        }
+                        @else {
+                            @for (colRecord of this._columnsEntityData; track colRecord) {
+                                <!-- loop through all the columns and display a checkbox and check it if we have a match in the current row -->
+                                <td (click)="_FlipRecord(row, colRecord, true)">
+                                    <input type="checkbox" kendoCheckBox [value]="_IsColumnChecked(row, colRecord)" (click)="_FlipRecord(row, colRecord)">
+                                </td>
+                            }
+                        }
+                    </tr>                
+                }
+                <!-- <tr *ngFor="let item of permissions" [ngClass]="IsPermissionReallyDirty(permission) ? 'dirty-row' : ''"> -->
+                    <!-- <td class="permission-left-col" (click)="flipRow(permission)">
+                        @if(this.Mode === 'Entity') {
+                            <span>
+                                {{ permission.RoleName }}
+                            </span>    
+                        }
+                        @else if(this.Mode === 'Role') {
+                            <span>
+                                {{ permission.Entity }}
+                            </span>
+                        }
+    
+                        @if(IsPermissionReallyDirty(permission)) {
+                            <span class="fa-solid fa-arrow-rotate-left" (click)="revertRow($event, permission)"></span>
+                        }
+                    </td>
+                    <td (click)="flipPermission($event, permission, 'Read', true)">
+                        <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanRead" (click)="flipPermission($event, permission, 'Read', false)">
+                    </td>
+                    <td (click)="flipPermission($event, permission, 'Create', true)">
+                        <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanCreate" (click)="flipPermission($event, permission, 'Create', false)">
+                    </td>
+                    <td (click)="flipPermission($event, permission, 'Update', true)">
+                        <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanUpdate" (click)="flipPermission($event, permission, 'Update', false)">
+                    </td>
+                    <td (click)="flipPermission($event, permission, 'Delete', true)">
+                        <input type="checkbox" kendoCheckBox [(ngModel)]="permission.CanDelete" (click)="flipPermission($event, permission, 'Delete', false)">
+                    </td> -->
+                <!-- </tr> -->
+            </tbody>
+        </table>
+    }
 </div>
