@@ -3,6 +3,9 @@ import { Component, OnInit, Input, EventEmitter, Output, AfterViewInit } from '@
 import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
+
+import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
+import { sampleData, displayDate } from './dummy-data';
  
 /**
  * 
@@ -87,4 +90,8 @@ export class TimelineComponent implements AfterViewInit {
 
   ngAfterViewInit(): void {
   }
+  
+  public selectedDate: Date = displayDate;
+  public events: SchedulerEvent[] = sampleData;
+
 }
