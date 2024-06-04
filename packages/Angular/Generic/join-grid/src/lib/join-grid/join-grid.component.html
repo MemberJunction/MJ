@@ -1,8 +1,15 @@
-<div class="card-container" *ngIf="ShowError">
-    {{ErrorMessage}}
-</div>
-<div class="user-view-grid-wrap" *ngIf="!ShowError">
-    <kendo-grid 
+<div mjFillContainer class="wrapper"> 
+    <kendo-grid
+        #kendoGrid
+        [resizable]="true"
+        [data]="_GridData"
+        scrollable="virtual"
+        [rowHeight]="36"
+        [loading]="_ShowLoader"
+    >
+
+    </kendo-grid>
+    <!-- <kendo-grid 
         #kendoGrid 
         [resizable]="true" 
         [data]="viewData" 
@@ -33,5 +40,5 @@
             </ng-template>
         </kendo-grid-column>
 
-    </kendo-grid>
+    </kendo-grid> -->
 </div>

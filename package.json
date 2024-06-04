@@ -6,6 +6,8 @@
     "packages/*",
     "packages/AI/*",
     "packages/Angular/*",
+    "packages/Angular/Generic/*",
+    "packages/Angular/Explorer/*",
     "packages/AngularElements/*"
   ],
   "scripts": {
