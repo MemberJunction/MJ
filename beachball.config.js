@@ -14,7 +14,7 @@ module.exports = {
   groups: [
     {
       name: 'MJ',
-      include: ['packages/*', 'packages/AI/*', 'packages/Angular/*', 'packages/AngularElements/*'],
+      include: ['packages/*', 'packages/AI/*', 'packages/Angular/**', 'packages/AngularElements/*'],
     },
   ],
   precommit: (cwd) => {
