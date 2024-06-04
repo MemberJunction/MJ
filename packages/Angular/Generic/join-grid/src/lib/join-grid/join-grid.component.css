@@ -1,0 +1,64 @@
+button {
+    margin-left: 5px;
+    margin-top: 5px;
+    width: 125px;
+}
+
+.wrapper {
+    padding-right: 10px;
+}
+
+/* Style for the whole table */
+table {
+    margin-left: 5px;
+    margin-top: 10px;
+    margin-right: 5px;
+    border-collapse: collapse; /* Ensures border collapse for a cleaner look */
+    width: 100%;
+}
+ 
+table th {
+    background-color: #f2f2f2; /* Light gray background for headers */
+    color: black; /* Black text color for headers */
+    font-weight: bold; /* Bold font weight for headers */
+    text-align: left;
+}
+
+/* Style for all table cells */
+table th, table td {
+    height: 36px; /* Fixed height for all rows */
+    padding: 0 8px; /* Add some padding inside cells */
+}
+
+/* Style for the first column cells */
+table td:first-child {
+    display: flex; /* Make the cell a flex container */
+    justify-content: space-between; /* Space out the text and icons */
+    align-items: center; /* Center items vertically */
+    padding-right: 8px; /* Ensure there is some padding on the right */
+}
+
+/* Style for the text span within the first column */
+td:first-child span:first-child {
+    border: none; /* Ensures no border is applied to the span */
+}
+
+/* Style for the icons container span within the first column */
+td:first-child span:last-child {
+    border: none; /* Ensures no border is applied to the span */
+}
+
+/* Style for the icons within the first column */
+td:first-child .icon {
+    margin-left: 10px; /* Space between icons if needed */
+    cursor: pointer; /* Change cursor to pointer on hover */
+}
+
+table tr {
+    cursor: pointer;
+}
+
+table tr:hover {
+    background-color: #e7f4ff; /* Light blue for even rows */
+}
+ 
