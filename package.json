@@ -6,6 +6,8 @@
     "packages/*",
     "packages/AI/*",
     "packages/Angular/*",
+    "packages/Angular/Explorer/*",
+    "packages/Angular/Generic/*",
     "packages/AngularElements/*"
   ],
   "scripts": {
@@ -17,7 +19,9 @@
     "docs": "typedoc",
     "change": "beachball change",
     "checkchange": "beachball check --verbose",
-    "release": "beachball publish --access public"
+    "release": "beachball publish --access public",
+    "mergemain": "node ci/merge_main.mjs",
+    "commitpush": "node ci/commit_push.mjs"
   },
   "repository": "https://github.com/MemberJunction/MJ.git",
   "dependencies": {

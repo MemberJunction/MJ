@@ -45,7 +45,6 @@ import { ResourceContainerComponent } from './lib/generic/resource-container-com
 import { HeaderComponent } from './lib/header/header.component';
 import { GenericBrowserListComponent } from './lib/generic-browser-list/generic-browser-list.component';
 import { HomeComponent } from './lib/home-component/home.component';
-import { JoinGridComponent } from './lib/join-grid/join-grid.component';
 import { NavigationComponent } from './lib/navigation/navigation.component';
 import { QueryBrowserComponent } from './lib/query-browser-component/query-browser.component';
 import { ReportBrowserComponent } from './lib/report-browser-component/report-browser.component';
@@ -98,7 +97,6 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
     SingleApplicationComponent,
     FavoritesComponent,
     HeaderComponent,
-    JoinGridComponent,
     SingleEntityComponent,
     SingleRecordComponent,
     SingleReportComponent,
@@ -180,7 +178,6 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
     SingleApplicationComponent,
     FavoritesComponent,
     HeaderComponent,
-    JoinGridComponent,
     SingleEntityComponent,
     SingleRecordComponent,
     SingleReportComponent,

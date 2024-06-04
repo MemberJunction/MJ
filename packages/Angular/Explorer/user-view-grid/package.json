@@ -29,6 +29,7 @@
     "@memberjunction/global": "~1.4.0",
     "@memberjunction/core": "~1.4.0",
     "@memberjunction/ng-shared": "~1.4.0",
+    "@memberjunction/ng-entity-form-dialog": "~1.4.0",
     "@memberjunction/ng-compare-records": "~1.4.0",
     "@memberjunction/ng-container-directives": "~1.4.0",
     "@progress/kendo-angular-grid": "~15.1.0",

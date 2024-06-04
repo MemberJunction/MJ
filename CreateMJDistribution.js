@@ -185,7 +185,7 @@ async function createMJDistribution() {
 
   // Define directories and output
   const directories = ['SQL Scripts', 'packages/CodeGen', 'packages/MJAPI', 'packages/MJExplorer', 'packages/GeneratedEntities', 'packages/GeneratedActions'];
-  const filename = `Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`;
+  const filename = process.env.MJ_DISTRIBUTION_FILENAME || `Distributions/MemberJunction_Code_Bootstrap_${dateTime}.zip`;
   const output = fs.createWriteStream(filename);
   const archive = archiver('zip');
 
