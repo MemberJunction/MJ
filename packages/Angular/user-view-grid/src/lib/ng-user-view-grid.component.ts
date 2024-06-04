@@ -400,31 +400,50 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   }
 
   public async cellClickHandler(args: CellClickEvent) {
-    if(this.compareMode || this.mergeMode ) return;
+    if(this.compareMode || this.mergeMode ){
+      return;
+    }
+
+    if(!this._entityInfo){
+      LogError("cellClickHandler() called but this._entityInfo is null or undefined");
+      return;
+    }
     
-    if (this._entityInfo) {
-      const compositeKey: CompositeKey = new CompositeKey();
-      compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
-      this.rowClicked.emit({
-        entityId: this._entityInfo.ID,
-        entityName: this._entityInfo.Name,
-        CompositeKey: compositeKey
-      })
+    const compositeKey: CompositeKey = new CompositeKey();
+    compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
+    this.rowClicked.emit({
+      entityId: this._entityInfo.ID,
+      entityName: this._entityInfo.Name,
+      CompositeKey: compositeKey
+    });
 
-      if (this._entityInfo.AllowUpdateAPI && 
-          this.EditMode !== "None"  ) {
-        const perm = this._entityInfo.GetUserPermisions(new Metadata().CurrentUser)
-        if (perm.CanUpdate) {
-          this.StartEditMode();
-          args.sender.editCell(args.rowIndex, args.columnIndex, this.createFormGroup(args.dataItem));
+    if (this._entityInfo.AllowUpdateAPI && this.EditMode !== "None") {
+      const perm = this._entityInfo.GetUserPermisions(new Metadata().CurrentUser)
+      if (perm.CanUpdate) {
+        this.StartEditMode();
+        args.sender.editCell(args.rowIndex, args.columnIndex, this.createFormGroup(args.dataItem));
+      }
+    }
+
+    if (this.EditMode ==='None' && this.AutoNavigate) {
+      // tell app router to go to this record
+      let decodedUrl: string = decodeURIComponent(this.router.url).slice(1);
+      if(decodedUrl.includes('?')){
+        decodedUrl = decodedUrl.split('?')[0];
+      }
+
+      const newURL: string[] = ['resource', 'record', compositeKey.ToURLSegment()];
+      const newURLString: string = newURL.join('/');
+      const refreshPage: boolean = newURLString === decodedUrl; 
+
+      this.router.navigate(newURL, { queryParams: { Entity: this._entityInfo.Name } }).then(() => {
+        //handle the edge case of us navigating to a new entity record that
+        //has the same ID as the current entity record
+        if (refreshPage) {
+          window.location.reload();
         }
-      }
-
-      if (this.EditMode==='None' && this.AutoNavigate) {
-        // tell app router to go to this record
-        this.router.navigate(['resource', 'record', compositeKey.ToURLSegment()], { queryParams: { Entity: this._entityInfo.Name } })
-      }
-    } 
+      });
+    }
   } 
 
   public createFormGroup(dataItem: any): FormGroup {
