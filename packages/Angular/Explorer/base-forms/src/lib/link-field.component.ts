@@ -110,6 +110,7 @@ export class MJLinkField extends BaseRecordComponent implements AfterViewInit {
     public onClearClicked() {
         this.RecordName = '';
         this.RecordLinked = false;
+        this.Value = null;
         this.showMatchingRecords = false;
     }
 
