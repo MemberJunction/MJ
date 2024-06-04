@@ -5,6 +5,14 @@
                     
                 </div>
                 <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    <mj-tab Name="Activities" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 153}">
+                        Activities - Test
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-timeline/>
+                    </mj-tab-body>
                     <mj-tab Name="Details">
                         Details
                     </mj-tab>
