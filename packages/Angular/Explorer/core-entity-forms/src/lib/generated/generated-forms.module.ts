@@ -15,6 +15,7 @@ import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
+import { TimelineModule } from "@memberjunction/ng-timeline";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 
 // Kendo Imports
@@ -259,7 +260,7 @@ import { ActionParamDetailsComponent, LoadActionParamDetailsComponent } from "./
 import { ActionLibraryDetailsComponent, LoadActionLibraryDetailsComponent } from "./Entities/ActionLibrary/sections/details.component"
 import { LibraryDetailsComponent, LoadLibraryDetailsComponent } from "./Entities/Library/sections/details.component"
 import { ListCategoryDetailsComponent, LoadListCategoryDetailsComponent } from "./Entities/ListCategory/sections/details.component"
-    
+import {TimelineComponent } from "@memberjunction/ng-timeline";    
 
 @NgModule({
 declarations: [
@@ -292,12 +293,14 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
     ComboBoxModule
+
 ],
 exports: [
 ]
@@ -337,6 +340,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -382,6 +386,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -427,6 +432,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -472,6 +478,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -517,6 +524,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -562,6 +570,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -607,6 +616,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -652,6 +662,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -697,6 +708,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -742,6 +754,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -780,6 +793,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
