@@ -1,0 +1,52 @@
+<div class="record-form-container" mjFillContainer [bottomMargin]="20" [rightMargin]="5">
+    <form *ngIf="record" class="record-form"  #form="ngForm" mjFillContainer>
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+                <div #topArea class="record-form-group">
+                    
+                </div>
+                <mj-tabstrip (TabSelected)="onTabSelect($event.index)" mjFillContainer>
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Dashboard Categories" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Dashboards" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 177}">
+                        Dashboards
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboards')"  
+                            [NewRecordValues]="NewRecordValues('Dashboards')"
+                            [AllowLoad]="IsCurrentTab('Dashboards')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+
+                    <mj-tab Name="Dashboard Categories" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 178}">
+                        Dashboard Categories
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Dashboard Categories')"  
+                            [NewRecordValues]="NewRecordValues('Dashboard Categories')"
+                            [AllowLoad]="IsCurrentTab('Dashboard Categories')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        
