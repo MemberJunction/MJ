@@ -4978,10 +4978,10 @@ import { RegisterClass } from "@memberjunction/global";
         * * SQL Data Type: int
         * * Related Entity/Foreign Key: Entities (vwEntities.ID)
         */
-        get EntityID(): number | null {  
+        get EntityID(): number {  
             return this.Get('EntityID');
         }
-        set EntityID(value: number | null) {
+        set EntityID(value: number) {
             this.Set('EntityID', value);
         }
         /**
@@ -5053,7 +5053,7 @@ import { RegisterClass } from "@memberjunction/global";
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)
         */
-        get Entity(): string | null {  
+        get Entity(): string {  
             return this.Get('Entity');
         }
         

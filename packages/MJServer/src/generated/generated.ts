@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/3/2024, 5:34:25 PM
+* GENERATED: 6/4/2024, 2:11:03 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -5926,8 +5926,8 @@ export class List_ {
     @Field({nullable: true}) 
     Description?: string;
           
-    @Field(() => Int, {nullable: true}) 
-    EntityID?: number;
+    @Field(() => Int) 
+    EntityID: number;
           
     @Field(() => Int) 
     UserID: number;
@@ -5950,9 +5950,9 @@ export class List_ {
     @Field(() => Int, {nullable: true}) 
     CategoryID?: number;
           
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(510)
-    Entity?: string;
+    Entity: string;
           
     @Field() 
     @MaxLength(200)
@@ -5977,8 +5977,8 @@ export class CreateListInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int, { nullable: true })
-    EntityID?: number;
+    @Field(() => Int)
+    EntityID: number;
 
     @Field(() => Int)
     UserID: number;
@@ -6008,8 +6008,8 @@ export class UpdateListInput {
     @Field({ nullable: true })
     Description?: string;
 
-    @Field(() => Int, { nullable: true })
-    EntityID?: number;
+    @Field(() => Int)
+    EntityID: number;
 
     @Field(() => Int)
     UserID: number;
