@@ -1,0 +1,32 @@
+.record-linked {
+  color: darkblue;
+  text-decoration: underline;
+}
+
+.input-box {
+    width: 400px;
+}
+
+button {
+    width: 50px;
+}
+
+
+.matching-records {
+    width: 400px;
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+}
+
+.matching-records li {
+    padding: 8px;
+    cursor: pointer;
+}
+
+.matching-records li:hover {
+    background-color: #f0f0f0;
+}

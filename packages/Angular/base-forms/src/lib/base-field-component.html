@@ -36,28 +36,35 @@
         @if (ShowLabel) {
             <label>{{DisplayName}}</label>
         }
-        @switch (Type) {
-            @case ('textbox') {
-                <kendo-textbox [(ngModel)]="Value"  />   
-            }
-            @case ('textarea') {
-                <kendo-textarea [(ngModel)]="Value" mjFillContainer [fillWidth]="ShowLabel ? false : true" [fillHeight]="ShowLabel ? false : true" ></kendo-textarea>
-            }
-            @case ('numerictextbox') {
-                <kendo-numerictextbox [(value)]="Value"  />   
-            }
-            @case ('datepicker') {
-                <kendo-datepicker [(value)]="Value"></kendo-datepicker>
-            }
-            @case ('checkbox') {
-                <input type="checkbox" [(ngModel)]="Value" kendoCheckBox />   
-            }
-            @case ('dropdownlist') {
-                <kendo-dropdownlist [data]="PossibleValues" [(ngModel)]="Value"></kendo-dropdownlist>   
-            }
-            @case ('combobox') {
-                <kendo-combobox [data]="PossibleValues" [allowCustom]="true" [(ngModel)]="Value"></kendo-combobox>
-            }
+        @if (FieldInfo && FieldInfo.RelatedEntity && FieldInfo.RelatedEntity.length > 0) {
+            <!-- Foreign Key Link here -->
+             <mj-link-field [record]="record" [FieldName]="FieldName"></mj-link-field> 
+        }
+        @else {
+            <!-- Not a foreign key -->
+            @switch (Type) {
+                @case ('textbox') {
+                    <kendo-textbox [(ngModel)]="Value"  />   
+                }
+                @case ('textarea') {
+                    <kendo-textarea [(ngModel)]="Value" mjFillContainer [fillWidth]="ShowLabel ? false : true" [fillHeight]="ShowLabel ? false : true" ></kendo-textarea>
+                }
+                @case ('numerictextbox') {
+                    <kendo-numerictextbox [(value)]="Value"  />   
+                }
+                @case ('datepicker') {
+                    <kendo-datepicker [(value)]="Value"></kendo-datepicker>
+                }
+                @case ('checkbox') {
+                    <input type="checkbox" [(ngModel)]="Value" kendoCheckBox />   
+                }
+                @case ('dropdownlist') {
+                    <kendo-dropdownlist [data]="PossibleValues" [(ngModel)]="Value"></kendo-dropdownlist>   
+                }
+                @case ('combobox') {
+                    <kendo-combobox [data]="PossibleValues" [allowCustom]="true" [(ngModel)]="Value"></kendo-combobox>
+                }
+            }    
         }
     </div>         
 }
