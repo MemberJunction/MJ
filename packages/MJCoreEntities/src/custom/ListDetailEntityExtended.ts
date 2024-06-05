@@ -34,7 +34,7 @@ export class ListDetailEntityExtended extends ListDetailEntity  {
             }
 
             if(rvResult.Results.length > 0){
-                throw new Error('Record ${this.RecordID} already exists in List ${this.ListID}');
+                throw new Error(`Record ${this.RecordID} already exists in List ${this.ListID}`);
             }
 
             const saveResult = await super.Save();

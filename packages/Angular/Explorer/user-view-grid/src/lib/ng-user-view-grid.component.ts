@@ -127,6 +127,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
 
   public viewExecutionTime: number = 0;
   public showAddToListDialog: boolean = false;
+  public showAddToListLoader: boolean = false;
   public sourceListEntities: ListEntity[] | null = null;
   public listEntities: ListEntity[] = [];
   public selectedListEntities: ListEntity[] = [];
@@ -694,7 +695,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       else
         throw new Error("Invalid configuration, we need to receive either a ViewEntity, ViewID, ViewName, or EntityName and ExtraFilter in order to run a view")
 
-        console.log("params?", params);
       const rvResult = await rv.RunView(params);
       if (!rvResult.Success) {
         // it failed
@@ -703,8 +703,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       else {
         // it worked
         this.viewData = rvResult.Results;
-        console.log("viewData", this.viewData);
-
         this.totalRowCount = rvResult.TotalRowCount;
         this.formattedData = new Array(this.viewData.length);
 
@@ -1067,10 +1065,16 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       if(!this.sourceListEntities){
         await this.loadListEntities();
       }
+      else{
+        this.listEntities = this.sourceListEntities;
+        this.selectedListEntities = [];
+      }
     }
     else{
       this.enableCheckbox(true, 'addToList');
     }
+
+    this.setupSearchDebounce();
   }
 
   public async loadListEntities(): Promise<void> {
@@ -1079,8 +1083,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       LogError("Entity Info is not set");
       return;
     }
-
-    this.setupSearchDebounce();
 
     const md: Metadata = new Metadata();
     const rv: RunView = new RunView();
@@ -1102,9 +1104,46 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public async addToList(listEntity: ListEntity): Promise<void> {
     console.log('add to list', listEntity.Name);
     this.selectedListEntities.push(listEntity);
+    this.selectedListEntities.includes(listEntity);
+  }
+
+  public async removeFromList(listEntity: ListEntity): Promise<void> {
+    console.log('remove from list', listEntity.Name);
+    this.selectedListEntities = this.selectedListEntities.filter((le: ListEntity) => le.ID !== listEntity.ID);
   }
 
   public async addRecordsToSelectedLists(): Promise<void> {
+    this.showAddToListLoader = true;
+    const md: Metadata = new Metadata();
+    let errorCount: number = 0;
+    for(const listEntity of this.selectedListEntities){
+      for(const index of this.selectedKeys){
+        const listDetail: ListDetailEntity = await md.GetEntityObject<ListDetailEntity>('List Details');
+        const viewData = this.viewData[index];
+        const idField: number = viewData.ID;
+        listDetail.NewRecord();
+        listDetail.ListID = listEntity.ID;
+        listDetail.RecordID = idField.toString();
+        listDetail.Sequence = 0;
+        listDetail.ContextCurrentUser = md.CurrentUser;
+        let saveResult: boolean = await listDetail.Save();
+
+        if(!saveResult){
+          LogError(`Failed to save record to list: ${listEntity.Name}`);
+          LogError(listDetail.LatestResult);
+          errorCount++;
+        }
+      }
+    }
+
+    if(errorCount === 0){
+      this.CreateSimpleNotification('Records successfully added to the selected lists', 'success', 2000);
+    }
+    else{
+      this.CreateSimpleNotification('Some records failed to be added to the selected lists', 'error', 2000);
+    }
+
+    this.showAddToListLoader = false;
     this.toggleAddToListDialog(false);
   }
 

@@ -184,7 +184,7 @@
     <div>
         <kendo-textbox
       id="listSearch"
-      placeholder="Search here..."
+      placeholder="Search Lists..."
       kendoTextBox
       (valueChange)="onSearch($event)"
       [clearButton]="true"
@@ -192,21 +192,35 @@
     ></kendo-textbox>
     </div>
     <div class="overflow-y-scroll">
-        @for(listEntity of listEntities; track listEntity){
-            <div class="list-item">
-                {{listEntity.Name}}
-                <button kendoButton (click)="addToList(listEntity)">
-                    Add
-                </button>
-            </div>
-            <hr>
+        @if(showAddToListLoader){
+            <kendo-loader type="converging-spinner"></kendo-loader>
+        }
+        @else {
+            @for(listEntity of listEntities; track listEntity){
+                <div class="list-item">
+                    {{listEntity.Name}}
+                    @if(selectedListEntities.includes(listEntity)){
+                        <button kendoButton (click)="removeFromList(listEntity)">
+                            <span class="fa-regular fa-circle-minus"></span>
+                            Remove
+                        </button>
+                    }
+                    @else {
+                        <button kendoButton (click)="addToList(listEntity)">
+                            <span class="fa-regular fa-circle-plus"></span>
+                            Add
+                        </button>
+                    }
+                </div>
+                <hr>
+            }
         }
     </div>
       <kendo-dialog-actions>
-        <button kendoButton (click)="addRecordsToSelectedLists()" themeColor="primary">
+        <button kendoButton (click)="addRecordsToSelectedLists()" [disabled]="showAddToListLoader" themeColor="primary">
             Save
         </button>
-        <button kendoButton (click)="toggleAddToListDialog(false)" >
+        <button kendoButton (click)="toggleAddToListDialog(false)" [disabled]="showAddToListLoader">
             Cancel
         </button>
       </kendo-dialog-actions>
