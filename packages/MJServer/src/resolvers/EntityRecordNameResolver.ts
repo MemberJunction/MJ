@@ -3,6 +3,7 @@ import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-gr
 import { AppContext } from '../types';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
 import { CommunicationEngine } from '@memberjunction/communication-core';
+import { DocumentationEngine } from '@memberjunction/doc-utils';
 
 @InputType()
 export class EntityRecordNameInput {
@@ -41,6 +42,7 @@ export class EntityRecordNameResolver {
   ): Promise<EntityRecordNameResult> {
     //TEMPORARY: test harness for communication framework - dumb place but quick test grounds, will delete
     //this.TestCommunicationFramework(userPayload.userRecord, EntityName, primaryKey);
+    //this.TestDocLibraries(userPayload.userRecord);
 
 
     const md = new Metadata();
@@ -79,16 +81,22 @@ export class EntityRecordNameResolver {
       return { Success: false, Status: `Entity ${EntityName} not found`, CompositeKey: pk, EntityName };
   }
 
-  // private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
-  //   const engine = CommunicationEngine.Instance;
-  //   await engine.Config(false, user);
-  //   await engine.SendSingleMessage('SendGrid', 'Email', {
-  //     To: 'email@goes.here',
-  //     Subject: `MJServer Notification: GetEntityRecordName Called For: ${EntityName}`,
-  //     Body: `Entity: ${EntityName}, Key: ${JSON.stringify(primaryKey)}`,
-  //     MessageType: null
-  //   });
-  // }
+  private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
+    const engine = CommunicationEngine.Instance;
+    await engine.Config(false, user);
+    await engine.SendSingleMessage('SendGrid', 'Email', {
+      To: 'user@domain.com',
+      Subject: `MJServer Notification: GetEntityRecordName Called For: ${EntityName}`,
+      Body: `Entity: ${EntityName}, Key: ${JSON.stringify(primaryKey)}`,
+      MessageType: null
+    });
+  }
+
+  private async TestDocLibraries(user: UserInfo) {
+    const engine = DocumentationEngine.Instance;
+    await engine.Config(false, user)
+    console.log(JSON.stringify(engine.Libraries));
+  }
 }
 
 export default EntityRecordNameResolver;
