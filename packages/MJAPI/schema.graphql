@@ -801,6 +801,7 @@ type CommunicationBaseMessageType_ {
 type CommunicationLog_ {
   CommunicationProvider: String!
   CommunicationProviderID: Int!
+  CommunicationProviderMessageType: String!
   CommunicationProviderMessageTypeID: Int!
   CommunicationRunID: Int
   CreatedAt: Timestamp!
@@ -831,12 +832,14 @@ Providers and their supported message types with additional attributes.
 type CommunicationProviderMessageType_ {
   """Additional attributes specific to the provider message type."""
   AdditionalAttributes: String
+  CommunicationBaseMessageType: String!
   CommunicationBaseMessageTypeID: Int!
   CommunicationLogsArray: [CommunicationLog_!]!
   CommunicationProvider: String!
   CommunicationProviderID: Int!
   CreatedAt: Timestamp!
   ID: Int!
+  Name: String!
 
   """The status of the provider message type (Disabled or Active)."""
   Status: String!
@@ -2041,6 +2044,7 @@ input CreateCommunicationProviderMessageTypeInput {
   AdditionalAttributes: String
   CommunicationBaseMessageTypeID: Int!
   CommunicationProviderID: Int!
+  Name: String!
   Status: String!
 }
 
@@ -14702,6 +14706,7 @@ input UpdateCommunicationProviderMessageTypeInput {
   CommunicationBaseMessageTypeID: Int!
   CommunicationProviderID: Int!
   ID: Int!
+  Name: String!
   OldValues___: [KeyValuePairInput!]
   Status: String!
 }

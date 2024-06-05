@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/5/2024, 5:24:53 AM
+* GENERATED: 6/5/2024, 6:30:50 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20640,6 +20640,10 @@ export class CommunicationProviderMessageType_ {
     @Field(() => Int) 
     CommunicationBaseMessageTypeID: number;
           
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
     @Field({description: 'The status of the provider message type (Disabled or Active).'}) 
     @MaxLength(40)
     Status: string;
@@ -20658,6 +20662,10 @@ export class CommunicationProviderMessageType_ {
     @Field() 
     @MaxLength(510)
     CommunicationProvider: string;
+          
+    @Field() 
+    @MaxLength(200)
+    CommunicationBaseMessageType: string;
         
     @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
     CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
@@ -20674,6 +20682,9 @@ export class CreateCommunicationProviderMessageTypeInput {
 
     @Field(() => Int)
     CommunicationBaseMessageTypeID: number;
+
+    @Field()
+    Name: string;
 
     @Field()
     Status: string;
@@ -20696,6 +20707,9 @@ export class UpdateCommunicationProviderMessageTypeInput {
 
     @Field(() => Int)
     CommunicationBaseMessageTypeID: number;
+
+    @Field()
+    Name: string;
 
     @Field()
     Status: string;
@@ -20833,6 +20847,10 @@ export class CommunicationLog_ {
     @Field() 
     @MaxLength(510)
     CommunicationProvider: string;
+          
+    @Field() 
+    @MaxLength(510)
+    CommunicationProviderMessageType: string;
         
 }
         

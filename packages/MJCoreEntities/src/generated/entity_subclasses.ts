@@ -17543,6 +17543,17 @@ import { RegisterClass } from "@memberjunction/global";
             this.Set('CommunicationBaseMessageTypeID', value);
         }
         /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -17595,6 +17606,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get CommunicationProvider(): string {  
             return this.Get('CommunicationProvider');
+        }
+        
+        /**
+        * * Field Name: CommunicationBaseMessageType
+        * * Display Name: Communication Base Message Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get CommunicationBaseMessageType(): string {  
+            return this.Get('CommunicationBaseMessageType');
         }
         
 
@@ -17782,6 +17802,15 @@ import { RegisterClass } from "@memberjunction/global";
         */
         get CommunicationProvider(): string {  
             return this.Get('CommunicationProvider');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderMessageType
+        * * Display Name: Communication Provider Message Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProviderMessageType(): string {  
+            return this.Get('CommunicationProviderMessageType');
         }
         
 
