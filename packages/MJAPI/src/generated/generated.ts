@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/5/2024, 6:30:50 AM
+* GENERATED: 6/5/2024, 4:55:25 PM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -16514,6 +16514,9 @@ export class OrganizationLink_ {
     @MaxLength(8)
     UpdatedAt: Date;
         
+    @Field(() => [PersonLink_])
+    PersonLinksArray: PersonLink_[]; // Link to PersonLinks
+    
 }
         
 //****************************************************************************
@@ -16610,7 +16613,15 @@ export class OrganizationLinkResolver extends ResolverBase {
         const result = this.MapFieldNamesToCodeNames('Organization Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
         return result;
     }
-    
+      
+    @FieldResolver(() => [PersonLink_])
+    async PersonLinksArray(@Root() organizationlink_: OrganizationLink_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Person Links', userPayload);
+        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [CRMAccountID]='${organizationlink_.CRMAccountID}' ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL));
+        return result;
+    }
+        
     @Mutation(() => OrganizationLink_)
     async CreateOrganizationLink(
         @Arg('input', () => CreateOrganizationLinkInput) input: CreateOrganizationLinkInput,
@@ -16675,126 +16686,21 @@ export class PersonLink_ {
     @MaxLength(8)
     UpdatedAt: Date;
         
-}
-        
-//****************************************************************************
-// INPUT TYPE for Person Links   
-//****************************************************************************
-@InputType()
-export class CreatePersonLinkInput {
-    @Field({ nullable: true })
-    MainGreatPlainsCustomerID?: string;
-
-    @Field({ nullable: true })
-    MembershipGreatPlainsCustomerID?: string;
-
-    @Field({ nullable: true })
-    FirstName?: string;
-
-    @Field({ nullable: true })
-    LastName?: string;
-
-    @Field({ nullable: true })
-    Email?: string;
-}
+    @Field(() => [CustomerAddress_])
+    CustomerAddressArray: CustomerAddress_[]; // Link to CustomerAddress
     
-        
-//****************************************************************************
-// INPUT TYPE for Person Links   
-//****************************************************************************
-@InputType()
-export class UpdatePersonLinkInput {
-    @Field(() => Int)
-    PersonLinkID: number;
+    @Field(() => [CustomerAddress__client_finance_])
+    CustomerAddress__client_financeArray: CustomerAddress__client_finance_[]; // Link to CustomerAddress__client_finance
+    // Relationship to Demo Keys is not included in the API because it is not marked as IncludeInAPI
 
-    @Field({ nullable: true })
-    MainGreatPlainsCustomerID?: string;
-
-    @Field({ nullable: true })
-    MembershipGreatPlainsCustomerID?: string;
-
-    @Field({ nullable: true })
-    FirstName?: string;
-
-    @Field({ nullable: true })
-    LastName?: string;
-
-    @Field({ nullable: true })
-    Email?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
+    @Field(() => [OrganizationLink_])
+    OrganizationLinksArray: OrganizationLink_[]; // Link to OrganizationLinks
     
-//****************************************************************************
-// RESOLVER for Person Links
-//****************************************************************************
-@ObjectType()
-export class RunPersonLinkViewResult {
-    @Field(() => [PersonLink_])
-    Results: PersonLink_[];
-
-    @Field(() => Int, {nullable: true})
-    UserViewRunID?: number;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(PersonLink_)
-export class PersonLinkResolver extends ResolverBase {
-    @Query(() => RunPersonLinkViewResult)
-    async RunPersonLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunPersonLinkViewResult)
-    async RunPersonLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
-    }
-
-    @Query(() => RunPersonLinkViewResult)
-    async RunPersonLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        input.EntityName = 'Person Links';
-        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
-    }
-    @Query(() => PersonLink_, { nullable: true })
-    async PersonLink(@Arg('PersonLinkID', () => Int) PersonLinkID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<PersonLink_ | null> {
-        this.CheckUserReadPermissions('Person Links', userPayload);
-        const sSQL = `SELECT * FROM [common].[vwPersonLinks] WHERE [PersonLinkID]=${PersonLinkID} ` + this.getRowLevelSecurityWhereClause('Person Links', userPayload, EntityPermissionType.Read, 'AND');
-        const result = this.MapFieldNamesToCodeNames('Person Links', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
-        return result;
-    }
+    @Field(() => [SalesTransaction__client_membership_])
+    SalesTransactions__client_membershipArray: SalesTransaction__client_membership_[]; // Link to SalesTransactions__client_membership
     
-    @Mutation(() => PersonLink_)
-    async CreatePersonLink(
-        @Arg('input', () => CreatePersonLinkInput) input: CreatePersonLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext, 
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.CreateRecord('Person Links', input, dataSource, userPayload, pubSub)
-    }
-        
-    @Mutation(() => PersonLink_)
-    async UpdatePersonLink(
-        @Arg('input', () => UpdatePersonLinkInput) input: UpdatePersonLinkInput,
-        @Ctx() { dataSource, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        return this.UpdateRecord('Person Links', input, dataSource, userPayload, pubSub);
-    }
+    @Field(() => [SalesTransaction_])
+    SalesTransactionsArray: SalesTransaction_[]; // Link to SalesTransactions
     
 }
 
