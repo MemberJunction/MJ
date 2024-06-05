@@ -786,7 +786,7 @@ const randomInt = (min: number, max: number): number => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-export const displayDate = new Date(currentYear, 5, 24);
+export const displayDate = new Date(2024, 3, 15);
 
 export const sampleData = baseData.map(dataItem => (
     <SchedulerEvent> {

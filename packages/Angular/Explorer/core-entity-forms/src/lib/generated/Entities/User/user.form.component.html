@@ -11,7 +11,8 @@
                         Activities - Test
                     </mj-tab>
                     <mj-tab-body>
-                        <mj-timeline>
+                        <mj-timeline 
+                        [record]="record">
                         </mj-timeline>
                     </mj-tab-body>
                     <mj-tab Name="Details">
@@ -24,6 +25,10 @@
                             [record]="record" 
                             [EditMode]="this.EditMode">
                         </mj-form-section>
+                        <mj-timeline 
+                        [record]="record">
+                        Timeline
+                        </mj-timeline>
                     </mj-tab-body>
                     
                     <mj-tab Name="User Applications" 

@@ -1,14 +1,11 @@
 <div mjFillContainer class="wrapper"> 
     <kendo-scheduler
-            [events]="events"
-            [selectedDate]="selectedDate"
-            [showWorkHours]="true"
-        >
-            <kendo-scheduler-day-view></kendo-scheduler-day-view>
-            <kendo-scheduler-week-view></kendo-scheduler-week-view>
-            <kendo-scheduler-month-view></kendo-scheduler-month-view>
-            <kendo-scheduler-timeline-view></kendo-scheduler-timeline-view>
-            <kendo-scheduler-agenda-view></kendo-scheduler-agenda-view>
-            <kendo-scheduler-year-view></kendo-scheduler-year-view>
-        </kendo-scheduler>
+    [events]="events"
+    [selectedDate]="selectedDate"
+  >
+    <ng-template kendoSchedulerAllDayEventTemplate let-event="event">
+      <span style="color:yellow;">{{ event.title }}</span>
+    </ng-template>
+    <kendo-scheduler-week-view> </kendo-scheduler-week-view>
+  </kendo-scheduler>
 </div> 

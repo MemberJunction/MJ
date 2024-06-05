@@ -15,6 +15,7 @@ import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { UserViewGridModule } from '@memberjunction/ng-user-view-grid';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
+import { TimelineModule } from "@memberjunction/ng-timeline";
 import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
 
 // Kendo Imports
@@ -24,6 +25,7 @@ import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
 import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
+import { SchedulerModule } from '@progress/kendo-angular-scheduler';
 
 // Import Generated Components
 import { CompanyFormComponent, LoadCompanyFormComponent } from "./Entities/Company/company.form.component";
@@ -304,12 +306,14 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule, 
+    SchedulerModule
 ],
 exports: [
 ]
@@ -349,12 +353,14 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
     ContainerDirectivesModule,
     DropDownListModule,
-    ComboBoxModule
+    ComboBoxModule, 
+    SchedulerModule
 ],
 exports: [
 ]
@@ -393,6 +399,7 @@ imports: [
     ButtonsModule,
     DateInputsModule,
     UserViewGridModule,
+    TimelineModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -438,6 +445,7 @@ imports: [
     ButtonsModule,
     DateInputsModule,
     UserViewGridModule,
+    TimelineModule,
     LinkDirectivesModule,
     BaseFormsModule,
     FormToolbarModule,
@@ -484,6 +492,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -529,6 +538,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -574,6 +584,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -619,6 +630,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -664,6 +676,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -709,6 +722,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
@@ -754,6 +768,7 @@ imports: [
     DateInputsModule,
     UserViewGridModule,
     LinkDirectivesModule,
+    TimelineModule,
     BaseFormsModule,
     FormToolbarModule,
     MJTabStripModule,
