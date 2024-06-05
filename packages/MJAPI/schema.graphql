@@ -3630,7 +3630,7 @@ input CreateListInput {
   CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
-  EntityID: Int
+  EntityID: Int!
   ExternalSystemRecordID: String
   Name: String!
   UserID: Int!
@@ -8302,8 +8302,8 @@ type List_ {
   CreatedAt: Timestamp!
   Description: String
   DuplicateRunsArray: [DuplicateRun_!]!
-  Entity: String
-  EntityID: Int
+  Entity: String!
+  EntityID: Int!
   ExternalSystemRecordID: String
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
@@ -16353,7 +16353,7 @@ input UpdateListInput {
   CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
-  EntityID: Int
+  EntityID: Int!
   ExternalSystemRecordID: String
   ID: Int!
   Name: String!

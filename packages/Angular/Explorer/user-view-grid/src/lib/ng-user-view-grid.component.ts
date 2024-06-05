@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, 
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { Router } from '@angular/router'
 
-import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection } from '@memberjunction/core';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest, FieldValueCollection, RunViewResult } from '@memberjunction/core';
 import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntity } from '@memberjunction/core-entities';
 
 import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
@@ -10,7 +10,8 @@ import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellClo
 import { Keys } from '@progress/kendo-angular-common';
 
 
-import { Subject } from 'rxjs';
+import { Subject, distinctUntilChanged } from 'rxjs';
+import { debounceTime} from "rxjs/operators";
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
@@ -101,12 +102,18 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   private _newGridState: ViewGridState = {};
 
   private editModeEnded = new Subject<void>();
+  private searchDebounce$: Subject<string> = new Subject();
 
   public recordsToCompare: any[] = [];
 
   public compareMode: boolean = false;
   public mergeMode: boolean = false;
   public duplicateMode: boolean = false;
+  public addToListMode: boolean = false;
+
+  public get anyModeEnabled(): boolean {
+    return this.compareMode || this.mergeMode || this.duplicateMode || this.addToListMode;
+  }
 
   public showNewRecordDialog: boolean = false;
 
@@ -119,6 +126,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   public showRefreshButton: boolean = true;
 
   public viewExecutionTime: number = 0;
+  public showAddToListDialog: boolean = false;
+  public sourceListEntities: ListEntity[] | null = null;
+  public listEntities: ListEntity[] = [];
+  public selectedListEntities: ListEntity[] = [];
+  public listEntitySearch: string = '';
 
   public get PendingRecords(): GridPendingRecordItem[] {
     return this._pendingRecords;
@@ -807,8 +819,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  enableCheckbox(cancel: boolean = false, type: 'merge' | 'compare' | 'duplicate' | ''){
-    if(!cancel && this.recordsToCompare.length >= 2){
+  enableCheckbox(cancel: boolean = false, type: 'merge' | 'compare' | 'duplicate' | 'addToList' | ''){
+    if(!cancel && type === 'addToList' && this.recordsToCompare.length >= 1){
+      this.toggleAddToListDialog(true);
+    }
+    else if(!cancel && this.recordsToCompare.length >= 2){
       // this scenario occurs when we've already started the merge/compare/duplicate and the user has selected records, then clicked the merge/compare button again
       this.isCompareDialogOpened = true;
       this.moveDialogToBody();
@@ -818,6 +833,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       this.mergeMode = false;
       this.compareMode = false;
       this.duplicateMode = false;
+      this.addToListMode = false;
       this.selectedKeys = [];
       this.recordsToCompare = [];
     }
@@ -831,6 +847,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       }
       else if(type === 'duplicate'){
         this.duplicateMode = true;
+      }
+      else if(type === 'addToList'){
+        this.addToListMode = true;
       }
     }
   }
@@ -886,8 +905,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  async closeCompareDialog(event: 'close' | 'cancel' | 'merge' | 'duplicate') {
-    console.log(event);
+  async closeCompareDialog(event: 'close' | 'cancel' | 'merge' | 'duplicate' | 'addToList') {
     switch (event) {
       case 'merge':
         // user has requested to merge the records and retain the selected record from the compare records component, so run the merge
@@ -900,6 +918,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         this.mergeMode = false;
         this.compareMode = false;
         this.duplicateMode = false;
+        this.addToListMode = false;
         this.isCompareDialogOpened = false;
         break;
     }
@@ -1039,6 +1058,80 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
         }
       }
     }
+  }
+
+  public async toggleAddToListDialog(show: boolean): Promise<void> {
+    this.showAddToListDialog = show;
+
+    if(show){
+      if(!this.sourceListEntities){
+        await this.loadListEntities();
+      }
+    }
+    else{
+      this.enableCheckbox(true, 'addToList');
+    }
+  }
+
+  public async loadListEntities(): Promise<void> {
+
+    if(!this._entityInfo){
+      LogError("Entity Info is not set");
+      return;
+    }
+
+    this.setupSearchDebounce();
+
+    const md: Metadata = new Metadata();
+    const rv: RunView = new RunView();
+
+    const rvResult: RunViewResult = await rv.RunView({
+      EntityName: 'Lists',
+      ExtraFilter: `UserID = ${md.CurrentUser.ID} AND EntityID = ${this._entityInfo.ID}`,
+      ResultType: 'entity_object'
+    });
+
+    if(!rvResult.Success){
+      LogError("Failed to load List Entities");
+      return;
+    }
+
+    this.sourceListEntities = this.listEntities = rvResult.Results as ListEntity[];
+  }
+
+  public async addToList(listEntity: ListEntity): Promise<void> {
+    console.log('add to list', listEntity.Name);
+    this.selectedListEntities.push(listEntity);
+  }
+
+  public async addRecordsToSelectedLists(): Promise<void> {
+    this.toggleAddToListDialog(false);
+  }
+
+  public onSearch(inputValue: string): void {
+    this.searchDebounce$.next(inputValue);
+  }
+
+
+  private setupSearchDebounce(): void {
+    this.searchDebounce$.pipe(
+      debounceTime(500), // updated to 500ms to reduce API calls and since most people don't type super fast
+      distinctUntilChanged(),
+    ).subscribe((inputValue: string) => {
+      this.search(inputValue);
+    });
+  }
+
+  private async search(inputValue: string) {
+    if(!this.sourceListEntities){
+      return;
+    }
+
+    this.listEntitySearch = inputValue;
+    const toLowerCase: string = inputValue.toLowerCase();
+    this.listEntities = this.sourceListEntities.filter((listEntity: ListEntity) => {
+      return listEntity.Name.toLowerCase().includes(toLowerCase);
+    });
   }
 }
  

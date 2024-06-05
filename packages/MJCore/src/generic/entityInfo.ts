@@ -626,7 +626,7 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns the BaseTable but with spaces inbetween capital letters
+     * @returns The BaseTable but with spaces inbetween capital letters
      * */
     get DisplayName(): string {
         return this.BaseTable.replace(/([A-Z])/g, ' $1').trim();

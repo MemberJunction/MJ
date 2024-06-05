@@ -1,4 +1,4 @@
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, LogStatus } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
