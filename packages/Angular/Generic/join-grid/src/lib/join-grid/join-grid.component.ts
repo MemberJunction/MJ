@@ -1,14 +1,19 @@
-import { Component, Input, AfterViewInit } from '@angular/core';
+import { Component, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 
 import { BaseEntity, EntityInfo, Metadata, RunView, RunViewParams } from '@memberjunction/core';
  
- 
+
+export class JoinGridCell {
+  index!: number;
+  RowForeignKeyValue: any;
+  ColumnForeignKeyValue: any;
+  data: BaseEntity | undefined;
+}
 export class JoinGridRow {
   FirstColValue: any;
   JoinExists: boolean = false;
-  JoinEntityRowForeignKey: any;
-  JoinEntityColumnForeignKey: any;
-  ColumnData: {index: number, ColumnForeignKey: any, data: BaseEntity | undefined}[] = []
+  RowForeignKeyValue: any;
+  ColumnData: JoinGridCell[] = []
 }
 
 @Component({
@@ -132,16 +137,23 @@ export class JoinGridComponent implements AfterViewInit {
    */
   @Input() CheckBoxValueField!: string
 
+  /**
+   * When the CheckBoxValueMode is set to RecordExists this means the grid will be adding and removing records from the JoinEntity. In some cases, entities require additional values
+   * beyond the foreign keys that are automatically set, in those cases, use this property to provide additional default values for the new records that are created.
+   */
+  @Input() NewRecordDefaultValues?: { [key: string]: any }
+
   ngAfterViewInit(): void {
     // load up the grid
     this.Refresh();
   }
 
+  constructor(private cdr: ChangeDetectorRef) { }
+
 
   /*The below members are public because the Angular template needs access to them, but by naming convention we prefix with an _ so that it is clear they are not to be used outside of the component */
   public _GridData: JoinGridRow[] = [];
   public _IsLoading: boolean = false;
-  public _NumDirtyRecords: number = 0;
 
   /* protected internal members */
   protected _rowsEntityInfo: EntityInfo | null = null;
@@ -153,6 +165,24 @@ export class JoinGridComponent implements AfterViewInit {
    * Saves all of the changes made in the grid. This includes adding new records, updating existing records, and deleting records.
    */
   public async Save(): Promise<boolean> {
+    // for each pending delete, we need to delete the record
+    // for each pending insert, we need to save the record
+    // do it all in one transaction
+    const md = new Metadata();
+    const tg = await md.CreateTransactionGroup();
+    this._pendingDeletes.forEach(obj => {
+      obj.TransactionGroup = tg;
+      obj.Delete(); // no await because we're using a TG
+    });
+    this._pendingInserts.forEach(obj => {
+      obj.TransactionGroup = tg;
+      obj.Save(); // no await because we're using a TG
+    });
+    if (!await tg.Submit()) {
+      alert ('Error saving changes');
+      return false;
+    }
+    await this.Refresh(); // refresh afterwards
     return true;
   }
 
@@ -162,7 +192,27 @@ export class JoinGridComponent implements AfterViewInit {
   public async CancelEdit() {
   }
 
+  public get NumDirtyRecords(): number {
+    return this._pendingDeletes.length + this._pendingInserts.length;
+  }
+
   public IsRecordReallyDirty(row: JoinGridRow): boolean {
+    return false;
+  }
+
+  public IsCellReallyDirty(cell: JoinGridCell): boolean {
+    if (cell.data) {
+      // we have a record here, check if it is dirty or not as step 1
+      if (cell.data.Dirty)
+        return true;
+    }
+    else {
+      // we need to see if we previoulsy HAD a data element in the cell but we removed it and it is located in the pendingDeletes array
+      const record = this._pendingDeletes.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === cell.ColumnForeignKeyValue && 
+                                                      obj.Get(this.JoinEntityRowForeignKey) === cell.RowForeignKeyValue);
+      if (record)
+        return true; // found a pending delete, we're dirty
+    }
     return false;
   }
 
@@ -171,6 +221,9 @@ export class JoinGridComponent implements AfterViewInit {
    */
   public async Refresh() {
     this._IsLoading = true;
+    this._pendingDeletes = [];
+    this._pendingInserts = [];
+
     // we are provided an array of Column and Row objects. We need to get the rows from the JoinEntity that link them up.
     const md = new Metadata();
     this._rowsEntityInfo = md.EntityByName(this.RowsEntityName);
@@ -244,8 +297,7 @@ export class JoinGridComponent implements AfterViewInit {
       let rowData: JoinGridRow = {
         FirstColValue: row.Get(this.RowsEntityDisplayField),
         JoinExists: false,
-        JoinEntityRowForeignKey: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name),
-        JoinEntityColumnForeignKey: null,
+        RowForeignKeyValue: row.Get(this._rowsEntityInfo!.FirstPrimaryKey.Name),
         ColumnData: [] // start off with an empty array
       };
 
@@ -257,7 +309,8 @@ export class JoinGridComponent implements AfterViewInit {
                                                 j.Get(this.JoinEntityColumnForeignKey) === column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name));
           rowData.ColumnData.push({
             index: i,
-            ColumnForeignKey: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name),
+            ColumnForeignKeyValue: column.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name),
+            RowForeignKeyValue: rowData.RowForeignKeyValue,
             data: join          
           });
         }
@@ -269,54 +322,55 @@ export class JoinGridComponent implements AfterViewInit {
     });
     this._GridData = gridData;
   }
-
-  public _IsColumnChecked(row: JoinGridRow, colRecord: BaseEntity): boolean {
-    // check to see if there is a matching object in the row's data array that links to the colRecord's primary key value
-    const pkey = colRecord.FirstPrimaryKey.Value;
-    const item = row.ColumnData.find(item => item.ColumnForeignKey === pkey)
-    if (item?.data)
-      return true;
-    else
-      return false;
-  }
+ 
 
   protected _pendingDeletes: BaseEntity[] = [];
   protected _pendingInserts: BaseEntity[] = [];
+ 
 
-  public async _FlipRecord(row: JoinGridRow, colRecord: BaseEntity, stopPropagation: boolean = false) {
-    const pkey = colRecord.FirstPrimaryKey.Value;
-    const item = row.ColumnData.find(item => item.ColumnForeignKey === pkey)
-    if (item && item.data) {
-      // if this is a record that is saved, put into an array of pending deletes
-      // now add the item to the array of stuff to delete, we can remove it from the array if the user unchecks the box
-      if (item.data.IsSaved)
-        this._pendingDeletes.push(item.data!);
+  public async _FlipRecord(event: MouseEvent, row: JoinGridRow, cell: JoinGridCell, stopPropagation: boolean = false) {
+    if (stopPropagation)
+        event.stopPropagation();
 
-      // now take data off the item
-      item.data = undefined;
-    } 
-    else {
-      // we need to add the record, first see if the record is in the _pendingDeletes array
-      let record = this._pendingDeletes.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === pkey && obj.Get(this.JoinEntityRowForeignKey) === row.JoinEntityRowForeignKey);
-      if (!record) {
-        const md = new Metadata();
-        record = await md.GetEntityObject(this.JoinEntityName);
-        record.Set(this.JoinEntityRowForeignKey, row.JoinEntityRowForeignKey);
-        record.Set(this.JoinEntityColumnForeignKey, pkey);
-      }
-      if (item)
-        item.data = record;
-      else
-        row.ColumnData.push({
-          index: this._columnsEntityData!.findIndex(obj => obj.Get(this._columnsEntityInfo!.FirstPrimaryKey.Name) === pkey),
-          ColumnForeignKey: pkey,
-          data: record
-        });
+    if (!cell)
+        throw new Error('cell is a required parameter');
 
-      // if a new record, put into pending so that we can easily remove it if the user unchecks the box
-      if (!record.IsSaved)
-        this._pendingInserts.push(record);
+    if (cell.data) {
+        if (cell.data.IsSaved) {
+          // If this is a record that is saved, put into an array of pending deletes
+          this._pendingDeletes.push(cell.data!);
+        }
+        else {
+          // we need to find the record in the pending inserts and remove it from that array
+          const index = this._pendingInserts.indexOf(cell.data);
+          if (index >= 0)
+            this._pendingInserts.splice(index, 1);
+        }
+
+
+        // Now take data off the item
+        cell.data = undefined;
+    } else {
+        // We need to add the record, first see if the record is in the _pendingDeletes array
+        let record = this._pendingDeletes.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === cell.ColumnForeignKeyValue && obj.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue);
+        if (!record) {
+            const md = new Metadata();
+            record = await md.GetEntityObject(this.JoinEntityName);
+            record.Set(this.JoinEntityRowForeignKey, row.RowForeignKeyValue);
+            record.Set(this.JoinEntityColumnForeignKey, cell.ColumnForeignKeyValue);
+            for (const key in this.NewRecordDefaultValues) {
+              record.Set(key, this.NewRecordDefaultValues[key]);
+            }
+            this._pendingInserts.push(record);
+        }
+        cell.data = record;
     }
+
+    this.cdr.detectChanges();
+  }
+
+  public _IsColumnChecked(cell: JoinGridCell): boolean {
+    return cell?.data !== undefined;
   }
 }
  

@@ -59,3 +59,7 @@ table tr.dirty-row {
     background-color: #ffcccc;
 }
 
+table td.dirty-cell {
+    font-style: italic;
+    background-color: #ffcccc;
+}
