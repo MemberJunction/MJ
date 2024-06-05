@@ -36,6 +36,7 @@
     "@memberjunction/ng-user-view-grid": "~1.4.0",
     "@memberjunction/ng-simple-record-list": "~1.4.0",
     "@memberjunction/ng-tabstrip": "~1.4.0",
+    "@memberjunction/ng-join-grid": "~1.4.0",
     "@progress/kendo-angular-dropdowns": "~15.1.0",
     "@progress/kendo-angular-grid": "~15.1.0",
     "@progress/kendo-angular-buttons": "~15.1.0",

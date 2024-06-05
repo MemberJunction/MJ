@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": true
+            "value": false
         }
     ],
     "logging": {
@@ -160,7 +160,7 @@
         },
         {
             "type": "AngularCoreEntities",
-            "directory": "../Angular/core-entity-forms/src/lib/generated",
+            "directory": "../Angular/Explorer/core-entity-forms/src/lib/generated",
             "options": [
                 {
                     "name": "maxComponentsPerModule",
@@ -217,7 +217,7 @@
             "when": "after"
         },
         {
-            "workingDirectory": "../Angular/core-entity-forms",
+            "workingDirectory": "../Angular/Explorer/core-entity-forms",
             "command": "npm",
             "args": [
                 "run",
