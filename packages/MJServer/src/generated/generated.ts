@@ -2,7 +2,7 @@
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
 * 
-* GENERATED: 6/4/2024, 2:11:03 PM
+* GENERATED: 6/5/2024, 5:24:53 AM
 * 
 *   >>> DO NOT MODIFY THIS FILE!!!!!!!!!!!!
 *   >>> YOUR CHANGES WILL BE OVERWRITTEN
@@ -20,7 +20,7 @@ import { mj_core_schema } from '../config';
 
 import * as mj_core_schema_server_object_types from '@memberjunction/server'
 
-import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity } from '@memberjunction/core-entities';
+import { CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, EntityBehaviorEntity, EntityBehaviorTypeEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationTemplateEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -3324,6 +3324,9 @@ export class User_ {
     @Field(() => [mj_core_schema_server_object_types.Action_])
     ActionsArray: mj_core_schema_server_object_types.Action_[]; // Link to Actions
     
+    @Field(() => [mj_core_schema_server_object_types.CommunicationRun_])
+    CommunicationRunsArray: mj_core_schema_server_object_types.CommunicationRun_[]; // Link to CommunicationRuns
+    
 }
         
 //****************************************************************************
@@ -3668,6 +3671,14 @@ export class UserResolverBase extends ResolverBase {
         this.CheckUserReadPermissions('Actions', userPayload);
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [CodeApprovedByUserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Actions', userPayload, EntityPermissionType.Read, 'AND');
         const result = this.ArrayMapFieldNamesToCodeNames('Actions', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationRun_])
+    async CommunicationRunsArray(@Root() user_: User_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [UserID]=${user_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL));
         return result;
     }
         
@@ -20101,6 +20112,1031 @@ export class ListCategoryResolver extends ResolverBase {
         @PubSub() pubSub: PubSubEngine
     ) {
         return this.UpdateRecord('List Categories', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Templates
+//****************************************************************************
+@ObjectType({ description: 'Reusable templates for communication.' })
+export class CommunicationTemplate_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field() 
+    Content: string;
+          
+    @Field(() => Int, {nullable: true}) 
+    ParentID?: number;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationTemplate_])
+    CommunicationTemplatesArray: mj_core_schema_server_object_types.CommunicationTemplate_[]; // Link to CommunicationTemplates
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Templates   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationTemplateInput {
+    @Field()
+    Name: string;
+
+    @Field()
+    Content: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field({ nullable: true })
+    Comments?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Templates   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationTemplateInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field()
+    Content: string;
+
+    @Field(() => Int, { nullable: true })
+    ParentID?: number;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Templates
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationTemplateViewResult {
+    @Field(() => [CommunicationTemplate_])
+    Results: CommunicationTemplate_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationTemplate_)
+export class CommunicationTemplateResolver extends ResolverBase {
+    @Query(() => RunCommunicationTemplateViewResult)
+    async RunCommunicationTemplateViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationTemplateViewResult)
+    async RunCommunicationTemplateViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationTemplateViewResult)
+    async RunCommunicationTemplateDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Templates';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationTemplate_, { nullable: true })
+    async CommunicationTemplate(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationTemplate_ | null> {
+        this.CheckUserReadPermissions('Communication Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationTemplates] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Templates', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationTemplate_])
+    async CommunicationTemplatesArray(@Root() communicationtemplate_: CommunicationTemplate_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Templates', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationTemplates] WHERE [ParentID]=${communicationtemplate_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Templates', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Templates', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationTemplate_)
+    async CreateCommunicationTemplate(
+        @Arg('input', () => CreateCommunicationTemplateInput) input: CreateCommunicationTemplateInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Templates', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationTemplate_)
+    async UpdateCommunicationTemplate(
+        @Arg('input', () => UpdateCommunicationTemplateInput) input: UpdateCommunicationTemplateInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Templates', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Providers
+//****************************************************************************
+@ObjectType({ description: 'All supported communication providers.' })
+export class CommunicationProvider_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(510)
+    Name: string;
+          
+    @Field({nullable: true}) 
+    Description?: string;
+          
+    @Field({description: 'The status of the communication provider (Disabled or Active).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field(() => Boolean, {description: 'Indicates if the provider supports sending messages.'}) 
+    SupportsSending: boolean;
+          
+    @Field(() => Boolean, {description: 'Indicates if the provider supports receiving messages.'}) 
+    SupportsReceiving: boolean;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+    
+    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Providers   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationProviderInput {
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Boolean)
+    SupportsSending: boolean;
+
+    @Field(() => Boolean)
+    SupportsReceiving: boolean;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Providers   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationProviderInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Name: string;
+
+    @Field({ nullable: true })
+    Description?: string;
+
+    @Field()
+    Status: string;
+
+    @Field(() => Boolean)
+    SupportsSending: boolean;
+
+    @Field(() => Boolean)
+    SupportsReceiving: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Providers
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationProviderViewResult {
+    @Field(() => [CommunicationProvider_])
+    Results: CommunicationProvider_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationProvider_)
+export class CommunicationProviderResolver extends ResolverBase {
+    @Query(() => RunCommunicationProviderViewResult)
+    async RunCommunicationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderViewResult)
+    async RunCommunicationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderViewResult)
+    async RunCommunicationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Providers';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationProvider_, { nullable: true })
+    async CommunicationProvider(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProvider_ | null> {
+        this.CheckUserReadPermissions('Communication Providers', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviders] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Providers', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    async CommunicationProviderMessageTypesArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationProviderID]=${communicationprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
+        return result;
+    }
+          
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    async CommunicationLogsArray(@Root() communicationprovider_: CommunicationProvider_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderID]=${communicationprovider_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationProvider_)
+    async CreateCommunicationProvider(
+        @Arg('input', () => CreateCommunicationProviderInput) input: CreateCommunicationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Providers', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationProvider_)
+    async UpdateCommunicationProvider(
+        @Arg('input', () => UpdateCommunicationProviderInput) input: UpdateCommunicationProviderInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Providers', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Runs
+//****************************************************************************
+@ObjectType({ description: 'Runs of bulk message sends and receives.' })
+export class CommunicationRun_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    UserID: number;
+          
+    @Field({description: 'The direction of the communication run (Sending or Receiving).'}) 
+    @MaxLength(40)
+    Direction: string;
+          
+    @Field({description: 'The status of the communication run (Pending, In-Progress, Complete, Failed).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true}) 
+    Comments?: string;
+          
+    @Field({nullable: true, description: 'The error message if the communication run failed.'}) 
+    ErrorMessage?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(200)
+    User: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Runs   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationRunInput {
+    @Field(() => Int)
+    UserID: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Runs   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationRunInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    UserID: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    Comments?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Runs
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationRunViewResult {
+    @Field(() => [CommunicationRun_])
+    Results: CommunicationRun_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationRun_)
+export class CommunicationRunResolver extends ResolverBase {
+    @Query(() => RunCommunicationRunViewResult)
+    async RunCommunicationRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationRunViewResult)
+    async RunCommunicationRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationRunViewResult)
+    async RunCommunicationRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Runs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationRun_, { nullable: true })
+    async CommunicationRun(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationRun_ | null> {
+        this.CheckUserReadPermissions('Communication Runs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationRuns] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Runs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    async CommunicationLogsArray(@Root() communicationrun_: CommunicationRun_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationRunID]=${communicationrun_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationRun_)
+    async CreateCommunicationRun(
+        @Arg('input', () => CreateCommunicationRunInput) input: CreateCommunicationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Runs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationRun_)
+    async UpdateCommunicationRun(
+        @Arg('input', () => UpdateCommunicationRunInput) input: UpdateCommunicationRunInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Runs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Provider Message Types
+//****************************************************************************
+@ObjectType({ description: 'Providers and their supported message types with additional attributes.' })
+export class CommunicationProviderMessageType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    CommunicationProviderID: number;
+          
+    @Field(() => Int) 
+    CommunicationBaseMessageTypeID: number;
+          
+    @Field({description: 'The status of the provider message type (Disabled or Active).'}) 
+    @MaxLength(40)
+    Status: string;
+          
+    @Field({nullable: true, description: 'Additional attributes specific to the provider message type.'}) 
+    AdditionalAttributes?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    CommunicationProvider: string;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    CommunicationLogsArray: mj_core_schema_server_object_types.CommunicationLog_[]; // Link to CommunicationLogs
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Provider Message Types   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationProviderMessageTypeInput {
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationBaseMessageTypeID: number;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    AdditionalAttributes?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Provider Message Types   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationProviderMessageTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationBaseMessageTypeID: number;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    AdditionalAttributes?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Provider Message Types
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationProviderMessageTypeViewResult {
+    @Field(() => [CommunicationProviderMessageType_])
+    Results: CommunicationProviderMessageType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationProviderMessageType_)
+export class CommunicationProviderMessageTypeResolver extends ResolverBase {
+    @Query(() => RunCommunicationProviderMessageTypeViewResult)
+    async RunCommunicationProviderMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderMessageTypeViewResult)
+    async RunCommunicationProviderMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationProviderMessageTypeViewResult)
+    async RunCommunicationProviderMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Provider Message Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationProviderMessageType_, { nullable: true })
+    async CommunicationProviderMessageType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationProviderMessageType_ | null> {
+        this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationLog_])
+    async CommunicationLogsArray(@Root() communicationprovidermessagetype_: CommunicationProviderMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [CommunicationProviderMessageTypeID]=${communicationprovidermessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationProviderMessageType_)
+    async CreateCommunicationProviderMessageType(
+        @Arg('input', () => CreateCommunicationProviderMessageTypeInput) input: CreateCommunicationProviderMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationProviderMessageType_)
+    async UpdateCommunicationProviderMessageType(
+        @Arg('input', () => UpdateCommunicationProviderMessageTypeInput) input: UpdateCommunicationProviderMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Provider Message Types', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Logs
+//****************************************************************************
+@ObjectType({ description: 'Logs of sent and received messages.' })
+export class CommunicationLog_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field(() => Int) 
+    CommunicationProviderID: number;
+          
+    @Field(() => Int) 
+    CommunicationProviderMessageTypeID: number;
+          
+    @Field(() => Int, {nullable: true}) 
+    CommunicationRunID?: number;
+          
+    @Field({description: 'The direction of the communication log (Sending or Receiving).'}) 
+    @MaxLength(40)
+    Direction: string;
+          
+    @Field({description: 'The date and time when the message was logged.'}) 
+    @MaxLength(8)
+    MessageDate: Date;
+          
+    @Field({description: 'The status of the logged message (Pending, In-Progress, Complete, Failed).'}) 
+    @MaxLength(100)
+    Status: string;
+          
+    @Field({nullable: true, description: 'The content of the logged message.'}) 
+    MessageContent?: string;
+          
+    @Field({nullable: true, description: 'The error message if the message sending failed.'}) 
+    ErrorMessage?: string;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+          
+    @Field() 
+    @MaxLength(510)
+    CommunicationProvider: string;
+        
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Logs   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationLogInput {
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationProviderMessageTypeID: number;
+
+    @Field(() => Int, { nullable: true })
+    CommunicationRunID?: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    MessageDate: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    MessageContent?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Logs   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationLogInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field(() => Int)
+    CommunicationProviderID: number;
+
+    @Field(() => Int)
+    CommunicationProviderMessageTypeID: number;
+
+    @Field(() => Int, { nullable: true })
+    CommunicationRunID?: number;
+
+    @Field()
+    Direction: string;
+
+    @Field()
+    MessageDate: Date;
+
+    @Field()
+    Status: string;
+
+    @Field({ nullable: true })
+    MessageContent?: string;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Logs
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationLogViewResult {
+    @Field(() => [CommunicationLog_])
+    Results: CommunicationLog_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationLog_)
+export class CommunicationLogResolver extends ResolverBase {
+    @Query(() => RunCommunicationLogViewResult)
+    async RunCommunicationLogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationLogViewResult)
+    async RunCommunicationLogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationLogViewResult)
+    async RunCommunicationLogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Logs';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationLog_, { nullable: true })
+    async CommunicationLog(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationLog_ | null> {
+        this.CheckUserReadPermissions('Communication Logs', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationLogs] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Logs', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Logs', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+    
+    @Mutation(() => CommunicationLog_)
+    async CreateCommunicationLog(
+        @Arg('input', () => CreateCommunicationLogInput) input: CreateCommunicationLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Logs', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationLog_)
+    async UpdateCommunicationLog(
+        @Arg('input', () => UpdateCommunicationLogInput) input: UpdateCommunicationLogInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Logs', input, dataSource, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for Communication Base Message Types
+//****************************************************************************
+@ObjectType({ description: 'Base message types and their supported functionalities.' })
+export class CommunicationBaseMessageType_ {  
+    @Field(() => Int) 
+    ID: number;
+          
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+          
+    @Field(() => Boolean, {description: 'Indicates if attachments are supported.'}) 
+    SupportsAttachments: boolean;
+          
+    @Field(() => Boolean, {description: 'Indicates if a subject line is supported.'}) 
+    SupportsSubjectLine: boolean;
+          
+    @Field(() => Boolean, {description: 'Indicates if HTML content is supported.'}) 
+    SupportsHtml: boolean;
+          
+    @Field(() => Int, {nullable: true, description: 'The maximum size in bytes for the message.'}) 
+    MaxBytes?: number;
+          
+    @Field() 
+    @MaxLength(8)
+    CreatedAt: Date;
+          
+    @Field() 
+    @MaxLength(8)
+    UpdatedAt: Date;
+        
+    @Field(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    CommunicationProviderMessageTypesArray: mj_core_schema_server_object_types.CommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
+    
+}
+        
+//****************************************************************************
+// INPUT TYPE for Communication Base Message Types   
+//****************************************************************************
+@InputType()
+export class CreateCommunicationBaseMessageTypeInput {
+    @Field()
+    Type: string;
+
+    @Field(() => Boolean)
+    SupportsAttachments: boolean;
+
+    @Field(() => Boolean)
+    SupportsSubjectLine: boolean;
+
+    @Field(() => Boolean)
+    SupportsHtml: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxBytes?: number;
+}
+    
+        
+//****************************************************************************
+// INPUT TYPE for Communication Base Message Types   
+//****************************************************************************
+@InputType()
+export class UpdateCommunicationBaseMessageTypeInput {
+    @Field(() => Int)
+    ID: number;
+
+    @Field()
+    Type: string;
+
+    @Field(() => Boolean)
+    SupportsAttachments: boolean;
+
+    @Field(() => Boolean)
+    SupportsSubjectLine: boolean;
+
+    @Field(() => Boolean)
+    SupportsHtml: boolean;
+
+    @Field(() => Int, { nullable: true })
+    MaxBytes?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for Communication Base Message Types
+//****************************************************************************
+@ObjectType()
+export class RunCommunicationBaseMessageTypeViewResult {
+    @Field(() => [CommunicationBaseMessageType_])
+    Results: CommunicationBaseMessageType_[];
+
+    @Field(() => Int, {nullable: true})
+    UserViewRunID?: number;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(CommunicationBaseMessageType_)
+export class CommunicationBaseMessageTypeResolver extends ResolverBase {
+    @Query(() => RunCommunicationBaseMessageTypeViewResult)
+    async RunCommunicationBaseMessageTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByIDGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationBaseMessageTypeViewResult)
+    async RunCommunicationBaseMessageTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        return super.RunViewByNameGeneric(input, dataSource, userPayload, pubSub);
+    }
+
+    @Query(() => RunCommunicationBaseMessageTypeViewResult)
+    async RunCommunicationBaseMessageTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        input.EntityName = 'Communication Base Message Types';
+        return super.RunDynamicViewGeneric(input, dataSource, userPayload, pubSub);
+    }
+    @Query(() => CommunicationBaseMessageType_, { nullable: true })
+    async CommunicationBaseMessageType(@Arg('ID', () => Int) ID: number, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<CommunicationBaseMessageType_ | null> {
+        this.CheckUserReadPermissions('Communication Base Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationBaseMessageTypes] WHERE [ID]=${ID} ` + this.getRowLevelSecurityWhereClause('Communication Base Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.MapFieldNamesToCodeNames('Communication Base Message Types', await dataSource.query(sSQL).then((r) => r && r.length > 0 ? r[0] : {}))
+        return result;
+    }
+      
+    @FieldResolver(() => [mj_core_schema_server_object_types.CommunicationProviderMessageType_])
+    async CommunicationProviderMessageTypesArray(@Root() communicationbasemessagetype_: CommunicationBaseMessageType_, @Ctx() { dataSource, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Communication Provider Message Types', userPayload);
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCommunicationProviderMessageTypes] WHERE [CommunicationBaseMessageTypeID]=${communicationbasemessagetype_.ID} ` + this.getRowLevelSecurityWhereClause('Communication Provider Message Types', userPayload, EntityPermissionType.Read, 'AND');
+        const result = this.ArrayMapFieldNamesToCodeNames('Communication Provider Message Types', await dataSource.query(sSQL));
+        return result;
+    }
+        
+    @Mutation(() => CommunicationBaseMessageType_)
+    async CreateCommunicationBaseMessageType(
+        @Arg('input', () => CreateCommunicationBaseMessageTypeInput) input: CreateCommunicationBaseMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext, 
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.CreateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub)
+    }
+        
+    @Mutation(() => CommunicationBaseMessageType_)
+    async UpdateCommunicationBaseMessageType(
+        @Arg('input', () => UpdateCommunicationBaseMessageTypeInput) input: UpdateCommunicationBaseMessageTypeInput,
+        @Ctx() { dataSource, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        return this.UpdateRecord('Communication Base Message Types', input, dataSource, userPayload, pubSub);
     }
     
 }
