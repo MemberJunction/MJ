@@ -1,4 +1,4 @@
-import { LogError, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { CommunicationBaseMessageTypeEntity, CommunicationProviderEntity, CommunicationProviderMessageTypeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal } from "@memberjunction/global";
 import { BehaviorSubject } from "rxjs";
@@ -8,7 +8,7 @@ import { BaseCommunicationProvider, CommunicationProviderEntityExtended, Message
  * Base class for communications. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
-export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
+export class CommunicationEngine extends BaseEngine<CommunicationEngine> {
      // implement a singleton pattern for caching metadata. All uses of the engine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
      // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the engine. This is important because the metadata is not expected to change during the lifecycle
     // of the application.
@@ -22,16 +22,10 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
     public static get Instance(): CommunicationEngine {
        return super.getInstance<CommunicationEngine>('MJ_Communication_Metadata');
     }
- 
   
-     // internal instance properties used for the singleton pattern
-     private _loaded: boolean = false;
-     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
- 
      private _BaseMessageTypes: CommunicationBaseMessageTypeEntity[];
      private _Providers: CommunicationProviderEntityExtended[];
      private _ProviderMessageTypes: CommunicationProviderMessageTypeEntity[];
-     private _contextUser: UserInfo;
  
      /**
       * This method is called to configure the engine. It loads the metadata and caches it in the GlobalObjectStore. You must call this method before doing anything else with the engine.
@@ -40,71 +34,39 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       * @param contextUser If you are running on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
       */
      public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-         // make sure we don't do this more than once while the first call is still going on
-         if (this._loadingSubject.value && !forceRefresh) {
-             return new Promise<void>((resolve) => {
-                const subscription = this._loadingSubject.subscribe((loading) => {
-                   if (!loading) {
-                         subscription.unsubscribe();
-                         resolve();
-                   }
-                });
-             });
-         }
- 
-         if (!this._loaded || forceRefresh) {
-             this._loadingSubject.next(true);
-             this._contextUser = contextUser;
- 
-             // Load metadata
-             const rv = new RunView();
-             try {
-                const messageTypes = await rv.RunView({
-                   EntityName: 'Communication Base Message Types',
-                   ResultType: 'entity_object'
-                }, contextUser);
-                if (messageTypes.Success) {
-                   this._BaseMessageTypes = messageTypes.Results;
-                }
+        const config = [
+            {
+                EntityName: 'Communication Base Message Types',
+                PropertyName: '_BaseMessageTypes'
+            }, 
+            {
+                EntityName: 'Communication Providers',
+                PropertyName: '_Providers'
+            }, 
+            {
+                EntityName: 'Communication Provider Message Types',
+                PropertyName: '_ProviderMessageTypes'
+            }]
 
-                const providers = await rv.RunView({
-                    EntityName: 'Communication Providers',
-                    ResultType: 'entity_object'
-                 }, contextUser);
-                if (providers.Success) {
-                    this._Providers = providers.Results;
-                }
- 
-                const providerMsgTypes = await rv.RunView({
-                    EntityName: 'Communication Provider Message Types',
-                    ResultType: 'entity_object'
-                 }, contextUser);
-                if (providerMsgTypes.Success) {
-                    this._ProviderMessageTypes = providerMsgTypes.Results;
-                    this._Providers.forEach((provider) => {
-                        provider.MessageTypes = this._ProviderMessageTypes.filter((pmt) => pmt.CommunicationProviderID === provider.ID);
-                    });
-                }
+        await this.Load(config, forceRefresh, contextUser); 
 
-                
-                this._loaded = true;
-             }
-             catch (e) {
-                LogError(e);
-             }
-             finally {
-                 this._loadingSubject.next(false);
-             }
-         }
-         else {
-             // we have already loaded and have not been told to force the refresh
-         }
+     }
+
+     protected override async AdditionalLoading(contextUser?: UserInfo) {
+        // a little post-processing done within the context of the base classes loading architecture...
+        this._Providers.forEach((provider) => {
+            provider.MessageTypes = this._ProviderMessageTypes.filter((pmt) => pmt.CommunicationProviderID === provider.ID);
+        });
      }
  
      public get BaseMessageTypes(): CommunicationBaseMessageTypeEntity[] {
-       return this._BaseMessageTypes;
+        if (!this.Loaded)
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+        return this._BaseMessageTypes;
      }
      public get Providers(): CommunicationProviderEntityExtended[] {
+        if (!this.Loaded)
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
         return this._Providers;
      }
 
@@ -114,6 +76,9 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       * @returns 
       */
      public GetProvider(providerName: string): BaseCommunicationProvider {
+        if (!this.Loaded)
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseCommunicationProvider>(BaseCommunicationProvider, providerName);
         if (instance) {
             // make sure the class we got back is NOT an instance of the base class, that is the default behavior of CreateInstance if we 
@@ -131,6 +96,9 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       * Sends a single message using the specified provider. The provider must be one of the providers that are configured in the system.
       */
      public async SendSingleMessage(providerName: string, providerMessageTypeName: string, message: Message): Promise<MessageResult> {
+        if (!this.Loaded)
+            throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
+
         const provider = this.GetProvider(providerName);
         if (!provider)
             throw new Error(`Provider ${providerName} not found.`);

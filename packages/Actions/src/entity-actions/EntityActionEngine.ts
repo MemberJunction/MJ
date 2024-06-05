@@ -1,10 +1,9 @@
-import { BaseEntity, EntityInfo, LogError, RunView, UserInfo } from "@memberjunction/core";
-import { ActionEntity, EntityActionEntity, EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionInvocationTypeEntity } from "@memberjunction/core-entities";
-import { BaseSingleton, MJGlobal } from "@memberjunction/global";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, UserInfo } from "@memberjunction/core";
+import { EntityActionFilterEntity, EntityActionInvocationEntity, EntityActionInvocationTypeEntity } from "@memberjunction/core-entities";
+import { MJGlobal } from "@memberjunction/global";
 import { EntityActionEntityServer } from "./EntityActionEntity.server";
 import { EntityActionInvocationBase } from "./EntityActionInvocationTypes";
 import { ActionResult } from "../generic/ActionEngine";
-import { BehaviorSubject } from 'rxjs';
 
 /**
  * Parameters type for invoking an entity action
@@ -38,10 +37,12 @@ export class EntityActionInvocationParams {
      */
     public ListID?: number;
 }
+
+
 /**
  * The purpose of this class is to handle the invocation of actions for entities in all of the supported invocation contexts.
  */
-export class EntityActionEngine extends BaseSingleton<EntityActionEngine> {
+export class EntityActionEngine extends BaseEngine<EntityActionEngine> {
     private constructor() {
         super('MJ_EntityAction_Metadata');
     }
@@ -52,10 +53,6 @@ export class EntityActionEngine extends BaseSingleton<EntityActionEngine> {
 
  
     // internal instance properties used for the singleton pattern
-    private _loaded: boolean = false;
-    private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
-    
-    private _contextUser: UserInfo;
     private _EntityActions: EntityActionEntityServer[] = [];
     private _EntityActionInvocationTypes: EntityActionInvocationTypeEntity[] = [];
     private _EntityActionFilters: EntityActionFilterEntity[] = [];
@@ -68,67 +65,25 @@ export class EntityActionEngine extends BaseSingleton<EntityActionEngine> {
      * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
      */
     public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        // make sure we don't do this more than once while the first call is still going on
-        if (this._loadingSubject.value && !forceRefresh) {
-            return new Promise<void>((resolve) => {
-                const subscription = this._loadingSubject.subscribe((loading) => {
-                    if (!loading) {
-                        subscription.unsubscribe();
-                        resolve();
-                    }
-                });
-            });
-        }
-
-        if (!this._loaded || forceRefresh) { 
-            this._loadingSubject.next(true);
-            this._contextUser = contextUser;
-
-            const rv = new RunView();
-            try {
-                const invTypes = await rv.RunView({
-                    EntityName: 'Entity Action Invocation Types',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                if (invTypes.Success) {
-                    this._EntityActionInvocationTypes = invTypes.Results;
-                }
-    
-                const filters = await rv.RunView({
-                    EntityName: 'Entity Action Filters',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                if (filters.Success) {
-                    this._EntityActionFilters = filters.Results;
-                }
-    
-                const invocations = await rv.RunView({
-                    EntityName: 'Entity Action Invocations',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                if (invocations.Success) {
-                    this._EntityActionInvocations = invocations.Results;
-                }
-    
-                const entityActions = await rv.RunView({
-                    EntityName: 'Entity Actions',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                if (entityActions.Success) {
-                    this._EntityActions = entityActions.Results;
-                }
-                this._loaded = true;    
+        const configs: BaseEnginePropertyConfig[] = [
+            {
+                EntityName: 'Entity Action Invocation Types',
+                PropertyName: '_EntityActionInvocationTypes'
+            },
+            {
+                EntityName: 'Entity Action Filters',
+                PropertyName: '_EntityActionFilters'
+            },
+            {
+                EntityName: 'Entity Action Invocations',
+                PropertyName: '_EntityActionInvocations'
+            },
+            {
+                EntityName: 'Entity Actions',
+                PropertyName: '_EntityActions'
             }
-            catch (e) {
-                LogError(e);
-            }
-            finally {
-                this._loadingSubject.next(false);
-            }
-        }
-        else {
-            // we have already loaded and have not been told to force the refresh
-        }
+        ]; 
+        await this.Load(configs, forceRefresh, contextUser);
     }
 
     /**
