@@ -17,6 +17,20 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="Person Links" 
+                        [Visible]="record.IsSaved" 
+                        [Props]="{EntityRelationshipID: 269}">
+                        Person Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Person Links')"  
+                            [NewRecordValues]="NewRecordValues('Person Links')"
+                            [AllowLoad]="IsCurrentTab('Person Links')"  
+                            [EditMode]="GridEditMode()"  
+                            [BottomMargin]="GridBottomMargin">
+                        </mj-user-view-grid>
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
