@@ -776,6 +776,131 @@ type ColorNotification {
   message: String
 }
 
+"""Base message types and their supported functionalities."""
+type CommunicationBaseMessageType_ {
+  CommunicationProviderMessageTypesArray: [CommunicationProviderMessageType_!]!
+  CreatedAt: Timestamp!
+  ID: Int!
+
+  """The maximum size in bytes for the message."""
+  MaxBytes: Int
+
+  """Indicates if attachments are supported."""
+  SupportsAttachments: Boolean!
+
+  """Indicates if HTML content is supported."""
+  SupportsHtml: Boolean!
+
+  """Indicates if a subject line is supported."""
+  SupportsSubjectLine: Boolean!
+  Type: String!
+  UpdatedAt: Timestamp!
+}
+
+"""Logs of sent and received messages."""
+type CommunicationLog_ {
+  CommunicationProvider: String!
+  CommunicationProviderID: Int!
+  CommunicationProviderMessageType: String!
+  CommunicationProviderMessageTypeID: Int!
+  CommunicationRunID: Int
+  CreatedAt: Timestamp!
+
+  """The direction of the communication log (Sending or Receiving)."""
+  Direction: String!
+
+  """The error message if the message sending failed."""
+  ErrorMessage: String
+  ID: Int!
+
+  """The content of the logged message."""
+  MessageContent: String
+
+  """The date and time when the message was logged."""
+  MessageDate: Timestamp!
+
+  """
+  The status of the logged message (Pending, In-Progress, Complete, Failed).
+  """
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""
+Providers and their supported message types with additional attributes.
+"""
+type CommunicationProviderMessageType_ {
+  """Additional attributes specific to the provider message type."""
+  AdditionalAttributes: String
+  CommunicationBaseMessageType: String!
+  CommunicationBaseMessageTypeID: Int!
+  CommunicationLogsArray: [CommunicationLog_!]!
+  CommunicationProvider: String!
+  CommunicationProviderID: Int!
+  CreatedAt: Timestamp!
+  ID: Int!
+  Name: String!
+
+  """The status of the provider message type (Disabled or Active)."""
+  Status: String!
+  UpdatedAt: Timestamp!
+}
+
+"""All supported communication providers."""
+type CommunicationProvider_ {
+  CommunicationLogsArray: [CommunicationLog_!]!
+  CommunicationProviderMessageTypesArray: [CommunicationProviderMessageType_!]!
+  CreatedAt: Timestamp!
+  Description: String
+  ID: Int!
+  Name: String!
+
+  """The status of the communication provider (Disabled or Active)."""
+  Status: String!
+
+  """Indicates if the provider supports receiving messages."""
+  SupportsReceiving: Boolean!
+
+  """Indicates if the provider supports sending messages."""
+  SupportsSending: Boolean!
+  UpdatedAt: Timestamp!
+}
+
+"""Runs of bulk message sends and receives."""
+type CommunicationRun_ {
+  Comments: String
+  CommunicationLogsArray: [CommunicationLog_!]!
+  CreatedAt: Timestamp!
+
+  """The direction of the communication run (Sending or Receiving)."""
+  Direction: String!
+
+  """The error message if the communication run failed."""
+  ErrorMessage: String
+  ID: Int!
+
+  """
+  The status of the communication run (Pending, In-Progress, Complete, Failed).
+  """
+  Status: String!
+  UpdatedAt: Timestamp!
+  User: String!
+  UserID: Int!
+}
+
+"""Reusable templates for communication."""
+type CommunicationTemplate_ {
+  Comments: String
+  CommunicationTemplatesArray: [CommunicationTemplate_!]!
+  Content: String!
+  CreatedAt: Timestamp!
+  ID: Int!
+  Name: String!
+  Parent: String
+  ParentID: Int
+  UpdatedAt: Timestamp!
+}
+
 type CompanyIntegrationRecordMap_ {
   CompanyIntegrationID: Int!
   CreatedAt: Timestamp!
@@ -1886,6 +2011,56 @@ input CreateAuditLogInput {
   RecordID: String
   Status: String!
   UserID: Int!
+}
+
+input CreateCommunicationBaseMessageTypeInput {
+  MaxBytes: Int
+  SupportsAttachments: Boolean!
+  SupportsHtml: Boolean!
+  SupportsSubjectLine: Boolean!
+  Type: String!
+}
+
+input CreateCommunicationLogInput {
+  CommunicationProviderID: Int!
+  CommunicationProviderMessageTypeID: Int!
+  CommunicationRunID: Int
+  Direction: String!
+  ErrorMessage: String
+  MessageContent: String
+  MessageDate: Timestamp!
+  Status: String!
+}
+
+input CreateCommunicationProviderInput {
+  Description: String
+  Name: String!
+  Status: String!
+  SupportsReceiving: Boolean!
+  SupportsSending: Boolean!
+}
+
+input CreateCommunicationProviderMessageTypeInput {
+  AdditionalAttributes: String
+  CommunicationBaseMessageTypeID: Int!
+  CommunicationProviderID: Int!
+  Name: String!
+  Status: String!
+}
+
+input CreateCommunicationRunInput {
+  Comments: String
+  Direction: String!
+  ErrorMessage: String
+  Status: String!
+  UserID: Int!
+}
+
+input CreateCommunicationTemplateInput {
+  Comments: String
+  Content: String!
+  Name: String!
+  ParentID: Int
 }
 
 input CreateCompanyInput {
@@ -3630,7 +3805,7 @@ input CreateListInput {
   CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
-  EntityID: Int
+  EntityID: Int!
   ExternalSystemRecordID: String
   Name: String!
   UserID: Int!
@@ -8302,8 +8477,8 @@ type List_ {
   CreatedAt: Timestamp!
   Description: String
   DuplicateRunsArray: [DuplicateRun_!]!
-  Entity: String
-  EntityID: Int
+  Entity: String!
+  EntityID: Int!
   ExternalSystemRecordID: String
   ID: Int!
   ListDetailsArray: [ListDetail_!]!
@@ -8332,6 +8507,12 @@ type Mutation {
   CreateApplicationEntity(input: CreateApplicationEntityInput!): ApplicationEntity_!
   CreateApplicationSetting(input: CreateApplicationSettingInput!): ApplicationSetting_!
   CreateAuditLog(input: CreateAuditLogInput!): AuditLog_!
+  CreateCommunicationBaseMessageType(input: CreateCommunicationBaseMessageTypeInput!): CommunicationBaseMessageType_!
+  CreateCommunicationLog(input: CreateCommunicationLogInput!): CommunicationLog_!
+  CreateCommunicationProvider(input: CreateCommunicationProviderInput!): CommunicationProvider_!
+  CreateCommunicationProviderMessageType(input: CreateCommunicationProviderMessageTypeInput!): CommunicationProviderMessageType_!
+  CreateCommunicationRun(input: CreateCommunicationRunInput!): CommunicationRun_!
+  CreateCommunicationTemplate(input: CreateCommunicationTemplateInput!): CommunicationTemplate_!
   CreateCompany(input: CreateCompanyInput!): Company_!
   CreateCompanyIntegrationRecordMap(input: CreateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
   CreateContact(input: CreateContactInput!): Contact_!
@@ -8507,6 +8688,12 @@ type Mutation {
   UpdateApplicationEntity(input: UpdateApplicationEntityInput!): ApplicationEntity_!
   UpdateApplicationSetting(input: UpdateApplicationSettingInput!): ApplicationSetting_!
   UpdateAuditLog(input: UpdateAuditLogInput!): AuditLog_!
+  UpdateCommunicationBaseMessageType(input: UpdateCommunicationBaseMessageTypeInput!): CommunicationBaseMessageType_!
+  UpdateCommunicationLog(input: UpdateCommunicationLogInput!): CommunicationLog_!
+  UpdateCommunicationProvider(input: UpdateCommunicationProviderInput!): CommunicationProvider_!
+  UpdateCommunicationProviderMessageType(input: UpdateCommunicationProviderMessageTypeInput!): CommunicationProviderMessageType_!
+  UpdateCommunicationRun(input: UpdateCommunicationRunInput!): CommunicationRun_!
+  UpdateCommunicationTemplate(input: UpdateCommunicationTemplateInput!): CommunicationTemplate_!
   UpdateCompany(input: UpdateCompanyInput!): Company_!
   UpdateCompanyIntegration(input: UpdateCompanyIntegrationInput!): CompanyIntegration_!
   UpdateCompanyIntegrationRecordMap(input: UpdateCompanyIntegrationRecordMapInput!): CompanyIntegrationRecordMap_!
@@ -8990,6 +9177,12 @@ type Query {
   AuditLogType(ID: Int!): AuditLogType_
   Authorization(ID: Int!): Authorization_
   AuthorizationRole(ID: Int!): AuthorizationRole_
+  CommunicationBaseMessageType(ID: Int!): CommunicationBaseMessageType_
+  CommunicationLog(ID: Int!): CommunicationLog_
+  CommunicationProvider(ID: Int!): CommunicationProvider_
+  CommunicationProviderMessageType(ID: Int!): CommunicationProviderMessageType_
+  CommunicationRun(ID: Int!): CommunicationRun_
+  CommunicationTemplate(ID: Int!): CommunicationTemplate_
   Company(ID: Int!): Company_
   CompanyIntegration(ID: Int!): CompanyIntegration_
   CompanyIntegrationRecordMap(ID: Int!): CompanyIntegrationRecordMap_
@@ -9174,6 +9367,24 @@ type Query {
   RunAuthorizationRoleViewByName(input: RunViewByNameInput!): RunAuthorizationRoleViewResult!
   RunAuthorizationViewByID(input: RunViewByIDInput!): RunAuthorizationViewResult!
   RunAuthorizationViewByName(input: RunViewByNameInput!): RunAuthorizationViewResult!
+  RunCommunicationBaseMessageTypeDynamicView(input: RunDynamicViewInput!): RunCommunicationBaseMessageTypeViewResult!
+  RunCommunicationBaseMessageTypeViewByID(input: RunViewByIDInput!): RunCommunicationBaseMessageTypeViewResult!
+  RunCommunicationBaseMessageTypeViewByName(input: RunViewByNameInput!): RunCommunicationBaseMessageTypeViewResult!
+  RunCommunicationLogDynamicView(input: RunDynamicViewInput!): RunCommunicationLogViewResult!
+  RunCommunicationLogViewByID(input: RunViewByIDInput!): RunCommunicationLogViewResult!
+  RunCommunicationLogViewByName(input: RunViewByNameInput!): RunCommunicationLogViewResult!
+  RunCommunicationProviderDynamicView(input: RunDynamicViewInput!): RunCommunicationProviderViewResult!
+  RunCommunicationProviderMessageTypeDynamicView(input: RunDynamicViewInput!): RunCommunicationProviderMessageTypeViewResult!
+  RunCommunicationProviderMessageTypeViewByID(input: RunViewByIDInput!): RunCommunicationProviderMessageTypeViewResult!
+  RunCommunicationProviderMessageTypeViewByName(input: RunViewByNameInput!): RunCommunicationProviderMessageTypeViewResult!
+  RunCommunicationProviderViewByID(input: RunViewByIDInput!): RunCommunicationProviderViewResult!
+  RunCommunicationProviderViewByName(input: RunViewByNameInput!): RunCommunicationProviderViewResult!
+  RunCommunicationRunDynamicView(input: RunDynamicViewInput!): RunCommunicationRunViewResult!
+  RunCommunicationRunViewByID(input: RunViewByIDInput!): RunCommunicationRunViewResult!
+  RunCommunicationRunViewByName(input: RunViewByNameInput!): RunCommunicationRunViewResult!
+  RunCommunicationTemplateDynamicView(input: RunDynamicViewInput!): RunCommunicationTemplateViewResult!
+  RunCommunicationTemplateViewByID(input: RunViewByIDInput!): RunCommunicationTemplateViewResult!
+  RunCommunicationTemplateViewByName(input: RunViewByNameInput!): RunCommunicationTemplateViewResult!
   RunCompanyDynamicView(input: RunDynamicViewInput!): RunCompanyViewResult!
   RunCompanyIntegrationDynamicView(input: RunDynamicViewInput!): RunCompanyIntegrationViewResult!
   RunCompanyIntegrationRecordMapDynamicView(input: RunDynamicViewInput!): RunCompanyIntegrationRecordMapViewResult!
@@ -10143,6 +10354,66 @@ type RunAuthorizationViewResult {
   ErrorMessage: String
   ExecutionTime: Int
   Results: [Authorization_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationBaseMessageTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationBaseMessageType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationLogViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationLog_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationProviderMessageTypeViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationProviderMessageType_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationProviderViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationProvider_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationRunViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationRun_!]!
+  RowCount: Int
+  Success: Boolean!
+  TotalRowCount: Int
+  UserViewRunID: Int
+}
+
+type RunCommunicationTemplateViewResult {
+  ErrorMessage: String
+  ExecutionTime: Int
+  Results: [CommunicationTemplate_!]!
   RowCount: Int
   Success: Boolean!
   TotalRowCount: Int
@@ -14397,6 +14668,68 @@ input UpdateAuditLogInput {
   UserID: Int!
 }
 
+input UpdateCommunicationBaseMessageTypeInput {
+  ID: Int!
+  MaxBytes: Int
+  OldValues___: [KeyValuePairInput!]
+  SupportsAttachments: Boolean!
+  SupportsHtml: Boolean!
+  SupportsSubjectLine: Boolean!
+  Type: String!
+}
+
+input UpdateCommunicationLogInput {
+  CommunicationProviderID: Int!
+  CommunicationProviderMessageTypeID: Int!
+  CommunicationRunID: Int
+  Direction: String!
+  ErrorMessage: String
+  ID: Int!
+  MessageContent: String
+  MessageDate: Timestamp!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateCommunicationProviderInput {
+  Description: String
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+  SupportsReceiving: Boolean!
+  SupportsSending: Boolean!
+}
+
+input UpdateCommunicationProviderMessageTypeInput {
+  AdditionalAttributes: String
+  CommunicationBaseMessageTypeID: Int!
+  CommunicationProviderID: Int!
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+}
+
+input UpdateCommunicationRunInput {
+  Comments: String
+  Direction: String!
+  ErrorMessage: String
+  ID: Int!
+  OldValues___: [KeyValuePairInput!]
+  Status: String!
+  UserID: Int!
+}
+
+input UpdateCommunicationTemplateInput {
+  Comments: String
+  Content: String!
+  ID: Int!
+  Name: String!
+  OldValues___: [KeyValuePairInput!]
+  ParentID: Int
+}
+
 input UpdateCompanyInput {
   Description: String!
   Domain: String
@@ -16353,7 +16686,7 @@ input UpdateListInput {
   CategoryID: Int
   CompanyIntegrationID: Int
   Description: String
-  EntityID: Int
+  EntityID: Int!
   ExternalSystemRecordID: String
   ID: Int!
   Name: String!
@@ -19333,6 +19666,7 @@ type User_ {
   ActionExecutionLogsArray: [ActionExecutionLog_!]!
   ActionsArray: [Action_!]!
   AuditLogsArray: [AuditLog_!]!
+  CommunicationRunsArray: [CommunicationRun_!]!
   CompanyIntegrationRunsArray: [CompanyIntegrationRun_!]!
   ConversationsArray: [Conversation_!]!
   CreatedAt: Timestamp!

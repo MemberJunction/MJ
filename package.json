@@ -5,6 +5,7 @@
   "workspaces": [
     "packages/*",
     "packages/AI/*",
+    "packages/Communication/*",
     "packages/Angular/*",
     "packages/Angular/Explorer/*",
     "packages/Angular/Generic/*",

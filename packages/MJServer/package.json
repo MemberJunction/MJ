@@ -30,6 +30,7 @@
     "@memberjunction/ai-vectors-pinecone": "~1.4.0",
     "@memberjunction/core": "~1.4.0",
     "@memberjunction/core-entities": "~1.4.0",
+    "@memberjunction/communication-core": "~1.4.0",
     "@memberjunction/data-context": "~1.4.0",
     "@memberjunction/data-context-server": "~1.4.0",
     "@memberjunction/global": "~1.4.0",

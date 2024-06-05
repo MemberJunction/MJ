@@ -17057,3 +17057,893 @@ import { RegisterClass } from "@memberjunction/global";
 
     }
         
+    /**
+     * Communication Templates - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationTemplate
+     * * Base View: vwCommunicationTemplates
+     * * @description Reusable templates for communication.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Templates')
+    export class CommunicationTemplateEntity extends BaseEntity {
+        /**
+        * Loads the Communication Templates record from the database
+        * @param ID: number - primary key value to load the Communication Templates record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationTemplateEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Templates - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationTemplateEntity
+        * @throws {Error} - Delete is not allowed for Communication Templates, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Templates, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Content
+        * * Display Name: Content
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Content(): string {  
+            return this.Get('Content');
+        }
+        set Content(value: string) {
+            this.Set('Content', value);
+        }
+        /**
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Templates (vwCommunicationTemplates.ID)
+        */
+        get ParentID(): number | null {  
+            return this.Get('ParentID');
+        }
+        set ParentID(value: number | null) {
+            this.Set('ParentID', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Parent(): string | null {  
+            return this.Get('Parent');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Providers - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationProvider
+     * * Base View: vwCommunicationProviders
+     * * @description All supported communication providers.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Providers')
+    export class CommunicationProviderEntity extends BaseEntity {
+        /**
+        * Loads the Communication Providers record from the database
+        * @param ID: number - primary key value to load the Communication Providers record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationProviderEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Providers - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationProviderEntity
+        * @throws {Error} - Delete is not allowed for Communication Providers, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Providers, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Description(): string | null {  
+            return this.Get('Description');
+        }
+        set Description(value: string | null) {
+            this.Set('Description', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        * * Description: The status of the communication provider (Disabled or Active).
+        */
+        get Status(): 'Disabled' | 'Active' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: SupportsSending
+        * * Display Name: Supports Sending
+        * * SQL Data Type: bit
+        * * Description: Indicates if the provider supports sending messages.
+        */
+        get SupportsSending(): boolean {  
+            return this.Get('SupportsSending');
+        }
+        set SupportsSending(value: boolean) {
+            this.Set('SupportsSending', value);
+        }
+        /**
+        * * Field Name: SupportsReceiving
+        * * Display Name: Supports Receiving
+        * * SQL Data Type: bit
+        * * Description: Indicates if the provider supports receiving messages.
+        */
+        get SupportsReceiving(): boolean {  
+            return this.Get('SupportsReceiving');
+        }
+        set SupportsReceiving(value: boolean) {
+            this.Set('SupportsReceiving', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Runs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationRun
+     * * Base View: vwCommunicationRuns
+     * * @description Runs of bulk message sends and receives.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Runs')
+    export class CommunicationRunEntity extends BaseEntity {
+        /**
+        * Loads the Communication Runs record from the database
+        * @param ID: number - primary key value to load the Communication Runs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationRunEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Runs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationRunEntity
+        * @throws {Error} - Delete is not allowed for Communication Runs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Runs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        */
+        get UserID(): number {  
+            return this.Get('UserID');
+        }
+        set UserID(value: number) {
+            this.Set('UserID', value);
+        }
+        /**
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Sending
+        *   * Receiving
+        * * Description: The direction of the communication run (Sending or Receiving).
+        */
+        get Direction(): 'Sending' | 'Receiving' {  
+            return this.Get('Direction');
+        }
+        set Direction(value: 'Sending' | 'Receiving') {
+            this.Set('Direction', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In-Progress
+        *   * Complete
+        *   * Failed
+        * * Description: The status of the communication run (Pending, In-Progress, Complete, Failed).
+        */
+        get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'In-Progress' | 'Complete' | 'Failed') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        */
+        get Comments(): string | null {  
+            return this.Get('Comments');
+        }
+        set Comments(value: string | null) {
+            this.Set('Comments', value);
+        }
+        /**
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The error message if the communication run failed.
+        */
+        get ErrorMessage(): string | null {  
+            return this.Get('ErrorMessage');
+        }
+        set ErrorMessage(value: string | null) {
+            this.Set('ErrorMessage', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)
+        */
+        get User(): string {  
+            return this.Get('User');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Provider Message Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationProviderMessageType
+     * * Base View: vwCommunicationProviderMessageTypes
+     * * @description Providers and their supported message types with additional attributes.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Provider Message Types')
+    export class CommunicationProviderMessageTypeEntity extends BaseEntity {
+        /**
+        * Loads the Communication Provider Message Types record from the database
+        * @param ID: number - primary key value to load the Communication Provider Message Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationProviderMessageTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Provider Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationProviderMessageTypeEntity
+        * @throws {Error} - Delete is not allowed for Communication Provider Message Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Provider Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
+        */
+        get CommunicationProviderID(): number {  
+            return this.Get('CommunicationProviderID');
+        }
+        set CommunicationProviderID(value: number) {
+            this.Set('CommunicationProviderID', value);
+        }
+        /**
+        * * Field Name: CommunicationBaseMessageTypeID
+        * * Display Name: Communication Base Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Base Message Types (vwCommunicationBaseMessageTypes.ID)
+        */
+        get CommunicationBaseMessageTypeID(): number {  
+            return this.Get('CommunicationBaseMessageTypeID');
+        }
+        set CommunicationBaseMessageTypeID(value: number) {
+            this.Set('CommunicationBaseMessageTypeID', value);
+        }
+        /**
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        */
+        get Name(): string {  
+            return this.Get('Name');
+        }
+        set Name(value: string) {
+            this.Set('Name', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Disabled
+        *   * Active
+        * * Description: The status of the provider message type (Disabled or Active).
+        */
+        get Status(): 'Disabled' | 'Active' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Disabled' | 'Active') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: AdditionalAttributes
+        * * Display Name: Additional Attributes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Additional attributes specific to the provider message type.
+        */
+        get AdditionalAttributes(): string | null {  
+            return this.Get('AdditionalAttributes');
+        }
+        set AdditionalAttributes(value: string | null) {
+            this.Set('AdditionalAttributes', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProvider(): string {  
+            return this.Get('CommunicationProvider');
+        }
+        
+        /**
+        * * Field Name: CommunicationBaseMessageType
+        * * Display Name: Communication Base Message Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get CommunicationBaseMessageType(): string {  
+            return this.Get('CommunicationBaseMessageType');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Logs - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationLog
+     * * Base View: vwCommunicationLogs
+     * * @description Logs of sent and received messages.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Logs')
+    export class CommunicationLogEntity extends BaseEntity {
+        /**
+        * Loads the Communication Logs record from the database
+        * @param ID: number - primary key value to load the Communication Logs record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationLogEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Logs - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationLogEntity
+        * @throws {Error} - Delete is not allowed for Communication Logs, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Logs, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderID
+        * * Display Name: Communication Provider ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Providers (vwCommunicationProviders.ID)
+        */
+        get CommunicationProviderID(): number {  
+            return this.Get('CommunicationProviderID');
+        }
+        set CommunicationProviderID(value: number) {
+            this.Set('CommunicationProviderID', value);
+        }
+        /**
+        * * Field Name: CommunicationProviderMessageTypeID
+        * * Display Name: Communication Provider Message Type ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Provider Message Types (vwCommunicationProviderMessageTypes.ID)
+        */
+        get CommunicationProviderMessageTypeID(): number {  
+            return this.Get('CommunicationProviderMessageTypeID');
+        }
+        set CommunicationProviderMessageTypeID(value: number) {
+            this.Set('CommunicationProviderMessageTypeID', value);
+        }
+        /**
+        * * Field Name: CommunicationRunID
+        * * Display Name: Communication Run ID
+        * * SQL Data Type: int
+        * * Related Entity/Foreign Key: Communication Runs (vwCommunicationRuns.ID)
+        */
+        get CommunicationRunID(): number | null {  
+            return this.Get('CommunicationRunID');
+        }
+        set CommunicationRunID(value: number | null) {
+            this.Set('CommunicationRunID', value);
+        }
+        /**
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Sending
+        *   * Receiving
+        * * Description: The direction of the communication log (Sending or Receiving).
+        */
+        get Direction(): 'Sending' | 'Receiving' {  
+            return this.Get('Direction');
+        }
+        set Direction(value: 'Sending' | 'Receiving') {
+            this.Set('Direction', value);
+        }
+        /**
+        * * Field Name: MessageDate
+        * * Display Name: Message Date
+        * * SQL Data Type: datetime
+        * * Description: The date and time when the message was logged.
+        */
+        get MessageDate(): Date {  
+            return this.Get('MessageDate');
+        }
+        set MessageDate(value: Date) {
+            this.Set('MessageDate', value);
+        }
+        /**
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(50)
+        * * Value List Type: List
+        * * Possible Values 
+        *   * Pending
+        *   * In-Progress
+        *   * Complete
+        *   * Failed
+        * * Description: The status of the logged message (Pending, In-Progress, Complete, Failed).
+        */
+        get Status(): 'Pending' | 'In-Progress' | 'Complete' | 'Failed' {  
+            return this.Get('Status');
+        }
+        set Status(value: 'Pending' | 'In-Progress' | 'Complete' | 'Failed') {
+            this.Set('Status', value);
+        }
+        /**
+        * * Field Name: MessageContent
+        * * Display Name: Message Content
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The content of the logged message.
+        */
+        get MessageContent(): string | null {  
+            return this.Get('MessageContent');
+        }
+        set MessageContent(value: string | null) {
+            this.Set('MessageContent', value);
+        }
+        /**
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The error message if the message sending failed.
+        */
+        get ErrorMessage(): string | null {  
+            return this.Get('ErrorMessage');
+        }
+        set ErrorMessage(value: string | null) {
+            this.Set('ErrorMessage', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+        /**
+        * * Field Name: CommunicationProvider
+        * * Display Name: Communication Provider
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProvider(): string {  
+            return this.Get('CommunicationProvider');
+        }
+        
+        /**
+        * * Field Name: CommunicationProviderMessageType
+        * * Display Name: Communication Provider Message Type
+        * * SQL Data Type: nvarchar(255)
+        */
+        get CommunicationProviderMessageType(): string {  
+            return this.Get('CommunicationProviderMessageType');
+        }
+        
+
+    }
+        
+    /**
+     * Communication Base Message Types - strongly typed entity sub-class
+     * * Schema: __mj
+     * * Base Table: CommunicationBaseMessageType
+     * * Base View: vwCommunicationBaseMessageTypes
+     * * @description Base message types and their supported functionalities.
+     * * Primary Key: ID
+     * @extends {BaseEntity}
+     * @class
+     * @public
+     */
+    @RegisterClass(BaseEntity, 'Communication Base Message Types')
+    export class CommunicationBaseMessageTypeEntity extends BaseEntity {
+        /**
+        * Loads the Communication Base Message Types record from the database
+        * @param ID: number - primary key value to load the Communication Base Message Types record.
+        * @param EntityRelationshipsToLoad - (optional) the relationships to load
+        * @returns {Promise<boolean>} - true if successful, false otherwise
+        * @public
+        * @async
+        * @memberof CommunicationBaseMessageTypeEntity
+        * @method
+        * @override
+        */      
+        public async Load(ID: number, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
+            const compositeKey: CompositeKey = new CompositeKey();
+            compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+            return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+        }
+            
+        /**
+        * Communication Base Message Types - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+        * @public
+        * @method
+        * @override
+        * @memberof CommunicationBaseMessageTypeEntity
+        * @throws {Error} - Delete is not allowed for Communication Base Message Types, to enable it set AllowDeleteAPI to 1 in the database.
+        */
+        public async Delete(): Promise<boolean> {
+            throw new Error('Delete is not allowed for Communication Base Message Types, to enable it set AllowDeleteAPI to 1 in the database.');
+        } 
+            
+            /**
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: int
+        */
+        get ID(): number {  
+            return this.Get('ID');
+        }
+        
+        /**
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)
+        */
+        get Type(): string {  
+            return this.Get('Type');
+        }
+        set Type(value: string) {
+            this.Set('Type', value);
+        }
+        /**
+        * * Field Name: SupportsAttachments
+        * * Display Name: Supports Attachments
+        * * SQL Data Type: bit
+        * * Description: Indicates if attachments are supported.
+        */
+        get SupportsAttachments(): boolean {  
+            return this.Get('SupportsAttachments');
+        }
+        set SupportsAttachments(value: boolean) {
+            this.Set('SupportsAttachments', value);
+        }
+        /**
+        * * Field Name: SupportsSubjectLine
+        * * Display Name: Supports Subject Line
+        * * SQL Data Type: bit
+        * * Description: Indicates if a subject line is supported.
+        */
+        get SupportsSubjectLine(): boolean {  
+            return this.Get('SupportsSubjectLine');
+        }
+        set SupportsSubjectLine(value: boolean) {
+            this.Set('SupportsSubjectLine', value);
+        }
+        /**
+        * * Field Name: SupportsHtml
+        * * Display Name: Supports Html
+        * * SQL Data Type: bit
+        * * Description: Indicates if HTML content is supported.
+        */
+        get SupportsHtml(): boolean {  
+            return this.Get('SupportsHtml');
+        }
+        set SupportsHtml(value: boolean) {
+            this.Set('SupportsHtml', value);
+        }
+        /**
+        * * Field Name: MaxBytes
+        * * Display Name: Max Bytes
+        * * SQL Data Type: int
+        * * Description: The maximum size in bytes for the message.
+        */
+        get MaxBytes(): number | null {  
+            return this.Get('MaxBytes');
+        }
+        set MaxBytes(value: number | null) {
+            this.Set('MaxBytes', value);
+        }
+        /**
+        * * Field Name: CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetime
+        */
+        get CreatedAt(): Date {  
+            return this.Get('CreatedAt');
+        }
+        
+        /**
+        * * Field Name: UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetime
+        */
+        get UpdatedAt(): Date {  
+            return this.Get('UpdatedAt');
+        }
+        
+
+    }
+        
