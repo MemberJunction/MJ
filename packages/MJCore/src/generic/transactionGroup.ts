@@ -1,3 +1,5 @@
+import { BaseEntity } from "./baseEntity";
+
 /**
  * Internal class used by TransactionGroupBase and sub-classes to manage individual transactions
  */
@@ -6,6 +8,7 @@ export class TransactionItem {
     private _vars: any; // variables to pass to the gql or sql
     private _callBack: Function; // callback function to call when the transaction is complete
     private _extraData: any // any additional stuff that is needed for processing by the provider
+    private _baseEntity: BaseEntity; // the base entity object that this transaction is associated with
 
     public get Vars(): any {
         return this._vars;
@@ -19,8 +22,12 @@ export class TransactionItem {
     public get CallBack(): Function {
         return this._callBack;
     }
+    public get BaseEntity(): BaseEntity {
+        return this._baseEntity;
+    }   
 
-    constructor (instruction: string, vars: any, extraData: any, callBack: Function) {
+    constructor (baseEntity: BaseEntity, instruction: string, vars: any, extraData: any, callBack: Function) {
+        this._baseEntity = baseEntity;
         this._instruction = instruction;
         this._vars = vars;
         this._extraData = extraData;
@@ -34,6 +41,9 @@ export class TransactionItem {
 export class TransactionResult {
     Transaction: TransactionItem;
     Result: any;
+    /**
+     * True if the transaction was successful, false if it failed. If it failed, check the TransactionItem's BaseEntity.ResultHistory and BaseEntity.LatestResult
+     */
     Success: boolean;
 
     constructor(transaction: TransactionItem, result: any, success: boolean) {
@@ -78,7 +88,8 @@ export abstract class TransactionGroupBase {
 
     /**
      * Submits the transaction group to the provider for handling. The provider will handle the actual transaction and call the callback functions
-     * @returns true if the transaction was successful, false if it failed
+     * @returns true if the transaction was successful, false if it failed. If the method fails, check each of the individual BaseEntity objects within
+     * the TransactionGroup for their result histories using BaseEntity.ResultHistory and BaseEntity.LatestResult
      */
     public async Submit(): Promise<boolean> {
         try {
@@ -90,6 +101,9 @@ export abstract class TransactionGroupBase {
                 for (let i = 0; i < results.length; i++) {
                     await results[i].Transaction.CallBack(results[i].Result, results[i].Success);
                 }
+
+                // now, see if there are any false values for results[x].Success, if so, we have to return false
+                return results.every((r) => r.Success);
             }
             return true;
         }
