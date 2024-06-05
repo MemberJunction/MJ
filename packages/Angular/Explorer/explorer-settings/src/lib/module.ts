@@ -24,6 +24,7 @@ import { SingleUserComponent } from './single-user/single-user.component';
 import { SingleApplicationComponent } from './single-application/single-application.component';
 import { ApplicationEntitiesGridComponent } from './application-entities-grid/application-entities-grid.component';
 import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+import { JoinGridModule } from '@memberjunction/ng-join-grid';
 
 @NgModule({
   declarations: [
@@ -50,7 +51,8 @@ import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
     EntityFormDialogModule,
     IndicatorsModule,
     UserViewGridModule,
-    SimpleRecordListModule
+    SimpleRecordListModule,
+    JoinGridModule
   ],
   exports: [
     SingleRoleComponent,

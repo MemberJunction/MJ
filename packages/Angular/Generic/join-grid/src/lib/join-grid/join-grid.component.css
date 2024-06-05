@@ -1,64 +1,65 @@
-button {
-    margin-left: 5px;
-    margin-top: 5px;
-    width: 125px;
-}
-
 .wrapper {
-    padding-right: 10px;
+    overflow: auto;
 }
 
 /* Style for the whole table */
 table {
     margin-left: 5px;
-    margin-top: 10px;
-    margin-right: 5px;
+    margin-top: 5px;
     border-collapse: collapse; /* Ensures border collapse for a cleaner look */
-    width: 100%;
+}
+
+button {
+    margin-left: 5px;
+    margin-top: 5px;
+    width: 125px;
 }
  
 table th {
     background-color: #f2f2f2; /* Light gray background for headers */
     color: black; /* Black text color for headers */
     font-weight: bold; /* Bold font weight for headers */
-    text-align: left;
+    cursor: pointer;
+}
+
+.permission-left-col {
+    cursor: pointer;
 }
 
 /* Style for all table cells */
 table th, table td {
+    border: 1px solid gray; /* Gray border for cells */
     height: 36px; /* Fixed height for all rows */
+    text-align: center;
     padding: 0 8px; /* Add some padding inside cells */
 }
 
-/* Style for the first column cells */
-table td:first-child {
-    display: flex; /* Make the cell a flex container */
-    justify-content: space-between; /* Space out the text and icons */
-    align-items: center; /* Center items vertically */
-    padding-right: 8px; /* Ensure there is some padding on the right */
+/* Specific styles for the first column */
+table th:first-child, table td:first-child {
+    min-width: 150px; /* Set width for the first column */
+    text-align: left;
 }
 
-/* Style for the text span within the first column */
-td:first-child span:first-child {
-    border: none; /* Ensures no border is applied to the span */
+/* Specific styles for the "Can" columns */
+table th:not(:first-child), table td:not(:first-child) {
+    width: 100px; /* Set width for "Can" columns */
 }
 
-/* Style for the icons container span within the first column */
-td:first-child span:last-child {
-    border: none; /* Ensures no border is applied to the span */
+/* Alternating row background colors */
+table tr:nth-child(odd) {
+    background-color: white; /* Light color for odd rows */
 }
 
-/* Style for the icons within the first column */
-td:first-child .icon {
-    margin-left: 10px; /* Space between icons if needed */
-    cursor: pointer; /* Change cursor to pointer on hover */
-}
-
-table tr {
-    cursor: pointer;
-}
-
-table tr:hover {
+table tr:nth-child(even) {
     background-color: #e7f4ff; /* Light blue for even rows */
 }
- 
+
+table tr.dirty-row {
+    font-style: italic;
+    background-color: #ffcccc;
+}
+
+table td.dirty-cell {
+    font-style: italic;
+    background-color: #ffcccc;
+}

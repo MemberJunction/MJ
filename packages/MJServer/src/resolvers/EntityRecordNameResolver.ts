@@ -1,7 +1,8 @@
-import { Metadata, CompositeKey, LogStatus } from '@memberjunction/core';
+import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
+import { CommunicationEngine } from '@memberjunction/communication-core';
 
 @InputType()
 export class EntityRecordNameInput {
@@ -36,8 +37,12 @@ export class EntityRecordNameResolver {
   async GetEntityRecordName(
     @Arg('EntityName', () => String) EntityName: string,
     @Arg('CompositeKey', () => CompositeKeyInputType) primaryKey: CompositeKey,
-    @Ctx() {}: AppContext
+    @Ctx() {userPayload}: AppContext
   ): Promise<EntityRecordNameResult> {
+    //TEMPORARY: test harness for communication framework - dumb place but quick test grounds, will delete
+    //this.TestCommunicationFramework(userPayload.userRecord, EntityName, primaryKey);
+
+
     const md = new Metadata();
     return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
   }
@@ -73,6 +78,17 @@ export class EntityRecordNameResolver {
     else 
       return { Success: false, Status: `Entity ${EntityName} not found`, CompositeKey: pk, EntityName };
   }
+
+  // private async TestCommunicationFramework(user: UserInfo, EntityName: string, primaryKey: CompositeKeyInputType) {
+  //   const engine = CommunicationEngine.Instance;
+  //   await engine.Config(false, user);
+  //   await engine.SendSingleMessage('SendGrid', 'Email', {
+  //     To: 'email@goes.here',
+  //     Subject: `MJServer Notification: GetEntityRecordName Called For: ${EntityName}`,
+  //     Body: `Entity: ${EntityName}, Key: ${JSON.stringify(primaryKey)}`,
+  //     MessageType: null
+  //   });
+  // }
 }
 
 export default EntityRecordNameResolver;
