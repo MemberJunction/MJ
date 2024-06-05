@@ -284,18 +284,22 @@ export class CompareRecordsComponent {
 
   public FormatColumnValue(dataItem: any, column: any, maxLength: number) { //column: ViewColumnInfo, value: string, maxLength: number) {
     try {
-      if (dataItem && column && column.KeyValuePairs) { 
-        const compositeKey: CompositeKey = new CompositeKey(column.KeyValuePairs);
-        const record = this.recordsToCompare.find(r => compositeKey.Equals(r.PrimaryKey));
-        if(!record) {
-          throw new Error('Record not found');
-        }
+      //console.log('dataItem', dataItem, "column", column, "recordsToCompare", this.recordsToCompare);
+      if (dataItem && column && column.CompositeKey && column.CompositeKey.KeyValuePairs) { 
 
-        const pkeyString = record.PrimaryKey.Values();
-        const item = dataItem[pkeyString]
-        const val = item.Value;
-        const field = item.metaData.EntityField;
-        return field.FormatValue(val, undefined, undefined, maxLength);
+          const compositeKey: CompositeKey = new CompositeKey(column.CompositeKey.KeyValuePairs);
+          const record = this.recordsToCompare.find(r => {
+            return compositeKey.Equals(r.PrimaryKey);
+          });
+          if(!record) {
+            throw new Error('Record not found');
+          }
+
+          const pkeyString = record.PrimaryKey.Values();
+          const item = dataItem[pkeyString]
+          const val = item.Value;
+          const field = item.metaData.EntityField;
+          return field.FormatValue(val, undefined, undefined, maxLength);
       }
     }
     catch (err) {
@@ -377,11 +381,11 @@ export class CompareRecordsComponent {
   }
 
   public GetColumnHeaderText(column: any) {
-    return this.GetColumnHeaderTextFromCompositeKey(column?.KeyValuePairs);
+    return this.GetColumnHeaderTextFromCompositeKey(column?.CompositeKey);
   }
 
   public GetColumnHeaderTextFromCompositeKey(compositeKey: CompositeKey) {
-    if (compositeKey.KeyValuePairs) {
+    if (compositeKey && compositeKey.KeyValuePairs) {
       // see if we have any dependencies
       const r = this._recordDependencies.find(r =>  compositeKey.Equals(r.compositeKey));
       const prefix = this.selectionMode && compositeKey.Equals(this.selectedRecordCompositeKey) ? '✓✓✓ ' : '';

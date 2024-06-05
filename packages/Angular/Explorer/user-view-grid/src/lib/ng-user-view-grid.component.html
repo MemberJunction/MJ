@@ -25,64 +25,67 @@
           (sortChange)="sortChanged($event)"
           >
           <ng-template kendoGridToolbarTemplate>
-            @if(ShowCreateNewRecordButton && UserCanCreateNewRecord) {
-                <button kendoButton (click)="doCreateNewRecord()" >
-                    <span class="fa-regular fa-plus"></span>
-                    New {{entityRecord?.EntityInfo?.Name}}
-                </button>                                        
+            @if(!anyModeEnabled){
+                @if(ShowCreateNewRecordButton && UserCanCreateNewRecord) {
+                    <button kendoButton (click)="doCreateNewRecord()" >
+                        <span class="fa-regular fa-plus"></span>
+                        New {{entityRecord?.EntityInfo?.Name}}
+                    </button>                                        
+                }
+
+                <button kendoButton (click)="doExcelExport()" >
+                    <span class="fa-regular fa-file-excel"></span>
+                    Export to Excel
+                </button>
+                <button (click)="enableCheckbox(false, 'duplicate')" kendoButton class="k-button-solid-base list-button">
+                    Search For Duplicates
+                </button>
+                <button (click)="enableCheckbox(false, 'addToList')" kendoButton class="k-button-solid-base list-button">
+                    Add To List
+                </button>
+                <button (click)="enableMergeOrCompare(false, 'merge')" kendoButton class="k-button-solid-base list-button">
+                    Merge
+                </button>
+                <button (click)="enableMergeOrCompare(false, 'compare')" kendoButton class="k-button-solid-base list-button">
+                    Compare
+                </button>
+
+                @if(showRefreshButton){
+                    <button kendoButton class="list-button" (click)="RefreshFromSavedParams()">
+                        <span class="fa-solid fa-arrows-rotate"></span>
+                        Refresh
+                    </button>
+                }
             }
-            
-            <button kendoButton *ngIf="!compareMode && !mergeMode" (click)="doExcelExport()" >
-            <span class="fa-regular fa-file-excel"></span>
-                Export to Excel
-            </button>
-
-              <!-- 3 buttons for duplicate. First one only shows when duplication is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending duple.  -->
-            <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="(!compareMode && !mergeMode && !duplicateMode)" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
-                Search For Duplicates
-            </button>
-            <button (click)="enableCheckbox(false, 'duplicate')" *ngIf="duplicateMode" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
-                Search For Duplicates
-            </button>
-            <!--
-            <button (click)="enableCheckbox(true, 'duplicate')" *ngIf="duplicateMode" kendoButton class="k-button-solid-base list-button">
-                Cancel
-            </button>
-            -->
-
-
-            <!-- 3 buttons for compare. First one only shows when comparison is going on in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending compare.  -->
-            <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="!compareMode && !mergeMode && !duplicateMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
-            <button (click)="enableMergeOrCompare(false, 'compare')" *ngIf="compareMode" [disabled]="compareMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Compare</button>
-            <!--
-            <button (click)="enableMergeOrCompare(true, 'compare')" *ngIf="compareMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
-            -->
-
-            <!-- 3 buttons for merge. First one only shows when merge is getting goin in the grid, the next one is the one the user starts the process with before records are selected, last one is to cancel the pending merge.  -->
-            <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="!mergeMode && !compareMode && !duplicateMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
-            <button (click)="enableMergeOrCompare(false, 'merge')" *ngIf="mergeMode" [disabled]="mergeMode && recordsToCompare.length < 2" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Merge</button>
-            <!--
-            <button (click)="enableMergeOrCompare(true, 'merge')" *ngIf="mergeMode" class="k-button k-button-md k-rounded-md k-button-solid-base k-button-solid">Cancel</button>
-            -->
-            
-            @if(compareMode || mergeMode || duplicateMode){
-                <button (click)="enableCheckbox(true, '')" kendoButton class="k-button-solid-base list-button">
-                    Cancel
+            @if(duplicateMode){
+                <button (click)="enableCheckbox(false, 'duplicate')" [disabled]="duplicateMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                    Search For Duplicates
                 </button>
             }
-            @if(showRefreshButton && !compareMode && !mergeMode && !duplicateMode){
-                <button
-                kendoButton
-                class="list-button"
-                (click)="RefreshFromSavedParams()">
-                    <span class="fa-solid fa-arrows-rotate"></span>
-                        Refresh
+            @if(addToListMode){
+                <button (click)="enableCheckbox(false, 'addToList')" [disabled]="addToListMode && recordsToCompare.length === 0" kendoButton class="k-button-solid-base list-button">
+                    Add To List
+                </button>
+            }
+            @if(compareMode){
+                <button (click)="enableMergeOrCompare(false, 'compare')" [disabled]="compareMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                    Compare
+                </button>
+            }
+            @if(mergeMode){
+                <button (click)="enableMergeOrCompare(false, 'merge')" [disabled]="mergeMode && recordsToCompare.length < 2" kendoButton class="k-button-solid-base list-button">
+                    Merge
+                </button>
+            }
+            @if(anyModeEnabled){
+                <button (click)="enableCheckbox(true, '')" kendoButton class="k-button-solid-base list-button">
+                    Cancel
                 </button>
             }
         </ng-template>
           
           <kendo-grid-checkbox-column 
-              *ngIf="compareMode || mergeMode || duplicateMode" 
+              *ngIf="anyModeEnabled" 
               [width]="50" 
               [headerStyle]="{ 'font-weight' : 'bold', 'background-color': 'white' }" 
               [style]="{'text-align': 'center', 'vertical-align': 'center'}">
@@ -168,6 +171,60 @@
             </kendo-window>
         </div>            
     </div>
+    <kendo-dialog
+    class="dialog-wrapper"
+    title="Select List(s) To Add Record"
+    *ngIf="showAddToListDialog"
+    (close)="toggleAddToListDialog(false)"
+    [minHeight]="450"
+    [maxHeight]="450"
+    [minWidth]="500"
+    [maxWidth]="650"
+    >
+    <div>
+        <kendo-textbox
+      id="listSearch"
+      placeholder="Search Lists..."
+      kendoTextBox
+      (valueChange)="onSearch($event)"
+      [clearButton]="true"
+      class="padding-bottom-small"
+    ></kendo-textbox>
+    </div>
+    <div class="overflow-y-scroll">
+        @if(showAddToListLoader){
+            <kendo-loader type="converging-spinner"></kendo-loader>
+        }
+        @else {
+            @for(listEntity of listEntities; track listEntity){
+                <div class="list-item">
+                    {{listEntity.Name}}
+                    @if(selectedListEntities.includes(listEntity)){
+                        <button kendoButton (click)="removeFromList(listEntity)">
+                            <span class="fa-regular fa-circle-minus"></span>
+                            Remove
+                        </button>
+                    }
+                    @else {
+                        <button kendoButton (click)="addToList(listEntity)">
+                            <span class="fa-regular fa-circle-plus"></span>
+                            Add
+                        </button>
+                    }
+                </div>
+                <hr>
+            }
+        }
+    </div>
+      <kendo-dialog-actions>
+        <button kendoButton (click)="addRecordsToSelectedLists()" [disabled]="showAddToListLoader" themeColor="primary">
+            Save
+        </button>
+        <button kendoButton (click)="toggleAddToListDialog(false)" [disabled]="showAddToListLoader">
+            Cancel
+        </button>
+      </kendo-dialog-actions>
+    </kendo-dialog>
 </div>
   
 <!-- Entity Form Dialog Component here for future use as needed -->

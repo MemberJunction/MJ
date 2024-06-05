@@ -144,5 +144,4 @@ export class SingleViewComponent implements AfterViewInit, OnInit  {
       this.Refresh();
     }
   }
-
 }
