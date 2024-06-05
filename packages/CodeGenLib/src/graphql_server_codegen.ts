@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, LogError } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './logging';
@@ -477,11 +477,28 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
         const md = new Metadata();
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
         const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
-        const filterFieldName = !r.EntityKeyField ? entity.FirstPrimaryKey.CodeName : entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase()).CodeName;
+        
+        let filterFieldName: string = "";
+        if(!r.EntityKeyField){
+            filterFieldName = entity.FirstPrimaryKey.CodeName;
+        }
+        else{
+            const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase());
+            if(field){
+                filterFieldName = field.CodeName;
+            }
+            else{
+                LogError(`GenerateOneToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+                return "";
+            }
+        }
+        
         const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
-        if (!filterField)
-            throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
-    
+        if (!filterField){
+            LogError(`GenerateOneToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+            return "";
+        }
+
         const quotes = filterField.NeedsQuotes ? "'" : '';
         const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
         const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix 
@@ -499,11 +516,27 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
     protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
         const md = new Metadata();
         const re = md.Entities.find(e => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase());
-        const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix 
-        const filterFieldName = !r.EntityKeyField ? entity.FirstPrimaryKey.CodeName : entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase()).CodeName;
+        const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
+        let filterFieldName: string = "";
+        if(!r.EntityKeyField){
+            filterFieldName = entity.FirstPrimaryKey.CodeName;
+        }
+        else{
+            const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase());
+            if(field){
+                filterFieldName = field.CodeName;
+            }
+            else{
+                LogError(`GenerateManyToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+                return "";
+            }
+        }
+
         const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
-        if (!filterField)
-            throw new Error(`Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+        if (!filterField){
+            LogError(`GenerateManyToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+            return "";
+        }
         
         const quotes = filterField.NeedsQuotes ? "'" : '';
         const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';

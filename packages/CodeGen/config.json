@@ -18,7 +18,7 @@
         },
         {
             "name": "skip_database_generation",
-            "value": false
+            "value": true
         }
     ],
     "logging": {
