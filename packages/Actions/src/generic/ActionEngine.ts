@@ -1,10 +1,8 @@
-import { LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, Metadata, UserInfo } from "@memberjunction/core";
 import { ActionEntity, ActionExecutionLogEntity, ActionFilterEntity, ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
-import { BaseSingleton, MJGlobal } from "@memberjunction/global";
+import { MJGlobal } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { ActionEntityServerEntity } from "./ActionEntity.server";
-import { BehaviorSubject } from "rxjs";
-
 
 
 export class ActionLibrary {
@@ -134,12 +132,12 @@ export class RunActionParams {
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
-export class ActionEngine extends BaseSingleton<ActionEngine> {
+export class ActionEngine extends BaseEngine<ActionEngine> {
    private __coreCategoryName = '__mj';
 
-    // implement a singleton pattern for caching metadata. All uses of the ActionEngine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
-    // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the ActionEngine. This is important because the metadata is not expected to change.
-    private constructor() {
+   // implement a singleton pattern for caching metadata. All uses of the ActionEngine will first call Config() to get started which is an async method. This method will load the metadata and cache it in a variable wtihin the "GlobalObjectStore"
+   // which is an MJ utility that is available to all packages. This will allow the metadata to be loaded once and then used by all instances of the ActionEngine. This is important because the metadata is not expected to change.
+   private constructor() {
       super('MJ_Action_Metadata');
    }
 
@@ -150,99 +148,43 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
       return super.getInstance<ActionEngine>('MJ_Action_Metadata');
    }
 
- 
-    // internal instance properties used for the singleton pattern
-    private _loaded: boolean = false;
-    private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
-
     private _Actions: ActionEntityServerEntity[];
     private _Filters: ActionFilterEntity[];
     private _Params: ActionParamEntity[];
     private _ActionResultCodes: ActionResultCodeEntity[];
     private _ActionLibraries: ActionLibraryEntity[];
-    private _contextUser: UserInfo;
 
-    /**
-     * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
-     * If this method was previously run on the instance of the ActionEngine, it will return immediately without re-loading the metadata. If you want to force a reload of the metadata, you can pass true for the forceReload parameter.
-     * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
-     * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
-     */
-    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
-        // make sure we don't do this more than once while the first call is still going on
-        if (this._loadingSubject.value && !forceRefresh) {
-            return new Promise<void>((resolve) => {
-               const subscription = this._loadingSubject.subscribe((loading) => {
-                  if (!loading) {
-                        subscription.unsubscribe();
-                        resolve();
-                  }
-               });
-            });
-        }
+   /**
+    * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.
+    * If this method was previously run on the instance of the ActionEngine, it will return immediately without re-loading the metadata. If you want to force a reload of the metadata, you can pass true for the forceReload parameter.
+    * @param forceRefresh If true, the metadata will be loaded from the database even if it was previously loaded.
+    * @param contextUser If you are running the action on the server side you must pass this in, but it is not required in an environment where a user is authenticated directly, e.g. a browser or other client. 
+    */
+   public async Config(forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
+      const config = [
+         {
+               EntityName: 'Actions',
+               PropertyName: '_Actions'
+         }, 
+         {
+               EntityName: 'Action Filters',
+               PropertyName: '_Filters'
+         }, 
+         {
+               EntityName: 'Action Result Codes',
+               PropertyName: '_ActionResultCodes'
+         },
+         {
+               EntityName: 'Action Params',
+               PropertyName: '_Params'
+         },
+         {
+               EntityName: 'Action Libraries',
+               PropertyName: '_ActionLibraries'
+         }];
 
-        if (!this._loaded || forceRefresh) {
-            this._loadingSubject.next(true);
-            this._contextUser = contextUser;
-
-            // Load all actions
-            const rv = new RunView();
-            try {
-               const actions = await rv.RunView({
-                  EntityName: 'Actions',
-                  ResultType: 'entity_object'
-               }, contextUser);
-               if (actions.Success) {
-                  this._Actions = actions.Results;
-               }
-
-               // Load all filters
-               const filters = await rv.RunView({
-                  EntityName: 'Action Filters',
-                  ResultType: 'entity_object'
-               }, contextUser);
-               if (filters.Success) {
-                  this._Filters = filters.Results;
-               }
-
-               // Load all result codes
-               const resultCodes = await rv.RunView({
-                  EntityName: 'Action Result Codes',
-                  ResultType: 'entity_object'
-               }, contextUser);
-               if (resultCodes.Success) {
-                  this._ActionResultCodes = resultCodes.Results;
-               }
-
-               const params = await rv.RunView({
-                  EntityName: 'Action Params',
-                  ResultType: 'entity_object'
-               }, contextUser);
-               if (resultCodes.Success) {
-                  this._Params = params.Results;
-               }
-
-               const libs = await rv.RunView({
-                  EntityName: 'Action Libraries',
-                  ResultType: 'entity_object'
-               }, contextUser);
-               if (libs.Success) {
-                  this._ActionLibraries = libs.Results;
-               }
-
-               this._loaded = true;
-            }
-            catch (e) {
-               LogError(e);
-            }
-            finally {
-                this._loadingSubject.next(false);
-            }
-        }
-        else {
-            // we have already loaded and have not been told to force the refresh
-        }
-    }
+      await this.Load(config, forceRefresh, contextUser);
+   }
 
     public get Actions(): ActionEntityServerEntity[] {
       return this._Actions;
@@ -362,11 +304,11 @@ export class ActionEngine extends BaseSingleton<ActionEngine> {
    protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<ActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
       const md = new Metadata();
-      const logEntity = await md.GetEntityObject<ActionExecutionLogEntity>('Action Execution Logs', this._contextUser);
+      const logEntity = await md.GetEntityObject<ActionExecutionLogEntity>('Action Execution Logs', this.ContextUser);
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
-      logEntity.UserID = this._contextUser.ID;
+      logEntity.UserID = this.ContextUser.ID;
       logEntity.Params = JSON.stringify(params.Params); // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
       if (saveRecord)
          await logEntity.Save(); // initial save so we persist that the action has started, unless the saveRecord parameter tells us not to save

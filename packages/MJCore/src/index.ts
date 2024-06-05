@@ -5,6 +5,7 @@ import { RunView } from "./views/runView";
 
 export * from "./generic/metadata";
 export * from "./generic/baseInfo";
+export * from "./generic/baseEngine";
 export * from "./views/runView";
 export * from "./generic/runReport";
 export * from "./generic/runQuery";
