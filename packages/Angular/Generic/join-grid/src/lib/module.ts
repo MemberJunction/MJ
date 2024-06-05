@@ -12,6 +12,7 @@ import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 // LOCAL
 import { JoinGridComponent } from './join-grid/join-grid.component';
 import { GridModule } from '@progress/kendo-angular-grid';
+import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
 @NgModule({
   declarations: [
@@ -25,10 +26,11 @@ import { GridModule } from '@progress/kendo-angular-grid';
     ButtonsModule,
     DropDownsModule,
     DialogsModule,
-    IndicatorsModule
+    IndicatorsModule,
+    ContainerDirectivesModule
   ],
   exports: [
     JoinGridComponent
   ]
 })
-export class SimpleRecordListModule { }
+export class JoinGridModule { }
