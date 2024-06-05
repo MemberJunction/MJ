@@ -1127,7 +1127,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                             // we are part of a transaction group, so just add our query to the list
                             // and when the transaction is committed, we will send all the queries at once
                             this._bAllowRefresh = false; // stop refreshes of metadata while we're doing work
-                            entity.TransactionGroup.AddTransaction(new TransactionItem(sSQL, null, {dataSource: this._dataSource}, (results: any, success: boolean) => {
+                            entity.TransactionGroup.AddTransaction(new TransactionItem(entity, sSQL, null, {dataSource: this._dataSource}, (results: any, success: boolean) => {
                                 // we get here whenever the transaction group does gets around to committing
                                 // our query.  
                                 this._bAllowRefresh = true; // allow refreshes again
@@ -1552,7 +1552,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
                 return new Promise((resolve, reject) => {
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(sSQL, null, {dataSource: this._dataSource}, (results: any, success: boolean) => {
+                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, sSQL, null, {dataSource: this._dataSource}, (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
                         // our query.  
                         result.EndedAt = new Date();

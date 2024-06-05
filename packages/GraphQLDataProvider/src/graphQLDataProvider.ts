@@ -623,7 +623,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(inner, vars, {mutationName, 
+                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName, 
                                                                                              mutationInputTypes: mutationInputTypes}, 
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing
@@ -784,7 +784,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 return new Promise((resolve, reject) => {
                     // we are part of a transaction group, so just add our query to the list
                     // and when the transaction is committed, we will send all the queries at once
-                    entity.TransactionGroup.AddTransaction(new TransactionItem(inner, vars, {mutationName: queryName, 
+                    entity.TransactionGroup.AddTransaction(new TransactionItem(entity, inner, vars, {mutationName: queryName, 
                                                                                              mutationInputTypes: mutationInputTypes}, 
                                                                                             (results: any, success: boolean) => {
                         // we get here whenever the transaction group does gets around to committing

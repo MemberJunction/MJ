@@ -1,6 +1,6 @@
 import { Component, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 
-import { BaseEntity, EntityInfo, Metadata, RunView, RunViewParams } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, Metadata, RunView, RunViewParams, ValidationErrorInfo } from '@memberjunction/core';
  
 
 export class JoinGridCell {
@@ -170,26 +170,64 @@ export class JoinGridComponent implements AfterViewInit {
     // do it all in one transaction
     const md = new Metadata();
     const tg = await md.CreateTransactionGroup();
+    let validated = true;
+    const valErrors: ValidationErrorInfo[][] = [];
     this._pendingDeletes.forEach(obj => {
       obj.TransactionGroup = tg;
-      obj.Delete(); // no await because we're using a TG
+      obj.Delete();
     });
     this._pendingInserts.forEach(obj => {
       obj.TransactionGroup = tg;
-      obj.Save(); // no await because we're using a TG
+      const valResult = obj.Validate()
+      validated = validated && valResult.Success;
+      valErrors.push(valResult.Errors);
+      obj.Save();
     });
-    if (!await tg.Submit()) {
-      alert ('Error saving changes');
+    if (validated) {
+      if (!await tg.Submit()) {
+        alert ('Error saving changes');
+        return false;
+      }
+      else {
+        await this.Refresh(); // refresh afterwards
+        return true;  
+      }  
+    }
+    else {
+      alert ('Error validating changes, details in console');
+      console.log(valErrors);
       return false;
     }
-    await this.Refresh(); // refresh afterwards
-    return true;
   }
 
   /**
    * Cancels any changes and reverts to the prior state of the grid that reflects the last saved state.
    */
   public async CancelEdit() {
+    // go through all of the pending deletes and remove them from the array
+    // and go through all of the pending inserts and remove them from the array
+    // before removing stuff from arrays we need to go back through all of hte grid cells and restore to original data
+    this._GridData.forEach(row => {
+      row.ColumnData.forEach(cell => {
+        // for each cell, if we have a data object, look for a match in the pending inserts array, that means it is a NEW record
+        if (cell.data) {
+          const match = this._pendingInserts.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === cell.ColumnForeignKeyValue && obj.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue);
+          if (match) {
+            // means that the current cell is a new record, so we need to remove it
+            cell.data = undefined;
+            this._pendingInserts.splice(this._pendingInserts.indexOf(match), 1);
+          }
+        }
+        else {
+          // we need to check if a match exists in the pending deletes array, if so, we need to restore the data
+          const match = this._pendingDeletes.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === cell.ColumnForeignKeyValue && obj.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue);
+          if (match) {
+            cell.data = match;
+            this._pendingDeletes.splice(this._pendingDeletes.indexOf(match), 1);
+          }
+        }
+      });
+    })
   }
 
   public get NumDirtyRecords(): number {
@@ -220,7 +258,9 @@ export class JoinGridComponent implements AfterViewInit {
    * This method is called automatically when the component is first loaded. Call the method anytime if you want to refresh the grid.
    */
   public async Refresh() {
-    this._IsLoading = true;
+    this._IsLoading = true;    // turn on the loading spinner
+    this.cdr.detectChanges(); // let angular know we have changes
+
     this._pendingDeletes = [];
     this._pendingInserts = [];
 
@@ -252,7 +292,9 @@ export class JoinGridComponent implements AfterViewInit {
       // we have the data, now we need to build the grid
       this.PopulateGridData(result.Results);
     }
-    this._IsLoading = false;
+
+    this._IsLoading = false; // turn off the loading spinner
+    this.cdr.detectChanges(); // let Angular know we have changes
   }
 
   protected async PopulateRowsAndColsData() {
