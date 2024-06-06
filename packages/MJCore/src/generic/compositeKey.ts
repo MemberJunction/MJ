@@ -23,7 +23,17 @@ export class FieldValueCollection {
     KeyValuePairs: KeyValuePair[];
 
     constructor(keyValuePairs?: KeyValuePair[]) {
-        this.KeyValuePairs = keyValuePairs || [];
+        if(keyValuePairs && Array.isArray(keyValuePairs)){
+            if(keyValuePairs.length > 0){
+                let kvp = keyValuePairs[0];
+                if(kvp.FieldName && kvp.Value){
+                    this.KeyValuePairs = keyValuePairs;
+                    return;
+                }
+            }
+        }
+        
+        this.KeyValuePairs = [];
     }
 
     /**

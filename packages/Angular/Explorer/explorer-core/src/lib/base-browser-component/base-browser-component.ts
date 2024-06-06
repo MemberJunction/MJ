@@ -79,7 +79,8 @@ export class BaseBrowserComponent {
 
         if(!params?.skiploadEntityData){
             const entityData: any[] = await this.RunView(this.itemEntityName, entityItemFilter);
-            let resourceItems: Item[] = this.createItemsFromEntityData(entityData);
+            const itemType: ItemType = params?.entityItemType || ItemType.Entity;
+            let resourceItems: Item[] = this.createItemsFromEntityData(entityData, itemType);
             if(params?.sortItemsAfterLoad){
                 resourceItems = this.sortItems(resourceItems);
             }
@@ -122,10 +123,10 @@ export class BaseBrowserComponent {
         return [];
     }
 
-    protected createItemsFromEntityData(entityData: any[]): Item[] {
+    protected createItemsFromEntityData(entityData: any[], itemType: ItemType): Item[] {
         let items: Item[] = [];
         for(const data of entityData){
-            let item: Item = new Item(data, ItemType.Entity);
+            let item: Item = new Item(data, itemType);
             items.push(item);
         }
 
@@ -180,6 +181,7 @@ export class BaseBrowserComponent {
 
 export type LoadDataParams = {
     entityItemFilter?: string,
+    entityItemType?: ItemType,
     categoryItemFilter?: string,
     skiploadEntityData?: boolean,
     skipLoadCategoryData?: boolean,

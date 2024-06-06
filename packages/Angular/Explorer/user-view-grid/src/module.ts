@@ -10,6 +10,7 @@ import { DialogsModule } from "@progress/kendo-angular-dialog";
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { InputsModule } from '@progress/kendo-angular-inputs';
+import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 
 import { CompareRecordsModule } from '@memberjunction/ng-compare-records';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -34,7 +35,8 @@ import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
     ContainerDirectivesModule,
     LayoutModule,
     InputsModule,
-    EntityFormDialogModule
+    EntityFormDialogModule,
+    IndicatorsModule
   ],
   exports: [
     UserViewGridComponent

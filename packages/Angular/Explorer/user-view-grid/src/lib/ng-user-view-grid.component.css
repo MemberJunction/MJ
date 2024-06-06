@@ -82,4 +82,19 @@
     color: var(--tdata-color);
     font-weight: 500;
     border-bottom-width: 1px;
-}   
+}  
+
+.overflow-y-scroll {
+    overflow-y: auto;
+    max-height: 275px;
+}
+
+.padding-bottom-small {
+    padding-bottom: 10px;
+}
+
+.list-item {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 5px;
+}

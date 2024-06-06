@@ -6,6 +6,7 @@ iconName="graph"
 addText="Create New List"
 ItemEntityName="Lists"
 CategoryEntityName="List Categories" 
+resourceName = "List"
 (itemClickEvent)="itemClick($event)"
 (AfterAddFolderEvent)="onEvent($event)"
 (AfterAddItemEvent)="onEvent($event)"
@@ -13,9 +14,60 @@ CategoryEntityName="List Categories"
 (AfterDeleteFolderEvent)="onEvent($event)"
 [selectedFolderID]="selectedFolderID"
 [showLoader]="showLoader"
-[disableAddButton]="true"
-[disableEditButton]="true"
 (viewModeChangeEvent)="onViewModeChange($event)"
 (BeforeUpdateItemEvent)="onBeforeUpdateItemEvent($event)"
+(BeforeAddItemEvent)="onBeforeAddItemEvent($event)"
 />
-<!-- creation of reports are disabled because they need a conversation ID before theyre made -->
+<kendo-dialog
+title="Create New List"
+*ngIf="showCreateDialog"
+(close)="toggleCreateDialog(false)"
+[minWidth]="250"
+[width]="650"
+[height]="550"
+>
+    @if(showCreateLoader){
+        <kendo-loader type="converging-spinner"></kendo-loader>
+    }
+    @else {
+        <div class="col-xs-12 col-sm-6 example-col">
+            <kendo-label text="Name">
+                <kendo-textbox  
+                    class="mt-10"
+                    placeholder="Enter List Name" 
+                    [(ngModel)]="listName">
+                </kendo-textbox>
+            </kendo-label>
+            <div class="mt-10">
+                <kendo-label text="Description">
+                    <kendo-textarea
+                        class="mt-10"
+                        placeholder="Enter Description"
+                        [rows]="3"
+                        resizable="vertical"
+                        [(ngModel)]="listDescription"
+                    ></kendo-textarea>
+                </kendo-label>
+            </div>
+            <div class="mt-10">
+                <kendo-label text="Select an Entity">
+                    <kendo-dropdownlist 
+                        class="mt-10"
+                        [data]="entityNames"
+                        [filterable]="true"
+                        (filterChange)="onFilterChange($event)"
+                        (selectionChange)="onSelectionChange($event)"
+                    />
+                </kendo-label>
+            </div>
+        </div>
+    }
+    <kendo-dialog-actions class="popup-actions-btn">
+        <button class="cancel-btn" (click)="createList()" [disabled]="!listName || !selectedEntity || showCreateLoader" kendoButton themeColor="info">
+          Create
+        </button>
+        <button  class="yes-btn" (click)="toggleCreateDialog(false)" [disabled]="showCreateLoader" kendoButton fillMode="outline" themeColor="info">
+          Cancel
+        </button>
+    </kendo-dialog-actions>
+</kendo-dialog>

@@ -5,7 +5,7 @@ import { UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-datap
 import AppDataSource from "./db"
 import { ManageMetadataBase } from './manageMetadata';
 import { outputDir, commands, mj_core_schema, mjCoreSchema, configInfo, getSettingValue } from './config';
-import { logError, logStatus } from './logging';
+import { logError, logMessage, logStatus } from './logging';
 import * as MJ from '@memberjunction/core'
 import { RunCommandsBase } from './runCommand';
 import { DBSchemaGeneratorBase } from './dbSchema';
@@ -29,15 +29,15 @@ export class RunCodeGenBase {
         /****************************************************************************************
         // First, setup the data source and make sure the metadata and related stuff for MJCore is initialized
         ****************************************************************************************/
-        logStatus("Initializing Data Source...")
+        logStatus("Initializing Data Source...");
         await AppDataSource.initialize()
         .then(() => {
-            logStatus("Data Source has been initialized!")
+            logStatus("Data Source has been initialized!");
         })
         .catch((err) => {
-            logError("Error during Data Source initialization", err)
+            logError("Error during Data Source initialization", err);
         })
-        const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 )
+        const config = new SQLServerProviderConfigData(AppDataSource,'',  mj_core_schema(), 0 );
         await setupSQLServerClient(config);
     }
 
@@ -49,7 +49,7 @@ export class RunCodeGenBase {
     public async Run(skipDatabaseGeneration: boolean = false) {
         try {
             const startTime = new Date();
-            logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString())
+            logStatus("\n\nSTARTING MJ CodeGen Run... @ " + startTime.toLocaleString());
             
             await this.setupDataSource();
 
@@ -119,7 +119,7 @@ export class RunCodeGenBase {
                     logStatus('SQL output directory NOT found in config file, skipping...');
             }
             else {
-                logStatus("Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings")
+                logMessage("Skipping all database related CodeGen work because skip_database_generation was set to true in the config file under settings", MJ.SeverityType.Warning, false);
             }
     
             const coreEntities = md.Entities.filter(e => e.IncludeInAPI).filter(e => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase());
