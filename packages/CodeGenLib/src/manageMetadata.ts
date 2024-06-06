@@ -1,7 +1,7 @@
 import { DataSource } from "typeorm";
 import { configInfo, mj_core_schema } from './config';
-import { LogError, LogStatus, Metadata } from "@memberjunction/core";
-import { logError, logStatus } from "./logging";
+import { LogError, LogStatus, Metadata, SeverityType } from "@memberjunction/core";
+import { logError, logMessage, logStatus } from "./logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult } from "./advanced_generation";
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
@@ -38,7 +38,7 @@ export class ManageMetadataBase {
       }  
       const sqlUtility = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase);
       if (! await sqlUtility.recompileAllBaseViews(ds, excludeSchemas, true)) {
-         logError('Warning: Non-Fatal error recompiling base views');
+         logMessage('Warning: Non-Fatal error recompiling base views', SeverityType.Warning, false);
          // many times the former versions of base views will NOT succesfully recompile, so don't consider that scenario to be a 
          // failure for this entire function
       }         

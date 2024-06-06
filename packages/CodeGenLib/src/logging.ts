@@ -1,5 +1,5 @@
 import { configInfo, currentWorkingDirectory } from "./config";
-import { LogError, LogStatus } from '@memberjunction/core'
+import { LogError, LogStatus, SeverityType, FormatFileMessage, FormatConsoleMessage } from '@memberjunction/core'
 import { MJGlobal, RegisterClass } from "@memberjunction/global";
 import path from 'path';
 
@@ -14,9 +14,11 @@ export class LoggerBase {
     * @param message 
     * @param args 
     */
-   public logError(message: string, ...args: any[]) {
-      this.logToConsole(message, true, ...args)
-      this.logToFile(message, true, ...args)
+   public logError(message: string, severity: SeverityType, ...args: any[]) {
+      const consoleMessage: string = FormatConsoleMessage(message, severity);
+      const fileMessage: string = FormatFileMessage(message, severity);
+      this.logToConsole(consoleMessage, true, ...args);
+      this.logToFile(fileMessage, true, ...args);
    }
    
    /**
@@ -24,41 +26,75 @@ export class LoggerBase {
     * @param message 
     * @param args 
     */
-   public logStatus(message: string, ...args: any[]) {
-      this.logToConsole(message, false, ...args)
-      this.logToFile(message, false, ...args)
+   public logStatus(message: string, severity: SeverityType, ...args: any[]) {
+      const consoleMessage: string = FormatConsoleMessage(message, severity);
+      const fileMessage: string = FormatFileMessage(message, severity);
+      this.logToConsole(consoleMessage, false, ...args);
+      this.logToFile(fileMessage, false, ...args);
+   }
+
+   /**
+    * Helper function to log a message with a specified severity and whether it is an error
+    * @param message The message to log
+    * @param severity The severity of the message
+    * @param isError Whether to treat this message as an error
+    * @param args Any additional arguments to log 
+    */
+   public logMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]) {
+      const consoleMessage: string = FormatConsoleMessage(message, severity);
+      const fileMessage: string = FormatFileMessage(message, severity);
+      this.logToConsole(consoleMessage, isError, ...args);
+      this.logToFile(fileMessage, isError, ...args);
    }
    
    protected logToConsole(message: string, isError: boolean, ...args: any[]) {
       if (configInfo.logging.console) {
-         if (isError)
-            LogError(message, null, ...args)
-         else
-            LogStatus(message, null, ...args)
+         if (isError){
+            LogError(message, null, ...args);
+         }
+         else{
+            LogStatus(message, null, ...args);
+         }
       }
    }
    protected logToFile(message, isError: boolean, ...args: any[]) {
       if (configInfo.logging.log) {
-         if (configInfo.logging.logFile === null || configInfo.logging.logFile === undefined || configInfo.logging.logFile === '') 
-            LogError('ERROR: No log file specified in config.json', null, ...args)
+         if (configInfo.logging.logFile === null || configInfo.logging.logFile === undefined || configInfo.logging.logFile === '') {
+            LogError('ERROR: No log file specified in config.json', null, ...args);
+         }
          else  {
-            const file: string = path.join(currentWorkingDirectory, configInfo.logging.logFile)
-            if (isError)
-               LogError(message, file, ...args)
-            else
-               LogStatus(message, file, ...args)
+            const file: string = path.join(currentWorkingDirectory, configInfo.logging.logFile);
+            if (isError){
+               LogError(message, file, ...args);
+            }
+            else{
+               LogStatus(message, file, ...args);
+            }
          }
       }
    }
 }
 
-
-// use the class below so that it is easier for external code to sub-class the logger if desired
+// use the classes below so that it is easier for external code to sub-class the logger if desired
 const _logger: LoggerBase = MJGlobal.Instance.ClassFactory.CreateInstance<LoggerBase>(LoggerBase);
+
+/**
+ * Wrapper for the LoggerBase.logError method
+ */
 export function logError(message: string, ...args: any[]) {
-   return _logger.logError(message, ...args);
+   return _logger.logError(message, SeverityType.Critical, ...args);
 }
 
+/**
+ * Wrapper for the LoggerBase.logStatus method
+ */
 export function logStatus(message: string, ...args: any[]) {
-   return _logger.logStatus(message, ...args);
+   return _logger.logStatus(message, SeverityType.Info, ...args);
+}
+
+/**
+ * Wrapper for the LoggerBase.logMessage method
+ */
+export function logMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]): void {
+   return _logger.logMessage(message, severity, isError, ...args);
 }
