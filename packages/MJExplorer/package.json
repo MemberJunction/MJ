@@ -36,6 +36,7 @@
     "@memberjunction/ng-record-changes": "~1.4.0",
     "@memberjunction/ng-tabstrip": "~1.4.0",
     "@memberjunction/ng-user-view-grid": "~1.4.0",
+    "@memberjunction/ng-timeline": "~1.4.0",
     "@progress/kendo-angular-notification": "~15.1.0",
     "@progress/kendo-angular-scheduler": "^15.1.0",
     "@progress/kendo-theme-default": "~7.2.0",

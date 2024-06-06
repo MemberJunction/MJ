@@ -115,7 +115,7 @@ export class RunView  {
      * @param contextUser if provided, this user is used for permissions and logging. For server based calls, this is generally required because there is no "Current User" since this object is shared across all requests.
      * @returns 
      */
-    public async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> {
+    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
         // FIRST, if the resultType is entity_object, we need to run the view with ALL fields in the entity
         // so that we can get the data to populate the entity object with.
         if (params.ResultType === 'entity_object') {
@@ -128,7 +128,7 @@ export class RunView  {
         }
 
         // NOW, run the view
-        const result = await RunView.Provider.RunView(params, contextUser);
+        const result = await RunView.Provider.RunView<T>(params, contextUser);
 
         // FINALLY, if needed, transform the result set into BaseEntity-derived objects
         if ( 
