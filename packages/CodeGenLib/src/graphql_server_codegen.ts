@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, LogError } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './logging';
@@ -488,14 +488,14 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
                 filterFieldName = field.CodeName;
             }
             else{
-                LogError(`GenerateOneToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+                logError(`GenerateOneToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
                 return "";
             }
         }
         
         const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
         if (!filterField){
-            LogError(`GenerateOneToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+            logError(`GenerateOneToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
             return "";
         }
 
@@ -527,14 +527,14 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`
                 filterFieldName = field.CodeName;
             }
             else{
-                LogError(`GenerateManyToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+                logError(`GenerateManyToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
                 return "";
             }
         }
 
         const filterField = entity.Fields.find(f => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
         if (!filterField){
-            LogError(`GenerateManyToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
+            logError(`GenerateManyToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`);
             return "";
         }
         

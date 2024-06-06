@@ -1,10 +1,10 @@
-import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, SeverityType, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from './util';
 import { RegisterClass } from '@memberjunction/global';
 import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
-import { logError, logStatus } from './logging';
+import { logError, logMessage, logStatus } from './logging';
 import { mkdirSync } from 'fs-extra';
 import { ActionEngine, ActionEntityServerEntity } from '@memberjunction/actions';
 
@@ -89,7 +89,7 @@ export function LoadGeneratedActions() {
      */
     public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved') {
-            logStatus(`    Skipping action ${action.Name} because Status <> Active and/or CodeApprovalStatus <> Approved --- Status: ${action.Status}, Code Approval Status: ${action.CodeApprovalStatus}`);
+            logMessage(`    Skipping action ${action.Name} because Status <> Active and/or CodeApprovalStatus <> Approved --- Status: ${action.Status}, Code Approval Status: ${action.CodeApprovalStatus}`, SeverityType.Warning, false);
             return "";
         }
 
