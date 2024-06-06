@@ -8,6 +8,7 @@
     "clean": "rimraf dist",
     "build": "rimraf dist && tsc",
     "start": "ts-node-dev -r dotenv/config src/index.ts",
+    "start2": "tsx -r dotenv/config src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "codegen": "cpy --flat ../codegen/output/entities/*.ts src/generated",
     "check-types": "tsc -noEmit",

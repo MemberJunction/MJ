@@ -638,7 +638,6 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       this._deferLoadCount++; // only do this one time 
       if (this.Params)
         this.Refresh(this.Params)
-      return;
     }
   }
 

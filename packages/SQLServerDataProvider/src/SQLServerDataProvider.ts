@@ -144,7 +144,7 @@ export class SQLServerDataProvider extends ProviderBase implements IEntityDataPr
     /**************************************************************************/
     // START ---- IRunViewProvider
     /**************************************************************************/
-    public async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> {
+    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
         const startTime = new Date();
         try {
             if (params) {

@@ -201,7 +201,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     // START ---- IRunViewProvider
     /**************************************************************************/
-    public async RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult> {
+    public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
         try {
             let qName: string = ''
             let paramType: string = ''

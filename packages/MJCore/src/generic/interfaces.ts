@@ -352,7 +352,7 @@ export interface IMetadataProvider {
 /**
  * Result of a RunView() execution
  */
-export type RunViewResult = {
+export type RunViewResult<T = any> = {
     /**
      * Was the view run successful or not
      */
@@ -360,7 +360,7 @@ export type RunViewResult = {
     /**
      * The array of records returned by the view, only valid if Success is true
      */
-    Results: any[];
+    Results: Array<T>;
     /**
      * The newly created UserViews.ID value - only provided if RunViewParams.SaveViewResults=true
      */
@@ -388,7 +388,7 @@ export type RunViewResult = {
 export interface IRunViewProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    RunView(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult>
+    RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>>
 }
 
 export type RunQueryResult = {
