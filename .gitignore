@@ -87,3 +87,4 @@ build.log.json
 
 Distributions/*.zip
 !Distributions/MemberJunction_Code_Bootstrap.zip
+packages/Templates-Old/.angular/

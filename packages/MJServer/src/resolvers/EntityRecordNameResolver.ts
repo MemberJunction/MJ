@@ -4,6 +4,7 @@ import { AppContext } from '../types';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes';
 import { CommunicationEngine } from '@memberjunction/communication-core';
 import { DocumentationEngine } from '@memberjunction/doc-utils';
+import { TemplateEngineService } from '@memberjunction/templates';
 
 @InputType()
 export class EntityRecordNameInput {
@@ -43,7 +44,7 @@ export class EntityRecordNameResolver {
     //TEMPORARY: test harness for communication framework - dumb place but quick test grounds, will delete
     //this.TestCommunicationFramework(userPayload.userRecord, EntityName, primaryKey);
     //this.TestDocLibraries(userPayload.userRecord);
-
+    this.TestTemplates();
 
     const md = new Metadata();
     return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
@@ -96,6 +97,18 @@ export class EntityRecordNameResolver {
     const engine = DocumentationEngine.Instance;
     await engine.Config(false, user)
     console.log(JSON.stringify(engine.Libraries));
+  }
+
+
+  private async TestTemplates() {
+    const templateEngine = new TemplateEngineService('server'); // Provide 'server'
+  
+    const template = `
+      <h1>Hello, {{context.name}}!</h1>
+    `;
+  
+    const renderedHtml = await templateEngine.render(template, { name: 'World' });
+    console.log(renderedHtml);
   }
 }
 
