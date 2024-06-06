@@ -91,7 +91,7 @@ export class TimelineComponent implements AfterViewInit {
 
   public created!: Date;
   public updated!: Date;
-  public name: string = "";
+  public name!: string;
   public selectedDate: Date = displayDate;
   public events: SchedulerEvent[] = [];
 
@@ -100,27 +100,49 @@ export class TimelineComponent implements AfterViewInit {
       console.log("record is null")
       return
     }
+ 
+    const g=  this.Groups[0];
+    this.events = g.EntityObjects.map(e => {
+      let date = new Date(e.Get(g.DateFieldName));
+      let title = e.Get(g.TitleFieldName);
+      let summary = "";
+      if (g.SummaryMode == 'field') {
+        summary = e.Get(g.TitleFieldName);
+      } else if (g.SummaryMode == 'custom' && g.SummaryFunction) {
+        summary = g.SummaryFunction(e);
+      }
+      return {
+        id: e.Get("ID"),
+        title: title,
+        start: date,
+        end: date,
+        isAllDay: true,
+        description: summary,
+        color: g.DisplayColor,
+        icon: g.DisplayIcon,
+      };
+    });
+    // let created = new Date(this.record.Get("CreatedAt"));
+    // let updated = new Date(this.record.Get("UpdatedAt"));
+    // let name = this.record.Get("Name"); 
+    // console.log(name)
 
-    let created = new Date(this.record.Get("CreatedAt"));
-    let updated = new Date(this.record.Get("UpdatedAt"));
-    let name = this.record.Get("Name"); 
-
-    this.events = [
-      {
-        id: 1,
-        title: "CreatedAt",
-        start: created,
-        end: created,
-        isAllDay: true, 
-      },
-      {
-        id: 2,
-        title: "UpdatedAt",
-        start: updated,
-        end: updated,
-        isAllDay: true, 
-      },
-    ];
+    // this.events = [
+    //   {
+    //     id: 1,
+    //     title: "CreatedAt",
+    //     start: created,
+    //     end: created,
+    //     isAllDay: true, 
+    //   },
+    //   {
+    //     id: 2,
+    //     title: "UpdatedAt",
+    //     start: updated,
+    //     end: updated,
+    //     isAllDay: true, 
+    //   },
+    // ];
   }
   
 }
