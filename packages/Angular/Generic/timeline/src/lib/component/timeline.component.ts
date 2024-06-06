@@ -3,7 +3,10 @@ import { Component, OnInit, Input, EventEmitter, Output, AfterViewInit } from '@
 import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
- 
+
+import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
+import { sampleData, displayDate } from './dummy-data';
+
 /**
  * 
  */
@@ -84,7 +87,62 @@ export class TimelineComponent implements AfterViewInit {
    * Provide an array of one or more TimelineGroup objects to display the data in the timeline. Each group will be displayed in a different color and icon.
    */
   @Input() public Groups: TimelineGroup[] = [];
+  @Input() public record: BaseEntity|null = null; 
+
+  public created!: Date;
+  public updated!: Date;
+  public name!: string;
+  public selectedDate: Date = displayDate;
+  public events: SchedulerEvent[] = [];
 
   ngAfterViewInit(): void {
+    if(!this.record){
+      console.log("record is null")
+      return
+    }
+ 
+    const g=  this.Groups[0];
+    this.events = g.EntityObjects.map(e => {
+      let date = new Date(e.Get(g.DateFieldName));
+      let title = e.Get(g.TitleFieldName);
+      let summary = "";
+      if (g.SummaryMode == 'field') {
+        summary = e.Get(g.TitleFieldName);
+      } else if (g.SummaryMode == 'custom' && g.SummaryFunction) {
+        summary = g.SummaryFunction(e);
+      }
+      return {
+        id: e.Get("ID"),
+        title: title,
+        start: date,
+        end: date,
+        isAllDay: true,
+        description: summary,
+        color: g.DisplayColor,
+        icon: g.DisplayIcon,
+      };
+    });
+    // let created = new Date(this.record.Get("CreatedAt"));
+    // let updated = new Date(this.record.Get("UpdatedAt"));
+    // let name = this.record.Get("Name"); 
+    // console.log(name)
+
+    // this.events = [
+    //   {
+    //     id: 1,
+    //     title: "CreatedAt",
+    //     start: created,
+    //     end: created,
+    //     isAllDay: true, 
+    //   },
+    //   {
+    //     id: 2,
+    //     title: "UpdatedAt",
+    //     start: updated,
+    //     end: updated,
+    //     isAllDay: true, 
+    //   },
+    // ];
   }
+  
 }

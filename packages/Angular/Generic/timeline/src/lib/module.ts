@@ -5,6 +5,7 @@ import { CommonModule } from '@angular/common';
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { LayoutModule } from '@progress/kendo-angular-layout';
+import { SchedulerModule } from '@progress/kendo-angular-scheduler';
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -23,7 +24,8 @@ import { TimelineComponent } from './component/timeline.component';
     ButtonsModule,
     EntityFormDialogModule,
     IndicatorsModule,
-    LayoutModule
+    LayoutModule, 
+    SchedulerModule
   ],
   exports: [
     TimelineComponent
