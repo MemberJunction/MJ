@@ -1,35 +1,45 @@
 {
-  "name": "@memberjunction/templates",
-  "version": "1.4.0",
-  "description": "MemberJunction Templating Engine and Utilities - Used for any application that requires templating utility functionality. NOTE: this package does use Angular Universal for compilation but is not marked with the usual ng prefix because it is a server-side library and not used within Angular apps.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "type": "module",
-  "files": [
-    "/dist"
-  ],
+  "name": "test",
+  "version": "0.0.0",
   "scripts": {
-    "start": "ts-node-dev src/index.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "serve:ssr:test": "node dist/test/server/server.mjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.1.7"
-  },
+  "private": true,
   "dependencies": {
-    "@memberjunction/core": "~1.4.0",
-    "@memberjunction/core-entities": "~1.4.0",
-    "@memberjunction/global": "~1.4.0",
-    "@memberjunction/data-context": "~1.4.0",
-    "@angular/core": "~17.2.2",
+    "@memberjunction/global": "1.4.0",
+    "@angular/animations": "~17.2.2",
     "@angular/common": "~17.2.2",
     "@angular/compiler": "~17.2.2",
+    "@angular/core": "~17.2.2",
+    "@angular/forms": "~17.2.2",
+    "@angular/platform-browser": "~17.2.2",
+    "@angular/platform-browser-dynamic": "~17.2.2",
     "@angular/platform-server": "~17.2.2",
-    "@angular/platform-browser-dynamic": "~17.2.2"
+    "@angular/router": "~17.2.2",
+    "@angular/ssr": "^17.2.2",
+    "express": "^4.18.2",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.14.3"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "~17.2.2",
+    "@angular/cli": "~17.2.2",
+    "@angular/compiler-cli": "~17.2.2",
+    "@types/express": "^4.17.17",
+    "@types/jasmine": "~5.1.0",
+    "@types/node": "^18.18.0",
+    "jasmine-core": "~5.1.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.4.2"
   }
 }
