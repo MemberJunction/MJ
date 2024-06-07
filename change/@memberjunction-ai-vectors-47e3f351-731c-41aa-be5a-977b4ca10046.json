@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Update minor version",
+  "packageName": "@memberjunction/ai-vectors",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
