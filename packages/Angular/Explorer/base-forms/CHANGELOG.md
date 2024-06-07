@@ -1,8 +1,22 @@
 # Change Log - @memberjunction/ng-base-forms
 
-This log was last generated on Fri, 07 Jun 2024 14:26:47 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 15:05:21 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.2
+
+Fri, 07 Jun 2024 15:05:21 GMT
+
+### Patches
+
+- Bump @memberjunction/global to v1.5.2
+- Bump @memberjunction/core to v1.5.2
+- Bump @memberjunction/ng-shared to v1.5.2
+- Bump @memberjunction/ng-tabstrip to v1.5.2
+- Bump @memberjunction/ng-link-directives to v1.5.2
+- Bump @memberjunction/ng-container-directives to v1.5.2
+- Bump @memberjunction/ng-record-changes to v1.5.2
 
 ## 1.5.1
 

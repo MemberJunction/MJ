@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/cli",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"

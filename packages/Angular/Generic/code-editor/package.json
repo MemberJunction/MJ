@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-code-editor",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "MemberJunction: Angular Code Editor",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -23,10 +23,10 @@
     "@angular/core": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/global": "~1.5.1",
-    "@memberjunction/core": "~1.5.1",
-    "@memberjunction/core-entities": "~1.5.1",
-    "@memberjunction/ng-container-directives": "~1.5.1",
+    "@memberjunction/global": "~1.5.2",
+    "@memberjunction/core": "~1.5.2",
+    "@memberjunction/core-entities": "~1.5.2",
+    "@memberjunction/ng-container-directives": "~1.5.2",
     "tslib": "^2.3.0"
   },
   "sideEffects": false
