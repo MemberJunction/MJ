@@ -1,7 +1,0 @@
-{
-  "type": "minor",
-  "comment": "Update minor version",
-  "packageName": "@memberjunction/ng-form-toolbar",
-  "email": "craig.adam@bluecypress.io",
-  "dependentChangeType": "patch"
-}

@@ -2,6 +2,33 @@
   "name": "@memberjunction/core-entities",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 05:45:57 GMT",
+      "version": "1.5.0",
+      "tag": "@memberjunction/core-entities_v1.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/core-entities",
+            "commit": "cb24735ac8dea70e7bd886cdb90e16d5e4c1e6a5",
+            "comment": "Update minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v1.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Fri, 07 Jun 2024 04:36:53 GMT",
       "version": "1.4.1",
       "tag": "@memberjunction/core-entities_v1.4.1",

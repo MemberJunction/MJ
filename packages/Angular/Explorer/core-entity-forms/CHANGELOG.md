@@ -1,8 +1,25 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
-This log was last generated on Fri, 07 Jun 2024 04:36:54 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.0
+
+Fri, 07 Jun 2024 05:45:57 GMT
+
+### Minor changes
+
+- Update minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/core to v1.5.0
+- Bump @memberjunction/core-entities to v1.5.0
+- Bump @memberjunction/ng-explorer-core to v1.5.0
+- Bump @memberjunction/ng-base-forms to v1.5.0
+- Bump @memberjunction/ng-form-toolbar to v1.5.0
+- Bump @memberjunction/ng-tabstrip to v1.5.0
+- Bump @memberjunction/ng-container-directives to v1.5.0
+- Bump @memberjunction/ng-code-editor to v1.5.0
+- Bump @memberjunction/ng-timeline to v1.5.0
 
 ## 1.4.1
 

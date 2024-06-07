@@ -1,8 +1,35 @@
 # Change Log - @memberjunction/server
 
-This log was last generated on Fri, 07 Jun 2024 04:36:53 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.0
+
+Fri, 07 Jun 2024 05:45:57 GMT
+
+### Minor changes
+
+- Update minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/actions to v1.5.0
+- Bump @memberjunction/core-actions to v1.5.0
+- Bump @memberjunction/ai to v1.5.0
+- Bump @memberjunction/ai-openai to v1.5.0
+- Bump @memberjunction/aiengine to v1.5.0
+- Bump @memberjunction/ai-mistral to v1.5.0
+- Bump @memberjunction/ai-vectors-pinecone to v1.5.0
+- Bump @memberjunction/core to v1.5.0
+- Bump @memberjunction/core-entities to v1.5.0
+- Bump @memberjunction/communication-core to v1.5.0
+- Bump @memberjunction/doc-utils to v1.5.0
+- Bump @memberjunction/templates to v1.5.0
+- Bump @memberjunction/data-context to v1.5.0
+- Bump @memberjunction/data-context-server to v1.5.0
+- Bump @memberjunction/global to v1.5.0
+- Bump @memberjunction/storage to v1.5.0
+- Bump @memberjunction/queue to v1.5.0
+- Bump @memberjunction/sqlserver-dataprovider to v1.5.0
+- Bump @memberjunction/skip-types to v1.5.0
 
 ## 1.4.1
 

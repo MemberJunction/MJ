@@ -1,8 +1,18 @@
 # Change Log - @memberjunction/ng-shared
 
-This log was last generated on Fri, 07 Jun 2024 04:36:54 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.0
+
+Fri, 07 Jun 2024 05:45:57 GMT
+
+### Minor changes
+
+- Update minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/core to v1.5.0
+- Bump @memberjunction/graphql-dataprovider to v1.5.0
 
 ## 1.4.1
 
