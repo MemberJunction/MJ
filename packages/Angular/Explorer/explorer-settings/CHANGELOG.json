@@ -2,6 +2,192 @@
   "name": "@memberjunction/ng-explorer-settings",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 05:45:57 GMT",
+      "version": "1.5.0",
+      "tag": "@memberjunction/ng-explorer-settings_v1.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-explorer-settings",
+            "commit": "cb24735ac8dea70e7bd886cdb90e16d5e4c1e6a5",
+            "comment": "Update minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core-entities to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/global to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-shared to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-permissions to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-simple-record-list to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-join-grid to v1.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 07 Jun 2024 04:36:54 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/ng-explorer-settings_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-settings",
+            "commit": "84be2cb92c0cc69bd218ccde584fd4a0a37373cf",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-settings",
+            "commit": "33ce061d4ca92fecd7367f4238d32768a488029b",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-explorer-settings",
+            "commit": "60eb56f8b3db128f56692fce226f0987e8439723",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core-entities to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-shared to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-permissions to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-base-forms to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-user-view-grid to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-simple-record-list to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-tabstrip to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-explorer-settings",
+            "comment": "Bump @memberjunction/ng-join-grid to v1.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 25 May 2024 15:30:17 GMT",
       "version": "1.4.0",
       "tag": "@memberjunction/ng-explorer-settings_v1.4.0",

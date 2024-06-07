@@ -12,7 +12,7 @@
     "packages/AngularElements/*"
   ],
   "scripts": {
-    "build": "turbo build --filter=\"!mj_*\"",
+    "build": "turbo build --filter=\"@memberjunction*\"",
     "watch": "turbo watch --filter=\"!mj_*\"",
     "start": "turbo start --filter=mj_explorer --filter=mj_api",
     "start:api": "turbo start --filter=mj_api",

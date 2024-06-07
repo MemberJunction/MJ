@@ -2,6 +2,164 @@
   "name": "@memberjunction/ng-user-view-grid",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 05:45:57 GMT",
+      "version": "1.5.0",
+      "tag": "@memberjunction/ng-user-view-grid_v1.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "cb24735ac8dea70e7bd886cdb90e16d5e4c1e6a5",
+            "comment": "Update minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/core-entities to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/global to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/core to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-shared to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-compare-records to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 07 Jun 2024 04:36:53 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/ng-user-view-grid_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "0c682dfc485a3700f2fff7dca7cab06e14be28dd",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "60eb56f8b3db128f56692fce226f0987e8439723",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "7aab00de3979566dd6c59c6ffa71c51537721b5f",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "e6271052e6c003e770409b763e6eb9acc551c52a",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "a8290ebed8cc884ade6b6ffdfa71f5dd1d50b056",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "95210785f4ef763943e33b854f059a82c8de00de",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "5cf1b5a19eb1d21efb33b1800a1601eb28da87a0",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/core-entities to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-shared to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-entity-form-dialog to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-compare-records to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-user-view-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.4.1",
+            "commit": "not available"
+          }
+        ],
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-user-view-grid",
+            "commit": "6aaf7d83e57ad56cdaa70d067bcfa0ee0d8fb482",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 25 May 2024 15:30:17 GMT",
       "version": "1.4.0",
       "tag": "@memberjunction/ng-user-view-grid_v1.4.0",

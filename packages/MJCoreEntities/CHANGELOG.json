@@ -2,6 +2,128 @@
   "name": "@memberjunction/core-entities",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 05:45:57 GMT",
+      "version": "1.5.0",
+      "tag": "@memberjunction/core-entities_v1.5.0",
+      "comments": {
+        "minor": [
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/core-entities",
+            "commit": "cb24735ac8dea70e7bd886cdb90e16d5e4c1e6a5",
+            "comment": "Update minor version"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v1.5.0",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v1.5.0",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
+      "date": "Fri, 07 Jun 2024 04:36:53 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/core-entities_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "0027e3bf77e685c48142028868bfea265d9f577a",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "a99e659e0d6db4b5a6b65d5bd6323e1c3905e35d",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "917716cd78cdddc49924d19a142762344593adff",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "9987640a26adb1429b8a067b0ddd06adf2adf435",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "26a59a43a29808408628213ec3b4d6351655a2c2",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "0104fd05397389652e71b9423465224fb5b79143",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "c6673826ac1b514ae7c9f02b1b02b222a3a40a77",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "b37ea09b3925e4b3b4864476814038f939991050",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "974a07d2ad92a24a2a6594e9ce290549fb78fcdd",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "95210785f4ef763943e33b854f059a82c8de00de",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/core-entities",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          }
+        ],
+        "minor": [
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "6aaf7d83e57ad56cdaa70d067bcfa0ee0d8fb482",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "155523863+JS-BC@users.noreply.github.com",
+            "package": "@memberjunction/core-entities",
+            "commit": "e05f7641e9e71a453baddaf71342cc737eb37b4c",
+            "comment": "Applying package updates [skip ci]"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 25 May 2024 15:30:17 GMT",
       "version": "1.4.0",
       "tag": "@memberjunction/core-entities_v1.4.0",

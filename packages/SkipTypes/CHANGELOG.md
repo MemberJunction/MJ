@@ -1,8 +1,27 @@
 # Change Log - @memberjunction/skip-types
 
-This log was last generated on Sat, 25 May 2024 15:30:17 GMT and should not be manually modified.
+This log was last generated on Fri, 07 Jun 2024 05:45:57 GMT and should not be manually modified.
 
 <!-- Start content -->
+
+## 1.5.0
+
+Fri, 07 Jun 2024 05:45:57 GMT
+
+### Minor changes
+
+- Update minor version (craig.adam@bluecypress.io)
+- Bump @memberjunction/core-entities to v1.5.0
+- Bump @memberjunction/data-context to v1.5.0
+
+## 1.4.1
+
+Fri, 07 Jun 2024 04:36:54 GMT
+
+### Patches
+
+- Bump @memberjunction/core-entities to v1.4.1
+- Bump @memberjunction/data-context to v1.4.1
 
 ## 1.4.0
 
