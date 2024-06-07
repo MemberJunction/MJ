@@ -1,7 +1,7 @@
 import { gitAsync } from 'beachball/lib/git/gitAsync.js';
 import { findProjectRoot, parseRemoteBranch } from 'workspace-tools';
 
-const branch = 'main';
+const branch = 'origin/main';
 const message = 'Update distribution zip [skip ci]';
 const { remote, remoteBranch } = parseRemoteBranch(branch);
 const cwd = findProjectRoot(process.cwd());
