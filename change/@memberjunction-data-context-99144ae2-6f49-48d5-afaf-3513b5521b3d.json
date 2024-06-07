@@ -1,0 +1,7 @@
+{
+  "type": "minor",
+  "comment": "Update minor version",
+  "packageName": "@memberjunction/data-context",
+  "email": "craig.adam@bluecypress.io",
+  "dependentChangeType": "patch"
+}
