@@ -10,11 +10,8 @@ const commitResult = await gitAsync(['commit', '--all', '-m', message], {
   cwd,
   verbose: true,
 });
-if (commitResult.success) {
-  completed = true;
-} else if (pushResult.timedOut) {
-  throw new Error(`Committing has timed out!`);
-} else {
+if (!commitResult.success) {
+  console.error(JSON.stringify(commitResult));
   throw new Error(`Committing has failed!`);
 }
 
@@ -24,10 +21,7 @@ const pushResult = await gitAsync(['push', '--no-verify', '--follow-tags', '--ve
   cwd,
   verbose: true,
 });
-if (pushResult.success) {
-  completed = true;
-} else if (pushResult.timedOut) {
-  throw new Error(`Pushing to ${branch} has timed out!`);
-} else {
+if (!pushResult.success) {
+  console.error(JSON.stringify(pushResult));
   throw new Error(`Pushing to ${branch} has failed!`);
 }

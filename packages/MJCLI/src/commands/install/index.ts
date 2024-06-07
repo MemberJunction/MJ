@@ -127,6 +127,8 @@ CONFIG_FILE='config.json'
 
     this.log('   Running npm link for GeneratedEntities...');
     execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: CODEGEN_DIR });
+    this.log('   Running npm link for GeneratedActions...');
+    execSync('npm link ../GeneratedActions', { stdio: 'inherit', cwd: CODEGEN_DIR });
 
     //*******************************************************************
     // Process MJAPI
@@ -134,6 +136,8 @@ CONFIG_FILE='config.json'
     this.log('\n\nBootstrapping MJAPI...');
     this.log('   Running npm link for GeneratedEntities...');
     execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJAPI_DIR });
+    this.log('   Running npm link for GeneratedActions...');
+    execSync('npm link ../GeneratedActions', { stdio: 'inherit', cwd: MJAPI_DIR });
     this.log('   Setting up MJAPI .env file...');
     const mjAPIENV = `#Database Setup
 DB_HOST='${this.userConfig.dbUrl}'
@@ -200,6 +204,8 @@ CONFIG_FILE='config.json'
     // keep on going with MJ Explorer - do the rest of the stuff
     this.log('   Running npm link for GeneratedEntities...');
     execSync('npm link ../GeneratedEntities', { stdio: 'inherit', cwd: MJEXPLORER_DIR });
+    this.log('   Running npm link for GeneratedActions...');
+    execSync('npm link ../GeneratedActions', { stdio: 'inherit', cwd: MJEXPLORER_DIR });
 
     this.log('Installation complete!');
   }
