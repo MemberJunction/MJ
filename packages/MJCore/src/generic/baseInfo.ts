@@ -15,8 +15,10 @@ export abstract class BaseInfo {
                     if (keys[j].trim().toLowerCase() === 'defaultvalue' && initData[keys[j]]) {
                         // strip parens from default value from the DB, if they exist, for example defaults might be ((1)) or (getdate())   
                         // could also be something like (('Pending')) in which case we'll want to remove the SYMMETRIC parens
-                        const noParens = this.stripContainingParens(initData[keys[j]]);
-                        const finalValue = this.stripSingleQuotes(this.stripUnicodePrefix(noParens));
+                        const initialValue: string = initData[keys[j]];
+                        const noParens = this.stripContainingParens(initialValue);
+                        const unicodeStripped = this.stripUnicodePrefix(noParens);
+                        const finalValue = this.stripSingleQuotes(unicodeStripped);
                         this[keys[j]] = finalValue;
                     }
                     else
@@ -27,9 +29,11 @@ export abstract class BaseInfo {
     }
 
     protected stripUnicodePrefix(value: string): string {
-        if (!value) return value;
+        if (!value){
+            return value;
+        }
 
-        const val = value.trim(); // trim it first
+        value = value.trim(); // trim it first
 
         // check to see if the first character is an N and if the character after
         // that as well as the last character are single quotes, if so, strip all of those out
@@ -38,6 +42,8 @@ export abstract class BaseInfo {
             value.charAt(value.length - 1) === '\'') {
             return value.substring(2, value.length - 1); // strip out the N and the single quotes for example N'Active' becomes Active
         }
+
+        return value;
     }
 
     protected stripSingleQuotes(value: string): string {

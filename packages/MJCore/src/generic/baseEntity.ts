@@ -169,8 +169,9 @@ export class EntityField {
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
         this._entityFieldInfo = fieldInfo;
-        if (Value)
+        if (Value){
             this.Value = Value;
+        }
         else if (fieldInfo.DefaultValue) {
             if (fieldInfo.TSType === EntityFieldTSType.Boolean) {
                 // special handling for booleans as we don't want a string passed into a boolean field, we want a true boolean
