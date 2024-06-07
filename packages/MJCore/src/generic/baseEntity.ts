@@ -284,7 +284,12 @@ export class BaseEntityResult {
     /**
      * Optional, a structured error object with additional information
      */
-    Error?: any;    
+    Error?: any;
+
+    /**
+     * Optional, a list of structured error objects with additional information
+     */
+    Errors?: any[];
     /**
      * A copy of the values of the entity object BEFORE the operation was performed
      */
@@ -688,7 +693,7 @@ export abstract class BaseEntity {
                 this.Set(kv.FieldName, kv.Value);                
             });
         }
-        this.RaiseEvent('new_record', null)        
+        this.RaiseEvent('new_record', null);      
         return true;
     }
 
@@ -743,11 +748,13 @@ export abstract class BaseEntity {
                 // so we need to add a new result to the history here
                 newResult.Success = false;
                 newResult.Type = this.IsSaved ? 'update' : 'create';
-                newResult.Message = e.message;
+                newResult.Message = e.message || null;
+                newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();               
                 this.ResultHistory.push(newResult);
             }
+
             return false;
         }
     }
@@ -927,7 +934,8 @@ export abstract class BaseEntity {
                 // so we need to add a new result to the history here
                 newResult.Success = false;
                 newResult.Type = 'delete'
-                newResult.Message = e.message;
+                newResult.Message = e.message || null;
+                newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();               
                 this.ResultHistory.push(newResult);
