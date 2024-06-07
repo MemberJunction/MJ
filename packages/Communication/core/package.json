@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/communication-core",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "MemberJunction: Core Communication Framework Library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,9 +19,9 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@memberjunction/global": "~1.4.0",
-    "@memberjunction/core": "~1.4.0",
-    "@memberjunction/core-entities": "~1.4.0",
+    "@memberjunction/global": "~1.4.1",
+    "@memberjunction/core": "~1.4.1",
+    "@memberjunction/core-entities": "~1.4.1",
     "rxjs": "^7.8.1"
   }
 }

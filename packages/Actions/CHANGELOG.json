@@ -1,0 +1,68 @@
+{
+  "name": "@memberjunction/actions",
+  "entries": [
+    {
+      "date": "Fri, 07 Jun 2024 04:36:54 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/actions_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/actions",
+            "commit": "c6673826ac1b514ae7c9f02b1b02b222a3a40a77",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/actions",
+            "commit": "0234e483120f6832051fc6fad8a60003f1221ae7",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/actions",
+            "commit": "8407b05845907554d8cdd897155cc916866d6640",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/actions",
+            "commit": "a99e659e0d6db4b5a6b65d5bd6323e1c3905e35d",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/core-entities to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/ai to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/actions",
+            "comment": "Bump @memberjunction/aiengine to v1.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

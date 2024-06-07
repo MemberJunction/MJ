@@ -1,0 +1,62 @@
+{
+  "name": "@memberjunction/ng-join-grid",
+  "entries": [
+    {
+      "date": "Fri, 07 Jun 2024 04:36:54 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/ng-join-grid_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "33ce061d4ca92fecd7367f4238d32768a488029b",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "53bd163eaabf2b71c0401f32b0527b5c2b9e584a",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-join-grid",
+            "commit": "84be2cb92c0cc69bd218ccde584fd4a0a37373cf",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/core-entities to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/ng-shared to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-join-grid",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

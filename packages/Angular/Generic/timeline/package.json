@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-timeline",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "MemberJunction: Timeline Display UI component",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -25,12 +25,12 @@
     "@angular/router": "~17.2.2"
   },
   "dependencies": {
-    "@memberjunction/core-entities": "~1.4.0",
-    "@memberjunction/global": "~1.4.0",
-    "@memberjunction/core": "~1.4.0",
-    "@memberjunction/ng-container-directives": "~1.4.0",
-    "@memberjunction/ng-entity-form-dialog": "~1.4.0",
-    "@memberjunction/ng-shared": "~1.4.0",
+    "@memberjunction/core-entities": "~1.4.1",
+    "@memberjunction/global": "~1.4.1",
+    "@memberjunction/core": "~1.4.1",
+    "@memberjunction/ng-container-directives": "~1.4.1",
+    "@memberjunction/ng-entity-form-dialog": "~1.4.1",
+    "@memberjunction/ng-shared": "~1.4.1",
     "@progress/kendo-angular-buttons": "~15.1.0",
     "@progress/kendo-angular-layout": "~15.1.0",
     "@progress/kendo-angular-indicators": "~15.1.0",

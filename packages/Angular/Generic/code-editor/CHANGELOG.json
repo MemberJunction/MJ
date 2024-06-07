@@ -1,0 +1,44 @@
+{
+  "name": "@memberjunction/ng-code-editor",
+  "entries": [
+    {
+      "date": "Fri, 07 Jun 2024 04:36:54 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/ng-code-editor_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/ng-code-editor",
+            "commit": "b37ea09b3925e4b3b4864476814038f939991050",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-code-editor",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-code-editor",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-code-editor",
+            "comment": "Bump @memberjunction/core-entities to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/ng-code-editor",
+            "comment": "Bump @memberjunction/ng-container-directives to v1.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    }
+  ]
+}

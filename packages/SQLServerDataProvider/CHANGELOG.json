@@ -2,6 +2,111 @@
   "name": "@memberjunction/sqlserver-dataprovider",
   "entries": [
     {
+      "date": "Fri, 07 Jun 2024 04:36:53 GMT",
+      "version": "1.4.1",
+      "tag": "@memberjunction/sqlserver-dataprovider_v1.4.1",
+      "comments": {
+        "patch": [
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "c6673826ac1b514ae7c9f02b1b02b222a3a40a77",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "a8290ebed8cc884ade6b6ffdfa71f5dd1d50b056",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "5cf1b5a19eb1d21efb33b1800a1601eb28da87a0",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "0234e483120f6832051fc6fad8a60003f1221ae7",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "9987640a26adb1429b8a067b0ddd06adf2adf435",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "904d7c33d3a467ad1d7717e81c04e74566d1d780",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "craig.adam@bluecypress.io",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "0c682dfc485a3700f2fff7dca7cab06e14be28dd",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "97354817+AN-BC@users.noreply.github.com",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "commit": "bb25c5935d928be46d53c118eb6811ca3e82a6e9",
+            "comment": "Applying package updates [skip ci]"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/actions to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/aiengine to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/core-entities to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/global to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/queue to v1.4.1",
+            "commit": "not available"
+          },
+          {
+            "author": "beachball",
+            "package": "@memberjunction/sqlserver-dataprovider",
+            "comment": "Bump @memberjunction/ai-vector-dupe to v1.4.1",
+            "commit": "not available"
+          }
+        ]
+      }
+    },
+    {
       "date": "Sat, 25 May 2024 15:30:16 GMT",
       "version": "1.4.0",
       "tag": "@memberjunction/sqlserver-dataprovider_v1.4.0",
