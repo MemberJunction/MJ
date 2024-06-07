@@ -12,11 +12,11 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
 
 // LOCAL
-import { TimelineComponent } from './component/timeline.component';
+import { TreelistComponent } from './component/treelist.component';
 
 @NgModule({
   declarations: [
-    TimelineComponent
+    TreelistComponent
   ],
   imports: [
     CommonModule,
@@ -28,7 +28,7 @@ import { TimelineComponent } from './component/timeline.component';
     SchedulerModule
   ],
   exports: [
-    TimelineComponent
+    TreelistComponent
   ]
 })
 export class TimelineModule { }

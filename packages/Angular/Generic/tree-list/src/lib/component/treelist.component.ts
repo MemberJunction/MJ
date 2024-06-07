@@ -5,7 +5,6 @@ import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
 
 import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
-import { sampleData, displayDate } from './dummy-data';
 
 /**
  * 
@@ -78,11 +77,11 @@ export class TimelineGroup {
  * Displays data on a timeline UI so that information can see a chronolgoical display of the provided data.
  */
 @Component({
-  selector: 'mj-timeline',
-  templateUrl: './timeline.component.html',
-  styleUrls: ['./timeline.component.css']
+  selector: 'mj-treelist',
+  templateUrl: './treelist.component.html',
+  styleUrls: ['./treelist.component.css']
 })
-export class TimelineComponent implements AfterViewInit { 
+export class TreelistComponent implements AfterViewInit { 
   private _groups: TimelineGroup[] = [];
 
   /**
