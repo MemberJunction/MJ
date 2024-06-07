@@ -1,15 +1,25 @@
 {
-  "name": "test",
-  "version": "0.0.0",
+  "name": "@memberjunction/templates",
+  "version": "1.4.0",
+  "description": "MemberJunction: Core Templating Engine and Types",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
+    "build2": "tsc -p tsconfig.json",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:test": "node dist/test/server/server.mjs"
   },
-  "private": true,
+  "author": "MemberJunction.com",
+  "license": "ISC",
   "dependencies": {
     "@memberjunction/global": "1.4.0",
     "@angular/animations": "~17.2.2",
